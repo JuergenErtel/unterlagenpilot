@@ -9,6 +9,8 @@ export interface AICompletionRequest {
   schemaName: string;
   system: string;
   user: string;
+  /** JSON-Schema der erwarteten Ausgabe (für echte LLMs als Vertrag). */
+  jsonSchema?: Record<string, unknown>;
   /** Optionaler Kontext für deterministische Mock-Ausgaben */
   hints?: Record<string, unknown>;
 }

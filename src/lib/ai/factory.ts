@@ -2,6 +2,7 @@ import { getEnv } from "@/lib/env";
 import type { AIProvider, OCRProvider } from "./types";
 import { MockAIProvider } from "./mock-provider";
 import { AzureOpenAIProvider } from "./azure-provider";
+import { OpenAICompatibleProvider } from "./openai-compatible-provider";
 import {
   MockOCRProvider,
   AzureDocumentIntelligenceProvider,
@@ -22,8 +23,10 @@ export function getAIProvider(): AIProvider {
     case "azure-openai":
       aiProvider = new AzureOpenAIProvider();
       break;
-    case "mock":
     case "openai-compatible":
+      aiProvider = new OpenAICompatibleProvider();
+      break;
+    case "mock":
     default:
       aiProvider = new MockAIProvider();
   }

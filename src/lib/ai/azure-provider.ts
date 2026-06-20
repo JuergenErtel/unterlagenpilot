@@ -1,14 +1,13 @@
 import type { AICompletionRequest, AIProvider } from "./types";
 import { getEnv } from "@/lib/env";
+import { extractJson } from "./json-extract";
 
 /**
- * Stub für einen EU-/DSGVO-konformen Azure-OpenAI-Provider (EU-Region).
- * Bewusst NICHT mit erratenen Endpunkten/Verträgen ausimplementiert.
+ * EU-/DSGVO-konformer Azure-OpenAI-Provider (EU-Region).
  * Aktivierung: AI_PROVIDER=azure-openai + AZURE_OPENAI_* in der Umgebung.
- *
- * TODO(prod): Aufruf der Chat-Completions-/Responses-API mit
- * response_format: json_schema, Konfidenz aus Modellsignalen ableiten,
- * Zero-Data-Retention konfigurieren, KEINE Kundendaten loggen.
+ * Die Azure-Ressource MUSS in einer EU-Region liegen (z.B. Sweden Central,
+ * France Central, Germany West Central) und Zero-Data-Retention konfiguriert
+ * sein. Es werden keine Kundendaten geloggt.
  */
 export class AzureOpenAIProvider implements AIProvider {
   readonly name = "azure-openai";
@@ -22,15 +21,50 @@ export class AzureOpenAIProvider implements AIProvider {
     );
   }
 
-  async completeJSON(_req: AICompletionRequest): Promise<unknown> {
+  async completeJSON(req: AICompletionRequest): Promise<unknown> {
+    const env = getEnv();
     if (!this.isConfigured()) {
       throw new Error(
-        "AzureOpenAIProvider ist nicht konfiguriert. Bitte AZURE_OPENAI_* setzen oder AI_PROVIDER=mock verwenden."
+        "AzureOpenAIProvider ist nicht konfiguriert. AZURE_OPENAI_ENDPOINT/API_KEY/DEPLOYMENT setzen oder AI_PROVIDER=mock verwenden."
       );
     }
-    // TODO(prod): Echten Azure-OpenAI-Aufruf (EU-Region) implementieren.
-    throw new Error(
-      "AzureOpenAIProvider.completeJSON ist noch nicht implementiert (Stub). Siehe README → KI/OCR-Konfiguration."
-    );
+
+    const base = env.AZURE_OPENAI_ENDPOINT!.replace(/\/$/, "");
+    const url = `${base}/openai/deployments/${env.AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version=${env.AZURE_OPENAI_API_VERSION}`;
+
+    const system = buildSystemPrompt(req);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": env.AZURE_OPENAI_API_KEY!,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: req.user },
+        ],
+        temperature: 0,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!res.ok) {
+      // Kein Response-Body mit Kundendaten loggen – nur Status.
+      throw new Error(`Azure OpenAI HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = data.choices?.[0]?.message?.content ?? "";
+    return extractJson(content);
   }
+}
+
+/** Schema-Vertrag in den System-Prompt einbetten (json_object-Modus). */
+export function buildSystemPrompt(req: AICompletionRequest): string {
+  const schemaPart = req.jsonSchema
+    ? `\n\nAntworte AUSSCHLIESSLICH mit gültigem JSON, das exakt diesem JSON-Schema entspricht:\n${JSON.stringify(req.jsonSchema)}`
+    : "\n\nAntworte ausschließlich mit gültigem JSON.";
+  return `${req.system}${schemaPart}\nKein Fließtext, keine Erklärungen, nur das JSON-Objekt.`;
 }

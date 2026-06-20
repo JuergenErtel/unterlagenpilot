@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AIProvider } from "./types";
 import { getAIProvider } from "./factory";
 import {
@@ -47,6 +48,7 @@ export class AIService {
     hints?: Record<string, unknown>,
     maxAttempts = 2
   ): Promise<z.output<S>> {
+    const jsonSchema = toJsonSchema(schemaName, schema);
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const repair =
@@ -58,6 +60,7 @@ export class AIService {
           schemaName,
           system,
           user: user + repair,
+          jsonSchema,
           hints: { ...hints, attempt },
         });
         return schema.parse(raw);
@@ -436,6 +439,15 @@ function guessApplicant(
 
 function truncate(s: string, n = 4000): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+const jsonSchemaCache = new Map<string, Record<string, unknown>>();
+function toJsonSchema(name: string, schema: z.ZodTypeAny): Record<string, unknown> {
+  const cached = jsonSchemaCache.get(name);
+  if (cached) return cached;
+  const js = zodToJsonSchema(schema, { name, target: "openApi3" }) as Record<string, unknown>;
+  jsonSchemaCache.set(name, js);
+  return js;
 }
 
 function describe(err: unknown): string {

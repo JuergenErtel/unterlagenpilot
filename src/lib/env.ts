@@ -21,10 +21,15 @@ const envSchema = z.object({
   AI_PROVIDER: z
     .enum(["mock", "azure-openai", "openai-compatible"])
     .default("mock"),
+  // Azure OpenAI (EU-Region!)
   AZURE_OPENAI_ENDPOINT: z.string().optional(),
   AZURE_OPENAI_API_KEY: z.string().optional(),
   AZURE_OPENAI_DEPLOYMENT: z.string().optional(),
   AZURE_OPENAI_API_VERSION: z.string().default("2024-10-21"),
+  // Generischer EU-OpenAI-kompatibler Anbieter (z.B. Mistral AI, EU-Endpoint)
+  OPENAI_COMPATIBLE_BASE_URL: z.string().optional(), // z.B. https://api.mistral.ai/v1
+  OPENAI_COMPATIBLE_API_KEY: z.string().optional(),
+  OPENAI_COMPATIBLE_MODEL: z.string().optional(), // z.B. mistral-large-latest
 
   OCR_PROVIDER: z
     .enum(["mock", "azure-document-intelligence", "tesseract"])
