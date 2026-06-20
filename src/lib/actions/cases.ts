@@ -107,37 +107,46 @@ export async function runAiCheck(caseId: string): Promise<void> {
 
   for (const doc of docs) {
     const text = doc.pages.map((p) => p.ocrText ?? "").join("\n");
-    const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
-    const ext = await ai.extractFields(cls.documentType, text);
+    try {
+      const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
+      const ext = await ai.extractFields(cls.documentType, text);
 
-    await prisma.document.update({
-      where: { id: doc.id },
-      data: {
-        documentType: cls.documentType,
-        confidence: cls.confidence,
-        classificationStatus: "fertig",
-        extractionStatus: "fertig",
-        readable: true,
-        extractedFields: {
-          deleteMany: {},
-          create: ext.fields.map((f) => ({
-            key: f.key,
-            label: f.label,
-            value: f.value == null ? null : String(f.value),
-            confidence: f.confidence,
-            source: f.source,
-          })),
+      await prisma.document.update({
+        where: { id: doc.id },
+        data: {
+          documentType: cls.documentType,
+          confidence: cls.confidence,
+          classificationStatus: "fertig",
+          extractionStatus: "fertig",
+          readable: true,
+          extractedFields: {
+            deleteMany: {},
+            create: ext.fields.map((f) => ({
+              key: f.key,
+              label: f.label,
+              value: f.value == null ? null : String(f.value),
+              confidence: f.confidence,
+              source: f.source,
+            })),
+          },
+          warnings: {
+            create: ext.warnings.map((w) => ({
+              code: w.code,
+              severity: w.severity,
+              message: w.message,
+              customerVisible: w.customerVisible,
+            })),
+          },
         },
-        warnings: {
-          create: ext.warnings.map((w) => ({
-            code: w.code,
-            severity: w.severity,
-            message: w.message,
-            customerVisible: w.customerVisible,
-          })),
-        },
-      },
-    });
+      });
+    } catch {
+      // KI-/OCR-Dienst nicht erreichbar o.ä.: Dokument markieren, Vorgang fortsetzen.
+      // (Keine Kundendaten loggen.)
+      await prisma.document.update({
+        where: { id: doc.id },
+        data: { classificationStatus: "fehler", extractionStatus: "fehler" },
+      });
+    }
   }
 
   const agg = await getCaseAggregate(caseId);

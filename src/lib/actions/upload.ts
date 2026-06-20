@@ -42,24 +42,33 @@ export async function customerUpload(token: string, formData: FormData): Promise
       buffer,
     });
 
-    const ocrResult = await ocr.extractText({
-      storageKey: stored.storageKey,
-      mimeType: stored.mimeType,
-      originalName: file.name,
-      buffer,
-    });
-
-    const cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
-    const ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+    // OCR + KI bestmöglich. Bei Ausfall (Dienst nicht erreichbar) wird die Datei
+    // trotzdem gespeichert und kann später erneut geprüft werden – der Kunde
+    // bekommt keinen Fehler.
+    let ocrResult: Awaited<ReturnType<typeof ocr.extractText>> | null = null;
+    let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
+    let ext: Awaited<ReturnType<typeof ai.extractFields>> | null = null;
+    try {
+      ocrResult = await ocr.extractText({
+        storageKey: stored.storageKey,
+        mimeType: stored.mimeType,
+        originalName: file.name,
+        buffer,
+      });
+      cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
+      ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+    } catch {
+      // KI/OCR aktuell nicht verfügbar – ohne Klartext loggen.
+    }
 
     const applicant = link.case.applicants[0];
     const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
 
     const generatedName = generateFileName({
-      documentType: cls.documentType,
-      applicantName: cls.detectedApplicant ?? applicantName,
-      propertyRef: cls.detectedPropertyRef,
-      period: cls.period,
+      documentType: cls?.documentType ?? null,
+      applicantName: cls?.detectedApplicant ?? applicantName,
+      propertyRef: cls?.detectedPropertyRef,
+      period: cls?.period,
       originalName: file.name,
     });
 
@@ -71,17 +80,17 @@ export async function customerUpload(token: string, formData: FormData): Promise
         storageKey: stored.storageKey,
         mimeType: stored.mimeType,
         sizeBytes: stored.sizeBytes,
-        pageCount: ocrResult.pageCount,
-        documentType: cls.documentType,
+        pageCount: ocrResult?.pageCount,
+        documentType: cls?.documentType ?? null,
         uploadSource: "kunde",
-        ocrStatus: "fertig",
-        classificationStatus: "fertig",
-        extractionStatus: "fertig",
-        confidence: cls.confidence,
-        readable: true,
-        period: cls.period ?? undefined,
-        pages: { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) },
-        extractedFields: {
+        ocrStatus: ocrResult ? "fertig" : "fehler",
+        classificationStatus: cls ? "fertig" : "fehler",
+        extractionStatus: ext ? "fertig" : "fehler",
+        confidence: cls?.confidence,
+        readable: ocrResult ? true : null,
+        period: cls?.period ?? undefined,
+        pages: ocrResult ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) } : undefined,
+        extractedFields: ext ? {
           create: ext.fields.map((f) => ({
             key: f.key,
             label: f.label,
@@ -89,10 +98,10 @@ export async function customerUpload(token: string, formData: FormData): Promise
             confidence: f.confidence,
             source: f.source,
           })),
-        },
-        warnings: {
+        } : undefined,
+        warnings: ext ? {
           create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })),
-        },
+        } : undefined,
       },
     });
   }
