@@ -1,32 +1,6 @@
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  FolderOpen,
-  FilePlus2,
-  Link2,
-  ListChecks,
-  ScanSearch,
-  Send,
-  Plug,
-  Settings,
-  ShieldCheck,
-  Building2,
-  BadgeEuro,
-} from "lucide-react";
-
-const NAV: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/cases", label: "Fälle", icon: FolderOpen },
-  { href: "/cases/new", label: "Neuer Fall", icon: FilePlus2 },
-  { href: "/review", label: "Review-Center", icon: ScanSearch },
-  { href: "/checklists", label: "Checklisten", icon: ListChecks },
-  { href: "/connections", label: "Plattform-Verbindungen", icon: Plug },
-  { href: "/messages", label: "Nachrichten", icon: Send },
-  { href: "/plans", label: "SaaS-Tarife", icon: BadgeEuro },
-  { href: "/organization", label: "Organisation / Team", icon: Building2 },
-  { href: "/audit", label: "Audit-Log", icon: ShieldCheck },
-  { href: "/settings", label: "Einstellungen", icon: Settings },
-];
+import { Link2 } from "lucide-react";
+import { SidebarNav } from "@/components/sidebar-nav";
 
 export function AppShell({
   children,
@@ -35,49 +9,51 @@ export function AppShell({
   children: React.ReactNode;
   context: { organizationName: string; userName: string; role: string };
 }) {
+  const initials = context.userName
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("");
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
-        <div className="flex h-16 items-center gap-2 border-b px-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <div className="flex min-h-screen bg-canvas">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
+        <Link href="/dashboard" className="flex h-16 items-center gap-2.5 border-b px-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-soft">
             <Link2 className="h-4 w-4" />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold">UnterlagenPilot</div>
+            <div className="text-sm font-semibold tracking-tight">UnterlagenPilot</div>
             <div className="text-[10px] text-muted-foreground">immocockpit24.de</div>
           </div>
-        </div>
-        <nav className="flex-1 space-y-0.5 p-3">
-          {NAV.map((it) => (
-            <Link
-              key={it.href}
-              href={it.href}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <it.icon className="h-4 w-4" />
-              {it.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="border-t p-4">
-          <div className="text-sm font-medium">{context.userName}</div>
-          <div className="text-xs text-muted-foreground">{context.organizationName}</div>
-          <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {context.role}
+        </Link>
+
+        <SidebarNav />
+
+        <div className="border-t p-3">
+          <div className="flex items-center gap-3 rounded-md px-2 py-1.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{context.userName}</div>
+              <div className="truncate text-xs text-muted-foreground">{context.organizationName}</div>
+            </div>
           </div>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b bg-card/60 px-6 backdrop-blur">
-          <div className="text-sm text-muted-foreground">
-            KI-Sachbearbeiter für Baufinanzierung
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/80 px-6 backdrop-blur">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="hidden sm:inline">KI-Sachbearbeiter für Baufinanzierung</span>
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
             Manuelle Freigabe vor jeder Übertragung · DSGVO/EU
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 animate-fade-in p-6">{children}</main>
       </div>
     </div>
   );

@@ -1,109 +1,112 @@
 import Link from "next/link";
 import {
+  Download,
+  Plus,
+  Link2,
+  PlayCircle,
   Inbox,
   UploadCloud,
   ScanSearch,
   FileWarning,
   Building2,
-  AlertTriangle,
-  Plus,
-  Link2,
-  Send,
+  Timer,
 } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
-import { getDashboardBuckets } from "@/lib/cases/service";
+import { getDashboardData } from "@/lib/cases/dashboard";
 import { prisma } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CaseStatusBadge } from "@/components/status-badge";
-import { ReadinessMeter } from "@/components/readiness-meter";
-import { computeReadiness } from "@/lib/documents/readiness";
-import type { CaseStatus } from "@/lib/domain/enums";
+import { PageHeader } from "@/components/ui/page-header";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { TodoCaseCard } from "@/components/dashboard/todo-case-card";
+import { Pipeline } from "@/components/case/pipeline";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+function greeting() {
+  return "Guten Tag"; // zeitneutral & deterministisch (kein Date im Render-Cache)
+}
 
 export default async function DashboardPage() {
   const ctx = await requireContext();
-  const buckets = await getDashboardBuckets(ctx.organizationId);
-  const recent = await prisma.case.findMany({
-    where: { organizationId: ctx.organizationId },
-    include: { applicants: true },
-    orderBy: { updatedAt: "desc" },
-    take: 6,
+  const data = await getDashboardData(ctx.organizationId);
+  const demoCase = await prisma.case.findFirst({
+    where: { organizationId: ctx.organizationId, caseNumber: "UP-2026-0001" },
+    select: { id: true },
   });
 
-  const tiles: Array<{ label: string; value: number; href: string; icon: React.ElementType; tone?: string }> = [
-    { label: "Offene Fälle", value: buckets.offen, href: "/cases", icon: Inbox },
-    { label: "Neue Uploads", value: buckets.neueUploads, href: "/review", icon: UploadCloud },
-    { label: "Prüfbereite KI-Auswertungen", value: buckets.pruefbereit, href: "/review", icon: ScanSearch },
-    { label: "Unterlagen fehlen", value: buckets.unterlagenFehlen, href: "/cases?status=unterlagen_fehlen", icon: FileWarning, tone: "text-warning" },
-    { label: "Bankbezogene Nachforderungen", value: buckets.bankNachforderung, href: "/cases", icon: Building2 },
-    { label: "Bereit für Europace", value: buckets.bereitEuropace, href: "/cases", icon: Building2, tone: "text-success" },
-    { label: "Bereit für FinLink", value: buckets.bereitFinlink, href: "/cases", icon: Building2, tone: "text-success" },
-    { label: "Bereit für eHyp home", value: buckets.bereitEhyp, href: "/cases", icon: Building2, tone: "text-success" },
-    { label: "Export-/Übertragungsprobleme", value: buckets.exportprobleme, href: "/cases", icon: AlertTriangle, tone: "text-destructive" },
-  ];
+  const hours = Math.floor(data.kpis.zeitersparnisMin / 60);
+  const mins = data.kpis.zeitersparnisMin % 60;
+  const timeSaved = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Willkommen zurück, {ctx.userName}. Was möchtest du als Nächstes tun?
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm"><Link href="/cases/new"><Plus />Neuer Fall</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link href="/cases/import">Aus FinLink importieren</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link href="/cases"><Link2 />Upload-Link erstellen</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link href="/messages"><Send />Nachforderung erstellen</Link></Button>
-        </div>
+    <div className="space-y-7">
+      {/* Hero */}
+      <div className="rounded-xl border bg-card p-6 shadow-soft">
+        <PageHeader
+          eyebrow="Arbeitszentrale"
+          title={`${greeting()}, ${ctx.userName.split(" ")[0]}. Diese Fälle brauchen deine Aufmerksamkeit.`}
+          subtitle="Unterlagen prüfen, Lücken schließen und Fälle einreichungsfertig machen."
+          actions={
+            <>
+              <Button asChild>
+                <Link href="/cases/import"><Download />Aus FinLink importieren</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/cases/new"><Plus />Neuen Fall anlegen</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/cases"><Link2 />Upload-Link erstellen</Link>
+              </Button>
+              {demoCase && (
+                <Button asChild variant="ghost">
+                  <Link href={`/cases/${demoCase.id}`}><PlayCircle />Demo-Fall öffnen</Link>
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-        {tiles.map((t) => (
-          <Link key={t.label} href={t.href}>
-            <Card className="transition-colors hover:border-primary/40">
-              <CardContent className="flex items-center justify-between p-5">
-                <div>
-                  <div className={`text-3xl font-semibold tabular-nums ${t.tone ?? ""}`}>{t.value}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{t.label}</div>
-                </div>
-                <t.icon className={`h-6 w-6 ${t.tone ?? "text-muted-foreground"}`} />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCard label="Offene Fälle" value={data.kpis.offen} icon={Inbox} href="/cases" />
+        <MetricCard label="Neue Uploads" value={data.kpis.neueUploads} tone="ai" icon={UploadCloud} href="/review" />
+        <MetricCard label="Prüfbereite KI-Auswertungen" value={data.kpis.pruefbereit} tone="ai" icon={ScanSearch} href="/review" />
+        <MetricCard label="Fehlende Unterlagen" value={data.kpis.unterlagenFehlen} tone="review" icon={FileWarning} href="/cases?status=unterlagen_fehlen" />
+        <MetricCard label="Bereit für Europace" value={data.kpis.bereitEuropace} tone={data.kpis.bereitEuropace > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Bereit für FinLink" value={data.kpis.bereitFinlink} tone={data.kpis.bereitFinlink > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Bereit für eHyp home" value={data.kpis.bereitEhyp} tone={data.kpis.bereitEhyp > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Zeitersparnis diese Woche" value={timeSaved} tone="ready" icon={Timer} hint="geschätzt, KI-gestützt" />
       </div>
 
+      {/* Mini-Pipeline */}
       <Card>
-        <CardHeader><CardTitle>Zuletzt bearbeitete Fälle</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {recent.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Noch keine Fälle. Lege deinen ersten Fall an oder führe das Seed-Skript aus.
-            </p>
-          )}
-          {recent.map((c) => {
-            const r = computeReadiness({ checklist: [] });
-            r.score = c.readinessScore;
-            return (
-              <Link
-                key={c.id}
-                href={`/cases/${c.id}`}
-                className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-accent/40"
-              >
-                <div>
-                  <div className="font-medium">
-                    {c.caseNumber} · {c.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).join(", ") || "Ohne Namen"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Einreichungsstatus {c.readinessScore} %</div>
-                </div>
-                <CaseStatusBadge status={c.status as CaseStatus} />
-              </Link>
-            );
-          })}
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Fall-Pipeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Pipeline stages={data.pipeline} />
         </CardContent>
       </Card>
+
+      {/* Priorisierte To-do-Liste */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">Heute dran</h2>
+          <Button asChild variant="link" size="sm"><Link href="/cases">Alle Fälle ansehen</Link></Button>
+        </div>
+        <div className="space-y-3">
+          {data.todos.length === 0 ? (
+            <Card>
+              <CardContent className="p-10 text-center">
+                <p className="text-sm font-medium">Nichts Dringendes offen.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Importiere einen Fall aus FinLink oder lege einen neuen an, um loszulegen.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            data.todos.map((t) => <TodoCaseCard key={t.caseId} item={t} />)
+          )}
+        </div>
+      </div>
     </div>
   );
 }

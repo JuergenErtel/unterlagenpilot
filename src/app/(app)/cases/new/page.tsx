@@ -1,4 +1,5 @@
 import { createCase } from "@/lib/actions/cases";
+import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,12 +15,11 @@ import {
 export default function NewCasePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Neuer Fall</h1>
-        <p className="text-sm text-muted-foreground">
-          Lege einen Fall manuell an (z. B. aus E-Mail/WhatsApp). Du kannst danach Dokumente hochladen oder einen Upload-Link erstellen.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Neuer Vorgang"
+        title="Neuen Fall anlegen"
+        subtitle="Lege einen Fall manuell an (z. B. aus E-Mail oder WhatsApp). Danach kannst du Dokumente hochladen oder einen Upload-Link erstellen."
+      />
 
       <Card>
         <CardHeader>

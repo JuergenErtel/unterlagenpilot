@@ -138,6 +138,23 @@ Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein i
 
 ---
 
+## Demo vs. Stub vs. echte API (Stand des Prototyps)
+
+| Bereich | Status | Bedeutung |
+|---|---|---|
+| **KI (Klassifizierung, Extraktion)** | **echt, EU** | Mistral AI (Frankreich, DSGVO). Echte API-Calls, Zod-validiert, mit Konfidenz. |
+| **OCR (gescannte PDFs/Fotos)** | **echt, EU** | Mistral OCR. Text-PDFs ebenfalls. |
+| **Datenbank** | **echt** | PostgreSQL (Supabase, EU/Frankfurt), Schema `unterlagenpilot`. |
+| **Datei-Storage** | **echt** | Supabase Storage, privater Bucket. |
+| **Demo-Fall Mustermann** | **Demo-Daten** | Geseedet (3 Dokumente, 4 fehlende Unterlagen, Warnungen, Nachrichten, Audit-Ereignisse), damit alle Screens mit Inhalt wirken. |
+| **Europace / FinLink / eHyp home Übertragung** | **Stub** | API-Adapter vorbereitet; produktiv über Export/Kopiermaske/JSON. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
+| **Browser-Assist** | **Konzept/deaktiviert** | Nur als späterer optionaler Assistenz-Fallback vorgesehen. |
+| **Auth / Zahlungen** | **MVP-Demo** | Vereinfachter Vermittler-Kontext; Tarife ohne aktive Zahlungsintegration. |
+
+Faustregel: **Datenfluss (Upload → OCR → KI → DB → Storage) ist echt und EU-konform.** Die **Plattform-Einreichung** ist bewusst noch manuell (Export/Kopiermaske), bis offizielle APIs angebunden sind.
+
+---
+
 ## Datenschutz / DSGVO
 
 - Verarbeitung in der **EU-Region** (Storage, Datenbank, KI/OCR).

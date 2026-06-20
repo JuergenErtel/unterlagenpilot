@@ -4,41 +4,51 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    /* Helles, ruhiges FinTech – kühles Near-White als Leinwand, Weiß als Fläche */
+    --canvas: 214 38% 97%;
+    --background: 214 38% 97%;
+    --foreground: 222 38% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 222 38% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    /* Seriöses FinTech-Blau */
-    --primary: 221 70% 36%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 94%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 92%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 62% 36%;
-    --success-foreground: 210 40% 98%;
-    --warning: 38 92% 45%;
-    --warning-foreground: 0 0% 100%;
-    --border: 214 32% 88%;
-    --input: 214 32% 88%;
-    --ring: 221 70% 36%;
-    --radius: 0.6rem;
+    --popover-foreground: 222 38% 11%;
+
+    /* Marke / Primäraktion: tiefes, vertrauenswürdiges Royalblau */
+    --primary: 224 71% 45%;
+    --primary-foreground: 210 40% 99%;
+
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 38% 16%;
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 16% 44%;
+    --accent: 214 40% 95%;
+    --accent-foreground: 222 38% 16%;
+
+    /* Semantische Statusfarben (Farblogik laut Brief) */
+    --success: 142 58% 38%;          /* Grün: bereit / geprüft */
+    --success-foreground: 140 60% 97%;
+    --warning: 36 94% 44%;           /* Gelb: Prüfung erforderlich */
+    --warning-foreground: 40 90% 97%;
+    --destructive: 0 72% 50%;        /* Rot: Blocker / fehlt */
+    --destructive-foreground: 0 86% 98%;
+    --ai: 213 94% 58%;               /* Blau: KI / automatisiert */
+    --ai-foreground: 210 50% 99%;
+
+    --border: 214 28% 89%;
+    --input: 214 26% 88%;
+    --ring: 224 71% 45%;
+    --radius: 0.7rem;
   }
 
   .dark {
-    --background: 222 47% 9%;
+    --canvas: 222 40% 8%;
+    --background: 222 40% 8%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 12%;
+    --card: 222 38% 11%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 12%;
+    --popover: 222 38% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 213 80% 62%;
+    --primary: 217 91% 62%;
     --primary-foreground: 222 47% 11%;
     --secondary: 217 33% 18%;
     --secondary-foreground: 210 40% 98%;
@@ -46,15 +56,17 @@
     --muted-foreground: 215 20% 65%;
     --accent: 217 33% 20%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 60% 45%;
-    --success-foreground: 222 47% 11%;
-    --warning: 38 92% 55%;
+    --success: 142 55% 45%;
+    --success-foreground: 140 60% 97%;
+    --warning: 36 92% 55%;
     --warning-foreground: 222 47% 11%;
+    --destructive: 0 63% 52%;
+    --destructive-foreground: 0 86% 98%;
+    --ai: 213 94% 64%;
+    --ai-foreground: 222 47% 11%;
     --border: 217 33% 22%;
     --input: 217 33% 22%;
-    --ring: 213 80% 62%;
+    --ring: 217 91% 62%;
   }
 }
 
@@ -63,7 +75,20 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-canvas text-foreground;
+    font-feature-settings: "cv01", "ss01", "rlig" 1, "calt" 1;
+  }
+  /* Kennzahlen (Scores, Prozente, €, Fall-IDs) tabellarisch & monospaced */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Dezenter Karten-Schatten – ruhig, hochwertig */
+  .card-elevated {
+    box-shadow:
+      0 1px 2px -1px hsl(222 38% 11% / 0.08),
+      0 2px 8px -2px hsl(222 38% 11% / 0.06);
   }
 }

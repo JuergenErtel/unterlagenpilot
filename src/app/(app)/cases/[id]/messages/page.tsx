@@ -1,12 +1,12 @@
 import Link from "next/link";
+import { ArrowLeft, Inbox } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { generateMessage } from "@/lib/actions/cases";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { CopyBlock } from "@/components/copy-block";
-import { formatDateTime } from "@/lib/utils";
+import { MessagePreview } from "@/components/case/message-preview";
 import type { MessageChannel, MessageTemplateType } from "@/lib/domain/enums";
 
 const ACTIONS: Array<{ type: MessageTemplateType; channel: MessageChannel; label: string }> = [
@@ -26,51 +26,90 @@ export default async function CaseMessagesPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireContext();
+  const ctx = await requireContext();
+
+  const caseRecord = await prisma.case.findFirstOrThrow({
+    where: { id, organizationId: ctx.organizationId },
+    include: { applicants: { orderBy: { position: "asc" } } },
+  });
   const messages = await prisma.generatedMessage.findMany({
     where: { caseId: id },
     orderBy: { createdAt: "desc" },
   });
 
+  const kundenName =
+    caseRecord.applicants
+      .map((a) => [a.vorname, a.nachname].filter(Boolean).join(" "))
+      .filter(Boolean)
+      .join(", ") || "—";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Nachrichten</h1>
-          <p className="text-sm text-muted-foreground">Vorformuliert – im MVP wird nichts automatisch versendet.</p>
-        </div>
-        <Button asChild variant="ghost" size="sm"><Link href={`/cases/${id}`}>Zur Fallakte</Link></Button>
-      </div>
+      <PageHeader
+        eyebrow="Kundenkommunikation"
+        title="Nachrichten"
+        subtitle="Vorformuliert – im MVP wird nichts automatisch versendet."
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/cases/${id}`}>
+              <ArrowLeft />
+              Zur Fallakte
+            </Link>
+          </Button>
+        }
+      />
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Neue Nachricht erzeugen</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Nachricht erzeugen</CardTitle>
+          <CardDescription>
+            Fall <span className="font-mono tabular">{caseRecord.caseNumber}</span> · {kundenName}
+          </CardDescription>
+        </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {ACTIONS.map((a) => (
             <form key={`${a.type}-${a.channel}`} action={generateMessage.bind(null, id, a.type, a.channel)}>
-              <Button size="sm" variant="outline" type="submit">{a.label}</Button>
+              <Button size="sm" variant="outline" type="submit">
+                {a.label}
+              </Button>
             </form>
           ))}
         </CardContent>
       </Card>
 
       <div className="space-y-4">
-        {messages.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Noch keine Nachrichten erzeugt.</CardContent></Card>
-        )}
-        {messages.map((m) => (
-          <Card key={m.id}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{m.subject ?? m.templateType}</CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{m.channel}</Badge>
-                <span className="text-xs text-muted-foreground">{formatDateTime(m.createdAt)}</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <CopyBlock text={m.subject ? `Betreff: ${m.subject}\n\n${m.body}` : m.body} />
+        {messages.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <Inbox className="h-6 w-6 text-muted-foreground" />
+              </span>
+              <p className="text-sm font-medium">Noch keine Nachricht erstellt.</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Wähle oben eine Vorlage – die fertige Nachricht erscheint hier zum Kopieren. Versendet wird nichts automatisch.
+              </p>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          messages.map((m) => (
+            <MessagePreview
+              key={m.id}
+              channel={m.channel as MessageChannel}
+              subject={m.subject}
+              body={m.body}
+              footer={
+                <>
+                  <Button type="button" variant="outline" size="sm" disabled>
+                    Als versendet markieren
+                  </Button>
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={`/cases/${id}`}>Zurück zum Fall</Link>
+                  </Button>
+                </>
+              }
+            />
+          ))
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "UnterlagenPilot – KI-Sachbearbeiter für Baufinanzierung",
   description:
-    "KI-gestützter Dokumenten-, Prüf- und Übergabe-Assistent für Baufinanzierungsvermittler. Modul von immocockpit24.de.",
+    "Unterlagen prüfen, Daten extrahieren, fehlende Unterlagen erkennen und Fälle einreichungsfertig für Europace, FinLink und eHyp home machen. Ein Modul von immocockpit24.de.",
 };
 
 export default function RootLayout({
@@ -13,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de">
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="de" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className="min-h-screen bg-canvas font-sans antialiased">{children}</body>
     </html>
   );
 }
