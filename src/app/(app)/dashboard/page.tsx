@@ -66,29 +66,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Offene Fälle" value={data.kpis.offen} icon={Inbox} href="/cases" />
-        <MetricCard label="Neue Uploads" value={data.kpis.neueUploads} tone="ai" icon={UploadCloud} href="/review" />
-        <MetricCard label="Prüfbereite KI-Auswertungen" value={data.kpis.pruefbereit} tone="ai" icon={ScanSearch} href="/review" />
-        <MetricCard label="Fehlende Unterlagen" value={data.kpis.unterlagenFehlen} tone="review" icon={FileWarning} href="/cases?status=unterlagen_fehlen" />
-        <MetricCard label="Bereit für Europace" value={data.kpis.bereitEuropace} tone={data.kpis.bereitEuropace > 0 ? "ready" : "neutral"} icon={Building2} />
-        <MetricCard label="Bereit für FinLink" value={data.kpis.bereitFinlink} tone={data.kpis.bereitFinlink > 0 ? "ready" : "neutral"} icon={Building2} />
-        <MetricCard label="Bereit für eHyp home" value={data.kpis.bereitEhyp} tone={data.kpis.bereitEhyp > 0 ? "ready" : "neutral"} icon={Building2} />
-        <MetricCard label="Zeitersparnis diese Woche" value={timeSaved} tone="ready" icon={Timer} hint="geschätzt, KI-gestützt" />
-      </div>
-
-      {/* Mini-Pipeline */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Fall-Pipeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Pipeline stages={data.pipeline} />
-        </CardContent>
-      </Card>
-
-      {/* Priorisierte To-do-Liste */}
+      {/* 1) Priorisierte To-do-Liste */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">Heute dran</h2>
@@ -106,6 +84,28 @@ export default async function DashboardPage() {
             data.todos.map((t) => <TodoCaseCard key={t.caseId} item={t} />)
           )}
         </div>
+      </div>
+
+      {/* 2) Mini-Pipeline */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Fall-Pipeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Pipeline stages={data.pipeline} />
+        </CardContent>
+      </Card>
+
+      {/* 3) KPIs */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCard label="Offene Fälle" value={data.kpis.offen} icon={Inbox} href="/cases" />
+        <MetricCard label="Neue Uploads" value={data.kpis.neueUploads} tone="ai" icon={UploadCloud} href="/review" />
+        <MetricCard label="Prüfbereite KI-Auswertungen" value={data.kpis.pruefbereit} tone="ai" icon={ScanSearch} href="/review" />
+        <MetricCard label="Fehlende Unterlagen" value={data.kpis.unterlagenFehlen} tone="review" icon={FileWarning} href="/cases?status=unterlagen_fehlen" />
+        <MetricCard label="Bereit für Europace" value={data.kpis.bereitEuropace} tone={data.kpis.bereitEuropace > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Bereit für FinLink" value={data.kpis.bereitFinlink} tone={data.kpis.bereitFinlink > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Bereit für eHyp home" value={data.kpis.bereitEhyp} tone={data.kpis.bereitEhyp > 0 ? "ready" : "neutral"} icon={Building2} />
+        <MetricCard label="Zeitersparnis diese Woche" value={timeSaved} tone="ready" icon={Timer} hint="geschätzt, KI-gestützt" />
       </div>
     </div>
   );
