@@ -1,0 +1,1055 @@
+// UnterlagenPilot – Prisma Schema
+// Mandantenfähiges Datenmodell für einen KI-Sachbearbeiter in der Baufinanzierung.
+// Enums sind synchron mit src/lib/domain/enums.ts gehalten.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Supabase: gepoolte Verbindung (PgBouncer, Port 6543) für die App,
+  // direkte Verbindung (Port 5432) für Migrationen/Introspektion.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================ ENUMS ============================
+
+enum Platform {
+  europace
+  finlink
+  ehyp_home
+}
+
+enum UserRole {
+  white_label_admin
+  org_admin
+  vermittler
+  teammitglied
+}
+
+enum CaseStatus {
+  neu
+  upload_offen
+  ki_pruefung_laeuft
+  vermittlerpruefung_erforderlich
+  unterlagen_fehlen
+  einreichungsfertig
+  exportiert
+  uebertragen
+  abgeschlossen
+  archiviert
+}
+
+enum CaseSourceType {
+  finlink_import
+  kundenformular
+  dokumenten_upload
+  manuell
+  europace_import
+}
+
+enum FinancingType {
+  kauf
+  neubau
+  anschlussfinanzierung
+  umschuldung
+  modernisierung
+  kapitalbeschaffung
+}
+
+enum EmploymentType {
+  angestellter
+  selbststaendiger
+  beamter
+  rentner
+  geschaeftsfuehrer
+  gesellschafter
+  sonstiges
+}
+
+enum MaritalStatus {
+  ledig
+  verheiratet
+  geschieden
+  verwitwet
+  eingetragene_partnerschaft
+  getrennt_lebend
+}
+
+enum PropertyType {
+  einfamilienhaus
+  doppelhaushaelfte
+  reihenhaus
+  eigentumswohnung
+  mehrfamilienhaus
+  grundstueck
+  gewerbe
+  sonstiges
+}
+
+enum UsageType {
+  selbstnutzung
+  vermietet
+  gemischt
+}
+
+enum DocumentType {
+  personalausweis
+  gehaltsabrechnung
+  grundbuchauszug
+  expose
+  kontoauszug
+  einkommensteuerbescheid
+  einkommensteuererklaerung
+  eigenkapitalnachweis
+  kaufvertragsentwurf
+  teilungserklaerung
+  wohnflaechenberechnung
+  flurkarte_lageplan
+  baubeschreibung
+  baukostenaufstellung
+  baugenehmigung
+  darlehensvertrag
+  restschuldnachweis
+  mietvertrag
+  mietaufstellung
+  bwa
+  susa
+  jahresabschluss
+  euer
+  rentenbescheid
+  versicherungsnachweis
+  sonstige
+}
+
+enum UploadSource {
+  kunde
+  vermittler
+  import
+}
+
+enum ProcessingStatus {
+  ausstehend
+  laeuft
+  fertig
+  fehler
+}
+
+enum DocumentReviewStatus {
+  offen
+  akzeptiert
+  abgelehnt
+  ersetzt
+  duplikat
+}
+
+enum Severity {
+  ok
+  warnung
+  kritisch
+  fehlt
+}
+
+enum RequirementLevel {
+  zwingend
+  spaeter
+  optional
+  bankabhaengig
+}
+
+enum RequirementScope {
+  allgemein
+  bankbezogen
+  produktbezogen
+}
+
+enum ChecklistItemStatus {
+  offen
+  vorhanden
+  unvollstaendig
+  nicht_aktuell
+  abgelehnt
+  nicht_erforderlich
+}
+
+enum MessageChannel {
+  email
+  whatsapp
+  pdf
+  intern
+}
+
+enum MessageTemplateType {
+  erstnachforderung
+  danke_erhalten
+  datei_nicht_lesbar
+  datei_veraltet
+  unterlage_fehlt_weiterhin
+  pdf_checkliste
+  interne_notiz
+}
+
+enum PlanTier {
+  starter
+  pro
+  team
+  enterprise
+  white_label
+}
+
+enum JobStatus {
+  queued
+  running
+  succeeded
+  failed
+  needs_review
+}
+
+enum AiJobType {
+  classify
+  extract
+  summarize
+  duplicate
+  scan_quality
+  assign
+  analyze_payslip
+  analyze_land_register
+  analyze_bank_statements
+  analyze_property
+  detect_missing
+  detect_bank_requirements
+  generate_message
+  bank_summary
+  plausibility
+  platform_mapping
+}
+
+// ============================ MANDANT / NUTZER ============================
+
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  street          String?
+  zip             String?
+  city            String?
+  website         String?
+  // Datenschutz: Aufbewahrungsfrist (0 = bis manuelle Loeschung)
+  retentionDays   Int      @default(0)
+  isWhiteLabel    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users               User[]
+  customers           Customer[]
+  cases               Case[]
+  checklistTemplates  ChecklistTemplate[]
+  platformConnections PlatformConnection[]
+  messageTemplates    MessageTemplate[]
+  subscription        Subscription?
+  featureFlags        FeatureFlag[]
+  whiteLabelSettings  WhiteLabelSettings?
+  bankRequirements    BankRequirement[]
+  auditLogs           AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String   @unique
+  name           String
+  // Passwort-Hash – niemals Klartext. Auth via Provider moeglich.
+  passwordHash   String?
+  role           UserRole @default(vermittler)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  casesAsBroker Case[]       @relation("CaseBroker")
+  auditLogs     AuditLog[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+// "roles" als konfigurierbare Rechte-Definition (RBAC-Basis, MVP: feste Rollen)
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String?
+  key            String
+  label          String
+  permissions    Json     // string[] der erlaubten Aktionen
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, key])
+  @@map("roles")
+}
+
+// ============================ KUNDE / ANTRAGSTELLER ============================
+
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String?
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cases Case[]
+
+  @@index([organizationId])
+  @@map("customers")
+}
+
+model Applicant {
+  id           String   @id @default(cuid())
+  caseId       String
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  position     Int      // 1 = Antragsteller 1, 2 = Antragsteller 2 ...
+  vorname      String?
+  nachname     String?
+  geburtsdatum DateTime?
+  geburtsort   String?
+  staatsangehoerigkeit String?
+  familienstand MaritalStatus?
+  anzahlKinder Int?
+  street       String?
+  zip          String?
+  city         String?
+  email        String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employment     EmploymentRecord[]
+  selfEmployment SelfEmploymentRecord[]
+  income         IncomeRecord[]
+  documents      Document[]
+
+  @@index([caseId])
+  @@map("applicants")
+}
+
+// ============================ FALL ============================
+
+model Case {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  caseNumber     String
+  customerId     String?
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  brokerId       String?
+  broker         User?    @relation("CaseBroker", fields: [brokerId], references: [id], onDelete: SetNull)
+
+  status         CaseStatus    @default(neu)
+  financingType  FinancingType?
+  primaryEmploymentType EmploymentType?
+  kapitalanlage  Boolean       @default(false)
+  selbstnutzung  Boolean       @default(true)
+  vermieteterAnteil Int?
+
+  // Plattform-IDs
+  finlinkId          String?
+  europaceVorgangId  String?
+  ehypHomeId         String?
+
+  // Einreichungsstatus 0..100 (berechnet)
+  readinessScore Int @default(0)
+
+  // Datenschutz / Aufbewahrung pro Vorgang
+  retentionDays  Int?
+  deleteAfter    DateTime?
+
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  applicants         Applicant[]
+  sources            CaseSource[]
+  property           Property?
+  financingRequest   FinancingRequest?
+  liabilities        Liability[]
+  assets             Asset[]
+  documents          Document[]
+  caseChecklistItems CaseChecklistItem[]
+  missingRequests    MissingDocumentRequest[]
+  generatedMessages  GeneratedMessage[]
+  uploadLinks        UploadLink[]
+  customerForm       CustomerForm?
+  platformMappings   PlatformMapping[]
+  platformSyncLogs   PlatformSyncLog[]
+  exportJobs         ExportJob[]
+  aiJobs             AiJob[]
+  plausibilityChecks PlausibilityCheck[]
+
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId, status])
+  @@map("cases")
+}
+
+model CaseSource {
+  id         String         @id @default(cuid())
+  caseId     String
+  case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type       CaseSourceType
+  externalId String?        // z.B. FinLink-/Europace-ID
+  payload    Json?          // Rohdaten der Quelle (ohne sensible Logs)
+  createdAt  DateTime       @default(now())
+
+  @@index([caseId])
+  @@map("case_sources")
+}
+
+// Gespeichertes Kunden-Erstformular
+model CustomerForm {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  data      Json     // validierte Formularfelder (siehe Zod customerFormSchema)
+  submitted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer_forms")
+}
+
+// ============================ OBJEKT / FINANZIERUNG ============================
+
+model Property {
+  id            String   @id @default(cuid())
+  caseId        String   @unique
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  objektart     PropertyType?
+  street        String?
+  zip           String?
+  city          String?
+  wohnflaeche   Float?
+  nutzflaeche   Float?
+  grundstuecksflaeche Float?
+  baujahr       Int?
+  zustand       String?
+  anzahlZimmer  Float?
+  anzahlWohneinheiten Int?
+  heizungsart   String?
+  energieausweis String?
+  stellplaetze  Int?
+  hausgeldMonatlich Float?
+  mieteinnahmenMonatlich Float?
+  nutzung       UsageType?
+  vermieteterAnteilProzent Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("properties")
+}
+
+model FinancingRequest {
+  id                   String   @id @default(cuid())
+  caseId               String   @unique
+  case                 Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kaufpreis            Float?
+  baukosten            Float?
+  modernisierungskosten Float?
+  nebenkosten          Float?
+  maklerprovisionProzent Float?
+  eigenkapital         Float?
+  darlehenswunsch      Float?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("financing_requests")
+}
+
+model Liability {
+  id             String  @id @default(cuid())
+  caseId         String
+  case           Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  art            String?
+  glaeubiger     String?
+  restschuld     Float?
+  monatlicheRate Float?
+  abzuloesen     Boolean @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([caseId])
+  @@map("liabilities")
+}
+
+model Asset {
+  id        String  @id @default(cuid())
+  caseId    String
+  case      Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  art       String?
+  betrag    Float?
+  belegt    Boolean @default(false)
+  quelle    String?
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+  @@map("assets")
+}
+
+model IncomeRecord {
+  id            String  @id @default(cuid())
+  applicantId   String
+  applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  nettoMonatlich Float?
+  bruttoMonatlich Float?
+  sonstigeEinnahmen Float?
+  mieteinnahmen Float?
+  einmalzahlungenJaehrlich Float?
+  createdAt     DateTime @default(now())
+
+  @@index([applicantId])
+  @@map("income_records")
+}
+
+model EmploymentRecord {
+  id               String   @id @default(cuid())
+  applicantId      String
+  applicant        Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  beschaeftigungsart EmploymentType?
+  beruf            String?
+  arbeitgeber      String?
+  arbeitgeberAdresse String?
+  eintrittsdatum   DateTime?
+  befristetBis     DateTime?
+  inProbezeit      Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([applicantId])
+  @@map("employment_records")
+}
+
+model SelfEmploymentRecord {
+  id            String   @id @default(cuid())
+  applicantId   String
+  applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  firma         String?
+  rechtsform    String?
+  beteiligungProzent Float?
+  gruendungsdatum DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([applicantId])
+  @@map("self_employment_records")
+}
+
+// ============================ DOKUMENTE ============================
+
+model Document {
+  id             String   @id @default(cuid())
+  caseId         String
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  applicantId    String?
+  applicant      Applicant? @relation(fields: [applicantId], references: [id], onDelete: SetNull)
+
+  originalName   String
+  // Automatisch generierter sinnvoller Dateiname
+  generatedName  String?
+  storageKey     String   // Pfad/Key im Storage (S3/Supabase/local)
+  mimeType       String
+  sizeBytes      Int
+  pageCount      Int?
+
+  documentType   DocumentType?
+  uploadSource   UploadSource
+  ocrStatus      ProcessingStatus     @default(ausstehend)
+  classificationStatus ProcessingStatus @default(ausstehend)
+  extractionStatus ProcessingStatus   @default(ausstehend)
+  reviewStatus   DocumentReviewStatus @default(offen)
+  confidence     Float?
+
+  detectedApplicant String?
+  propertyRef    String?
+  period         String?       // Zeitraum, z.B. 2026-05
+  issuer         String?       // Aussteller
+
+  // Qualitaet / Duplikat
+  readable       Boolean?
+  missingPages   Boolean?
+  isDuplicate    Boolean  @default(false)
+  duplicateOfId  String?
+
+  // Plattform- / Bankzuordnung
+  platformRelevance Platform[]
+  bankRequirementKey String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pages           DocumentPage[]
+  classifications DocumentClassification[]
+  extractedFields ExtractedFieldRecord[]
+  warnings        DocumentWarning[]
+  duplicateChecksA DuplicateCheck[] @relation("DupA")
+  duplicateChecksB DuplicateCheck[] @relation("DupB")
+  checklistLinks   CaseChecklistItem[] @relation("ChecklistDocuments")
+  ocrJobs          OcrJob[]
+  aiJobs           AiJob[]
+
+  @@index([caseId])
+  @@index([documentType])
+  @@map("documents")
+}
+
+model DocumentPage {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  ocrText    String?  // OCR-Text; kann sensible Daten enthalten -> verschluesselt at-rest empfohlen
+  width      Int?
+  height     Int?
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+  @@map("document_pages")
+}
+
+model DocumentClassification {
+  id           String   @id @default(cuid())
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentType DocumentType
+  confidence   Float
+  reasoning    String?
+  model        String?  // verwendetes KI-Modell (zur Nachvollziehbarkeit)
+  createdAt    DateTime @default(now())
+
+  @@index([documentId])
+  @@map("document_classifications")
+}
+
+model ExtractedFieldRecord {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  key        String
+  label      String
+  value      String?
+  confidence Float
+  source     String?
+  // Vom Vermittler korrigierter Wert (Mensch schlaegt KI)
+  correctedValue String?
+  reviewed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+  @@map("extracted_fields")
+}
+
+model DocumentWarning {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  code       String
+  severity   Severity
+  message    String
+  customerVisible Boolean @default(false)
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+  @@map("document_warnings")
+}
+
+model DuplicateCheck {
+  id          String   @id @default(cuid())
+  documentAId String
+  documentA   Document @relation("DupA", fields: [documentAId], references: [id], onDelete: Cascade)
+  documentBId String
+  documentB   Document @relation("DupB", fields: [documentBId], references: [id], onDelete: Cascade)
+  isDuplicate Boolean
+  isNearDuplicate Boolean
+  similarity  Float
+  createdAt   DateTime @default(now())
+
+  @@index([documentAId])
+  @@map("duplicate_checks")
+}
+
+// ============================ CHECKLISTEN ============================
+
+model ChecklistTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?  // null = globale Standardvorlage
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String   // z.B. "angestellter_kauf"
+  name           String
+  description    String?
+  financingType  FinancingType?
+  employmentType EmploymentType?
+  propertyType   PropertyType?
+  editable       Boolean  @default(false) // MVP: fix; spaeter editierbar
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items ChecklistItem[]
+
+  @@unique([organizationId, key])
+  @@map("checklist_templates")
+}
+
+model ChecklistItem {
+  id           String   @id @default(cuid())
+  templateId   String
+  template     ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  key          String
+  name         String
+  customerDescription String  // Beschreibung fuer Kunde
+  internalDescription String? // interne Beschreibung fuer Vermittler
+  documentType DocumentType?
+  level        RequirementLevel @default(zwingend)
+  scope        RequirementScope @default(allgemein)
+  platforms    Platform[]
+  bankSpecific Boolean  @default(false)
+  recencyDays  Int?     // Aktualitaetsanforderung (z.B. 90 Tage)
+  acceptedFileTypes String[] @default(["pdf", "jpg", "png"])
+  requiredCount Int     @default(1)
+  example      String?
+  sortOrder    Int      @default(0)
+
+  caseItems CaseChecklistItem[]
+
+  @@unique([templateId, key])
+  @@map("checklist_items")
+}
+
+// Fallbezogene Instanz einer Checklisten-Position
+model CaseChecklistItem {
+  id              String   @id @default(cuid())
+  caseId          String
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  checklistItemId String?
+  checklistItem   ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  key             String
+  name            String
+  status          ChecklistItemStatus @default(offen)
+  level           RequirementLevel    @default(zwingend)
+  platforms       Platform[]
+  customerVisible Boolean  @default(true)
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  documents Document[] @relation("ChecklistDocuments")
+
+  @@index([caseId])
+  @@map("case_checklist_items")
+}
+
+// ============================ RULES (ANFORDERUNGEN) ============================
+
+// Plattform-spezifische Pflichtanforderungen (Europace/FinLink/eHyp)
+model PlatformRequirement {
+  id           String   @id @default(cuid())
+  platform     Platform
+  key          String
+  title        String
+  documentType DocumentType?
+  level        RequirementLevel @default(zwingend)
+  condition    Json?    // strukturierte Bedingung (caseType/applicantType/propertyType)
+  createdAt    DateTime @default(now())
+
+  @@unique([platform, key])
+  @@map("platform_requirements")
+}
+
+// Bank-spezifische Zusatzanforderungen
+model BankRequirement {
+  id             String   @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankName       String
+  key            String
+  title          String
+  documentType   DocumentType?
+  level          RequirementLevel @default(bankabhaengig)
+  condition      Json?
+  createdAt      DateTime @default(now())
+
+  @@map("bank_requirements")
+}
+
+// ============================ NACHFORDERUNGEN / NACHRICHTEN ============================
+
+model MissingDocumentRequest {
+  id             String   @id @default(cuid())
+  caseId         String
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  requirementKey String
+  documentType   DocumentType?
+  title          String
+  reason         String
+  level          RequirementLevel @default(zwingend)
+  platform       String?  // europace|finlink|ehyp_home|allgemein
+  bank           String?
+  customerVisible Boolean @default(true)
+  resolved       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([caseId])
+  @@map("missing_document_requests")
+}
+
+model GeneratedMessage {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  channel    MessageChannel
+  templateType MessageTemplateType
+  subject    String?
+  body       String
+  // Im MVP nur vorformuliert, nicht automatisch versendet
+  sent       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([caseId])
+  @@map("generated_messages")
+}
+
+model MessageTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           MessageTemplateType
+  channel        MessageChannel
+  subject        String?
+  body           String   // mit Platzhaltern wie {{kunde}}, {{uploadLink}}
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("message_templates")
+}
+
+// ============================ UPLOAD-LINK ============================
+
+model UploadLink {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  token      String   @unique // signiertes, zufaelliges Token
+  expiresAt  DateTime
+  maxUploads Int?
+  usedCount  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([caseId])
+  @@map("upload_links")
+}
+
+// ============================ PLATTFORM-INTEGRATION ============================
+
+model PlatformConnection {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  platform       Platform
+  // Verbindungs-/Config-Status. KEINE Klartext-Secrets -> verschluesselt / ENV-Referenz.
+  configured     Boolean  @default(false)
+  baseUrl        String?
+  configRef      String?  // Referenz auf sicher gespeicherte Credentials
+  lastTestedAt   DateTime?
+  lastStatus     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, platform])
+  @@map("platform_connections")
+}
+
+model PlatformMapping {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform   Platform
+  payload    Json     // gemapptes Payload (kanonisch -> Plattform)
+  missingRequiredFields String[] @default([])
+  released   Boolean  @default(false) // manuelle Freigabe vor Export
+  releasedBy String?
+  releasedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([caseId, platform])
+  @@map("platform_mappings")
+}
+
+model PlatformSyncLog {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform   Platform
+  direction  String   // import | export
+  status     String
+  message    String?
+  createdAt  DateTime @default(now())
+
+  @@index([caseId])
+  @@map("platform_sync_logs")
+}
+
+model ExportJob {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform   Platform?
+  format     String   // pdf | json | csv | clipboard
+  status     JobStatus @default(queued)
+  resultKey  String?  // Storage-Key des Exports
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([caseId])
+  @@map("export_jobs")
+}
+
+// ============================ KI / OCR JOBS ============================
+
+model AiJob {
+  id         String   @id @default(cuid())
+  caseId     String?
+  case       Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type       AiJobType
+  status     JobStatus @default(queued)
+  provider   String?
+  model      String?
+  confidence Float?
+  // Eingaben/Ausgaben: KEINE rohen Kundendaten dauerhaft loggen.
+  output     Json?
+  error      String?
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([documentId])
+  @@map("ai_jobs")
+}
+
+model OcrJob {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status     JobStatus @default(queued)
+  provider   String?
+  pageCount  Int?
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([documentId])
+  @@map("ocr_jobs")
+}
+
+// ============================ AUDIT ============================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String   // siehe AUDIT_ACTIONS
+  entityType     String
+  entityId       String?
+  // Nur Metadaten / Diff-Keys – keine sensiblen Klartext-Inhalte.
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ============================ SAAS / BILLING ============================
+
+model Plan {
+  id          String   @id @default(cuid())
+  tier        PlanTier @unique
+  name        String
+  monthlyCasesLimit Int?     // null = unbegrenzt
+  features    Json     // string[] Feature-Keys
+  priceMonthly Int?    // in Cent
+  createdAt   DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId         String
+  plan           Plan     @relation(fields: [planId], references: [id])
+  status         String   @default("trialing") // trialing|active|past_due|canceled
+  currentPeriodEnd DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model FeatureFlag {
+  id             String   @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String
+  enabled        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, key])
+  @@map("feature_flags")
+}
+
+model WhiteLabelSettings {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  brandName      String?
+  logoUrl        String?
+  primaryColor   String?
+  supportEmail   String?
+  customDomain   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("white_label_settings")
+}
+
+// ============================ PLAUSIBILITAET ============================
+
+model PlausibilityCheck {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  key         String
+  category    String
+  status      Severity
+  explanation String
+  recommendedAction String?
+  customerVisible Boolean @default(false)
+  relevantEuropace Boolean @default(false)
+  relevantFinlink  Boolean @default(false)
+  relevantEhyp     Boolean @default(false)
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([caseId])
+  @@map("plausibility_checks")
+}

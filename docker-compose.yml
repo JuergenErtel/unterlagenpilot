@@ -1,0 +1,25 @@
+# Lokale Entwicklungs-Datenbank für UnterlagenPilot.
+# Start:   docker compose up -d
+# Stop:    docker compose down
+# Reset:   docker compose down -v   (löscht das Volume / alle Daten)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: unterlagenpilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: unterlagenpilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - unterlagenpilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d unterlagenpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  unterlagenpilot_pgdata:
