@@ -32,10 +32,14 @@ const envSchema = z.object({
   OPENAI_COMPATIBLE_MODEL: z.string().optional(), // z.B. mistral-large-latest
 
   OCR_PROVIDER: z
-    .enum(["mock", "azure-document-intelligence", "tesseract"])
+    .enum(["mock", "mistral", "azure-document-intelligence", "tesseract"])
     .default("mock"),
   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: z.string().optional(),
   AZURE_DOCUMENT_INTELLIGENCE_KEY: z.string().optional(),
+  // Mistral OCR (EU). Key fällt auf OPENAI_COMPATIBLE_API_KEY zurück (gleiches Konto).
+  MISTRAL_API_KEY: z.string().optional(),
+  MISTRAL_API_BASE_URL: z.string().default("https://api.mistral.ai/v1"),
+  MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
 
   DEFAULT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
 });

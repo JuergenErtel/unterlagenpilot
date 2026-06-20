@@ -7,6 +7,7 @@ import {
   MockOCRProvider,
   AzureDocumentIntelligenceProvider,
 } from "./ocr-provider";
+import { MistralOCRProvider } from "./mistral-ocr-provider";
 
 /**
  * Provider-Factory – bewusst getrennt von index.ts/service.ts, um zirkuläre
@@ -37,6 +38,9 @@ export function getOCRProvider(): OCRProvider {
   if (ocrProvider) return ocrProvider;
   const env = getEnv();
   switch (env.OCR_PROVIDER) {
+    case "mistral":
+      ocrProvider = new MistralOCRProvider();
+      break;
     case "azure-document-intelligence":
       ocrProvider = new AzureDocumentIntelligenceProvider();
       break;
