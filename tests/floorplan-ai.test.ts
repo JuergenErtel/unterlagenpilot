@@ -11,4 +11,9 @@ describe("KI-Grundrissanalyse (Mock)", () => {
     expect(res.rooms[0]!.kategorie).toBeTruthy();
     expect(res.rooms[0]!.konfidenz).toBeGreaterThanOrEqual(0);
   });
+
+  it("akzeptiert PDF-Dokumente (document_url) ohne Bilder", async () => {
+    const res = await ai.analyzeFloorplan([], [{ url: "https://example.com/grundriss.pdf", name: "grundriss.pdf" }]);
+    expect(res.rooms.length).toBeGreaterThan(0);
+  });
 });

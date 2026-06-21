@@ -33,7 +33,11 @@ export async function analyzeFloorplanAction(
   if (files.length === 0) return { rooms: [], error: "Bitte mindestens einen Grundriss hochladen." };
 
   // 1) Grundrisse durch die sichere Pipeline (Validierung + Virenscan + Storage).
+  //    Bilder gehen als data-URI an die Vision-KI; PDFs als kurzlebige signierte
+  //    URL (Mistral document_url) – so liest die KI auch mehrseitige PDFs (mehrere Geschosse).
   const images: Array<{ base64: string; mimeType: string }> = [];
+  const documents: Array<{ url: string; name?: string }> = [];
+  const storage = getStorage();
   for (const file of files) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await processUpload({
@@ -44,20 +48,26 @@ export async function analyzeFloorplanAction(
       actorUserId: ctx.userId,
     });
     if (!result.ok || !result.documentId) continue;
-    // Nur Bildformate an die Vision-KI (PDF-Seiten-Rendering ist hier nicht im Scope).
     if (VISION_MIME.has(file.type)) {
       images.push({ base64: buffer.toString("base64"), mimeType: file.type });
+    } else if (file.type === "application/pdf") {
+      const doc = await prisma.document.findUnique({
+        where: { id: result.documentId },
+        select: { storageKey: true },
+      });
+      const signed = doc ? await storage.createSignedUrl(doc.storageKey, 300) : null;
+      if (signed) documents.push({ url: signed, name: file.name });
     }
   }
 
-  if (images.length === 0) {
-    return { rooms: [], error: "Für die KI-Analyse bitte JPG/PNG-Grundrisse hochladen (PDF wird gespeichert, aber nicht analysiert)." };
+  if (images.length === 0 && documents.length === 0) {
+    return { rooms: [], error: "Für die KI-Analyse bitte JPG/PNG- oder PDF-Grundrisse hochladen." };
   }
 
   // 2) KI-Analyse (best effort).
   let rooms: FloorplanWoflvRoom[] = [];
   try {
-    const analysis = await ai.analyzeFloorplan(images);
+    const analysis = await ai.analyzeFloorplan(images, documents);
     rooms = toWoflvRooms(analysis);
   } catch {
     return { rooms: [], error: "KI-Analyse derzeit nicht möglich. Bitte später erneut versuchen oder Räume manuell erfassen." };
@@ -69,7 +79,7 @@ export async function analyzeFloorplanAction(
     action: "ai.evaluated",
     entityType: "case",
     entityId: caseId,
-    metadata: { feature: "wohnflaeche", rooms: rooms.length, images: images.length },
+    metadata: { feature: "wohnflaeche", rooms: rooms.length, images: images.length, documents: documents.length },
   });
 
   revalidatePath(`/cases/${caseId}/wohnflaeche`);

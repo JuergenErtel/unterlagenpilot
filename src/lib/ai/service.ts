@@ -164,11 +164,14 @@ export class AIService {
     );
   }
 
-  async analyzeFloorplan(images: Array<{ base64: string; mimeType: string }>): Promise<FloorplanAnalysis> {
+  async analyzeFloorplan(
+    images: Array<{ base64: string; mimeType: string }>,
+    documents: Array<{ url: string; name?: string }> = []
+  ): Promise<FloorplanAnalysis> {
     const raw = await this.provider.completeJSON({
       schemaName: "floorplan",
       system:
-        "Du bist ein Bausachverständiger. Analysiere die beigefügten Grundriss-Bilder. " +
+        "Du bist ein Bausachverständiger. Analysiere die beigefügten Grundriss-Bilder und -PDFs. " +
         "Gib für JEDEN Raum Geschoss, Raumname, Kategorie (wohnraum, balkon_terrasse_loggia, " +
         "zubehoer_keller_hobby_abstell, wintergarten, schwimmbad), die Fläche in m² (falls " +
         "beschriftet) ODER Länge/Breite in Metern, ob eine Dachschräge vorliegt, sowie eine " +
@@ -176,6 +179,7 @@ export class AIService {
       user: "Analysiere die Grundrisse und liefere die Raumliste gemäß Schema.",
       jsonSchema: floorplanJsonSchema,
       images,
+      documents,
     });
     const parsed = floorplanAnalysisSchema.safeParse(raw);
     if (!parsed.success) return { rooms: [] };
