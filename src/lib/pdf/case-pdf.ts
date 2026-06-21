@@ -18,11 +18,12 @@ import type {
   ChecklistData,
   AuditProtocolData,
   PlatformExportData,
+  WohnflaecheData,
 } from "@/lib/pdf/renderer";
 
 const ai = new AIService();
 
-export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform";
+export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform" | "wohnflaeche";
 
 function dateStr(d = new Date()): string {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -195,5 +196,33 @@ export async function buildPlatformExportData(
       missingDocuments: [],
     },
     fileName: pdfFileName(`Export_${PLATFORM_LABELS[platform]}`, caseRow.applicants),
+  };
+}
+
+export async function buildWohnflaecheData(
+  caseId: string,
+  organizationId: string
+): Promise<{ data: WohnflaecheData; fileName: string } | null> {
+  const broker = await getBrokerInfo(organizationId);
+  const caseRow = await prisma.case.findUniqueOrThrow({
+    where: { id: caseId },
+    include: { applicants: { orderBy: { position: "asc" } } },
+  });
+  const latest = await prisma.wohnflaechenBerechnung.findFirst({
+    where: { caseId },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!latest) return null;
+  const rooms = (latest.rooms as unknown as WohnflaecheData["rooms"]) ?? [];
+  return {
+    data: {
+      caseNumber: caseRow.caseNumber,
+      dateStr: dateStr(),
+      broker,
+      rooms,
+      summeWohnflaeche: latest.summeWohnflaeche,
+      summeZubehoer: latest.summeZubehoer,
+    },
+    fileName: pdfFileName("Wohnflaechenberechnung", caseRow.applicants),
   };
 }

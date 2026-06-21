@@ -66,6 +66,17 @@ export class MockAIProvider implements AIProvider {
         return req.hints?.precomputed ?? { platform: "europace", groups: [], missingRequiredFields: [] };
       case "generatedMessage":
         return req.hints?.precomputed ?? { channel: "email", subject: "Ihre Unterlagen", body: "" };
+      case "floorplan":
+        return {
+          rooms: [
+            { geschoss: "EG", raumname: "Wohnen/Essen", kategorie: "wohnraum", flaecheM2: 32.4, konfidenz: 0.9, quelle: "flaeche_beschriftet" },
+            { geschoss: "EG", raumname: "Küche", kategorie: "wohnraum", flaecheM2: 11.2, konfidenz: 0.88, quelle: "flaeche_beschriftet" },
+            { geschoss: "EG", raumname: "Gäste-WC", kategorie: "wohnraum", flaecheM2: 3.1, konfidenz: 0.7, quelle: "aus_massen_berechnet" },
+            { geschoss: "OG", raumname: "Schlafen", kategorie: "wohnraum", flaecheM2: 18.0, konfidenz: 0.85, quelle: "flaeche_beschriftet" },
+            { geschoss: "OG", raumname: "Balkon", kategorie: "balkon_terrasse_loggia", flaecheM2: 8.0, konfidenz: 0.8, quelle: "flaeche_beschriftet" },
+            { geschoss: "KG", raumname: "Keller", kategorie: "zubehoer_keller_hobby_abstell", flaecheM2: 24.0, konfidenz: 0.75, quelle: "aus_massen_berechnet" },
+          ],
+        };
       default:
         return {};
     }

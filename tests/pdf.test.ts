@@ -4,6 +4,7 @@ import {
   renderMissingChecklist,
   renderAuditProtocol,
   renderPlatformExport,
+  renderWohnflaeche,
 } from "@/lib/pdf/renderer";
 import { pdfFileName } from "@/lib/pdf/case-pdf";
 
@@ -63,5 +64,21 @@ describe("PDF-Renderer", () => {
     expect(pdfFileName("Bankzusammenfassung", [{ vorname: "Max", nachname: "Mustermann" }, { vorname: "Erika", nachname: "Mustermann" }])).toBe(
       "Bankzusammenfassung_Max_Erika_Mustermann.pdf"
     );
+  });
+
+  it("erzeugt eine Wohnflächenberechnung", async () => {
+    const buf = await renderWohnflaeche({
+      caseNumber: "UP-2026-0001",
+      dateStr: "21.06.2026",
+      broker,
+      rooms: [
+        { geschoss: "EG", raumname: "Wohnen", kategorie: "wohnraum", flaecheM2: 32.4, faktor: 1, anrechenbarM2: 32.4, istZubehoer: false },
+        { geschoss: "OG", raumname: "Balkon", kategorie: "balkon_terrasse_loggia", flaecheM2: 8, faktor: 0.25, anrechenbarM2: 2, istZubehoer: false },
+        { geschoss: "KG", raumname: "Keller", kategorie: "zubehoer_keller_hobby_abstell", flaecheM2: 24, faktor: 0, anrechenbarM2: 0, istZubehoer: true },
+      ],
+      summeWohnflaeche: 34.4,
+      summeZubehoer: 24,
+    });
+    expect(isPdf(buf)).toBe(true);
   });
 });

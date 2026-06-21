@@ -7,12 +7,14 @@ import {
   renderMissingChecklist,
   renderAuditProtocol,
   renderPlatformExport,
+  renderWohnflaeche,
 } from "@/lib/pdf/renderer";
 import {
   buildBankSummaryData,
   buildChecklistData,
   buildAuditProtocolData,
   buildPlatformExportData,
+  buildWohnflaecheData,
   type CasePdfType,
 } from "@/lib/pdf/case-pdf";
 import { PLATFORMS, type Platform } from "@/lib/domain/enums";
@@ -43,6 +45,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     switch (type) {
+      case "wohnflaeche": {
+        const built = await buildWohnflaecheData(id, ctx.organizationId);
+        if (!built) return new NextResponse("Noch keine Wohnflächenberechnung vorhanden.", { status: 404 });
+        buffer = await renderWohnflaeche(built.data);
+        fileName = built.fileName;
+        break;
+      }
       case "checklist": {
         const { data, fileName: fn } = await buildChecklistData(id, ctx.organizationId);
         buffer = await renderMissingChecklist(data);

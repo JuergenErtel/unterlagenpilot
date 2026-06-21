@@ -43,7 +43,19 @@ export class OpenAICompatibleProvider implements AIProvider {
         model: env.OPENAI_COMPATIBLE_MODEL,
         messages: [
           { role: "system", content: buildSystemPrompt(req) },
-          { role: "user", content: req.user },
+          {
+            role: "user",
+            content:
+              req.images && req.images.length > 0
+                ? [
+                    { type: "text", text: req.user },
+                    ...req.images.map((img) => ({
+                      type: "image_url",
+                      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+                    })),
+                  ]
+                : req.user,
+          },
         ],
         temperature: 0,
         response_format: { type: "json_object" },

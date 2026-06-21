@@ -26,6 +26,7 @@ import {
   type ExtractedField,
 } from "@/lib/domain/ai-schemas";
 import type { DocumentType, Platform } from "@/lib/domain/enums";
+import { floorplanAnalysisSchema, floorplanJsonSchema, type FloorplanAnalysis } from "@/lib/wohnflaeche/schema";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 
 /**
@@ -161,6 +162,24 @@ export class AIService {
         propertyRef: caseData.property?.strasse ?? null,
       }
     );
+  }
+
+  async analyzeFloorplan(images: Array<{ base64: string; mimeType: string }>): Promise<FloorplanAnalysis> {
+    const raw = await this.provider.completeJSON({
+      schemaName: "floorplan",
+      system:
+        "Du bist ein Bausachverständiger. Analysiere die beigefügten Grundriss-Bilder. " +
+        "Gib für JEDEN Raum Geschoss, Raumname, Kategorie (wohnraum, balkon_terrasse_loggia, " +
+        "zubehoer_keller_hobby_abstell, wintergarten, schwimmbad), die Fläche in m² (falls " +
+        "beschriftet) ODER Länge/Breite in Metern, ob eine Dachschräge vorliegt, sowie eine " +
+        "Konfidenz (0–1) und die Quelle. Erfinde keine Maße. Antworte ausschließlich als JSON.",
+      user: "Analysiere die Grundrisse und liefere die Raumliste gemäß Schema.",
+      jsonSchema: floorplanJsonSchema,
+      images,
+    });
+    const parsed = floorplanAnalysisSchema.safeParse(raw);
+    if (!parsed.success) return { rooms: [] };
+    return parsed.data;
   }
 
   // ---------------- Fachanalysen (KO-Kriterien) ----------------
