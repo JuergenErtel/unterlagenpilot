@@ -269,3 +269,52 @@ export async function renderPlatformExport(data: PlatformExportData): Promise<Bu
   footer(doc, data.broker);
   return docToBuffer(doc);
 }
+
+// ---------------------------------------------------------------------------
+// E) Wohnflächenberechnung nach WoFlV
+// ---------------------------------------------------------------------------
+
+export interface WohnflaecheData {
+  caseNumber: string;
+  dateStr: string;
+  broker: BrokerInfo;
+  rooms: Array<{ geschoss: string; raumname: string; kategorie: string; flaecheM2: number; faktor: number; anrechenbarM2: number; istZubehoer: boolean }>;
+  summeWohnflaeche: number;
+  summeZubehoer: number;
+}
+
+const KAT_LABEL: Record<string, string> = {
+  wohnraum: "Wohnraum",
+  balkon_terrasse_loggia: "Balkon/Terrasse",
+  zubehoer_keller_hobby_abstell: "Zubehör",
+  wintergarten: "Wintergarten",
+  schwimmbad: "Schwimmbad",
+};
+
+export async function renderWohnflaeche(data: WohnflaecheData): Promise<Buffer> {
+  const doc = newDoc(`Wohnflaechenberechnung ${data.caseNumber}`);
+  coverHeader(doc, data.broker, "Wohnflächenberechnung nach WoFlV", `Vorgang ${data.caseNumber}`, data.dateStr);
+
+  heading(doc, "Aufstellung");
+  doc.font("Helvetica").fontSize(9).fillColor("#1a1a1a");
+  data.rooms.forEach((r) => {
+    const line = `${r.geschoss} · ${r.raumname} (${KAT_LABEL[r.kategorie] ?? r.kategorie}) — ${r.flaecheM2.toFixed(2)} m² × ${Math.round(r.faktor * 100)}% = ${r.anrechenbarM2.toFixed(2)} m²${r.istZubehoer ? "  [Zubehör]" : ""}`;
+    doc.text(line);
+    doc.moveDown(0.1);
+  });
+
+  heading(doc, "Summen");
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#1f3a8a");
+  doc.text(`Anrechenbare Wohnfläche: ${data.summeWohnflaeche.toFixed(2)} m²`);
+  doc.font("Helvetica").fontSize(10).fillColor("#6b7280");
+  doc.text(`Zubehörflächen (nicht angerechnet): ${data.summeZubehoer.toFixed(2)} m²`);
+
+  doc.moveDown(1);
+  doc.fillColor("#6b7280").fontSize(7.5).font("Helvetica").text(
+    "Berechnung auf Basis der vorgelegten Pläne – ersetzt keine amtliche Aufmaß-/Vermesserbescheinigung. Werte vor Verwendung prüfen.",
+    { width: 495 }
+  );
+
+  footer(doc, data.broker);
+  return docToBuffer(doc);
+}
