@@ -145,6 +145,17 @@ enum DocumentReviewStatus {
   duplikat
 }
 
+// Sicherheits-Lebenszyklus eines Uploads (Virenscan / Quarantäne)
+enum DocumentScanStatus {
+  uploaded
+  quarantined
+  virus_scan_pending
+  virus_scan_clean
+  virus_scan_failed
+  rejected
+  ready_for_ocr
+}
+
 enum Severity {
   ok
   warnung
@@ -561,6 +572,10 @@ model Document {
 
   documentType   DocumentType?
   uploadSource   UploadSource
+  // Sicherheits-/Scan-Status. OCR/KI laufen erst nach virus_scan_clean/ready_for_ocr.
+  scanStatus     DocumentScanStatus   @default(virus_scan_pending)
+  scanEngine     String?
+  scannedAt      DateTime?
   ocrStatus      ProcessingStatus     @default(ausstehend)
   classificationStatus ProcessingStatus @default(ausstehend)
   extractionStatus ProcessingStatus   @default(ausstehend)

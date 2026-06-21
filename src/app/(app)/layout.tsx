@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentContext } from "@/lib/auth/context";
-import Link from "next/link";
+import { getEnv } from "@/lib/env";
 
 // DB-gestützte Seiten immer zur Laufzeit rendern (kein Build-Time-Prerender).
 export const dynamic = "force-dynamic";
@@ -13,6 +15,9 @@ export default async function AppLayout({
   const ctx = await getCurrentContext();
 
   if (!ctx) {
+    // Session-Modus: echte Anmeldung erforderlich.
+    if (getEnv().AUTH_MODE === "session") redirect("/login");
+    // Demo-Modus ohne Seed: Hinweis statt Endlos-Redirect.
     return (
       <div className="mx-auto mt-24 max-w-md rounded-lg border bg-card p-8 text-center">
         <h1 className="text-lg font-semibold">Kein Kontext gefunden</h1>
@@ -28,7 +33,14 @@ export default async function AppLayout({
   }
 
   return (
-    <AppShell context={{ organizationName: ctx.organizationName, userName: ctx.userName, role: ctx.role }}>
+    <AppShell
+      context={{
+        organizationName: ctx.organizationName,
+        userName: ctx.userName,
+        role: ctx.role,
+        isDemo: ctx.isDemo,
+      }}
+    >
       {children}
     </AppShell>
   );

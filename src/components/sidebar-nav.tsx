@@ -8,6 +8,7 @@ import {
   ScanSearch,
   Send,
   ListChecks,
+  FileStack,
   Plug,
   Building2,
   ShieldCheck,
@@ -31,6 +32,7 @@ const GROUPS: Array<{ label: string; items: Array<{ href: string; label: string;
     label: "Konfiguration",
     items: [
       { href: "/checklists", label: "Checklisten", icon: ListChecks },
+      { href: "/document-types", label: "Dokumenttypen", icon: FileStack },
       { href: "/connections", label: "Plattform-Verbindungen", icon: Plug },
       { href: "/organization", label: "Organisation & Team", icon: Building2 },
       { href: "/audit", label: "Audit-Log", icon: ShieldCheck },

@@ -9,12 +9,15 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getSystemStatus } from "@/lib/system/status";
+import { SystemStatusPanel, PilotBanner } from "@/components/system/system-status-panel";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
   const org = await prisma.organization.findUnique({
     where: { id: ctx.organizationId },
   });
+  const status = await getSystemStatus(ctx.organizationId);
 
   const aiProvider = process.env.AI_PROVIDER ?? "mock";
   const ocrProvider = process.env.OCR_PROVIDER ?? "mock";
@@ -34,6 +37,9 @@ export default async function SettingsPage() {
           {ctx.organizationName}. Reine Anzeige – Secrets werden nicht angezeigt.
         </p>
       </div>
+
+      <PilotBanner pilot={status.pilot} />
+      <SystemStatusPanel status={status} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

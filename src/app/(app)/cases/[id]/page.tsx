@@ -4,8 +4,9 @@ import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle } from "
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
-import { getEnv } from "@/lib/env";
-import { runAiCheck, createUploadLinkForm } from "@/lib/actions/cases";
+import { listUploadLinks } from "@/lib/security/upload-link";
+import { runAiCheck } from "@/lib/actions/cases";
+import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +39,19 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
   if (!caseRow) notFound();
 
   const cockpit = await getCaseCockpit(id);
-  const [documents, plausibility, uploadLink] = await Promise.all([
+  const [documents, plausibility, uploadLinks] = await Promise.all([
     prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
-    prisma.uploadLink.findFirst({ where: { caseId: id, active: true }, orderBy: { createdAt: "desc" } }),
+    listUploadLinks(id, ctx.organizationId),
   ]);
-  const uploadUrl = uploadLink ? `${getEnv().APP_BASE_URL}/upload/${uploadLink.token}` : null;
+  const uploadLinkRows = uploadLinks.map((l) => ({
+    id: l.id,
+    expiresAt: l.expiresAt.toISOString(),
+    active: l.active,
+    expired: l.expired,
+    maxUploads: l.maxUploads,
+    usedCount: l.usedCount,
+  }));
 
   return (
     <div className="space-y-6">
@@ -74,13 +82,6 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
           </div>
         </CardContent>
       </Card>
-
-      {uploadUrl && (
-        <div className="rounded-lg border border-ai/30 bg-ai/[0.04] p-3 text-sm">
-          <span className="font-medium">Aktiver Upload-Link:</span>{" "}
-          <a href={uploadUrl} className="break-all font-mono text-xs text-ai underline" target="_blank" rel="noreferrer">{uploadUrl}</a>
-        </div>
-      )}
 
       {/* Hauptbereich: Roadmap + Tabs | Sidebar */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -198,10 +199,19 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
         <div className="space-y-4">
           <NextBestAction actions={cockpit.nextActions} />
           <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Link2 className="h-4 w-4" /> Sicherer Upload-Link
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UploadLinkManager caseId={id} links={uploadLinkRows} />
+            </CardContent>
+          </Card>
+          <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">Aktionen</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
               <form action={runAiCheck.bind(null, id)}><Button type="submit" variant="ai" className="w-full justify-start"><ScanSearch />KI-Prüfung starten</Button></form>
-              <form action={createUploadLinkForm.bind(null, id)}><Button type="submit" variant="outline" className="w-full justify-start"><Link2 />Upload-Link erstellen</Button></form>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>

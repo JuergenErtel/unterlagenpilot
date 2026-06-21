@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { getDashboardData } from "@/lib/cases/dashboard";
+import { getSystemStatus } from "@/lib/system/status";
+import { PilotBanner } from "@/components/system/system-status-panel";
 import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -28,6 +30,7 @@ function greeting() {
 export default async function DashboardPage() {
   const ctx = await requireContext();
   const data = await getDashboardData(ctx.organizationId);
+  const status = await getSystemStatus(ctx.organizationId);
   const demoCase = await prisma.case.findFirst({
     where: { organizationId: ctx.organizationId, caseNumber: "UP-2026-0001" },
     select: { id: true },
@@ -39,6 +42,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-7">
+      {status.pilot && <PilotBanner pilot={status.pilot} />}
+
       {/* Hero */}
       <div className="rounded-xl border bg-card p-6 shadow-soft">
         <PageHeader

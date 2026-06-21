@@ -17,12 +17,13 @@ describe.runIf(RUN)("Supabase Storage – Roundtrip", () => {
       const buffer = Buffer.from(content, "utf-8");
 
       const stored = await storage.put({
+        organizationId: "selftest-org",
         caseId: "selftest",
         originalName: "probe.txt",
         mimeType: "text/plain",
         buffer,
       });
-      expect(stored.storageKey).toContain("selftest/");
+      expect(stored.storageKey).toContain("cases/selftest/");
       expect(stored.sizeBytes).toBe(buffer.byteLength);
 
       const back = await storage.get(stored.storageKey);

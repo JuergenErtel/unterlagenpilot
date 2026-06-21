@@ -43,3 +43,13 @@ export function verifyUploadToken(token: string): UploadTokenPayload | null {
 export function randomToken(bytes = 24): string {
   return crypto.randomBytes(bytes).toString("base64url");
 }
+
+/**
+ * Deterministischer Hash des (Klartext-)Tokens für die Speicherung.
+ * Wir speichern NIE das Klartext-Token in der DB, sondern nur diesen Hash –
+ * so ist ein DB-Leak nicht direkt als gültiger Upload-Link verwendbar.
+ */
+export function hashToken(token: string): string {
+  const secret = getEnv().UPLOAD_TOKEN_SECRET;
+  return crypto.createHmac("sha256", secret).update(`uplink:${token}`).digest("base64url");
+}
