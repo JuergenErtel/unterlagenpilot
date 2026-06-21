@@ -399,6 +399,7 @@ model Case {
   exportJobs         ExportJob[]
   aiJobs             AiJob[]
   plausibilityChecks PlausibilityCheck[]
+  wohnflaechen       WohnflaechenBerechnung[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -1067,4 +1068,23 @@ model PlausibilityCheck {
 
   @@index([caseId])
   @@map("plausibility_checks")
+}
+
+// ============================ WOHNFLAECHEN BERECHNUNG ============================
+
+model WohnflaechenBerechnung {
+  id              String   @id @default(cuid())
+  caseId          String
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // Geprüfte Raumliste (WoflvRoomResult[]) als JSON – editierbar, nachvollziehbar.
+  rooms           Json
+  summeWohnflaeche Float   @default(0)
+  summeZubehoer   Float    @default(0)
+  released        Boolean  @default(false)
+  model           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([caseId])
+  @@map("wohnflaechen_berechnungen")
 }
