@@ -13,6 +13,8 @@ export interface AICompletionRequest {
   jsonSchema?: Record<string, unknown>;
   /** Optionaler Kontext für deterministische Mock-Ausgaben */
   hints?: Record<string, unknown>;
+  /** Optionale Bilder (Vision). base64 OHNE data:-Präfix. */
+  images?: Array<{ base64: string; mimeType: string }>;
 }
 
 export interface AIProvider {
