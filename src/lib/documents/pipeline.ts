@@ -1,0 +1,223 @@
+import { prisma } from "@/lib/db";
+import { getEnv } from "@/lib/env";
+import { audit } from "@/lib/audit";
+import { getStorage } from "@/lib/storage";
+import { getOCRProvider } from "@/lib/ai";
+import { AIService } from "@/lib/ai/service";
+import { generateFileName } from "@/lib/documents/filename";
+import { validateUpload } from "@/lib/security/file-validation";
+import { getVirusScanner } from "@/lib/security/virus-scan";
+import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
+
+/**
+ * Sichere Upload-Pipeline:
+ *   validieren → speichern → Virenscan (Quarantäne) → erst danach OCR/KI.
+ * Jeder Schritt wird auditiert (nur Metadaten, keine Klartext-Inhalte).
+ */
+const ai = new AIService();
+
+export interface ProcessUploadFile {
+  name: string;
+  type: string;
+  size: number;
+  buffer: Buffer;
+}
+
+export interface ProcessUploadInput {
+  organizationId: string;
+  caseId: string;
+  file: ProcessUploadFile;
+  uploadSource: UploadSource;
+  applicantName?: string | null;
+  applicantId?: string | null;
+  actorUserId?: string | null;
+}
+
+export interface ProcessUploadResult {
+  ok: boolean;
+  documentId?: string;
+  fileName: string;
+  scanStatus?: DocumentScanStatus;
+  /** Datenarme, verständliche Meldung bei Ablehnung/Quarantäne. */
+  reason?: string;
+}
+
+export async function processUpload(input: ProcessUploadInput): Promise<ProcessUploadResult> {
+  const { organizationId, caseId, file, uploadSource } = input;
+
+  // 1) Validierung (Typ/Größe/MIME/Magic-Bytes) VOR Speicherung.
+  const validation = validateUpload({
+    filename: file.name,
+    mimeType: file.type,
+    size: file.size,
+    buffer: file.buffer,
+  });
+  if (!validation.ok) {
+    await audit({
+      organizationId,
+      userId: input.actorUserId ?? null,
+      action: "document.rejected",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { source: uploadSource, reason: validation.error, stage: "validation" },
+    });
+    return { ok: false, fileName: file.name, reason: validation.error };
+  }
+
+  // 2) Speichern (mandanten-/fallbezogener Pfad).
+  const storage = getStorage();
+  const stored = await storage.put({
+    organizationId,
+    caseId,
+    originalName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    buffer: file.buffer,
+  });
+
+  // 3) Dokument anlegen, zunächst in Quarantäne (Scan ausstehend).
+  const doc = await prisma.document.create({
+    data: {
+      caseId,
+      applicantId: input.applicantId ?? undefined,
+      originalName: file.name,
+      generatedName: generateFileName({
+        documentType: null,
+        applicantName: input.applicantName ?? null,
+        originalName: file.name,
+      }),
+      storageKey: stored.storageKey,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+      uploadSource,
+      scanStatus: "virus_scan_pending",
+    },
+    select: { id: true },
+  });
+
+  // 4) Virenscan.
+  const scanner = getVirusScanner();
+  let scan;
+  try {
+    scan = await scanner.scan({ buffer: file.buffer, filename: file.name, mimeType: stored.mimeType });
+  } catch {
+    scan = { verdict: "error" as const, engine: scanner.name, demo: false };
+  }
+
+  await audit({
+    organizationId,
+    userId: input.actorUserId ?? null,
+    action: "document.scanned",
+    entityType: "document",
+    entityId: doc.id,
+    metadata: { engine: scan.engine, verdict: scan.verdict, demo: scan.demo },
+  });
+
+  if (scan.verdict === "infected") {
+    await prisma.document.update({
+      where: { id: doc.id },
+      data: { scanStatus: "rejected", scanEngine: scan.engine, scannedAt: new Date(), readable: false },
+    });
+    // Infizierte Datei aus dem Storage entfernen (keine weitere Verarbeitung).
+    await storage.remove(stored.storageKey).catch(() => {});
+    await audit({
+      organizationId,
+      userId: input.actorUserId ?? null,
+      action: "document.rejected",
+      entityType: "document",
+      entityId: doc.id,
+      metadata: { reason: "virus", signature: scan.signature, stage: "scan" },
+    });
+    return {
+      ok: false,
+      documentId: doc.id,
+      fileName: file.name,
+      scanStatus: "rejected",
+      reason: "Aus Sicherheitsgründen abgelehnt (Schadsoftware erkannt).",
+    };
+  }
+
+  if (scan.verdict === "error") {
+    await prisma.document.update({
+      where: { id: doc.id },
+      data: { scanStatus: "virus_scan_failed", scanEngine: scan.engine, scannedAt: new Date() },
+    });
+    return {
+      ok: false,
+      documentId: doc.id,
+      fileName: file.name,
+      scanStatus: "virus_scan_failed",
+      reason: "Sicherheitsprüfung derzeit nicht möglich. Die Datei wurde sicher zwischengelagert und wird geprüft.",
+    };
+  }
+
+  // Sauber → für OCR freigegeben.
+  await prisma.document.update({
+    where: { id: doc.id },
+    data: { scanStatus: "ready_for_ocr", scanEngine: scan.engine, scannedAt: new Date() },
+  });
+
+  // 5) OCR + KI (best effort; Ausfall blockiert den Upload nicht).
+  const ocr = getOCRProvider();
+  let ocrResult: Awaited<ReturnType<typeof ocr.extractText>> | null = null;
+  let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
+  let ext: Awaited<ReturnType<typeof ai.extractFields>> | null = null;
+  try {
+    ocrResult = await ocr.extractText({
+      storageKey: stored.storageKey,
+      mimeType: stored.mimeType,
+      originalName: file.name,
+      buffer: file.buffer,
+    });
+    cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
+    ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+  } catch {
+    // KI/OCR nicht verfügbar – ohne Klartext loggen.
+  }
+
+  const generatedName = generateFileName({
+    documentType: cls?.documentType ?? null,
+    applicantName: cls?.detectedApplicant ?? input.applicantName ?? null,
+    propertyRef: cls?.detectedPropertyRef,
+    period: cls?.period,
+    originalName: file.name,
+  });
+
+  await prisma.document.update({
+    where: { id: doc.id },
+    data: {
+      generatedName,
+      pageCount: ocrResult?.pageCount,
+      documentType: cls?.documentType ?? null,
+      ocrStatus: ocrResult ? "fertig" : "fehler",
+      classificationStatus: cls ? "fertig" : "fehler",
+      extractionStatus: ext ? "fertig" : "fehler",
+      confidence: cls?.confidence,
+      readable: ocrResult ? true : null,
+      period: cls?.period ?? undefined,
+      pages: ocrResult
+        ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) }
+        : undefined,
+      extractedFields: ext
+        ? {
+            create: ext.fields.map((f) => ({
+              key: f.key,
+              label: f.label,
+              value: f.value == null ? null : String(f.value),
+              confidence: f.confidence,
+              source: f.source,
+            })),
+          }
+        : undefined,
+      warnings: ext
+        ? { create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })) }
+        : undefined,
+    },
+  });
+
+  return { ok: true, documentId: doc.id, fileName: file.name, scanStatus: "ready_for_ocr" };
+}
+
+/** Maximale Upload-Größe in MB (für UI-Hinweise). */
+export function maxUploadMb(): number {
+  return getEnv().UPLOAD_MAX_MB;
+}

@@ -1,4 +1,20 @@
 import { PrismaClient } from "@prisma/client";
+import crypto from "node:crypto";
+
+/**
+ * Inline-Passwort-Hash (Format identisch zu src/lib/auth/session.ts → verifyPassword):
+ * scrypt$N$saltB64url$hashB64url. Seed läuft via tsx ohne @/-Pfadauflösung,
+ * daher hier dupliziert statt importiert.
+ */
+function hashPassword(password: string): string {
+  const N = 16384;
+  const salt = crypto.randomBytes(16);
+  const dk = crypto.scryptSync(password, salt, 64, { N });
+  return `scrypt$${N}$${salt.toString("base64url")}$${dk.toString("base64url")}`;
+}
+
+// Demo-/Pilot-Login (nur Entwicklung). Produktiv: individuelle Passwörter setzen.
+const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? "Pilot2026!";
 
 /**
  * Seed-Daten: Organisation Jürgen Ertel Baufinanzierung + überzeugender Demo-Fall
@@ -51,14 +67,14 @@ export async function seed(prisma: PrismaClient) {
 
   const broker = await prisma.user.upsert({
     where: { email: "juergen.ertel@baufi-woerth.de" },
-    create: { organizationId: org.id, email: "juergen.ertel@baufi-woerth.de", name: "Jürgen Ertel", role: "org_admin" },
-    update: {},
+    create: { organizationId: org.id, email: "juergen.ertel@baufi-woerth.de", name: "Jürgen Ertel", role: "org_admin", passwordHash: hashPassword(DEMO_PASSWORD) },
+    update: { passwordHash: hashPassword(DEMO_PASSWORD) },
   });
-  // Zweiter Demo-Nutzer (Team-Ansicht)
+  // Zweiter Demo-Nutzer (Team-Ansicht / Sachbearbeiter)
   await prisma.user.upsert({
     where: { email: "sachbearbeitung@baufi-woerth.de" },
-    create: { organizationId: org.id, email: "sachbearbeitung@baufi-woerth.de", name: "Lena Bachmann", role: "teammitglied" },
-    update: {},
+    create: { organizationId: org.id, email: "sachbearbeitung@baufi-woerth.de", name: "Lena Bachmann", role: "teammitglied", passwordHash: hashPassword(DEMO_PASSWORD) },
+    update: { passwordHash: hashPassword(DEMO_PASSWORD) },
   });
 
   for (const key of ["ki_auswertung", "bankfaehige_zusammenfassung", "plattform_kopiermaske"]) {

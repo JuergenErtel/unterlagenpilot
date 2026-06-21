@@ -208,6 +208,18 @@ export const DOCUMENT_REVIEW_STATUSES = [
 ] as const;
 export type DocumentReviewStatus = (typeof DOCUMENT_REVIEW_STATUSES)[number];
 
+/** Sicherheits-/Scan-Status eines Uploads */
+export const DOCUMENT_SCAN_STATUSES = [
+  "uploaded",
+  "quarantined",
+  "virus_scan_pending",
+  "virus_scan_clean",
+  "virus_scan_failed",
+  "rejected",
+  "ready_for_ocr",
+] as const;
+export type DocumentScanStatus = (typeof DOCUMENT_SCAN_STATUSES)[number];
+
 /** Schweregrad von Prüfungen / Warnungen */
 export const SEVERITIES = ["ok", "warnung", "kritisch", "fehlt"] as const;
 export type Severity = (typeof SEVERITIES)[number];
@@ -282,6 +294,13 @@ export const USER_ROLES = [
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  white_label_admin: "White-Label-Admin",
+  org_admin: "Owner / Admin",
+  vermittler: "Vermittler",
+  teammitglied: "Sachbearbeiter",
+};
+
 /** KI-Job-Arten */
 export const AI_JOB_TYPES = [
   "classify",
@@ -328,6 +347,17 @@ export const AUDIT_ACTIONS = [
   "platform.pushed",
   "message.generated",
   "upload_link.created",
+  "upload_link.accessed",
+  "upload_link.deactivated",
+  "upload_link.regenerated",
+  "document.scanned",
+  "document.quarantined",
+  "document.rejected",
+  "document.downloaded",
+  "pdf.generated",
+  "auth.login",
+  "auth.login_failed",
+  "auth.logout",
   "customer.data_exported",
   "customer.deleted",
   "access.viewed",

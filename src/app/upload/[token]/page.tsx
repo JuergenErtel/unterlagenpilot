@@ -1,8 +1,9 @@
-import { ShieldCheck, UploadCloud, Lock } from "lucide-react";
+import { ShieldCheck, Lock } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { verifyUploadToken } from "@/lib/security/upload-token";
+import { requireUploadTokenAccess } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
-import { customerUpload, saveCustomerForm } from "@/lib/actions/upload";
+import { saveCustomerForm } from "@/lib/actions/upload";
+import { maxUploadMb } from "@/lib/documents/pipeline";
 import {
   Card,
   CardContent,
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CustomerUploadProgress } from "@/components/customer/customer-upload-progress";
+import { CustomerUploadForm } from "@/components/customer/customer-upload-form";
 import { MARITAL_STATUSES, type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +27,10 @@ export default async function PublicUploadPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const payload = verifyUploadToken(token);
-  const link = payload
+  const access = await requireUploadTokenAccess(token);
+  const link = access
     ? await prisma.uploadLink.findUnique({
-        where: { token },
+        where: { id: access.linkId },
         include: {
           case: {
             include: {
@@ -42,8 +44,7 @@ export default async function PublicUploadPage({
       })
     : null;
 
-  const now = new Date();
-  if (!payload || !link || !link.active || link.expiresAt < now) {
+  if (!access || !link) {
     return (
       <main className="grid min-h-screen place-items-center bg-muted/30 p-6">
         <Card className="max-w-md text-center">
@@ -151,31 +152,12 @@ export default async function PublicUploadPage({
           <CardHeader>
             <CardTitle className="text-base">Unterlagen hochladen</CardTitle>
             <CardDescription>
-              PDF oder Foto – mehrere Dateien gleichzeitig möglich.
+              PDF oder Foto – mehrere Dateien gleichzeitig möglich. Jede Datei
+              wird automatisch auf Sicherheit geprüft.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={customerUpload.bind(null, token)} className="space-y-4">
-              <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-ai/50">
-                <UploadCloud className="h-9 w-9 text-muted-foreground" />
-                <span className="text-sm font-medium">
-                  Dateien auswählen oder hierher ziehen
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  PDF, JPG oder PNG
-                </span>
-                <input
-                  type="file"
-                  name="files"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="mt-2 w-full max-w-full text-xs"
-                />
-              </label>
-              <Button type="submit" size="lg" className="w-full">
-                Hochladen
-              </Button>
-            </form>
+            <CustomerUploadForm token={token} maxMb={maxUploadMb()} />
           </CardContent>
         </Card>
 

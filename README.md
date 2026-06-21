@@ -70,6 +70,15 @@ Die Anwendung läuft anschließend standardmäßig unter `http://localhost:3000`
 | `APP_BASE_URL` | Öffentliche Basis-URL der App (Links, Upload-Tokens) | `http://localhost:3000` |
 | `AUTH_SECRET` | Geheimnis für Session-/Auth-Signierung | `<zufälliger langer String>` |
 | `UPLOAD_TOKEN_SECRET` | Geheimnis zum Signieren der sicheren Upload-Links | `<zufälliger langer String>` |
+| `AUTH_MODE` | `demo` = ohne Login (Dev/Demo), `session` = echte Login-Pflicht | `demo` (Default) |
+| `SESSION_TTL_HOURS` | Gültigkeit der Session in Stunden | `12` |
+| `SEED_PASSWORD` | Passwort der Seed-Logins | `Pilot2026!` |
+| `LOGIN_RATE_MAX` / `LOGIN_RATE_WINDOW_SEC` | Rate-Limit Login | `5` / `300` |
+| `UPLOAD_RATE_MAX` / `UPLOAD_RATE_WINDOW_SEC` | Rate-Limit Upload | `30` / `600` |
+| `UPLOAD_MAX_MB` | Maximale Upload-Dateigröße (MB) | `25` |
+| `VIRUS_SCANNER` | `mock` (Demo) oder `clamav` | `mock` (Default) |
+| `CLAMAV_HOST` / `CLAMAV_PORT` | clamd-Adresse (nur bei `clamav`) | `127.0.0.1` / `3310` |
+| `DOWNLOAD_URL_TTL_SEC` | Gültigkeit signierter Download-URLs (Sek.) | `120` |
 | `STORAGE_PROVIDER` | Storage-Backend | `s3` \| `supabase` |
 | `STORAGE_BUCKET` | Bucket-Name für Dokumente | `unterlagenpilot-docs` |
 | `S3_ENDPOINT` | S3-kompatibler Endpunkt | `https://s3.eu-central-1.amazonaws.com` |
@@ -149,9 +158,12 @@ Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein i
 | **Demo-Fall Mustermann** | **Demo-Daten** | Geseedet (3 Dokumente, 4 fehlende Unterlagen, Warnungen, Nachrichten, Audit-Ereignisse), damit alle Screens mit Inhalt wirken. |
 | **Europace / FinLink / eHyp home Übertragung** | **Stub** | API-Adapter vorbereitet; produktiv über Export/Kopiermaske/JSON. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
 | **Browser-Assist** | **Konzept/deaktiviert** | Nur als späterer optionaler Assistenz-Fallback vorgesehen. |
-| **Auth / Zahlungen** | **MVP-Demo** | Vereinfachter Vermittler-Kontext; Tarife ohne aktive Zahlungsintegration. |
+| **Auth** | **echt (umschaltbar)** | `AUTH_MODE=session`: Login-Pflicht, scrypt-Passwörter, signiertes Session-Cookie, Rollen, CSRF, Login-Rate-Limit. `AUTH_MODE=demo`: ohne Login (nur Dev/Demo). |
+| **Upload-Sicherheit** | **echt** | Typ-/MIME-/Magic-Bytes-Prüfung, Größenlimit, Quarantäne, Virenscan-Adapter (Mock-Demo; ClamAV vorbereitet). OCR/KI erst nach sauberem Scan. |
+| **PDF-Erzeugung** | **echt** | Serverseitig (pdfkit): Bankzusammenfassung, Kunden-Checkliste, Prüfprotokoll, Plattform-Export. |
+| **Virenscan / Zahlungen** | **Demo / vorbereitet** | Virenscan im Mock-Modus (ClamAV-Adapter vorbereitet); Tarife ohne aktive Zahlungsintegration. |
 
-Faustregel: **Datenfluss (Upload → OCR → KI → DB → Storage) ist echt und EU-konform.** Die **Plattform-Einreichung** ist bewusst noch manuell (Export/Kopiermaske), bis offizielle APIs angebunden sind.
+Faustregel: **Datenfluss (Upload → Validierung → Virenscan → OCR → KI → DB → Storage) ist echt und EU-konform.** Die **Plattform-Einreichung** ist bewusst noch manuell (Export/Kopiermaske), bis offizielle APIs angebunden sind.
 
 ---
 
@@ -195,13 +207,35 @@ In den Env-Variablen `STORAGE_PROVIDER=supabase`, `STORAGE_BUCKET=unterlagenpilo
 
 ---
 
+## Pilotbetrieb – Anleitung
+
+Der Pilotbetrieb erlaubt **echte Fälle mit einem Vermittler**, bevor die Plattform-APIs angebunden sind. Sichtbar im UI über **Dashboard-Banner** und **Einstellungen → Systemstatus** (zeigt je Baustein: aktiv / Demo / Stub).
+
+**Vor echten Kundendaten zwingend setzen:**
+1. `AUTH_MODE=session` (Login-Pflicht). Login mit den Seed-Konten (`SEED_PASSWORD`), z. B. `juergen.ertel@baufi-woerth.de`.
+2. `STORAGE_PROVIDER=supabase` (privater, verschlüsselter Bucket) – **nicht** `local`.
+3. `AUTH_SECRET` und `UPLOAD_TOKEN_SECRET` auf lange Zufallswerte.
+4. KI/OCR auf EU-Provider (`AI_PROVIDER`, `OCR_PROVIDER`) oder bewusst im Mock-Modus belassen.
+5. Optional: `VIRUS_SCANNER=clamav` + `CLAMAV_HOST/PORT` für echten Virenscan (sonst Mock-Demo).
+
+### Sicherheitsarchitektur (umgesetzt)
+- **Auth:** Adapter-basiert (`AuthProvider`), aktuell Credentials (scrypt) + signiertes Session-Cookie; austauschbar gegen NextAuth/Supabase Auth. Guards: `requireUser/requireRole/requireOrganizationAccess/requireCaseAccess/requireUploadTokenAccess`. CSRF-Helper, Login-Rate-Limit, Open-Redirect-Schutz.
+- **Upload-Links:** signiert **und gehasht** gespeichert (DB-Leak ≠ gültiger Link), Ablauf, ein-/mehrmalig, erstellen/neu erzeugen/deaktivieren, Zugriffs-Audit.
+- **Upload-Pipeline:** Validierung (Typ/MIME/Magic-Bytes/Größe) → Speicherung → **Virenscan/Quarantäne** → erst dann OCR/KI. Adapter `VirusScanner` (`MockVirusScanner`, `ClamAVScanner`-Stub – kein heimlicher Bypass).
+- **Storage:** mandanten-/fallbezogene Pfade (`organizations/{org}/cases/{case}/documents/…`), signierte kurzlebige Download-URLs, authentifizierte + auditierte Download-Route.
+- **PDF:** serverseitig (pdfkit) – `GET /api/cases/[id]/pdf?type=bank-summary|checklist|audit|platform`.
+
 ## Offene Punkte für den Produktivbetrieb
 
-- **Echte API-Anbindung** der Plattformen (Europace, FinLink, eHyp home) statt Stubs.
-- **Zahlungsintegration** für die SaaS-Tarife.
-- **Auth-Härtung** (z. B. MFA, Session-Management, Rate-Limiting).
-- **Storage-Verschlüsselung** durchgängig (At-Rest, ggf. kundenseitige Schlüssel).
-- **Virenscan der Uploads** vor Verarbeitung.
+**Bewusste MVP-Stubs (kein Bug):** Europace-/FinLink-/eHyp-home-API, echte KI/OCR sofern nicht konfiguriert, Zahlungsintegration, direkter Nachrichtenversand.
+
+**Echte offene Aufgaben vor Produktivbetrieb:**
+- **Echte API-Anbindung** der Plattformen (Europace, FinLink, eHyp home) statt Stubs – Spezifikationen/Zugänge beschaffen.
+- **Produktiven Virenscan** aktivieren (ClamAV-INSTREAM-Protokoll implementieren / Cloud-AV).
+- **Produktiven Storage** mit At-Rest-Verschlüsselung (Supabase/S3 SSE-KMS); OCR-Text zusätzlich app-seitig verschlüsseln.
+- **Auth-Härtung** (MFA, verteiltes Rate-Limiting via Redis/KV, ggf. SSO).
+- **Zahlungsintegration** (Stripe) für die SaaS-Tarife.
+- **Datenschutz-/AVV-/DSGVO-Prüfung** und **Penetrationstest**.
 
 ---
 

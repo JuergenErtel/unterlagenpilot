@@ -1,19 +1,23 @@
 import Link from "next/link";
-import { Link2 } from "lucide-react";
+import { Link2, LogOut } from "lucide-react";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { logout } from "@/lib/actions/auth";
+import { USER_ROLE_LABELS } from "@/lib/domain/enums";
 
 export function AppShell({
   children,
   context,
 }: {
   children: React.ReactNode;
-  context: { organizationName: string; userName: string; role: string };
+  context: { organizationName: string; userName: string; role: string; isDemo?: boolean };
 }) {
   const initials = context.userName
     .split(" ")
     .map((n) => n[0])
     .slice(0, 2)
     .join("");
+  const roleLabel =
+    USER_ROLE_LABELS[context.role as keyof typeof USER_ROLE_LABELS] ?? context.role;
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -30,16 +34,32 @@ export function AppShell({
 
         <SidebarNav />
 
-        <div className="border-t p-3">
+        <div className="space-y-2 border-t p-3">
           <div className="flex items-center gap-3 rounded-md px-2 py-1.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
               {initials}
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{context.userName}</div>
-              <div className="truncate text-xs text-muted-foreground">{context.organizationName}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {roleLabel} · {context.organizationName}
+              </div>
             </div>
           </div>
+          {context.isDemo ? (
+            <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning-foreground">
+              Demo-Zugang (ohne Login). Für echte Daten AUTH_MODE=session.
+            </div>
+          ) : (
+            <form action={logout}>
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-3.5 w-3.5" /> Abmelden
+              </button>
+            </form>
+          )}
         </div>
       </aside>
 

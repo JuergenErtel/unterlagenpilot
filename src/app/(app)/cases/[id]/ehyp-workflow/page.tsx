@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
-import { requireContext } from "@/lib/auth/context";
+import { ArrowLeft, ArrowRight, CheckCircle2, FileText, FileDown } from "lucide-react";
+import { requireCaseAccess } from "@/lib/auth/context";
+import { prisma } from "@/lib/db";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
-import { europaceToEhyp } from "@/lib/platforms/mapping";
+import { europaceToEhyp, buildPlatformMapping } from "@/lib/platforms/mapping";
 import { releasePlatform } from "@/lib/actions/cases";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CopyBlock } from "@/components/copy-block";
+import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/lib/domain/enums";
 
 const STEPS = [
   "Europace-Daten laden",
@@ -34,9 +36,10 @@ export default async function EhypWorkflowPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireContext();
+  await requireCaseAccess(id);
   const canonical = await caseToCanonical(id);
   const r = europaceToEhyp(canonical);
+  const europace = buildPlatformMapping(canonical, "europace");
   const json = JSON.stringify(r.ehypPayload, null, 2);
   const ready = r.missingForEhyp.length === 0;
 
@@ -45,6 +48,27 @@ export default async function EhypWorkflowPage({
   const missingLabels = r.missingForEhyp.map(
     (pf) => ehypFields.find((f) => f.platformField === pf)?.label ?? pf
   );
+
+  // Kopiermaske für eHyp home (flach, zum manuellen Abtippen).
+  const kopiermaske = r.ehypPayload.groups
+    .map(
+      (g) =>
+        `## ${g.group}\n` +
+        g.fields.map((f) => `${f.label}: ${f.value === null || f.value === "" ? "—" : String(f.value)}`).join("\n")
+    )
+    .join("\n\n");
+
+  // Dokumente für eHyp home (Freigabe-Status sichtbar machen).
+  const documents = await prisma.document.findMany({
+    where: { caseId: id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, generatedName: true, originalName: true, documentType: true, reviewStatus: true },
+  });
+
+  // Europace-Quelldaten (flach) zur Nachvollziehbarkeit der Übernahme.
+  const europaceSource = europace.groups
+    .map((g) => `${g.group}: ` + g.fields.map((f) => `${f.label}=${f.value ?? "—"}`).join(", "))
+    .join("\n");
 
   return (
     <div className="space-y-6">
@@ -80,6 +104,18 @@ export default async function EhypWorkflowPage({
           </li>
         ))}
       </ol>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">1) Europace-Quelldaten (geladen)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Aus dem Europace-Vorgang ins interne kanonische Modell normalisiert. Keine echte API-Übertragung – Demo-/Falldaten.
+          </p>
+          <CopyBlock text={europaceSource} label="Europace-Daten kopieren" />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -139,22 +175,85 @@ export default async function EhypWorkflowPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">eHyp-home-Export (JSON)</CardTitle>
+          <CardTitle className="text-base">Dokumente für eHyp home</CardTitle>
         </CardHeader>
-        <CardContent>
-          <CopyBlock text={json} label="JSON kopieren" />
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dokument</TableHead>
+                <TableHead>Typ</TableHead>
+                <TableHead>Freigabe</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {documents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="py-6 text-center text-sm text-muted-foreground">
+                    Noch keine Dokumente im Fall.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                documents.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
+                    <TableCell>{d.documentType ? DOCUMENT_TYPE_LABELS[d.documentType as DocumentType] : "—"}</TableCell>
+                    <TableCell>
+                      {d.reviewStatus === "akzeptiert" ? (
+                        <Badge variant="success">freigegeben</Badge>
+                      ) : (
+                        <Badge variant="neutral">offen</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Kopiermaske eHyp home</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CopyBlock text={kopiermaske} label="Kopiermaske kopieren" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">eHyp-home-Export (JSON)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CopyBlock text={json} label="JSON kopieren" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
         <form action={releasePlatform.bind(null, id, "ehyp_home")}>
           <Button variant="success" type="submit" disabled={!ready}>
+            <CheckCircle2 className="h-4 w-4" />
             Status „bereit für eHyp home" setzen
           </Button>
         </form>
+        <Button asChild variant="outline" size="sm">
+          <a href={`/api/cases/${id}/pdf?type=platform&platform=ehyp_home`}>
+            <FileDown className="h-4 w-4" />
+            Exportpaket (PDF)
+          </a>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <a href={`/api/cases/${id}/pdf?type=checklist`}>
+            <FileText className="h-4 w-4" />
+            Unterlagen-Checkliste
+          </a>
+        </Button>
         {!ready && (
           <span className="text-sm text-muted-foreground">
-            Erst möglich, wenn alle Pflichtfelder vorliegen.
+            Freigabe erst möglich, wenn alle Pflichtfelder vorliegen.
           </span>
         )}
       </div>

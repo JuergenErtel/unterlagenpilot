@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Compass } from "lucide-react";
 import {
   Card,
@@ -8,11 +8,24 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { LoginForm } from "@/components/auth/login-form";
+import { getEnv } from "@/lib/env";
+import { getCurrentContext } from "@/lib/auth/context";
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
+  const env = getEnv();
+
+  // Bereits angemeldet (echte Session) → direkt weiter.
+  const ctx = await getCurrentContext();
+  if (ctx && !ctx.isDemo) redirect(next && next.startsWith("/") ? next : "/dashboard");
+
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
@@ -29,39 +42,16 @@ export default function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle>Anmelden</CardTitle>
-            <CardDescription>
-              Melden Sie sich bei Ihrem Konto an.
-            </CardDescription>
+            <CardDescription>Melden Sie sich bei Ihrem Konto an.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">E-Mail</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="name@kanzlei.de"
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Passwort</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </div>
+          <CardContent>
+            <LoginForm next={next} />
           </CardContent>
-          <CardFooter className="flex-col items-stretch gap-3">
-            <Button asChild className="w-full">
-              <Link href="/dashboard">Anmelden</Link>
-            </Button>
+          <CardFooter>
             <p className="text-center text-xs text-muted-foreground">
-              MVP: Demo-Zugang ohne echte Authentifizierung. Produktiv:
-              mandantenfähige Auth mit Rollen.
+              {env.AUTH_MODE === "demo"
+                ? "Demo-Modus aktiv: Der Bereich ist auch ohne Anmeldung erreichbar. Für echte Kundendaten AUTH_MODE=session setzen."
+                : "Mandantenfähige Anmeldung mit Rollen und Organisationstrennung."}
             </p>
           </CardFooter>
         </Card>

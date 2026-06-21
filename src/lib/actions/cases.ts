@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
-import { createUploadToken, randomToken } from "@/lib/security/upload-token";
-import { getEnv } from "@/lib/env";
+import {
+  createSecureUploadLink,
+  regenerateUploadLink,
+  deactivateUploadLink,
+} from "@/lib/security/upload-link";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
 import { generateByType } from "@/lib/messages/generators";
@@ -67,37 +70,82 @@ export async function createCase(formData: FormData): Promise<void> {
   redirect(`/cases/${created.id}`);
 }
 
-export async function createUploadLink(caseId: string, days = 14): Promise<string> {
-  const ctx = await requireContext();
-  const linkId = randomToken(8);
-  const exp = Math.floor(Date.now() / 1000) + days * 86400;
-  const token = createUploadToken({ caseId, linkId, exp });
-
-  await prisma.uploadLink.create({
-    data: { caseId, token, expiresAt: new Date(exp * 1000) },
-  });
-  await prisma.case.update({ where: { id: caseId }, data: { status: "upload_offen" } });
-  await audit({
-    organizationId: ctx.organizationId,
-    userId: ctx.userId,
-    action: "upload_link.created",
-    entityType: "case",
-    entityId: caseId,
-    metadata: { days },
-  });
-
-  revalidatePath(`/cases/${caseId}`);
-  return `${getEnv().APP_BASE_URL}/upload/${token}`;
+export interface UploadLinkActionState {
+  /** Klartext-URL des neu erstellten Links – nur einmalig sichtbar. */
+  url?: string;
+  error?: string;
 }
 
-/** Formular-Wrapper: erstellt einen Upload-Link (Rückgabe via DB/Revalidate). */
-export async function createUploadLinkForm(caseId: string): Promise<void> {
-  await createUploadLink(caseId);
+/**
+ * Erstellt einen sicheren Upload-Link. Das Klartext-Token ist NUR im Rückgabewert
+ * verfügbar (zum Kopieren); in der DB liegt ausschließlich der Hash.
+ */
+export async function createUploadLink(caseId: string, days = 14): Promise<string> {
+  const { ctx } = await requireCaseAccess(caseId);
+  const created = await createSecureUploadLink(
+    caseId,
+    new Date(Date.now() + days * 86400 * 1000),
+    { organizationId: ctx.organizationId, actorUserId: ctx.userId }
+  );
+  await prisma.case.update({ where: { id: caseId }, data: { status: "upload_offen" } });
+  revalidatePath(`/cases/${caseId}`);
+  return created.url;
+}
+
+/** Formular-Action (useActionState): erstellt einen Link und gibt die URL einmalig zurück. */
+export async function createUploadLinkAction(
+  caseId: string,
+  _prev: UploadLinkActionState,
+  formData: FormData
+): Promise<UploadLinkActionState> {
+  try {
+    const { ctx } = await requireCaseAccess(caseId);
+    const days = Number(formData.get("days") ?? 14) || 14;
+    const singleUse = formData.get("singleUse") === "on";
+    const created = await createSecureUploadLink(
+      caseId,
+      new Date(Date.now() + days * 86400 * 1000),
+      { organizationId: ctx.organizationId, actorUserId: ctx.userId, singleUse }
+    );
+    await prisma.case.update({ where: { id: caseId }, data: { status: "upload_offen" } });
+    revalidatePath(`/cases/${caseId}`);
+    return { url: created.url };
+  } catch {
+    return { error: "Link konnte nicht erstellt werden." };
+  }
+}
+
+/** Erzeugt einen frischen Link und deaktiviert vorherige aktive Links des Falls. */
+export async function regenerateUploadLinkAction(
+  caseId: string,
+  _prev: UploadLinkActionState,
+  formData: FormData
+): Promise<UploadLinkActionState> {
+  try {
+    const { ctx } = await requireCaseAccess(caseId);
+    const days = Number(formData.get("days") ?? 14) || 14;
+    const created = await regenerateUploadLink(
+      caseId,
+      new Date(Date.now() + days * 86400 * 1000),
+      { organizationId: ctx.organizationId, actorUserId: ctx.userId }
+    );
+    revalidatePath(`/cases/${caseId}`);
+    return { url: created.url };
+  } catch {
+    return { error: "Link konnte nicht neu erzeugt werden." };
+  }
+}
+
+/** Deaktiviert einen einzelnen Upload-Link. */
+export async function deactivateUploadLinkAction(caseId: string, linkId: string): Promise<void> {
+  const { ctx } = await requireCaseAccess(caseId);
+  await deactivateUploadLink(linkId, { organizationId: ctx.organizationId, userId: ctx.userId });
+  revalidatePath(`/cases/${caseId}`);
 }
 
 /** Startet die (deterministische) KI-Prüfung über alle Dokumente eines Falls. */
 export async function runAiCheck(caseId: string): Promise<void> {
-  const ctx = await requireContext();
+  const { ctx } = await requireCaseAccess(caseId);
   await prisma.case.update({ where: { id: caseId }, data: { status: "ki_pruefung_laeuft" } });
 
   const docs = await prisma.document.findMany({
@@ -175,14 +223,21 @@ export async function generateMessage(
   type: MessageTemplateType,
   channel: MessageChannel
 ): Promise<void> {
-  const ctx = await requireContext();
+  const { ctx } = await requireCaseAccess(caseId);
   const agg = await getCaseAggregate(caseId);
   const a = agg.canonical.applicants[0];
-  const link = await prisma.uploadLink.findFirst({
-    where: { caseId, active: true },
-    orderBy: { createdAt: "desc" },
-  });
-  const uploadLink = link ? `${getEnv().APP_BASE_URL}/upload/${link.token}` : undefined;
+  // Token wird nur gehasht gespeichert → für Nachrichten mit Upload-Bezug einen
+  // frischen, gültigen Link erzeugen (sonst kein Klartext-Link verfügbar).
+  const needsLink = ["erstnachforderung", "unterlage_fehlt_weiterhin", "pdf_checkliste"].includes(type);
+  let uploadLink: string | undefined;
+  if (needsLink) {
+    const created = await createSecureUploadLink(
+      caseId,
+      new Date(Date.now() + 14 * 86400 * 1000),
+      { organizationId: ctx.organizationId, actorUserId: ctx.userId }
+    );
+    uploadLink = created.url;
+  }
 
   const msg = generateByType(
     type,
@@ -212,7 +267,7 @@ export async function generateMessage(
 
 /** Bereitet Plattform-Mapping vor und gibt es (nach manueller Aktion) frei. */
 export async function releasePlatform(caseId: string, platform: Platform): Promise<void> {
-  const ctx = await requireContext();
+  const { ctx } = await requireCaseAccess(caseId);
   const canonical = await caseToCanonical(caseId);
   const payload = buildPlatformMapping(canonical, platform);
 
@@ -252,6 +307,15 @@ export async function setDocumentReview(
   reviewStatus: "akzeptiert" | "abgelehnt" | "duplikat" | "ersetzt"
 ): Promise<void> {
   const ctx = await requireContext();
+  // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
+  const owner = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: { case: { select: { organizationId: true } } },
+  });
+  if (!owner || owner.case.organizationId !== ctx.organizationId) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
   const doc = await prisma.document.update({
     where: { id: documentId },
     data: { reviewStatus },

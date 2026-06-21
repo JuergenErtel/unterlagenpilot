@@ -42,12 +42,23 @@ export default async function SummaryPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Bankfähige Zusammenfassung</h1>
           <p className="text-sm text-muted-foreground">Neutral und sachlich formuliert – ohne Bewertung der Machbarkeit.</p>
         </div>
-        <Button asChild variant="ghost" size="sm"><Link href={`/cases/${id}`}>Zur Fallakte</Link></Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="default" size="sm">
+            <a href={`/api/cases/${id}/pdf?type=bank-summary`}>PDF herunterladen</a>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/cases/${id}/pdf?type=bank-summary&preview=1`} target="_blank" rel="noreferrer">Vorschau</a>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/cases/${id}/pdf?type=checklist`}>Checkliste-PDF</a>
+          </Button>
+          <Button asChild variant="ghost" size="sm"><Link href={`/cases/${id}`}>Zur Fallakte</Link></Button>
+        </div>
       </div>
 
       <Card>
@@ -70,7 +81,7 @@ export default async function SummaryPage({
         <CardHeader><CardTitle className="text-base">Kopierbare Textversion (für Bank/Plattform)</CardTitle></CardHeader>
         <CardContent>
           <CopyBlock text={text} label="Zusammenfassung kopieren" />
-          <p className="mt-2 text-xs text-muted-foreground">PDF-Export: über Druckfunktion des Browsers (TODO: serverseitiger PDF-Renderer).</p>
+          <p className="mt-2 text-xs text-muted-foreground">PDF-Export: serverseitig erzeugt – „PDF herunterladen" oben.</p>
         </CardContent>
       </Card>
     </div>

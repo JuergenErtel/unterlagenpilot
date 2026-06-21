@@ -1,25 +1,17 @@
 import type { AICompletionRequest, AIProvider } from "./types";
 import type { DocumentType } from "@/lib/domain/enums";
+import { classificationKeywords, DOCUMENT_TYPE_SPECS } from "@/lib/documents/document-types";
 
 /**
  * Deterministischer Offline-AI-Provider für Entwicklung, Demo und Tests.
- * Erkennt Dokumenttypen heuristisch anhand von Schlüsselwörtern und liefert
- * plausible, schema-konforme strukturierte Daten – ohne externe Dienste.
+ * Erkennt Dokumenttypen heuristisch anhand von Schlüsselwörtern (zentrale
+ * Registry: src/lib/documents/document-types.ts) und liefert plausible,
+ * schema-konforme strukturierte Daten – ohne externe Dienste.
  * In Produktion wird stattdessen ein EU-konformer Provider (Azure OpenAI EU)
  * konfiguriert.
  */
 
-const KEYWORDS: Array<{ type: DocumentType; words: string[] }> = [
-  { type: "personalausweis", words: ["personalausweis", "bundesrepublik deutschland", "ausweisnummer", "personalausweisnummer"] },
-  { type: "gehaltsabrechnung", words: ["gehaltsabrechnung", "entgeltabrechnung", "lohnabrechnung", "brutto", "netto", "steuerklasse", "sozialversicherung"] },
-  { type: "grundbuchauszug", words: ["grundbuch", "grundbuchamt", "gemarkung", "flurstück", "abteilung", "blattnummer"] },
-  { type: "expose", words: ["exposé", "expose", "wohnfläche", "kaufpreis", "baujahr", "objektbeschreibung", "courtage", "provision"] },
-  { type: "kontoauszug", words: ["kontoauszug", "kontostand", "buchung", "iban", "gutschrift", "lastschrift"] },
-  { type: "einkommensteuerbescheid", words: ["einkommensteuerbescheid", "finanzamt", "festsetzung", "zu versteuerndes einkommen"] },
-  { type: "kaufvertragsentwurf", words: ["kaufvertrag", "notar", "urkundenrolle", "auflassung"] },
-  { type: "mietvertrag", words: ["mietvertrag", "kaltmiete", "nebenkosten", "mietverhältnis"] },
-  { type: "rentenbescheid", words: ["rentenbescheid", "deutsche rentenversicherung", "altersrente"] },
-];
+const KEYWORDS = classificationKeywords();
 
 function detectType(text: string): { type: DocumentType; confidence: number } {
   const lower = text.toLowerCase();
@@ -165,10 +157,14 @@ export class MockAIProvider implements AIProvider {
           f("zimmer", "Anzahl Zimmer", num(text, /(\d+)\s*Zimmer/) ?? 5, 0.7),
           f("heizungsart", "Heizungsart", str(text, /Heizung[:\s]+([A-Za-zÄÖÜäöüß -]{2,30})/) ?? "Gas-Brennwert", 0.6),
         ];
-      default:
-        return [
-          f("dokumentinhalt", "Erkannter Inhalt", text.slice(0, 80) || null, 0.4),
-        ];
+      default: {
+        // Schema-basierte Extraktion für vorbereitete Dokumenttypen (Registry).
+        const spec = DOCUMENT_TYPE_SPECS[type];
+        if (type !== "sonstige" && spec && spec.fields.length > 0) {
+          return spec.fields.map((fld) => f(fld.key, fld.label, null, fld.required ? 0.5 : 0.4));
+        }
+        return [f("dokumentinhalt", "Erkannter Inhalt", text.slice(0, 80) || null, 0.4)];
+      }
     }
   }
 
