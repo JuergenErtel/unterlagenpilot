@@ -66,6 +66,15 @@ export class MockAIProvider implements AIProvider {
         return req.hints?.precomputed ?? { platform: "europace", groups: [], missingRequiredFields: [] };
       case "generatedMessage":
         return req.hints?.precomputed ?? { channel: "email", subject: "Ihre Unterlagen", body: "" };
+      case "selfEmployed":
+        return {
+          docs: [
+            { dokumenttyp: "einkommensteuerbescheid", jahr: 2022, kennzahlen: { zuVersteuerndesEinkommen: 78000, gewinn: 82000 }, notiz: "Steuerbescheid 2022, stabiles Einkommen.", konfidenz: 0.88 },
+            { dokumenttyp: "einkommensteuerbescheid", jahr: 2023, kennzahlen: { zuVersteuerndesEinkommen: 84000, gewinn: 88000 }, notiz: "Steuerbescheid 2023, leicht steigend.", konfidenz: 0.88 },
+            { dokumenttyp: "euer", jahr: 2023, kennzahlen: { umsatz: 210000, gewinn: 88000, afa: 12000 }, notiz: "EÜR 2023, Umsatz 210k.", konfidenz: 0.8 },
+            { dokumenttyp: "bwa", jahr: 2024, kennzahlen: { umsatz: 120000, gewinn: 52000 }, notiz: "BWA per 06/2024 (unterjährig).", konfidenz: 0.6 },
+          ],
+        };
       case "floorplan":
         return {
           rooms: [
