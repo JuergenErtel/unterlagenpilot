@@ -10,6 +10,8 @@ import { audit } from "@/lib/audit";
 import { AIService } from "@/lib/ai/service";
 import { computeWoflv, type WoflvRoom } from "@/lib/wohnflaeche/woflv";
 import { toWoflvRooms, type FloorplanWoflvRoom } from "@/lib/wohnflaeche/schema";
+import { buildWohnflaecheData } from "@/lib/pdf/case-pdf";
+import { renderWohnflaeche } from "@/lib/pdf/renderer";
 
 const ai = new AIService();
 
@@ -88,6 +90,34 @@ export async function saveWohnflaecheAction(caseId: string, rooms: WoflvRoom[]):
     },
     select: { id: true },
   });
+
+  // Spec §7: PDF als Falldokument ablegen.
+  const built = await buildWohnflaecheData(caseId, ctx.organizationId);
+  if (built) {
+    const buffer = await renderWohnflaeche(built.data);
+    const stored = await getStorage().put({
+      organizationId: ctx.organizationId,
+      caseId,
+      originalName: built.fileName,
+      mimeType: "application/pdf",
+      buffer,
+    });
+    await prisma.document.create({
+      data: {
+        caseId,
+        originalName: built.fileName,
+        generatedName: built.fileName,
+        storageKey: stored.storageKey,
+        mimeType: "application/pdf",
+        sizeBytes: buffer.length,
+        documentType: "wohnflaechenberechnung",
+        uploadSource: "vermittler",
+        scanStatus: "ready_for_ocr",
+        readable: true,
+      },
+    });
+  }
+
   await audit({
     organizationId: ctx.organizationId,
     userId: ctx.userId,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useEffect } from "react";
+import { useActionState, useState, useEffect, Fragment } from "react";
 import { UploadCloud, Save, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -140,8 +140,8 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
                   const isDachOpen = dachOpen[editorRoom.id] ?? false;
 
                   return (
-                    <>
-                      <tr key={resultRoom.id} className="border-b last:border-0">
+                    <Fragment key={resultRoom.id}>
+                      <tr className="border-b last:border-0">
                         <td className="px-2 py-1">
                           <Input
                             value={editorRoom.geschoss}
@@ -194,7 +194,35 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
                           />
                         </td>
                         <td className="px-2 py-1 text-xs text-muted-foreground">
-                          {Math.round(resultRoom.faktor * 100)}%
+                          {editorRoom.kategorie === "balkon_terrasse_loggia" ? (
+                            <select
+                              value={editorRoom.balkonFaktor ?? 0.25}
+                              onChange={(e) =>
+                                update(editorRoom.id, { balkonFaktor: Number(e.target.value) })
+                              }
+                              className="h-7 rounded-md border px-1 text-xs"
+                            >
+                              {[0.25, 0.30, 0.35, 0.40, 0.45, 0.50].map((v) => (
+                                <option key={v} value={v}>
+                                  {Math.round(v * 100)} %
+                                </option>
+                              ))}
+                            </select>
+                          ) : (editorRoom.kategorie === "wintergarten" || editorRoom.kategorie === "schwimmbad") ? (
+                            <label className="flex cursor-pointer items-center gap-1 text-xs select-none">
+                              <input
+                                type="checkbox"
+                                checked={editorRoom.beheizt ?? false}
+                                onChange={(e) =>
+                                  update(editorRoom.id, { beheizt: e.target.checked })
+                                }
+                                className="h-3.5 w-3.5"
+                              />
+                              <span>beheizt</span>
+                            </label>
+                          ) : (
+                            `${Math.round(resultRoom.faktor * 100)}%`
+                          )}
                         </td>
                         <td className="px-2 py-1 font-medium">{resultRoom.anrechenbarM2.toFixed(2)}</td>
                         <td className="px-2 py-1">
@@ -213,7 +241,7 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
                       </tr>
                       {/* Improvement 2: Dachschräge toggle + sub-row for wohnraum */}
                       {editorRoom.kategorie === "wohnraum" && (
-                        <tr key={`${resultRoom.id}-dach`} className="border-b bg-muted/20 last:border-0">
+                        <tr className="border-b bg-muted/20 last:border-0">
                           <td colSpan={7} className="px-3 py-1.5">
                             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground select-none">
                               <input
@@ -294,7 +322,7 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>

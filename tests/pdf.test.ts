@@ -4,8 +4,8 @@ import {
   renderMissingChecklist,
   renderAuditProtocol,
   renderPlatformExport,
+  renderWohnflaeche,
 } from "@/lib/pdf/renderer";
-import { renderWohnflaeche } from "@/lib/pdf/renderer";
 import { pdfFileName } from "@/lib/pdf/case-pdf";
 
 const broker = { name: "Jürgen Ertel Baufinanzierung", street: "Ottstr. 9", zip: "76744", city: "Wörth", website: "www.baufi-woerth.de" };
