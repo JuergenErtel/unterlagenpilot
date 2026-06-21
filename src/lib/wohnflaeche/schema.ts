@@ -34,16 +34,15 @@ export type FloorplanRoom = z.infer<typeof floorplanRoomSchema>;
 
 export const floorplanJsonSchema = zodToJsonSchema(floorplanAnalysisSchema, "floorplan") as Record<string, unknown>;
 
-let idCounter = 0;
 function nextId(): string {
-  idCounter += 1;
-  return `room-${idCounter}-${Math.round(performance.now())}`;
+  return crypto.randomUUID();
 }
 
 /** Erweitert die Engine-Eingabe um Konfidenz/Quelle für die UI. */
 export interface FloorplanWoflvRoom extends WoflvRoom {
   konfidenz: number;
   quelle: FloorplanRoom["quelle"];
+  dachschraegeHinweis: boolean;
 }
 
 export function toWoflvRooms(a: FloorplanAnalysis): FloorplanWoflvRoom[] {
@@ -58,6 +57,7 @@ export function toWoflvRooms(a: FloorplanAnalysis): FloorplanWoflvRoom[] {
       flaecheM2,
       beheizt: r.beheizt,
       dachschraege: null,
+      dachschraegeHinweis: r.dachschraege ?? false,
       konfidenz: r.konfidenz,
       quelle: r.quelle,
     };

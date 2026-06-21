@@ -20,4 +20,12 @@ describe("Floorplan-Analyse-Schema", () => {
     expect(rooms[0]!.flaecheM2).toBe(6);
     expect(rooms[0]!.id).toBeTruthy();
   });
+
+  it("übernimmt den Dachschrägen-Hinweis und die Konfidenz", () => {
+    const rooms = toWoflvRooms({
+      rooms: [{ geschoss: "DG", raumname: "Schlafen", kategorie: "wohnraum", flaecheM2: 20, dachschraege: true, konfidenz: 0.6, quelle: "flaeche_beschriftet" }],
+    });
+    expect(rooms[0]!.dachschraegeHinweis).toBe(true);
+    expect(rooms[0]!.konfidenz).toBe(0.6);
+  });
 });
