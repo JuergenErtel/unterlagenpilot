@@ -216,6 +216,7 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><FileBarChart />Wohnflächenberechnung</Link></Button>
             </CardContent>
           </Card>
         </div>
