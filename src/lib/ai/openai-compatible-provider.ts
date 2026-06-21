@@ -51,7 +51,7 @@ export class OpenAICompatibleProvider implements AIProvider {
                     { type: "text", text: req.user },
                     ...req.images.map((img) => ({
                       type: "image_url",
-                      image_url: `data:${img.mimeType};base64,${img.base64}`,
+                      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
                     })),
                   ]
                 : req.user,
