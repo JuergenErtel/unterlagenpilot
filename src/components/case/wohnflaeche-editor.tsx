@@ -80,7 +80,7 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
         <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center hover:border-ai/50">
           <UploadCloud className="h-8 w-8 text-muted-foreground" />
           <span className="text-sm font-medium">
-            Grundriss(e) hochladen (JPG/PNG für KI-Analyse, PDF wird gespeichert)
+            Grundriss(e) hochladen – JPG, PNG oder PDF (auch mehrseitig)
           </span>
           <input type="file" name="files" multiple accept=".pdf,.jpg,.jpeg,.png" className="mt-2 text-xs" />
         </label>

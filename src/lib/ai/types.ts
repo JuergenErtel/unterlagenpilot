@@ -15,6 +15,8 @@ export interface AICompletionRequest {
   hints?: Record<string, unknown>;
   /** Optionale Bilder (Vision). base64 OHNE data:-Präfix. */
   images?: Array<{ base64: string; mimeType: string }>;
+  /** Optionale Dokumente (z. B. PDF) als abrufbare URL (Mistral document_url). */
+  documents?: Array<{ url: string; name?: string }>;
 }
 
 export interface AIProvider {

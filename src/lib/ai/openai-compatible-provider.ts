@@ -4,6 +4,27 @@ import { extractJson } from "./json-extract";
 import { buildSystemPrompt } from "./azure-provider";
 
 /**
+ * Baut den User-Inhalt: reiner Text, oder multimodal (Text + Bilder + Dokumente).
+ * Bilder als data-URI (image_url), PDFs als abrufbare URL (document_url).
+ */
+function buildUserContent(req: AICompletionRequest): unknown {
+  const images = req.images ?? [];
+  const documents = req.documents ?? [];
+  if (images.length === 0 && documents.length === 0) return req.user;
+  return [
+    { type: "text", text: req.user },
+    ...images.map((img) => ({
+      type: "image_url",
+      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+    })),
+    ...documents.map((doc) => ({
+      type: "document_url",
+      document_url: { document_url: doc.url, document_name: doc.name ?? "dokument.pdf" },
+    })),
+  ];
+}
+
+/**
  * Generischer EU-/DSGVO-konformer OpenAI-kompatibler Provider.
  * Geeignet für EU-Anbieter wie Mistral AI (Frankreich) oder jeden anderen
  * OpenAI-kompatiblen Endpunkt in der EU.
@@ -45,16 +66,7 @@ export class OpenAICompatibleProvider implements AIProvider {
           { role: "system", content: buildSystemPrompt(req) },
           {
             role: "user",
-            content:
-              req.images && req.images.length > 0
-                ? [
-                    { type: "text", text: req.user },
-                    ...req.images.map((img) => ({
-                      type: "image_url",
-                      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
-                    })),
-                  ]
-                : req.user,
+            content: buildUserContent(req),
           },
         ],
         temperature: 0,
