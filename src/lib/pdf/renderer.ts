@@ -318,3 +318,76 @@ export async function renderWohnflaeche(data: WohnflaecheData): Promise<Buffer> 
   footer(doc, data.broker);
   return docToBuffer(doc);
 }
+
+// ---------------------------------------------------------------------------
+// F) Einkommensanalyse Selbständige
+// ---------------------------------------------------------------------------
+
+export interface EinkommensanalyseData {
+  applicantName: string;
+  caseNumber: string;
+  dateStr: string;
+  broker: BrokerInfo;
+  jahre: number[];
+  rows: Array<{ label: string; cells: Record<number, number | null>; trend: "steigend" | "fallend" | "stabil" | "unbekannt" }>;
+  docNotes: Array<{ label: string; notiz: string }>;
+  einkommensansatzJahr: number | null;
+  einkommensansatzMonat: number | null;
+}
+
+const TREND_LABEL: Record<string, string> = {
+  steigend: "↑ steigend",
+  fallend: "↓ fallend",
+  stabil: "→ stabil",
+  unbekannt: "—",
+};
+
+function eur(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+}
+
+export async function renderEinkommensanalyse(data: EinkommensanalyseData): Promise<Buffer> {
+  const doc = newDoc(`Einkommensanalyse ${data.caseNumber}`);
+  coverHeader(doc, data.broker, "Einkommensanalyse Selbständige", `${data.applicantName} · Vorgang ${data.caseNumber}`, data.dateStr);
+
+  heading(doc, "Kennzahlen je Jahr");
+  doc.font("Helvetica").fontSize(9).fillColor("#1a1a1a");
+  if (data.rows.length === 0) {
+    doc.text("Keine Kennzahlen erfasst.");
+  } else {
+    const head = `Kennzahl  ·  ${data.jahre.join("   ")}   ·  Trend`;
+    doc.font("Helvetica-Bold").text(head);
+    doc.font("Helvetica");
+    data.rows.forEach((r) => {
+      const cols = data.jahre.map((j) => eur(r.cells[j] ?? null)).join("   ");
+      doc.text(`${r.label}: ${cols}   (${TREND_LABEL[r.trend] ?? r.trend})`);
+      doc.moveDown(0.1);
+    });
+  }
+
+  if (data.einkommensansatzJahr != null) {
+    heading(doc, "Einkommensansatz (Vermittler)");
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#1f3a8a");
+    doc.text(`${eur(data.einkommensansatzJahr)} p. a.  ·  ${eur(data.einkommensansatzMonat)} / Monat`);
+    doc.font("Helvetica").fontSize(9).fillColor("#1a1a1a");
+  }
+
+  if (data.docNotes.length > 0) {
+    heading(doc, "Einordnung je Dokument");
+    data.docNotes.forEach((n) => {
+      doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#1a1a1a").text(n.label);
+      doc.font("Helvetica").fontSize(9).fillColor("#6b7280").text(n.notiz || "—");
+      doc.moveDown(0.2);
+    });
+  }
+
+  doc.moveDown(1);
+  doc.fillColor("#6b7280").fontSize(7.5).font("Helvetica").text(
+    "Analyse auf Basis der vorgelegten Unterlagen – keine Bonitäts- oder Einkommensbestätigung. Die finale Beurteilung trifft die Bank. Werte prüfen.",
+    { width: 495 }
+  );
+
+  footer(doc, data.broker);
+  return docToBuffer(doc);
+}
