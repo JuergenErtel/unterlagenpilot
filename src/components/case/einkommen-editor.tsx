@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { UploadCloud, Save, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KENNZAHL_LABELS, trendFor, type ConsolidatedMatrix } from "@/lib/einkommen/consolidate";
+import { KENNZAHL_LABELS, trendFor } from "@/lib/einkommen/consolidate";
 import {
   analyzeSelfEmployedAction,
   createEinkommensPdfAction,
@@ -37,6 +37,7 @@ export function EinkommenEditor({ caseId }: { caseId: string }) {
   const [ansatz, setAnsatz] = useState<string>("");
   const [docId, setDocId] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!state.matrix) return;
@@ -68,23 +69,28 @@ export function EinkommenEditor({ caseId }: { caseId: string }) {
   }
 
   async function createPdf() {
-    const ansatzJahr = ansatz.trim() === "" ? null : Number(ansatz);
-    setPdfError(null);
-    const res = await createEinkommensPdfAction(caseId, {
-      jahre,
-      rows: rows.map((r) => {
-        const vals = jahre
-          .map((j) => r.cells[j])
-          .filter((v): v is number => typeof v === "number");
-        return { kennzahl: r.kennzahl, label: r.label, cells: r.cells, trend: trendFor(vals) };
-      }),
-      docNotes: notes,
-      einkommensansatzJahr: ansatzJahr,
-    });
-    if (res.documentId) {
-      setDocId(res.documentId);
-    } else if (res.error) {
-      setPdfError(res.error);
+    try {
+      setCreating(true);
+      const ansatzJahr = ansatz.trim() === "" ? null : Number(ansatz);
+      setPdfError(null);
+      const res = await createEinkommensPdfAction(caseId, {
+        jahre,
+        rows: rows.map((r) => {
+          const vals = jahre
+            .map((j) => r.cells[j])
+            .filter((v): v is number => typeof v === "number");
+          return { kennzahl: r.kennzahl, label: r.label, cells: r.cells, trend: trendFor(vals) };
+        }),
+        docNotes: notes,
+        einkommensansatzJahr: ansatzJahr,
+      });
+      if (res.documentId) {
+        setDocId(res.documentId);
+      } else if (res.error) {
+        setPdfError(res.error);
+      }
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -179,9 +185,9 @@ export function EinkommenEditor({ caseId }: { caseId: string }) {
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex gap-2">
-                <Button onClick={createPdf} variant="success" size="sm">
+                <Button onClick={createPdf} variant="success" size="sm" disabled={creating}>
                   <Save className="h-4 w-4" />
-                  {docId ? "PDF erstellt" : "PDF erstellen & ablegen"}
+                  {creating ? "Erstelle …" : docId ? "PDF erstellt" : "PDF erstellen & ablegen"}
                 </Button>
                 {docId ? (
                   <Button asChild variant="outline" size="sm">
