@@ -5,6 +5,7 @@ import {
   renderAuditProtocol,
   renderPlatformExport,
   renderWohnflaeche,
+  renderEinkommensanalyse,
 } from "@/lib/pdf/renderer";
 import { pdfFileName } from "@/lib/pdf/case-pdf";
 
@@ -78,6 +79,24 @@ describe("PDF-Renderer", () => {
       ],
       summeWohnflaeche: 34.4,
       summeZubehoer: 24,
+    });
+    expect(isPdf(buf)).toBe(true);
+  });
+
+  it("erzeugt eine Einkommensanalyse Selbständige", async () => {
+    const buf = await renderEinkommensanalyse({
+      applicantName: "Max Mustermann",
+      caseNumber: "UP-2026-0001",
+      dateStr: "21.06.2026",
+      broker,
+      jahre: [2022, 2023],
+      rows: [
+        { label: "Umsatz / Gesamtleistung", cells: { 2022: 180000, 2023: 210000 }, trend: "steigend" },
+        { label: "Gewinn / Jahresüberschuss", cells: { 2022: 70000, 2023: 88000 }, trend: "steigend" },
+      ],
+      docNotes: [{ label: "EÜR 2023", notiz: "Umsatz 210k, Gewinn 88k." }],
+      einkommensansatzJahr: 80000,
+      einkommensansatzMonat: 6667,
     });
     expect(isPdf(buf)).toBe(true);
   });

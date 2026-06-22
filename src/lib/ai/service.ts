@@ -27,6 +27,7 @@ import {
 } from "@/lib/domain/ai-schemas";
 import type { DocumentType, Platform } from "@/lib/domain/enums";
 import { floorplanAnalysisSchema, floorplanJsonSchema, type FloorplanAnalysis } from "@/lib/wohnflaeche/schema";
+import { selfEmployedAnalysisSchema, selfEmployedJsonSchema, type SelfEmployedAnalysis } from "@/lib/einkommen/schema";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 
 /**
@@ -183,6 +184,29 @@ export class AIService {
     });
     const parsed = floorplanAnalysisSchema.safeParse(raw);
     if (!parsed.success) return { rooms: [] };
+    return parsed.data;
+  }
+
+  async analyzeSelfEmployedDocs(
+    images: Array<{ base64: string; mimeType: string }>,
+    documents: Array<{ url: string; name?: string }> = []
+  ): Promise<SelfEmployedAnalysis> {
+    const raw = await this.provider.completeJSON({
+      schemaName: "selfEmployed",
+      system:
+        "Du bist Bankanalyst für Selbständigen-Einkommen. Analysiere die beigefügten " +
+        "Finanzunterlagen (BWA, G+V/Jahresabschluss, EÜR, Einkommensteuerbescheid/-erklärung). " +
+        "Gib für JEDES Dokument: dokumenttyp, jahr (Geschäftsjahr/Veranlagungsjahr), kennzahlen " +
+        "(umsatz, gewinn, zuVersteuerndesEinkommen, afa, zinsaufwand, privatentnahmen, " +
+        "geschaeftsfuehrergehalt – nur falls erkennbar, in EUR), eine kurze notiz (1–2 Sätze) und " +
+        "konfidenz (0–1). Erfinde keine Zahlen. Antworte ausschließlich als JSON.",
+      user: "Analysiere die Unterlagen und liefere die Dokumentliste gemäß Schema.",
+      jsonSchema: selfEmployedJsonSchema,
+      images,
+      documents,
+    });
+    const parsed = selfEmployedAnalysisSchema.safeParse(raw);
+    if (!parsed.success) return { docs: [] };
     return parsed.data;
   }
 
