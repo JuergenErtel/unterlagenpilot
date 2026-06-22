@@ -98,68 +98,73 @@ export interface EinkommenPdfInput {
 export async function createEinkommensPdfAction(
   caseId: string,
   input: EinkommenPdfInput
-): Promise<{ documentId: string }> {
+): Promise<{ documentId?: string; error?: string }> {
   const { ctx } = await requireCaseAccess(caseId);
-  const broker = await getBrokerInfo(ctx.organizationId);
-  const caseRow = await prisma.case.findUniqueOrThrow({
-    where: { id: caseId },
-    include: { applicants: { orderBy: { position: "asc" } } },
-  });
-  const applicantName = caseRow.applicants
-    .map((a) => [a.vorname, a.nachname].filter(Boolean).join(" "))
-    .filter(Boolean)
-    .join(", ");
 
-  const monat = input.einkommensansatzJahr != null ? Math.round(input.einkommensansatzJahr / 12) : null;
+  try {
+    const broker = await getBrokerInfo(ctx.organizationId);
+    const caseRow = await prisma.case.findUniqueOrThrow({
+      where: { id: caseId },
+      include: { applicants: { orderBy: { position: "asc" } } },
+    });
+    const applicantName = caseRow.applicants
+      .map((a) => [a.vorname, a.nachname].filter(Boolean).join(" "))
+      .filter(Boolean)
+      .join(", ");
 
-  const buffer = await renderEinkommensanalyse({
-    applicantName,
-    caseNumber: caseRow.caseNumber,
-    dateStr: new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
-    broker,
-    jahre: input.jahre,
-    rows: input.rows.map((r) => ({
-      label: r.label || (KENNZAHL_LABELS[r.kennzahl as keyof typeof KENNZAHL_LABELS] ?? r.kennzahl),
-      cells: r.cells,
-      trend: (r.trend as EinkommenPdfInput["rows"][number]["trend"]) as "steigend" | "fallend" | "stabil" | "unbekannt",
-    })),
-    docNotes: input.docNotes,
-    einkommensansatzJahr: input.einkommensansatzJahr,
-    einkommensansatzMonat: monat,
-  });
+    const monat = input.einkommensansatzJahr != null ? Math.round(input.einkommensansatzJahr / 12) : null;
 
-  const fileName = pdfFileName("Einkommensanalyse", caseRow.applicants);
-  const stored = await getStorage().put({
-    organizationId: ctx.organizationId,
-    caseId,
-    originalName: fileName,
-    mimeType: "application/pdf",
-    buffer,
-  });
-  const created = await prisma.document.create({
-    data: {
+    const buffer = await renderEinkommensanalyse({
+      applicantName,
+      caseNumber: caseRow.caseNumber,
+      dateStr: new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      broker,
+      jahre: input.jahre,
+      rows: input.rows.map((r) => ({
+        label: r.label || (KENNZAHL_LABELS[r.kennzahl as keyof typeof KENNZAHL_LABELS] ?? r.kennzahl),
+        cells: r.cells,
+        trend: (r.trend as EinkommenPdfInput["rows"][number]["trend"]) as "steigend" | "fallend" | "stabil" | "unbekannt",
+      })),
+      docNotes: input.docNotes,
+      einkommensansatzJahr: input.einkommensansatzJahr,
+      einkommensansatzMonat: monat,
+    });
+
+    const fileName = pdfFileName("Einkommensanalyse", caseRow.applicants);
+    const stored = await getStorage().put({
+      organizationId: ctx.organizationId,
       caseId,
       originalName: fileName,
-      generatedName: fileName,
-      storageKey: stored.storageKey,
       mimeType: "application/pdf",
-      sizeBytes: buffer.length,
-      documentType: "sonstige",
-      uploadSource: "vermittler",
-      scanStatus: "ready_for_ocr",
-      readable: true,
-    },
-    select: { id: true },
-  });
+      buffer,
+    });
+    const created = await prisma.document.create({
+      data: {
+        caseId,
+        originalName: fileName,
+        generatedName: fileName,
+        storageKey: stored.storageKey,
+        mimeType: "application/pdf",
+        sizeBytes: buffer.length,
+        documentType: "sonstige",
+        uploadSource: "vermittler",
+        scanStatus: "ready_for_ocr",
+        readable: true,
+      },
+      select: { id: true },
+    });
 
-  await audit({
-    organizationId: ctx.organizationId,
-    userId: ctx.userId,
-    action: "pdf.generated",
-    entityType: "case",
-    entityId: caseId,
-    metadata: { feature: "einkommen", documentId: created.id },
-  });
-  revalidatePath(`/cases/${caseId}`);
-  return { documentId: created.id };
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "pdf.generated",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { feature: "einkommen", documentId: created.id },
+    });
+    revalidatePath(`/cases/${caseId}`);
+    return { documentId: created.id };
+  } catch {
+    return { error: "PDF konnte nicht erstellt werden." };
+  }
 }
