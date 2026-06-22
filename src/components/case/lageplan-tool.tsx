@@ -1,19 +1,27 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { MapPin, FileDown, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { generateLageplanAction, saveLageplanPdfAction, type LageplanState } from "@/lib/actions/lageplan";
+import { geoportalFor } from "@/lib/geo/geoportale";
+
+const fb = geoportalFor(null).entry;
 
 export function LageplanTool({ caseId, initialAddress }: { caseId: string; initialAddress: string }) {
   const action = generateLageplanAction.bind(null, caseId);
   const [state, formAction, pending] = useActionState<LageplanState, FormData>(action, {
-    mapDataUri: null, lat: null, lon: null, bundesland: null, geoportalLabel: "", geoportalUrl: "", address: initialAddress,
+    mapDataUri: null, lat: null, lon: null, bundesland: null, geoportalLabel: fb.label, geoportalUrl: fb.url, address: initialAddress,
   });
   const [docId, setDocId] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDocId(null);
+    setPdfError(null);
+  }, [state.mapDataUri]);
 
   async function savePdf() {
     if (state.mapDataUri == null || state.lat == null || state.lon == null) return;

@@ -424,18 +424,22 @@ export async function renderLageplan(data: LageplanData): Promise<Buffer> {
   const mapSize = 360;
   const x = 50;
   const y = doc.y + 4;
+  let imageOk = true;
   try {
     doc.image(data.mapPng, x, y, { fit: [mapSize, mapSize] });
   } catch {
+    imageOk = false;
     doc.fillColor("#92400e").fontSize(9).text("Kartenbild konnte nicht eingebettet werden.");
   }
-  // Markierung in der Bildmitte (Objektposition = Kartenzentrum).
-  const cx = x + mapSize / 2;
-  const cy = y + mapSize / 2;
-  doc.strokeColor("#c0152f").lineWidth(2);
-  doc.moveTo(cx - 8, cy).lineTo(cx + 8, cy).stroke();
-  doc.moveTo(cx, cy - 8).lineTo(cx, cy + 8).stroke();
-  doc.circle(cx, cy, 9).strokeColor("#c0152f").lineWidth(1.5).stroke();
+  // Markierung in der Bildmitte (Objektposition = Kartenzentrum) – nur wenn Bild erfolgreich eingebettet.
+  if (imageOk) {
+    const cx = x + mapSize / 2;
+    const cy = y + mapSize / 2;
+    doc.strokeColor("#c0152f").lineWidth(2);
+    doc.moveTo(cx - 8, cy).lineTo(cx + 8, cy).stroke();
+    doc.moveTo(cx, cy - 8).lineTo(cx, cy + 8).stroke();
+    doc.circle(cx, cy, 9).strokeColor("#c0152f").lineWidth(1.5).stroke();
+  }
   doc.y = y + mapSize + 8;
 
   heading(doc, "Amtliche Flurkarte");
