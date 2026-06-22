@@ -6,10 +6,17 @@ import {
   renderPlatformExport,
   renderWohnflaeche,
   renderEinkommensanalyse,
+  renderLageplan,
 } from "@/lib/pdf/renderer";
 import { pdfFileName } from "@/lib/pdf/case-pdf";
 
 const broker = { name: "Jürgen Ertel Baufinanzierung", street: "Ottstr. 9", zip: "76744", city: "Wörth", website: "www.baufi-woerth.de" };
+
+// Minimal gültiges 1x1-PNG (für die Bild-Einbettung im Test)
+const PNG_1x1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64"
+);
 
 function isPdf(buf: Buffer) {
   return buf.length > 800 && buf.subarray(0, 5).toString("latin1") === "%PDF-";
@@ -97,6 +104,23 @@ describe("PDF-Renderer", () => {
       docNotes: [{ label: "EÜR 2023", notiz: "Umsatz 210k, Gewinn 88k." }],
       einkommensansatzJahr: 80000,
       einkommensansatzMonat: 6667,
+    });
+    expect(isPdf(buf)).toBe(true);
+  });
+
+  it("erzeugt einen Lageplan-PDF mit eingebettetem Bild", async () => {
+    const buf = await renderLageplan({
+      caseNumber: "UP-2026-0001",
+      dateStr: "22.06.2026",
+      broker,
+      address: "Ottstr. 9, 76744 Wörth am Rhein",
+      lat: 49.0508,
+      lon: 8.2731,
+      bundesland: "Rheinland-Pfalz",
+      geoportalLabel: "Geoportal RLP",
+      geoportalUrl: "https://www.geoportal.rlp.de/",
+      attributions: "© BKG (TopPlusOpen) · © OpenStreetMap-Mitwirkende",
+      mapPng: PNG_1x1,
     });
     expect(isPdf(buf)).toBe(true);
   });

@@ -391,3 +391,64 @@ export async function renderEinkommensanalyse(data: EinkommensanalyseData): Prom
   footer(doc, data.broker);
   return docToBuffer(doc);
 }
+
+// ---------------------------------------------------------------------------
+// G) Lageplan (Orientierung)
+// ---------------------------------------------------------------------------
+
+export interface LageplanData {
+  caseNumber: string;
+  dateStr: string;
+  broker: BrokerInfo;
+  address: string;
+  lat: number;
+  lon: number;
+  bundesland: string;
+  geoportalLabel: string;
+  geoportalUrl: string;
+  attributions: string;
+  mapPng: Buffer;
+}
+
+export async function renderLageplan(data: LageplanData): Promise<Buffer> {
+  const doc = newDoc(`Lageplan ${data.caseNumber}`);
+  coverHeader(doc, data.broker, "Lageplan (Orientierung)", `Vorgang ${data.caseNumber}`, data.dateStr);
+
+  heading(doc, "Objekt");
+  doc.font("Helvetica").fontSize(10).fillColor("#1a1a1a");
+  doc.text(data.address || "—");
+  doc.fillColor("#6b7280").fontSize(8).text(`Koordinaten: ${data.lat.toFixed(5)}, ${data.lon.toFixed(5)} · ${data.bundesland || "—"}`);
+
+  heading(doc, "Kartenausschnitt");
+  // Quadratisches Kartenbild, Objekt in der Mitte.
+  const mapSize = 360;
+  const x = 50;
+  const y = doc.y + 4;
+  try {
+    doc.image(data.mapPng, x, y, { fit: [mapSize, mapSize] });
+  } catch {
+    doc.fillColor("#92400e").fontSize(9).text("Kartenbild konnte nicht eingebettet werden.");
+  }
+  // Markierung in der Bildmitte (Objektposition = Kartenzentrum).
+  const cx = x + mapSize / 2;
+  const cy = y + mapSize / 2;
+  doc.strokeColor("#c0152f").lineWidth(2);
+  doc.moveTo(cx - 8, cy).lineTo(cx + 8, cy).stroke();
+  doc.moveTo(cx, cy - 8).lineTo(cx, cy + 8).stroke();
+  doc.circle(cx, cy, 9).strokeColor("#c0152f").lineWidth(1.5).stroke();
+  doc.y = y + mapSize + 8;
+
+  heading(doc, "Amtliche Flurkarte");
+  doc.font("Helvetica").fontSize(10).fillColor("#1f3a8a").text(`${data.geoportalLabel}: ${data.geoportalUrl}`, { link: data.geoportalUrl, underline: true });
+  doc.font("Helvetica").fontSize(9).fillColor("#1a1a1a").text("Den amtlichen Auszug über das Geoportal des Bundeslandes abrufen.");
+
+  doc.moveDown(1);
+  doc.fillColor("#6b7280").fontSize(7.5).font("Helvetica").text(
+    "Orientierungs-Lageplan – kein amtlicher Auszug; amtliche Flurkarte über das Landes-Geoportal.",
+    { width: 495 }
+  );
+  doc.fillColor("#9ca3af").fontSize(7).text(`Kartenquellen: ${data.attributions}`, { width: 495 });
+
+  footer(doc, data.broker);
+  return docToBuffer(doc);
+}
