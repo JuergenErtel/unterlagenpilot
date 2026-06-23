@@ -75,7 +75,12 @@ export class OpenAICompatibleProvider implements AIProvider {
     });
 
     if (!res.ok) {
-      throw new Error(`EU-OpenAI-kompatibel HTTP ${res.status}`);
+      // Antwort-Body mitnehmen (gekürzt, keine Kundendaten – nur die Anbieter-Fehlermeldung),
+      // damit z.B. "document_url not supported" im Log sichtbar wird statt nur "HTTP 422".
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `EU-OpenAI-kompatibel HTTP ${res.status}${body ? `: ${body.slice(0, 600)}` : ""}`
+      );
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;

@@ -206,7 +206,16 @@ export class AIService {
       documents,
     });
     const parsed = selfEmployedAnalysisSchema.safeParse(raw);
-    if (!parsed.success) return { docs: [] };
+    if (!parsed.success) {
+      // Kein stilles Schlucken: die KI hat geantwortet, aber nicht im erwarteten Schema.
+      console.error(
+        "[analyzeSelfEmployedDocs] KI-Antwort entspricht nicht dem Schema:",
+        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+        "| Rohausgabe (gekürzt):",
+        JSON.stringify(raw).slice(0, 600)
+      );
+      return { docs: [] };
+    }
     return parsed.data;
   }
 
