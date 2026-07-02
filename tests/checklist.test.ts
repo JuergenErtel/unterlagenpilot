@@ -41,6 +41,34 @@ describe("Checklisten-Logik", () => {
     expect(ausweis?.status).toBe("unvollstaendig");
   });
 
+  it("ein unlesbarer Alt-Upload blockiert nicht eine mit lesbaren Dokumenten erfüllte Position", () => {
+    // Gehaltsabrechnungen: requiredCount 3. 3 lesbare + 1 unlesbarer -> vorhanden.
+    const list = buildChecklistForCase(
+      { employmentType: "angestellter", financingType: "kauf" },
+      [
+        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", readable: true },
+        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", readable: true },
+        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", readable: true },
+        { documentType: "gehaltsabrechnung", reviewStatus: "offen", readable: false },
+      ]
+    );
+    const gehalt = list.find((i) => i.key === "gehaltsabrechnung");
+    expect(gehalt?.status).toBe("vorhanden");
+  });
+
+  it("zu wenige lesbare Dokumente bleiben unvollständig (2 lesbar + 1 unlesbar bei requiredCount 3)", () => {
+    const list = buildChecklistForCase(
+      { employmentType: "angestellter", financingType: "kauf" },
+      [
+        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", readable: true },
+        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", readable: true },
+        { documentType: "gehaltsabrechnung", reviewStatus: "offen", readable: false },
+      ]
+    );
+    const gehalt = list.find((i) => i.key === "gehaltsabrechnung");
+    expect(gehalt?.status).toBe("unvollstaendig");
+  });
+
   it("Readiness-Score bleibt gedeckelt bei offenen Pflichtunterlagen", () => {
     const list = buildChecklistForCase({ employmentType: "angestellter", financingType: "kauf" }, []);
     const r = computeReadiness({ checklist: list });

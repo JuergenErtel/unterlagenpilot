@@ -150,14 +150,18 @@ function resolveStatus(
 
   if (matches.length > 0) {
     const required = def.requiredCount ?? 1;
-    const unreadable = matches.some((m) => m.readable === false);
+    // Unlesbare Dokumente zählen nicht zur Erfüllung, blockieren aber auch nicht
+    // eine bereits mit genügend LESBAREN Dokumenten erfüllte Position.
+    const readableMatches = matches.filter((m) => m.readable !== false);
     const tooOld =
       def.recencyDays != null &&
-      matches.every((m) => (m.ageDays ?? 0) > def.recencyDays!);
-    if (unreadable) status = "unvollstaendig";
-    else if (tooOld) status = "nicht_aktuell";
-    else if (matches.length < required) status = "unvollstaendig";
-    else status = "vorhanden";
+      readableMatches.length > 0 &&
+      readableMatches.every((m) => (m.ageDays ?? 0) > def.recencyDays!);
+    if (readableMatches.length >= required) {
+      status = tooOld ? "nicht_aktuell" : "vorhanden";
+    } else {
+      status = "unvollstaendig";
+    }
   }
 
   return {

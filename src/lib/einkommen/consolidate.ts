@@ -60,9 +60,13 @@ export function trendFor(valuesInYearOrder: number[]): Trend {
   const first = valuesInYearOrder[0]!;
   const last = valuesInYearOrder[valuesInYearOrder.length - 1]!;
   if (first === 0) return last === 0 ? "stabil" : last > 0 ? "steigend" : "fallend";
-  const ratio = last / first;
-  if (ratio > 1.05) return "steigend";
-  if (ratio < 0.95) return "fallend";
+  // Relative Veränderung über den BETRAG des Startwerts messen. Ein Quotient
+  // (last/first) kehrt bei negativem Startwert das Vorzeichen um und meldet bei
+  // Selbständigen-Verlustjahren einen falschen Trend (z.B. -40.000 -> -10.000
+  // wäre eine Verbesserung, würde als "fallend" ausgewiesen).
+  const relativeChange = (last - first) / Math.abs(first);
+  if (relativeChange > 0.05) return "steigend";
+  if (relativeChange < -0.05) return "fallend";
   return "stabil";
 }
 

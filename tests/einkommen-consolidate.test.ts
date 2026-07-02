@@ -10,6 +10,19 @@ describe("Einkommens-Konsolidierung", () => {
     expect(trendFor([])).toBe("unbekannt");
   });
 
+  it("trendFor: korrekt bei negativen Startwerten (Verlustjahre)", () => {
+    // Schrumpfender Verlust = Verbesserung -> steigend
+    expect(trendFor([-40000, -10000])).toBe("steigend");
+    // Von Verlust in Gewinn -> steigend
+    expect(trendFor([-20000, 30000])).toBe("steigend");
+    // Wachsender Verlust -> fallend
+    expect(trendFor([-10000, -40000])).toBe("fallend");
+    // Von Gewinn in Verlust -> fallend
+    expect(trendFor([30000, -20000])).toBe("fallend");
+    // Nahezu unveränderter Verlust -> stabil
+    expect(trendFor([-20000, -20200])).toBe("stabil");
+  });
+
   it("baut eine Jahr×Kennzahl-Matrix, Jahre aufsteigend", () => {
     const docs: EinkommenDoc[] = [
       { dokumenttyp: "euer", jahr: 2023, kennzahlen: { umsatz: 200000, gewinn: 80000 }, notiz: "", konfidenz: 0.9 },
