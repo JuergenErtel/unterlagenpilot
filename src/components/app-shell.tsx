@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Link2, LogOut } from "lucide-react";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { MobileNav } from "@/components/mobile-nav";
 import { logout } from "@/lib/actions/auth";
 import { USER_ROLE_LABELS } from "@/lib/domain/enums";
 
@@ -64,16 +65,19 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/80 px-6 backdrop-blur">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-2 border-b bg-card/80 px-4 backdrop-blur sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+            <MobileNav context={context} />
             <span className="hidden sm:inline">KI-Sachbearbeiter für Baufinanzierung</span>
+            <span className="truncate font-medium text-foreground sm:hidden">UnterlagenPilot</span>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
-            Manuelle Freigabe vor jeder Übertragung · DSGVO/EU
+            <span className="hidden sm:inline">Manuelle Freigabe vor jeder Übertragung · DSGVO/EU</span>
+            <span className="sm:hidden">DSGVO/EU</span>
           </div>
         </header>
-        <main className="flex-1 animate-fade-in p-6">{children}</main>
+        <main className="flex-1 animate-fade-in p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

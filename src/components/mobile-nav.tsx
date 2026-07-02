@@ -1,0 +1,100 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Menu, X, Link2, LogOut } from "lucide-react";
+import { SidebarNav } from "@/components/sidebar-nav";
+import { logout } from "@/lib/actions/auth";
+import { USER_ROLE_LABELS } from "@/lib/domain/enums";
+
+/**
+ * Mobile-Navigation (< md): Hamburger im Header öffnet ein Slide-over-Drawer
+ * mit derselben Navigation wie die Desktop-Sidebar. Schließt bei Auswahl.
+ */
+export function MobileNav({
+  context,
+}: {
+  context: { organizationName: string; userName: string; role: string; isDemo?: boolean };
+}) {
+  const [open, setOpen] = useState(false);
+  const initials = context.userName
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("");
+  const roleLabel =
+    USER_ROLE_LABELS[context.role as keyof typeof USER_ROLE_LABELS] ?? context.role;
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Navigation öffnen"
+          className="flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden" />
+        <Dialog.Content
+          className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r bg-card shadow-xl focus:outline-none md:hidden"
+        >
+          <Dialog.Title className="sr-only">Navigation</Dialog.Title>
+          <div className="flex h-16 items-center justify-between border-b px-5">
+            <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-soft">
+                <Link2 className="h-4 w-4" />
+              </div>
+              <div className="leading-tight">
+                <div className="text-sm font-semibold tracking-tight">UnterlagenPilot</div>
+                <div className="text-[10px] text-muted-foreground">immocockpit24.de</div>
+              </div>
+            </Link>
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                aria-label="Navigation schließen"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </Dialog.Close>
+          </div>
+
+          <SidebarNav onNavigate={() => setOpen(false)} />
+
+          <div className="space-y-2 border-t p-3">
+            <div className="flex items-center gap-3 rounded-md px-2 py-1.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{context.userName}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {roleLabel} · {context.organizationName}
+                </div>
+              </div>
+            </div>
+            {context.isDemo ? (
+              <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning-foreground">
+                Demo-Zugang (ohne Login).
+              </div>
+            ) : (
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <LogOut className="h-3.5 w-3.5" /> Abmelden
+                </button>
+              </form>
+            )}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

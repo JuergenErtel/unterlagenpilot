@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const GROUPS: Array<{ label: string; items: Array<{ href: string; label: string; icon: LucideIcon }> }> = [
+export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; label: string; icon: LucideIcon }> }> = [
   {
     label: "Arbeit",
     items: [
@@ -42,11 +42,11 @@ const GROUPS: Array<{ label: string; items: Array<{ href: string; label: string;
   },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   return (
     <nav className="flex-1 space-y-5 overflow-y-auto p-3">
-      {GROUPS.map((g) => (
+      {NAV_GROUPS.map((g) => (
         <div key={g.label}>
           <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
             {g.label}
@@ -58,6 +58,7 @@ export function SidebarNav() {
                 <Link
                   key={it.href}
                   href={it.href}
+                  onClick={onNavigate}
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     active
