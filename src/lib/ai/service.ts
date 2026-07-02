@@ -183,7 +183,16 @@ export class AIService {
       documents,
     });
     const parsed = floorplanAnalysisSchema.safeParse(raw);
-    if (!parsed.success) return { rooms: [] };
+    if (!parsed.success) {
+      // Kein stilles Schlucken: die KI hat geantwortet, aber nicht im erwarteten Schema.
+      console.error(
+        "[analyzeFloorplan] KI-Antwort entspricht nicht dem Schema:",
+        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+        "| Rohausgabe (gekürzt):",
+        JSON.stringify(raw).slice(0, 600)
+      );
+      return { rooms: [] };
+    }
     return parsed.data;
   }
 

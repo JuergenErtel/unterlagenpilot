@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, ShieldCheck, Sparkles } from "lucide-react";
+import { ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { setDocumentReview, releasePlatform } from "@/lib/actions/cases";
@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/ui/page-header";
 import { SeverityBadge } from "@/components/status-badge";
 import { ConfidenceBadge } from "@/components/case/confidence-badge";
+import { ExtractedFieldActions } from "@/components/review/extracted-field-actions";
 import { formatConfidence } from "@/lib/utils";
 import {
   DOCUMENT_TYPE_LABELS,
@@ -70,12 +71,36 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
               </CardHeader>
               <CardContent className="grid gap-0 p-0 lg:grid-cols-[1fr_1.3fr_1fr]">
                 {/* Vorschau */}
-                <div className="flex flex-col items-center justify-center border-b bg-gradient-to-br from-muted/40 to-card p-8 text-center lg:border-b-0 lg:border-r">
-                  <div className="flex h-32 w-24 items-center justify-center rounded-md border-2 border-dashed bg-card">
-                    <FileText className="h-8 w-8 text-muted-foreground/60" />
+                <div className="flex flex-col items-center justify-center gap-2 border-b bg-gradient-to-br from-muted/40 to-card p-4 text-center lg:border-b-0 lg:border-r">
+                  {d.mimeType?.startsWith("image/") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/documents/${d.id}/download?preview=1`}
+                      alt={`Vorschau: ${d.generatedName ?? d.originalName}`}
+                      className="max-h-72 w-auto max-w-full rounded-md border object-contain"
+                    />
+                  ) : d.mimeType === "application/pdf" ? (
+                    <iframe
+                      src={`/api/documents/${d.id}/download?preview=1`}
+                      title={`Vorschau: ${d.generatedName ?? d.originalName}`}
+                      className="h-72 w-full rounded-md border bg-card"
+                    />
+                  ) : (
+                    <div className="flex h-32 w-24 items-center justify-center rounded-md border-2 border-dashed bg-card">
+                      <FileText className="h-8 w-8 text-muted-foreground/60" />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-xs">
+                    <a
+                      href={`/api/documents/${d.id}/download?preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary underline"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Original öffnen
+                    </a>
+                    <Link href={`/cases/${d.caseId}`} className="text-primary underline">Zur Fallakte</Link>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">Dokumentvorschau</p>
-                  <Link href={`/cases/${d.caseId}`} className="mt-1 text-xs text-primary underline">Zur Fallakte</Link>
                 </div>
 
                 {/* Erkannte Felder */}
@@ -89,11 +114,11 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <ConfidenceBadge value={f.confidence} />
-                        <div className="hidden gap-0.5 sm:flex">
-                          <button className="rounded px-1.5 py-0.5 text-[11px] text-success hover:bg-success/10" title="Akzeptieren">✓</button>
-                          <button className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted" title="Korrigieren">✎</button>
-                          <button className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted" title="Ignorieren">∅</button>
-                        </div>
+                        <ExtractedFieldActions
+                          fieldId={f.id}
+                          currentValue={f.correctedValue ?? f.value}
+                          reviewed={f.reviewed}
+                        />
                       </div>
                     </div>
                   ))}

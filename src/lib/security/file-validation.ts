@@ -21,6 +21,13 @@ const MIME_TO_KIND: Record<string, AllowedKind> = {
   "image/png": "png",
 };
 
+/** Kanonischer MIME-Type je erkanntem Inhalt – wird gespeichert/ausgeliefert. */
+const KIND_TO_MIME: Record<AllowedKind, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  png: "image/png",
+};
+
 export interface FileValidationInput {
   filename: string;
   mimeType: string;
@@ -31,6 +38,12 @@ export interface FileValidationInput {
 export interface FileValidationResult {
   ok: boolean;
   kind?: AllowedKind;
+  /**
+   * Kanonischer MIME-Type, abgeleitet aus den Magic-Bytes – NIE der Client-Wert.
+   * Nur dieser darf gespeichert und beim Download ausgeliefert werden (verhindert
+   * Stored XSS über einen manipulierten Content-Type, z. B. text/html).
+   */
+  mimeType?: string;
   /** Verständliche, datenarme Fehlermeldung (kunden-/vermittlertauglich). */
   error?: string;
 }
@@ -85,5 +98,5 @@ export function validateUpload(input: FileValidationInput): FileValidationResult
     return { ok: false, error: "Der Dateiinhalt entspricht nicht der Endung." };
   }
 
-  return { ok: true, kind: magicKind };
+  return { ok: true, kind: magicKind, mimeType: KIND_TO_MIME[magicKind] };
 }

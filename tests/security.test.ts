@@ -68,6 +68,17 @@ describe("Datei-Validierung (Typ/MIME/Magic-Bytes)", () => {
   it("lehnt leere Dateien ab", () => {
     expect(validateUpload({ filename: "a.pdf", mimeType: "application/pdf", size: 0, buffer: Buffer.alloc(0) }).ok).toBe(false);
   });
+
+  it("liefert einen kanonischen MIME-Type aus den Magic-Bytes (nie den Client-Wert)", () => {
+    // Client behauptet text/html (unbekannter MIME wird toleriert) – gespeichert
+    // werden darf trotzdem nur der aus dem Inhalt abgeleitete Typ (XSS-Schutz).
+    const html = validateUpload({ filename: "a.png", mimeType: "text/html", size: PNG.length, buffer: PNG });
+    expect(html.ok).toBe(true);
+    expect(html.mimeType).toBe("image/png");
+
+    expect(validateUpload({ filename: "a.pdf", mimeType: "", size: PDF.length, buffer: PDF }).mimeType).toBe("application/pdf");
+    expect(validateUpload({ filename: "a.jpg", mimeType: "image/jpeg", size: JPG.length, buffer: JPG }).mimeType).toBe("image/jpeg");
+  });
 });
 
 describe("MockVirusScanner", () => {

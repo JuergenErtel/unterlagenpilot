@@ -29,3 +29,33 @@ describe("OpenAICompatibleProvider – Fehlerdiagnose", () => {
     await expect(provider.completeJSON(req)).rejects.toThrow(/document_url is not supported/);
   });
 });
+
+describe("OpenAICompatibleProvider – Payload-Format", () => {
+  it("sendet document_url als String-Feld im Chunk (Mistral-API), nicht verschachtelt", async () => {
+    let sentBody: {
+      messages: Array<{ role: string; content: unknown }>;
+    } | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body: string }) => {
+        sentBody = JSON.parse(init.body);
+        return {
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: "{}" } }] }),
+        };
+      })
+    );
+
+    await provider.completeJSON({
+      ...req,
+      documents: [{ url: "https://example.com/grundriss.pdf", name: "grundriss.pdf" }],
+    });
+
+    const userContent = sentBody!.messages.find((m) => m.role === "user")!.content as Array<
+      Record<string, unknown>
+    >;
+    const chunk = userContent.find((c) => c.type === "document_url")!;
+    expect(chunk.document_url).toBe("https://example.com/grundriss.pdf");
+    expect(chunk.document_name).toBe("grundriss.pdf");
+  });
+});

@@ -17,9 +17,12 @@ function buildUserContent(req: AICompletionRequest): unknown {
       type: "image_url",
       image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
     })),
+    // Mistral-API: document_url ist ein String direkt im Chunk, document_name
+    // ein Geschwisterfeld (verschachtelt → HTTP 422 "document_url not supported").
     ...documents.map((doc) => ({
       type: "document_url",
-      document_url: { document_url: doc.url, document_name: doc.name ?? "dokument.pdf" },
+      document_url: doc.url,
+      document_name: doc.name ?? "dokument.pdf",
     })),
   ];
 }

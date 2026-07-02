@@ -60,12 +60,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const buffer = await storage.get(doc.storageKey);
   if (!buffer) return new NextResponse("Datei nicht verfügbar.", { status: 404 });
 
+  // Nur bekannte, harmlose Typen dürfen inline gerendert werden. Alles andere
+  // (inkl. Altbestand mit client-geliefertem MIME) wird als Download erzwungen –
+  // verhindert Stored XSS über manipulierte Content-Types in der App-Origin.
+  const SAFE_INLINE = new Set(["application/pdf", "image/jpeg", "image/png"]);
+  const safeType = SAFE_INLINE.has(doc.mimeType ?? "") ? doc.mimeType! : "application/octet-stream";
+  const inline = preview && safeType !== "application/octet-stream";
+
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
-      "Content-Type": doc.mimeType || "application/octet-stream",
-      "Content-Disposition": `${preview ? "inline" : "attachment"}; filename="${encodeURIComponent(fileName)}"`,
+      "Content-Type": safeType,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(fileName)}"`,
       "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

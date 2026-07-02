@@ -65,12 +65,13 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
   }
 
   // 2) Speichern (mandanten-/fallbezogener Pfad).
+  //    MIME-Type stammt aus den Magic-Bytes (kanonisch) – nie vom Client.
   const storage = getStorage();
   const stored = await storage.put({
     organizationId,
     caseId,
     originalName: file.name,
-    mimeType: file.type || "application/octet-stream",
+    mimeType: validation.mimeType!,
     buffer: file.buffer,
   });
 

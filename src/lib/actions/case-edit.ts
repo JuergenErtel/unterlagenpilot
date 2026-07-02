@@ -24,6 +24,16 @@ export async function editApplicant(
 ): Promise<void> {
   const ctx = await requireContext();
 
+  // Tenant-Isolation: Antragsteller muss zu einem Fall der eigenen Organisation gehören.
+  const owner = await prisma.applicant.findUnique({
+    where: { id: applicantId },
+    select: { caseId: true, case: { select: { organizationId: true } } },
+  });
+  if (!owner || owner.case.organizationId !== ctx.organizationId) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+
   const vorname = field(formData, "vorname");
   const nachname = field(formData, "nachname");
   const geburtsdatumRaw = field(formData, "geburtsdatum");
@@ -36,7 +46,10 @@ export async function editApplicant(
       ? (familienstandRaw as MaritalStatus)
       : undefined;
 
-  const geburtsdatum = geburtsdatumRaw ? new Date(geburtsdatumRaw) : undefined;
+  const geburtsdatumParsed = geburtsdatumRaw ? new Date(geburtsdatumRaw) : undefined;
+  // Ungültige Datumseingaben ignorieren statt mit Prisma-Fehler (500) zu antworten.
+  const geburtsdatum =
+    geburtsdatumParsed && !Number.isNaN(geburtsdatumParsed.getTime()) ? geburtsdatumParsed : undefined;
 
   const data: {
     vorname?: string;

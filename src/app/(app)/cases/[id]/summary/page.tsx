@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireContext } from "@/lib/auth/context";
+import { requireCaseAccess } from "@/lib/auth/context";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,8 @@ export default async function SummaryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireContext();
+  // Tenant-Isolation: 404 bei fremder Organisation (kein Existenz-Leak).
+  await requireCaseAccess(id);
   const agg = await getCaseAggregate(id);
   const s = ai.createBankSummary({
     ...agg.canonical,
