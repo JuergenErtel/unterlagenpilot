@@ -33,3 +33,44 @@ export function rateLimit(key: string, max: number, windowSec: number): RateLimi
 export function __resetRateLimits(): void {
   buckets.clear();
 }
+
+function upstashConfig(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url: url.replace(/\/$/, ""), token } : null;
+}
+
+/**
+ * Verteiltes Rate-Limiting: nutzt Upstash Redis (REST) wenn konfiguriert, sonst
+ * das In-Memory-Limit. Auf Serverless ist In-Memory pro Instanz – erst Upstash
+ * macht das Limit instanzübergreifend wirksam. Bei Upstash-Fehlern wird auf das
+ * In-Memory-Limit zurückgefallen (fail-safe, kein Crash).
+ */
+export async function checkRateLimit(
+  key: string,
+  max: number,
+  windowSec: number
+): Promise<RateLimitResult> {
+  const cfg = upstashConfig();
+  if (!cfg) return rateLimit(key, max, windowSec);
+
+  try {
+    // Fixed-Window-Zähler in einem Round-Trip: INCR + (nur beim ersten Treffer) EXPIRE.
+    const res = await fetch(`${cfg.url}/pipeline`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify([
+        ["INCR", key],
+        ["EXPIRE", key, windowSec, "NX"],
+      ]),
+    });
+    if (!res.ok) throw new Error(`Upstash HTTP ${res.status}`);
+    const data = (await res.json()) as Array<{ result?: number }>;
+    const count = Number(data[0]?.result ?? 0);
+    if (count > max) return { ok: false, remaining: 0, retryAfterSec: windowSec };
+    return { ok: true, remaining: Math.max(0, max - count), retryAfterSec: 0 };
+  } catch (e) {
+    console.error("[rate-limit] Upstash nicht erreichbar – Fallback auf In-Memory:", e);
+    return rateLimit(key, max, windowSec);
+  }
+}

@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { requireUploadTokenAccess } from "@/lib/auth/context";
-import { rateLimit } from "@/lib/auth/rate-limit";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { processUpload } from "@/lib/documents/pipeline";
 import { customerFormSchema } from "@/lib/domain/forms";
 import { audit } from "@/lib/audit";
@@ -18,7 +18,8 @@ export interface CustomerUploadState {
 
 async function clientIp(): Promise<string> {
   const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  // x-real-ip wird von Vercel gesetzt (nicht client-spoofbar); x-forwarded-for als Fallback.
+  return h.get("x-real-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 }
 
 /**
@@ -35,7 +36,7 @@ export async function customerUpload(
   if (!access) return { uploaded: 0, rejected: [], error: "Upload-Link ungültig oder abgelaufen." };
 
   const env = getEnv();
-  const limit = rateLimit(`upload:${access.linkId}:${await clientIp()}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
+  const limit = await checkRateLimit(`upload:${access.linkId}:${await clientIp()}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) {
     return { uploaded: 0, rejected: [], error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
   }

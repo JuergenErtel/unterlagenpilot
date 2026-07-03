@@ -10,7 +10,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "@/lib/auth/session";
-import { rateLimit } from "@/lib/auth/rate-limit";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 
 export interface LoginState {
   error?: string;
@@ -18,7 +18,8 @@ export interface LoginState {
 
 async function clientIp(): Promise<string> {
   const h = await headers();
-  return (h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown");
+  // x-real-ip wird von Vercel gesetzt (nicht client-spoofbar); x-forwarded-for als Fallback.
+  return (h.get("x-real-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown");
 }
 
 /** Nur relative, eigene Pfade erlauben (Schutz gegen Open-Redirect). */
@@ -31,7 +32,7 @@ function safeRedirect(target: string | null | undefined): string {
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const env = getEnv();
   const ip = await clientIp();
-  const limit = rateLimit(`login:${ip}`, env.LOGIN_RATE_MAX, env.LOGIN_RATE_WINDOW_SEC);
+  const limit = await checkRateLimit(`login:${ip}`, env.LOGIN_RATE_MAX, env.LOGIN_RATE_WINDOW_SEC);
   if (!limit.ok) {
     return { error: `Zu viele Versuche. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
   }
