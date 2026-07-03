@@ -68,6 +68,10 @@ const envSchema = z.object({
   // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(), // z.B. "UnterlagenPilot <noreply@immocockpit24.de>"
+
+  // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
+  CRON_SECRET: z.string().optional(),
+  REMINDER_AFTER_DAYS: z.coerce.number().int().min(1).max(90).default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;
