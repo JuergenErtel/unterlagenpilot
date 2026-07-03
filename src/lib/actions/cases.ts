@@ -13,6 +13,8 @@ import {
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
 import { generateByType } from "@/lib/messages/generators";
+import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buildSignature } from "@/lib/messages/render";
+import { getBrokerInfo } from "@/lib/pdf/case-pdf";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { computeNextCaseNumber, caseNumberPrefix } from "@/lib/cases/case-number";
@@ -306,19 +308,45 @@ export async function generateMessage(
     uploadLink = created.url;
   }
 
-  const msg = generateByType(
-    type,
-    { kundeName: [a?.vorname, a?.nachname].filter(Boolean).join(" "), uploadLink },
-    agg.missing.map((m) => ({ title: m.name }))
-  );
+  const kundeName = [a?.vorname, a?.nachname].filter(Boolean).join(" ");
+  const items = agg.missing.map((m) => ({ title: m.name }));
+
+  // Signatur aus den Organisationsdaten (mandantenfähig statt hartkodiert).
+  const broker = await getBrokerInfo(ctx.organizationId);
+  const vars = buildTemplateVars({
+    kundeName,
+    uploadLink,
+    signatur: buildSignature(broker),
+    items,
+    dokument: items[0]?.title,
+  });
+
+  // Organisationsspezifische Vorlage bevorzugen, sonst Standard-Vorlage,
+  // sonst (z.B. interne Notiz) der eingebaute Generator.
+  const override = await prisma.messageTemplate.findFirst({
+    where: { organizationId: ctx.organizationId, type, channel },
+    select: { subject: true, body: true },
+  });
+  const source = override ?? DEFAULT_TEMPLATES[templateKey(type, channel)];
+
+  let subject: string | null;
+  let body: string;
+  if (source) {
+    subject = source.subject ? renderTemplate(source.subject, vars) : null;
+    body = renderTemplate(source.body, vars);
+  } else {
+    const msg = generateByType(type, { kundeName, uploadLink }, items);
+    subject = msg.subject ?? null;
+    body = msg.body;
+  }
 
   await prisma.generatedMessage.create({
     data: {
       caseId,
-      channel: msg.channel,
+      channel,
       templateType: type,
-      subject: msg.subject ?? null,
-      body: msg.body,
+      subject,
+      body,
     },
   });
   await audit({
