@@ -63,6 +63,11 @@ const envSchema = z.object({
   MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
 
   DEFAULT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
+
+  // E-Mail-Versand (Resend). Ohne beide Werte ist der Versand deaktiviert
+  // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(), // z.B. "UnterlagenPilot <noreply@immocockpit24.de>"
 });
 
 export type Env = z.infer<typeof envSchema>;

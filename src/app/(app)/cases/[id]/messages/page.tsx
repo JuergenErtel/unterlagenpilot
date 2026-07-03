@@ -3,10 +3,12 @@ import { ArrowLeft, Inbox } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { generateMessage } from "@/lib/actions/cases";
+import { isEmailConfigured } from "@/lib/email/resend";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessagePreview } from "@/components/case/message-preview";
+import { SendEmailButton } from "@/components/case/send-email-button";
 import type { MessageChannel, MessageTemplateType } from "@/lib/domain/enums";
 
 const ACTIONS: Array<{ type: MessageTemplateType; channel: MessageChannel; label: string }> = [
@@ -43,12 +45,20 @@ export default async function CaseMessagesPage({
       .filter(Boolean)
       .join(", ") || "—";
 
+  const recipientEmail =
+    caseRecord.applicants.map((a) => a.email).find((e): e is string => !!e && e.includes("@")) ?? null;
+  const emailConfigured = isEmailConfigured();
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Kundenkommunikation"
         title="Nachrichten"
-        subtitle="Vorformuliert – im MVP wird nichts automatisch versendet."
+        subtitle={
+          emailConfigured
+            ? "Vorformuliert. E-Mails können nach Bestätigung direkt versendet werden – automatisch passiert nichts."
+            : "Vorformuliert zum Kopieren. Für Direktversand E-Mail (Resend) konfigurieren."
+        }
         actions={
           <Button asChild variant="outline" size="sm">
             <Link href={`/cases/${id}`}>
@@ -99,9 +109,16 @@ export default async function CaseMessagesPage({
               body={m.body}
               footer={
                 <>
-                  <Button type="button" variant="outline" size="sm" disabled>
-                    Als versendet markieren
-                  </Button>
+                  {m.channel === "email" ? (
+                    <SendEmailButton
+                      messageId={m.id}
+                      to={recipientEmail}
+                      configured={emailConfigured}
+                      subject={m.subject}
+                      body={m.body}
+                      alreadySent={m.sent}
+                    />
+                  ) : null}
                   <Button asChild variant="ghost" size="sm">
                     <Link href={`/cases/${id}`}>Zurück zum Fall</Link>
                   </Button>

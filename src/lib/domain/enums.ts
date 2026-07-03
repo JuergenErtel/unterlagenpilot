@@ -346,6 +346,7 @@ export const AUDIT_ACTIONS = [
   "platform.released",
   "platform.pushed",
   "message.generated",
+  "message.sent",
   "upload_link.created",
   "upload_link.accessed",
   "upload_link.deactivated",
