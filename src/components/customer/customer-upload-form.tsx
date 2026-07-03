@@ -73,7 +73,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
           <input
             type="file"
             multiple
-            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
             className="sr-only"
             onChange={(e) => {
               addFiles(e.target.files);

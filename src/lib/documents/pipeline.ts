@@ -6,6 +6,7 @@ import { getOCRProvider } from "@/lib/ai";
 import { AIService } from "@/lib/ai/service";
 import { generateFileName } from "@/lib/documents/filename";
 import { validateUpload } from "@/lib/security/file-validation";
+import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
@@ -43,7 +44,11 @@ export interface ProcessUploadResult {
 }
 
 export async function processUpload(input: ProcessUploadInput): Promise<ProcessUploadResult> {
-  const { organizationId, caseId, file, uploadSource } = input;
+  const { organizationId, caseId, uploadSource } = input;
+
+  // 0) HEIC/HEIF (iPhone-Standard) serverseitig nach JPEG konvertieren, bevor
+  //    validiert/gespeichert/ge-OCRt wird.
+  const { file } = await normalizeUploadFile(input.file);
 
   // 1) Validierung (Typ/Größe/MIME/Magic-Bytes) VOR Speicherung.
   const validation = validateUpload({
