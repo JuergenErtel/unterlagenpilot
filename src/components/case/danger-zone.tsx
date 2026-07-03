@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Archive, ArchiveRestore, Trash2, ShieldAlert } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2, ShieldAlert, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { deleteCase, archiveCase, unarchiveCase } from "@/lib/actions/case-lifecycle";
@@ -46,6 +46,12 @@ export function DangerZone({
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">
+        <Button asChild variant="outline" className="w-full justify-start">
+          <a href={`/api/cases/${caseId}/dsgvo`}>
+            <FileDown className="h-4 w-4" />
+            DSGVO-Auskunft exportieren (JSON)
+          </a>
+        </Button>
         <Button
           type="button"
           variant="outline"
