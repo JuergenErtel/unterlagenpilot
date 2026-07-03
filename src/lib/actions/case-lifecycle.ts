@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireCaseAccess } from "@/lib/auth/context";
-import { getStorage } from "@/lib/storage";
 import { audit } from "@/lib/audit";
+import { purgeCase } from "@/lib/cases/purge";
 
 /**
  * DSGVO-Löschung (Recht auf Vergessenwerden): entfernt den Fall vollständig
@@ -15,32 +15,7 @@ import { audit } from "@/lib/audit";
  */
 export async function deleteCase(caseId: string): Promise<void> {
   const { ctx } = await requireCaseAccess(caseId);
-
-  const [caseRow, docs] = await Promise.all([
-    prisma.case.findUnique({ where: { id: caseId }, select: { caseNumber: true } }),
-    prisma.document.findMany({ where: { caseId }, select: { storageKey: true } }),
-  ]);
-
-  // Zuerst protokollieren: der Audit-Log referenziert den Fall nicht per FK und
-  // bleibt daher auch nach dem Cascade-Delete als Löschnachweis erhalten.
-  await audit({
-    organizationId: ctx.organizationId,
-    userId: ctx.userId,
-    action: "case.deleted",
-    entityType: "case",
-    entityId: caseId,
-    metadata: { caseNumber: caseRow?.caseNumber, documents: docs.length },
-  });
-
-  // DB: Case + alle abhängigen Zeilen (onDelete: Cascade).
-  await prisma.case.delete({ where: { id: caseId } });
-
-  // Storage: Dateien best-effort entfernen (Fehler dürfen die Löschung nicht blockieren).
-  const storage = getStorage();
-  for (const d of docs) {
-    if (d.storageKey) await storage.remove(d.storageKey).catch(() => {});
-  }
-
+  await purgeCase(caseId, { organizationId: ctx.organizationId, userId: ctx.userId, reason: "manuell" });
   revalidatePath("/cases");
   redirect("/cases");
 }
