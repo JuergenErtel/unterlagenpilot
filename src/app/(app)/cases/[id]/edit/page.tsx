@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, UserRound } from "lucide-react";
+import { ArrowLeft, UserRound, UserPlus, Trash2 } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
-import { editApplicant } from "@/lib/actions/case-edit";
+import { editApplicant, addApplicant, removeApplicant } from "@/lib/actions/case-edit";
+import { MAX_APPLICANTS } from "@/lib/domain/enums";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -81,9 +82,18 @@ export default async function CaseEditPage({
                     <Badge variant="destructive">Pflichtfeld fehlt</Badge>
                   )}
                 </div>
-                <CardDescription>
-                  Antragsteller {applicant.position}
-                </CardDescription>
+                <div className="flex items-center justify-between gap-2">
+                  <CardDescription>
+                    Antragsteller {applicant.position}
+                  </CardDescription>
+                  {caseRecord.applicants.length > 1 ? (
+                    <form action={removeApplicant.bind(null, applicant.id)}>
+                      <Button type="submit" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">
+                        <Trash2 className="h-4 w-4" /> Entfernen
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
               </CardHeader>
               <form action={editApplicant.bind(null, applicant.id)}>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -163,6 +173,15 @@ export default async function CaseEditPage({
           );
         })}
       </div>
+
+      {caseRecord.applicants.length < MAX_APPLICANTS ? (
+        <form action={addApplicant.bind(null, id)}>
+          <Button type="submit" variant="outline" className="w-full border-dashed">
+            <UserPlus className="h-4 w-4" />
+            Zweiten Antragsteller hinzufügen
+          </Button>
+        </form>
+      ) : null}
     </div>
   );
 }

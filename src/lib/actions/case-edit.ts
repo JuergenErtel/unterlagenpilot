@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
-import { MARITAL_STATUSES, type MaritalStatus } from "@/lib/domain/enums";
+import { MARITAL_STATUSES, MAX_APPLICANTS, type MaritalStatus } from "@/lib/domain/enums";
 
 /** Liest einen Trim-Wert aus FormData; gibt undefined zurück, wenn leer. */
 function field(formData: FormData, key: string): string | undefined {
@@ -83,4 +83,84 @@ export async function editApplicant(
 
   revalidatePath(`/cases/${updated.caseId}`);
   revalidatePath(`/cases/${updated.caseId}/edit`);
+}
+
+/**
+ * Fügt einen weiteren Antragsteller hinzu (max. 2). No-op, wenn das Limit
+ * bereits erreicht ist – die UI zeigt den Button dann ohnehin nicht.
+ */
+export async function addApplicant(caseId: string): Promise<void> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const current = await prisma.applicant.count({ where: { caseId } });
+  if (current >= MAX_APPLICANTS) return;
+
+  const highest = await prisma.applicant.findFirst({
+    where: { caseId },
+    orderBy: { position: "desc" },
+    select: { position: true },
+  });
+  const position = (highest?.position ?? 0) + 1;
+
+  await prisma.applicant.create({ data: { caseId, position } });
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: caseId,
+    metadata: { applicantAdded: position },
+  });
+
+  revalidatePath(`/cases/${caseId}`);
+  revalidatePath(`/cases/${caseId}/edit`);
+}
+
+/**
+ * Entfernt einen Antragsteller (nie den letzten) und nummeriert die
+ * verbleibenden lückenlos neu. Zugeordnete Dokumente werden dabei nicht
+ * gelöscht (Relation ist onDelete: SetNull).
+ */
+export async function removeApplicant(applicantId: string): Promise<void> {
+  const ctx = await requireContext();
+
+  const owner = await prisma.applicant.findUnique({
+    where: { id: applicantId },
+    select: { caseId: true, position: true, case: { select: { organizationId: true } } },
+  });
+  if (!owner || owner.case.organizationId !== ctx.organizationId) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+
+  const total = await prisma.applicant.count({ where: { caseId: owner!.caseId } });
+  if (total <= 1) return; // den letzten Antragsteller nicht entfernen
+
+  await prisma.applicant.delete({ where: { id: applicantId } });
+
+  // Verbleibende lückenlos neu nummerieren (1..n), damit "Antragsteller 1/2" stimmt.
+  const remaining = await prisma.applicant.findMany({
+    where: { caseId: owner!.caseId },
+    orderBy: { position: "asc" },
+    select: { id: true, position: true },
+  });
+  for (let i = 0; i < remaining.length; i++) {
+    const target = i + 1;
+    if (remaining[i]!.position !== target) {
+      await prisma.applicant.update({ where: { id: remaining[i]!.id }, data: { position: target } });
+    }
+  }
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: owner!.caseId,
+    metadata: { applicantRemoved: applicantId },
+  });
+
+  revalidatePath(`/cases/${owner!.caseId}`);
+  revalidatePath(`/cases/${owner!.caseId}/edit`);
 }

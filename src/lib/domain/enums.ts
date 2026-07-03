@@ -85,6 +85,9 @@ export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
 };
 
 /** Familienstand */
+/** Baufi-Standard: bis zu zwei Antragsteller je Fall. */
+export const MAX_APPLICANTS = 2;
+
 export const MARITAL_STATUSES = [
   "ledig",
   "verheiratet",
