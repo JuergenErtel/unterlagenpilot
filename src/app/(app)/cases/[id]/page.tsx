@@ -19,6 +19,7 @@ import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
+import { DangerZone } from "@/components/case/danger-zone";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import {
@@ -223,6 +224,7 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
               <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
             </CardContent>
           </Card>
+          <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />
         </div>
       </div>
     </div>

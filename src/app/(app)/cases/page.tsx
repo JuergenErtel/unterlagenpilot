@@ -34,7 +34,8 @@ export default async function CasesPage({
   const cases = await prisma.case.findMany({
     where: {
       organizationId: ctx.organizationId,
-      status: statusFilter,
+      // Archivierte Fälle standardmäßig ausblenden; per ?status=archiviert einsehbar.
+      status: statusFilter ?? { not: "archiviert" },
       ...(q ? { OR: caseSearchOR(q) } : {}),
     },
     include: {

@@ -339,6 +339,8 @@ export const AUDIT_ACTIONS = [
   "case.created",
   "case.updated",
   "case.status_changed",
+  "case.archived",
+  "case.deleted",
   "document.uploaded",
   "document.classified",
   "document.reviewed",
