@@ -36,4 +36,38 @@ describe("Plattform-Mapping", () => {
     expect(Array.isArray(res.differences)).toBe(true);
     expect(res.missingForEhyp).toHaveLength(0);
   });
+
+  it("hat bei nur einem Antragsteller keine Antragsteller-2-Gruppe", () => {
+    const p = buildPlatformMapping(baseCase, "europace");
+    expect(p.groups.some((g) => g.group === "Antragsteller 2")).toBe(false);
+  });
+
+  it("mappt den zweiten Antragsteller in eine eigene Gruppe", () => {
+    const zwei: CanonicalCase = {
+      ...baseCase,
+      applicants: [
+        { position: 1, vorname: "Max", nachname: "Mustermann", geburtsdatum: "1985-04-12" },
+        { position: 2, vorname: "Erika", nachname: "Mustermann", geburtsdatum: "1987-09-23" },
+      ],
+    };
+    const p = buildPlatformMapping(zwei, "europace");
+    const a2 = p.groups.find((g) => g.group === "Antragsteller 2");
+    expect(a2).toBeDefined();
+    expect(a2!.fields.find((f) => f.label === "Vorname")?.value).toBe("Erika");
+    expect(a2!.fields.find((f) => f.platformField === "ep.antragsteller2.vorname")).toBeDefined();
+    expect(p.missingRequiredFields).toHaveLength(0);
+  });
+
+  it("zählt fehlende Pflichtfelder des zweiten Antragstellers", () => {
+    const zwei: CanonicalCase = {
+      ...baseCase,
+      applicants: [
+        { position: 1, vorname: "Max", nachname: "Mustermann", geburtsdatum: "1985-04-12" },
+        { position: 2, vorname: "Erika", nachname: undefined, geburtsdatum: undefined },
+      ],
+    };
+    const p = buildPlatformMapping(zwei, "europace");
+    expect(p.missingRequiredFields).toContain("ep.antragsteller2.nachname");
+    expect(p.missingRequiredFields).toContain("ep.antragsteller2.geburtsdatum");
+  });
 });

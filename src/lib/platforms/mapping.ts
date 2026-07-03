@@ -15,12 +15,12 @@ type FieldSpec = {
   required?: boolean;
 };
 
-const applicantFields = (prefix: string): FieldSpec[] => [
-  { platformField: `${prefix}.vorname`, label: "Vorname", get: (c) => c.applicants[0]?.vorname, required: true },
-  { platformField: `${prefix}.nachname`, label: "Nachname", get: (c) => c.applicants[0]?.nachname, required: true },
-  { platformField: `${prefix}.geburtsdatum`, label: "Geburtsdatum", get: (c) => c.applicants[0]?.geburtsdatum, required: true },
-  { platformField: `${prefix}.familienstand`, label: "Familienstand", get: (c) => c.applicants[0]?.familienstand },
-  { platformField: `${prefix}.kinder`, label: "Anzahl Kinder", get: (c) => c.applicants[0]?.anzahlKinder ?? 0 },
+const applicantFields = (prefix: string, index: number): FieldSpec[] => [
+  { platformField: `${prefix}.vorname`, label: "Vorname", get: (c) => c.applicants[index]?.vorname, required: true },
+  { platformField: `${prefix}.nachname`, label: "Nachname", get: (c) => c.applicants[index]?.nachname, required: true },
+  { platformField: `${prefix}.geburtsdatum`, label: "Geburtsdatum", get: (c) => c.applicants[index]?.geburtsdatum, required: true },
+  { platformField: `${prefix}.familienstand`, label: "Familienstand", get: (c) => c.applicants[index]?.familienstand },
+  { platformField: `${prefix}.kinder`, label: "Anzahl Kinder", get: (c) => c.applicants[index]?.anzahlKinder ?? 0 },
 ];
 
 const incomeFields: FieldSpec[] = [
@@ -46,27 +46,37 @@ const financingFields: FieldSpec[] = [
   { platformField: "finanzierung.nebenkosten", label: "Nebenkosten", get: (c) => c.financing.nebenkosten },
 ];
 
-/** Plattformspezifische Gruppen (gleiche kanonische Basis, andere Feldnamen). */
-const PLATFORM_GROUPS: Record<Platform, Array<{ group: string; fields: FieldSpec[] }>> = {
-  europace: [
-    { group: "Antragsteller", fields: applicantFields("ep.antragsteller1") },
-    { group: "Einkommen", fields: incomeFields },
-    { group: "Objekt", fields: objectFields },
-    { group: "Finanzierung", fields: financingFields },
-  ],
-  finlink: [
-    { group: "Antragsteller", fields: applicantFields("fl.kunde") },
-    { group: "Einkommen", fields: incomeFields },
-    { group: "Objekt", fields: objectFields },
-    { group: "Finanzierung", fields: financingFields },
-  ],
-  ehyp_home: [
-    { group: "Antragsteller", fields: applicantFields("ehyp.applicant") },
-    { group: "Einkommen", fields: incomeFields },
-    { group: "Objekt", fields: objectFields },
-    { group: "Finanzierung", fields: financingFields },
-  ],
+/** Plattformspezifische Feld-Präfixe je Antragsteller (Index 0 = A1, 1 = A2). */
+const APPLICANT_PREFIXES: Record<Platform, [string, string]> = {
+  europace: ["ep.antragsteller1", "ep.antragsteller2"],
+  finlink: ["fl.kunde", "fl.kunde2"],
+  ehyp_home: ["ehyp.applicant", "ehyp.applicant2"],
 };
+
+// Gruppen jenseits der Antragsteller sind über alle Plattformen identisch.
+const NON_APPLICANT_GROUPS: Array<{ group: string; fields: FieldSpec[] }> = [
+  { group: "Einkommen", fields: incomeFields },
+  { group: "Objekt", fields: objectFields },
+  { group: "Finanzierung", fields: financingFields },
+];
+
+/**
+ * Baut die Feldgruppen für eine Plattform. Die zweite Antragsteller-Gruppe wird
+ * NUR erzeugt, wenn ein zweiter Antragsteller existiert – sonst würden dessen
+ * Pflichtfelder den Fall fälschlich als unvollständig markieren.
+ */
+function groupsFor(platform: Platform, c: CanonicalCase): Array<{ group: string; fields: FieldSpec[] }> {
+  const [p1, p2] = APPLICANT_PREFIXES[platform];
+  const hasSecond = c.applicants.length >= 2;
+  const groups: Array<{ group: string; fields: FieldSpec[] }> = [
+    { group: hasSecond ? "Antragsteller 1" : "Antragsteller", fields: applicantFields(p1, 0) },
+  ];
+  if (hasSecond) {
+    groups.push({ group: "Antragsteller 2", fields: applicantFields(p2, 1) });
+  }
+  groups.push(...NON_APPLICANT_GROUPS);
+  return groups;
+}
 
 function toField(spec: FieldSpec, c: CanonicalCase): PlatformField {
   const raw = spec.get(c);
@@ -86,11 +96,12 @@ export function buildPlatformMapping(
   c: CanonicalCase,
   platform: Platform
 ): PlatformPayload {
-  const groups = PLATFORM_GROUPS[platform].map((g) => ({
+  const specGroups = groupsFor(platform, c);
+  const groups = specGroups.map((g) => ({
     group: g.group,
     fields: g.fields.map((f) => toField(f, c)),
   }));
-  const missingRequiredFields = PLATFORM_GROUPS[platform]
+  const missingRequiredFields = specGroups
     .flatMap((g) => g.fields)
     .filter((f) => f.required && isEmpty(f.get(c)))
     .map((f) => f.platformField);
