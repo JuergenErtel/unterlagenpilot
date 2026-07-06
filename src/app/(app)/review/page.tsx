@@ -11,9 +11,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SeverityBadge } from "@/components/status-badge";
 import { ConfidenceBadge } from "@/components/case/confidence-badge";
 import { ExtractedFieldActions } from "@/components/review/extracted-field-actions";
+import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { formatConfidence } from "@/lib/utils";
 import {
-  DOCUMENT_TYPE_LABELS,
   PLATFORM_LABELS,
   type DocumentType,
   type Severity,
@@ -62,7 +62,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">{d.generatedName ?? d.originalName}</CardTitle>
-                  <Badge variant="ai">{d.documentType ? DOCUMENT_TYPE_LABELS[d.documentType as DocumentType] : "unbekannt"}</Badge>
+                  <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{d.case.caseNumber} · {name}</span>

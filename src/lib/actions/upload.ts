@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
-import { requireUploadTokenAccess } from "@/lib/auth/context";
+import { requireUploadTokenAccess, requireCaseAccess } from "@/lib/auth/context";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { processUpload } from "@/lib/documents/pipeline";
 import { customerFormSchema } from "@/lib/domain/forms";
@@ -15,6 +15,9 @@ export interface CustomerUploadState {
   rejected: { name: string; reason: string }[];
   error?: string;
 }
+
+/** Gleiche Form wie CustomerUploadState – eigener Alias für den Vermittler-Flow. */
+export type BrokerUploadState = CustomerUploadState;
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -90,6 +93,67 @@ export async function customerUpload(
 
   revalidatePath(`/upload/${token}`);
   revalidatePath(`/cases/${access.caseId}`);
+  return { uploaded, rejected };
+}
+
+/**
+ * Vermittler-Upload direkt in einen Fall (ohne Kunden-Link). Nutzt dieselbe
+ * gesicherte Pipeline (Validierung, Virenscan, OCR/KI). Die Antragsteller-Zuordnung
+ * wählt der Vermittler über applicantPosition ("1" | "2" | "none").
+ */
+export async function brokerUpload(
+  caseId: string,
+  _prev: BrokerUploadState,
+  formData: FormData
+): Promise<BrokerUploadState> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const env = getEnv();
+  const limit = await checkRateLimit(
+    `broker-upload:${caseId}:${ctx.userId}`,
+    env.UPLOAD_RATE_MAX,
+    env.UPLOAD_RATE_WINDOW_SEC
+  );
+  if (!limit.ok) {
+    return { uploaded: 0, rejected: [], error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
+  }
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { uploaded: 0, rejected: [], error: "Bitte mindestens eine Datei auswählen." };
+
+  // Antragsteller-Zuordnung auflösen (Vorauswahl 1; "none" = keine Zuordnung).
+  const position = String(formData.get("applicantPosition") ?? "1");
+  let applicantId: string | null = null;
+  let applicantName: string | null = null;
+  if (position === "1" || position === "2") {
+    const applicant = await prisma.applicant.findFirst({
+      where: { caseId, position: Number(position) },
+      select: { id: true, vorname: true, nachname: true },
+    });
+    if (applicant) {
+      applicantId = applicant.id;
+      applicantName = [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") || null;
+    }
+  }
+
+  const rejected: { name: string; reason: string }[] = [];
+  let uploaded = 0;
+  for (const file of files) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const result = await processUpload({
+      organizationId: ctx.organizationId,
+      caseId,
+      file: { name: file.name, type: file.type, size: file.size, buffer },
+      uploadSource: "vermittler",
+      applicantName,
+      applicantId,
+      actorUserId: ctx.userId,
+    });
+    if (result.ok) uploaded += 1;
+    else rejected.push({ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." });
+  }
+
+  revalidatePath(`/cases/${caseId}`);
   return { uploaded, rejected };
 }
 

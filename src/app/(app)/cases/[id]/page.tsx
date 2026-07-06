@@ -20,10 +20,12 @@ import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { DangerZone } from "@/components/case/danger-zone";
+import { BrokerUploadForm } from "@/components/case/broker-upload-form";
+import { DocumentTypeSelect } from "@/components/review/document-type-select";
+import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import {
-  DOCUMENT_TYPE_LABELS,
   type CaseStatus,
   type DocumentType,
   type Severity,
@@ -45,6 +47,10 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
     listUploadLinks(id, ctx.organizationId),
   ]);
+  const applicantOptions = caseRow.applicants.map((a) => ({
+    position: a.position,
+    name: [a.vorname, a.nachname].filter(Boolean).join(" "),
+  }));
   const uploadLinkRows = uploadLinks.map((l) => ({
     id: l.id,
     expiresAt: l.expiresAt.toISOString(),
@@ -105,41 +111,54 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
             </TabsContent>
 
             <TabsContent value="dokumente">
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Dateiname</TableHead>
-                        <TableHead>Typ</TableHead>
-                        <TableHead>Konfidenz</TableHead>
-                        <TableHead>Hinweise</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {documents.length === 0 && (
-                        <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Erstelle einen Upload-Link, damit der Kunde seine Unterlagen sicher hochladen kann.</TableCell></TableRow>
-                      )}
-                      {documents.map((d) => (
-                        <TableRow key={d.id}>
-                          <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
-                          <TableCell>{d.documentType ? DOCUMENT_TYPE_LABELS[d.documentType as DocumentType] : "—"}</TableCell>
-                          <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
-                          <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
-                          <TableCell>
-                            {d.reviewStatus === "offen"
-                              ? <Badge variant="ai">prüfbereit</Badge>
-                              : d.reviewStatus === "akzeptiert"
-                                ? <Badge variant="success">akzeptiert</Badge>
-                                : <Badge variant="neutral">{d.reviewStatus}</Badge>}
-                          </TableCell>
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Dokumente hochladen</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Beliebige Unterlagen selbst einwerfen – Klassifizierung, Umbenennung und Zuordnung laufen automatisch.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={applicantOptions} />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Dateiname</TableHead>
+                          <TableHead>Typ</TableHead>
+                          <TableHead>Konfidenz</TableHead>
+                          <TableHead>Hinweise</TableHead>
+                          <TableHead>Status</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {documents.length === 0 && (
+                          <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
+                        )}
+                        {documents.map((d) => (
+                          <TableRow key={d.id}>
+                            <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
+                            <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
+                            <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
+                            <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
+                            <TableCell>
+                              {d.reviewStatus === "offen"
+                                ? <Badge variant="ai">prüfbereit</Badge>
+                                : d.reviewStatus === "akzeptiert"
+                                  ? <Badge variant="success">akzeptiert</Badge>
+                                  : <Badge variant="neutral">{d.reviewStatus}</Badge>}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="plausibilitaet">
