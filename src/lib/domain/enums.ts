@@ -343,6 +343,7 @@ export const AUDIT_ACTIONS = [
   "case.deleted",
   "document.uploaded",
   "document.classified",
+  "document.reclassified",
   "document.reviewed",
   "document.deleted",
   "ai.evaluated",
