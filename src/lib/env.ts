@@ -35,9 +35,11 @@ const envSchema = z.object({
 
   // Upload-Sicherheit
   UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(200).default(25),
-  VIRUS_SCANNER: z.enum(["mock", "clamav"]).default("mock"),
+  VIRUS_SCANNER: z.enum(["mock", "clamav", "cloudmersive"]).default("mock"),
   CLAMAV_HOST: z.string().optional(),
   CLAMAV_PORT: z.coerce.number().int().optional(),
+  // HTTP-AV-Dienst (Cloudmersive) – DSGVO: AVV vor Prod-Einsatz erforderlich.
+  CLOUDMERSIVE_API_KEY: z.string().optional(),
 
   AI_PROVIDER: z
     .enum(["mock", "azure-openai", "openai-compatible"])
