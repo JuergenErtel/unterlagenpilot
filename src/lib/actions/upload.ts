@@ -9,6 +9,8 @@ import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { processUpload } from "@/lib/documents/pipeline";
 import { customerFormSchema } from "@/lib/domain/forms";
 import { audit } from "@/lib/audit";
+import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
+import { buildUploadNotification } from "@/lib/email/notifications";
 
 export interface CustomerUploadState {
   uploaded: number;
@@ -49,7 +51,10 @@ export async function customerUpload(
 
   const caseRow = await prisma.case.findUnique({
     where: { id: access.caseId },
-    include: { applicants: { orderBy: { position: "asc" }, take: 1 } },
+    include: {
+      applicants: { orderBy: { position: "asc" }, take: 1 },
+      broker: { select: { email: true, name: true } },
+    },
   });
   const applicant = caseRow?.applicants[0];
   const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
@@ -89,6 +94,7 @@ export async function customerUpload(
       where: { id: access.linkId },
       data: { usedCount: { increment: successfulUploads } },
     });
+    await notifyBrokerOfUpload(caseRow, applicantName, successfulUploads);
   }
 
   revalidatePath(`/upload/${token}`);
@@ -155,6 +161,33 @@ export async function brokerUpload(
 
   revalidatePath(`/cases/${caseId}`);
   return { uploaded, rejected };
+}
+
+/**
+ * Benachrichtigt den zuständigen Vermittler per E-Mail über neu hochgeladene
+ * Unterlagen. Best-effort: nur bei konfiguriertem Versand und vorhandener
+ * Broker-Adresse; ein Fehler bricht den Upload NIE ab.
+ */
+async function notifyBrokerOfUpload(
+  caseRow: { id: string; caseNumber: string; broker: { email: string | null } | null } | null,
+  kundeName: string | null,
+  count: number
+): Promise<void> {
+  const brokerEmail = caseRow?.broker?.email;
+  if (!caseRow || !brokerEmail || !isEmailConfigured()) return;
+  try {
+    const caseUrl = `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/cases/${caseRow.id}`;
+    const { subject, text } = buildUploadNotification({
+      caseNumber: caseRow.caseNumber,
+      kundeName: kundeName ?? "",
+      count,
+      caseUrl,
+    });
+    await sendEmail({ to: brokerEmail, subject, text });
+  } catch (e) {
+    // Kein Abbruch des Uploads – nur Metadaten loggen, keine Kundendaten.
+    console.error("[customerUpload] Broker-Benachrichtigung fehlgeschlagen:", e);
+  }
 }
 
 /** Speichert das Kunden-Erstformular (auch Teilstand). */

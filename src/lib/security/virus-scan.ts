@@ -75,11 +75,69 @@ export class ClamAVScanner implements VirusScanner {
   }
 }
 
+/**
+ * Cloudmersive Virus-Scan (HTTP-AV-Dienst, serverless-tauglich).
+ * POST der Datei-Bytes als multipart an /virus/scan/file, Apikey im Header.
+ * Antwort: { CleanResult: boolean, FoundViruses?: [{ VirusName }] }.
+ * Jeder Fehlerfall (kein Key, HTTP-Fehler, unerwartete Antwort) ist bewusst
+ * `error` = fail-closed → Datei bleibt in Quarantäne, kein Bypass.
+ *
+ * DSGVO: Vor Prod-Einsatz AVV mit dem Anbieter abschließen (No-Retention-Pfad).
+ */
+export class CloudmersiveVirusScanner implements VirusScanner {
+  readonly name = "cloudmersive";
+
+  async scan(input: VirusScanInput): Promise<VirusScanResult> {
+    const env = getEnv();
+    if (!env.CLOUDMERSIVE_API_KEY) {
+      return { verdict: "error", engine: this.name, demo: false };
+    }
+    try {
+      const body = new FormData();
+      body.append("inputFile", new Blob([Uint8Array.from(input.buffer)]), input.filename);
+      const res = await fetch("https://api.cloudmersive.com/virus/scan/file", {
+        method: "POST",
+        headers: { Apikey: env.CLOUDMERSIVE_API_KEY },
+        body,
+      });
+      if (!res.ok) {
+        return { verdict: "error", engine: this.name, demo: false };
+      }
+      const data = (await res.json()) as {
+        CleanResult?: boolean;
+        FoundViruses?: Array<{ VirusName?: string }>;
+      };
+      if (data.CleanResult === true) {
+        return { verdict: "clean", engine: this.name, demo: false };
+      }
+      if (data.CleanResult === false) {
+        return {
+          verdict: "infected",
+          engine: this.name,
+          signature: data.FoundViruses?.[0]?.VirusName ?? "unbekannt",
+          demo: false,
+        };
+      }
+      // Unerwartete Antwortform → fail-closed.
+      return { verdict: "error", engine: this.name, demo: false };
+    } catch {
+      // Netzwerk-/Parsingfehler → fail-closed (kein Klartext-Inhalt geloggt).
+      return { verdict: "error", engine: this.name, demo: false };
+    }
+  }
+}
+
 let scanner: VirusScanner | null = null;
 
 export function getVirusScanner(): VirusScanner {
   if (scanner) return scanner;
-  scanner = getEnv().VIRUS_SCANNER === "clamav" ? new ClamAVScanner() : new MockVirusScanner();
+  const which = getEnv().VIRUS_SCANNER;
+  scanner =
+    which === "clamav"
+      ? new ClamAVScanner()
+      : which === "cloudmersive"
+        ? new CloudmersiveVirusScanner()
+        : new MockVirusScanner();
   return scanner;
 }
 
