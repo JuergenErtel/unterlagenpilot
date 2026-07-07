@@ -60,7 +60,7 @@ export async function seed(prisma: PrismaClient) {
       website: "www.baufi-woerth.de",
       retentionDays: 0,
       subscription: { create: { planId: proPlan.id, status: "active" } },
-      whiteLabelSettings: { create: { brandName: "UnterlagenPilot", supportEmail: "info@baufi-woerth.de" } },
+      whiteLabelSettings: { create: { brandName: "BaufiDesk", supportEmail: "info@baufi-woerth.de" } },
     },
     update: {},
   });

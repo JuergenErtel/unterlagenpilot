@@ -1,4 +1,4 @@
-// UnterlagenPilot – Prisma Schema
+// BaufiDesk – Prisma Schema
 // Mandantenfähiges Datenmodell für einen KI-Sachbearbeiter in der Baufinanzierung.
 // Enums sind synchron mit src/lib/domain/enums.ts gehalten.
 

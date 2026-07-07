@@ -21,7 +21,7 @@ const TIER_SUBTITLES: Record<PlanTier, string> = {
   team: "Für Teams mit mehreren Beratern und Sachbearbeitern.",
   enterprise: "Für größere Organisationen mit eigenen Prozessen.",
   white_label:
-    "Für Vertriebe, die UnterlagenPilot unter eigener Marke nutzen wollen.",
+    "Für Vertriebe, die BaufiDesk unter eigener Marke nutzen wollen.",
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -129,7 +129,7 @@ export default async function PlansPage() {
       <PageHeader
         eyebrow="Tarife"
         title="Der passende Tarif für Ihre Arbeitsweise"
-        subtitle="Wählen Sie, wie viel UnterlagenPilot für Sie übernehmen soll – von der sauberen Sammlung bis zur eigenen Marke."
+        subtitle="Wählen Sie, wie viel BaufiDesk für Sie übernehmen soll – von der sauberen Sammlung bis zur eigenen Marke."
       />
 
       <Card className="border-ai/30 bg-ai/5">

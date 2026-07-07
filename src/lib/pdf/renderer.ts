@@ -33,7 +33,7 @@ function docToBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
 }
 
 function newDoc(title: string): PDFKit.PDFDocument {
-  return new PDFDocument({ size: "A4", margin: 50, info: { Title: title, Creator: "UnterlagenPilot" } });
+  return new PDFDocument({ size: "A4", margin: 50, info: { Title: title, Creator: "BaufiDesk" } });
 }
 
 function heading(doc: PDFKit.PDFDocument, text: string) {
@@ -67,8 +67,8 @@ function footer(doc: PDFKit.PDFDocument, broker: BrokerInfo) {
 }
 
 function coverHeader(doc: PDFKit.PDFDocument, broker: BrokerInfo, title: string, subtitle: string, dateStr: string) {
-  doc.fillColor(COLORS.accent).fontSize(9).font("Helvetica-Bold").text("UNTERLAGENPILOT", { characterSpacing: 1 });
-  doc.fillColor(COLORS.muted).fontSize(8).font("Helvetica").text("immocockpit24.de", { continued: false });
+  doc.fillColor(COLORS.accent).fontSize(9).font("Helvetica-Bold").text("BAUFIDESK", { characterSpacing: 1 });
+  doc.fillColor(COLORS.muted).fontSize(8).font("Helvetica").text("baufidesk.de", { continued: false });
   doc.moveDown(1.5);
   doc.fillColor(COLORS.text).fontSize(20).font("Helvetica-Bold").text(title);
   doc.fillColor(COLORS.muted).fontSize(11).font("Helvetica").text(subtitle);

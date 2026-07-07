@@ -13,7 +13,7 @@ describe.runIf(RUN)("Supabase Storage – Roundtrip", () => {
     "lädt eine Datei hoch und liest sie zurück",
     async () => {
       const storage = getStorage();
-      const content = `UnterlagenPilot Storage-Probe ${Date.now()}`;
+      const content = `BaufiDesk Storage-Probe ${Date.now()}`;
       const buffer = Buffer.from(content, "utf-8");
 
       const stored = await storage.put({

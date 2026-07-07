@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 
 // Muss vor dem ersten getEnv()-Aufruf gesetzt werden.
 process.env.RESEND_API_KEY = "re_test_key";
-process.env.EMAIL_FROM = "UnterlagenPilot <noreply@example.de>";
+process.env.EMAIL_FROM = "BaufiDesk <noreply@example.de>";
 
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
 
@@ -31,7 +31,7 @@ describe("Resend-E-Mail-Client", () => {
     expect(url).toBe("https://api.resend.com/emails");
     expect(init!.headers.Authorization).toBe("Bearer re_test_key");
     const payload = JSON.parse(init!.body);
-    expect(payload.from).toBe("UnterlagenPilot <noreply@example.de>");
+    expect(payload.from).toBe("BaufiDesk <noreply@example.de>");
     expect(payload.to).toBe("kunde@example.de");
     expect(payload.subject).toBe("Betreff");
     expect(payload.text).toBe("Hallo");

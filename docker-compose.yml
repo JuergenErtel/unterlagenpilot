@@ -1,4 +1,4 @@
-# Lokale Entwicklungs-Datenbank für UnterlagenPilot.
+# Lokale Entwicklungs-Datenbank für BaufiDesk.
 # Start:   docker compose up -d
 # Stop:    docker compose down
 # Reset:   docker compose down -v   (löscht das Volume / alle Daten)

@@ -1,7 +1,6 @@
-# UnterlagenPilot – Produktspezifikation
+# BaufiDesk – Produktspezifikation
 
 > KI-gestützter Dokumenten-, Prüf- und Übergabe-Assistent für deutsche Baufinanzierungsvermittler.
-> Modul von **immocockpit24.de**.
 
 Stand: 20.06.2026 · Sprache: Deutsch · Status: Spezifikation (MVP + Roadmap)
 
@@ -28,9 +27,9 @@ Stand: 20.06.2026 · Sprache: Deutsch · Status: Spezifikation (MVP + Roadmap)
 
 ## 1. Executive Summary & Positionierung
 
-**UnterlagenPilot ist KEINE allgemeine Dokumentenablage.** Es ist ein produktiver, KI-gestützter **Sachbearbeiter**, der die wiederkehrende, fehleranfällige und zeitraubende Vorarbeit eines Baufinanzierungsvermittlers übernimmt: Unterlagen einsammeln, erkennen, benennen, zuordnen, prüfen, plausibilisieren und für die Einreichung in den gängigen Plattformen vorbereiten.
+**BaufiDesk ist KEINE allgemeine Dokumentenablage.** Es ist ein produktiver, KI-gestützter **Sachbearbeiter**, der die wiederkehrende, fehleranfällige und zeitraubende Vorarbeit eines Baufinanzierungsvermittlers übernimmt: Unterlagen einsammeln, erkennen, benennen, zuordnen, prüfen, plausibilisieren und für die Einreichung in den gängigen Plattformen vorbereiten.
 
-Das **zentrale Ziel** ist die **drastische Reduktion manueller Eingaben** in den Vermittlerplattformen **Europace**, **FinLink** und **eHyp home**. Statt Daten mehrfach abzutippen, bereitet UnterlagenPilot eine vollständige, geprüfte und übergabefertige Fallakte vor – der Vermittler gibt nur noch frei.
+Das **zentrale Ziel** ist die **drastische Reduktion manueller Eingaben** in den Vermittlerplattformen **Europace**, **FinLink** und **eHyp home**. Statt Daten mehrfach abzutippen, bereitet BaufiDesk eine vollständige, geprüfte und übergabefertige Fallakte vor – der Vermittler gibt nur noch frei.
 
 ### Positionierung
 
@@ -74,7 +73,7 @@ Das **zentrale Ziel** ist die **drastische Reduktion manueller Eingaben** in den
 
 ## 3. Kernnutzen & Arbeitsmodus
 
-UnterlagenPilot betreibt eine **aktive Vorbereitung** von Export- und Übergabeprozessen. Der Assistent arbeitet voraus, der Mensch entscheidet.
+BaufiDesk betreibt eine **aktive Vorbereitung** von Export- und Übergabeprozessen. Der Assistent arbeitet voraus, der Mensch entscheidet.
 
 ### Grundprinzipien
 
@@ -87,7 +86,7 @@ UnterlagenPilot betreibt eine **aktive Vorbereitung** von Export- und Übergabep
 
 ### Nutzenversprechen
 
-| Vorher (manuell) | Mit UnterlagenPilot |
+| Vorher (manuell) | Mit BaufiDesk |
 | --- | --- |
 | Unterlagen per Mail/WhatsApp einsammeln, manuell sortieren | Sicherer Upload-Link, automatische Erkennung & Benennung |
 | Felder in Europace/FinLink/eHyp abtippen | Vorbereitete, geprüfte Daten – nur freigeben |
@@ -276,7 +275,7 @@ Gestaffelte Tarife vom Einzelvermittler bis zur White-Label-Organisation.
 
 ## 9. Datenschutz & Sicherheit (DSGVO/EU)
 
-UnterlagenPilot verarbeitet hochsensible personenbezogene Finanz- und Identitätsdaten. Datenschutz ist **Kernanforderung**, nicht Zusatz.
+BaufiDesk verarbeitet hochsensible personenbezogene Finanz- und Identitätsdaten. Datenschutz ist **Kernanforderung**, nicht Zusatz.
 
 - **Mandantentrennung (Multi-Tenancy):** strikte Isolation der Daten je Organisation/Mandant.
 - **RBAC:** rollenbasierte Zugriffskontrolle (siehe Rollenmodell, Abschnitt 2).

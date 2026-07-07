@@ -1,4 +1,5 @@
-import { ShieldCheck, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import { prisma } from "@/lib/db";
 import { requireUploadTokenAccess } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
@@ -91,10 +92,7 @@ export default async function PublicUploadPage({
     <main className="min-h-screen bg-muted/30 pb-16">
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-4">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-ai" />
-            <span className="text-base font-semibold">UnterlagenPilot</span>
-          </div>
+          <Logo className="h-7 w-auto" />
           <span className="text-right text-[11px] leading-tight text-muted-foreground">
             Sicherer Bereich
             <br />
