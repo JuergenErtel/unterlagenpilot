@@ -4,9 +4,18 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "UnterlagenPilot – KI-Sachbearbeiter für Baufinanzierung",
+  metadataBase: new URL("https://baufidesk.de"),
+  title: "BaufiDesk – KI-Sachbearbeiter für Baufinanzierung",
   description:
-    "Unterlagen prüfen, Daten extrahieren, fehlende Unterlagen erkennen und Fälle einreichungsfertig für Europace, FinLink und eHyp home machen. Ein Modul von immocockpit24.de.",
+    "Unterlagen prüfen, Daten extrahieren, fehlende Unterlagen erkennen und Fälle einreichungsfertig für Europace, FinLink und eHyp home machen.",
+  openGraph: {
+    title: "BaufiDesk – KI-Sachbearbeiter für Baufinanzierung",
+    description:
+      "Unterlagen prüfen, Daten extrahieren, fehlende Unterlagen erkennen und Fälle einreichungsfertig machen.",
+    type: "website",
+    locale: "de_DE",
+    siteName: "BaufiDesk",
+  },
 };
 
 export default function RootLayout({

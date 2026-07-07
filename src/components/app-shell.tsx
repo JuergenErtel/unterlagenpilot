@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Link2, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { logout } from "@/lib/actions/auth";
@@ -23,14 +24,8 @@ export function AppShell({
   return (
     <div className="flex min-h-screen bg-canvas">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
-        <Link href="/dashboard" className="flex h-16 items-center gap-2.5 border-b px-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-soft">
-            <Link2 className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold tracking-tight">UnterlagenPilot</div>
-            <div className="text-[10px] text-muted-foreground">immocockpit24.de</div>
-          </div>
+        <Link href="/dashboard" className="flex h-16 items-center border-b px-5">
+          <Logo className="h-8 w-auto" />
         </Link>
 
         <SidebarNav />
@@ -69,7 +64,7 @@ export function AppShell({
           <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
             <MobileNav context={context} />
             <span className="hidden sm:inline">KI-Sachbearbeiter für Baufinanzierung</span>
-            <span className="truncate font-medium text-foreground sm:hidden">UnterlagenPilot</span>
+            <Logo className="h-6 w-auto sm:hidden" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />

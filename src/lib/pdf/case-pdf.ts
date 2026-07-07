@@ -35,7 +35,7 @@ export async function getBrokerInfo(organizationId: string): Promise<BrokerInfo>
     select: { name: true, street: true, zip: true, city: true, website: true },
   });
   return {
-    name: org?.name ?? "UnterlagenPilot",
+    name: org?.name ?? "BaufiDesk",
     street: org?.street ?? undefined,
     zip: org?.zip ?? undefined,
     city: org?.city ?? undefined,

@@ -1,9 +1,8 @@
-# UnterlagenPilot
+# BaufiDesk
 
 KI-gestützter Dokumenten-, Prüf- und Übergabe-Assistent für deutsche Baufinanzierungsvermittler.
-Modul von **immocockpit24.de**.
 
-UnterlagenPilot ist kein Dokumentenarchiv, sondern ein produktiver KI-Sachbearbeiter: Er sammelt, erkennt, benennt, prüft und plausibilisiert Unterlagen und bereitet sie für die Einreichung in **Europace**, **FinLink** und **eHyp home** vor. Ziel ist die drastische Reduktion manueller Eingaben. **Jede Übertragung erfolgt nur nach manueller Freigabe.**
+BaufiDesk ist kein Dokumentenarchiv, sondern ein produktiver KI-Sachbearbeiter: Er sammelt, erkennt, benennt, prüft und plausibilisiert Unterlagen und bereitet sie für die Einreichung in **Europace**, **FinLink** und **eHyp home** vor. Ziel ist die drastische Reduktion manueller Eingaben. **Jede Übertragung erfolgt nur nach manueller Freigabe.**
 
 Eine ausführliche Produktbeschreibung findet sich in [`docs/PRODUCTSPEC.md`](docs/PRODUCTSPEC.md).
 
@@ -241,4 +240,4 @@ Der Pilotbetrieb erlaubt **echte Fälle mit einem Vermittler**, bevor die Plattf
 
 ## Disclaimer
 
-KI-Ergebnisse müssen **immer menschlich geprüft** werden. Es findet **keine automatische Übertragung ohne manuelle Freigabe** statt. UnterlagenPilot bereitet vor – die finale Entscheidung trifft stets der Mensch.
+KI-Ergebnisse müssen **immer menschlich geprüft** werden. Es findet **keine automatische Übertragung ohne manuelle Freigabe** statt. BaufiDesk bereitet vor – die finale Entscheidung trifft stets der Mensch.

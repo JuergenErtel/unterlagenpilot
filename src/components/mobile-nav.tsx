@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Menu, X, Link2, LogOut } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { logout } from "@/lib/actions/auth";
 import { USER_ROLE_LABELS } from "@/lib/domain/enums";
@@ -44,14 +45,8 @@ export function MobileNav({
         >
           <Dialog.Title className="sr-only">Navigation</Dialog.Title>
           <div className="flex h-16 items-center justify-between border-b px-5">
-            <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-soft">
-                <Link2 className="h-4 w-4" />
-              </div>
-              <div className="leading-tight">
-                <div className="text-sm font-semibold tracking-tight">UnterlagenPilot</div>
-                <div className="text-[10px] text-muted-foreground">immocockpit24.de</div>
-              </div>
+            <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center">
+              <Logo className="h-8 w-auto" />
             </Link>
             <Dialog.Close asChild>
               <button

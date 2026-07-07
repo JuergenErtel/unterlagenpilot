@@ -13,7 +13,7 @@ export default function FinLinkImportPage() {
       <PageHeader
         eyebrow="Empfohlener Startpunkt"
         title="Aus FinLink importieren"
-        subtitle="Übernimm einen bestehenden Vorgang aus FinLink – Kundendaten und Objektangaben kommen direkt in UnterlagenPilot."
+        subtitle="Übernimm einen bestehenden Vorgang aus FinLink – Kundendaten und Objektangaben kommen direkt in BaufiDesk."
       />
 
       <Card className="border-primary/30 bg-primary/[0.03]">
@@ -42,7 +42,7 @@ export default function FinLinkImportPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Sobald die FinLink-Zugangsdaten hinterlegt sind, lädt UnterlagenPilot den Vorgang automatisch und legt den Fall an.
+            Sobald die FinLink-Zugangsdaten hinterlegt sind, lädt BaufiDesk den Vorgang automatisch und legt den Fall an.
           </p>
         </CardContent>
       </Card>

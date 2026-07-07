@@ -39,7 +39,7 @@ export function buildTopPlusUrl(
 
 /** Holt das Kartenbild als PNG-Buffer. Wirft bei HTTP-Fehler. */
 export async function fetchMapPng(url: string): Promise<Buffer> {
-  const res = await fetch(url, { headers: { "User-Agent": "UnterlagenPilot/1.0 (immocockpit24.de)" } });
+  const res = await fetch(url, { headers: { "User-Agent": "BaufiDesk/1.0 (baufidesk.de)" } });
   if (!res.ok) throw new Error(`TopPlusOpen HTTP ${res.status}`);
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("image")) throw new Error("TopPlusOpen: kein Bild zurückgegeben");

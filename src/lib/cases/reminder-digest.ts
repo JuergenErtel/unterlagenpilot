@@ -33,7 +33,7 @@ export function buildReminderDigest(
     "",
     "Über den jeweiligen Link können Sie mit einem Klick eine Erinnerung senden.",
     "",
-    "— UnterlagenPilot",
+    "— BaufiDesk",
   ].join("\n");
 
   return { subject, text };

@@ -1,8 +1,8 @@
 {
-  "name": "unterlagenpilot",
+  "name": "baufidesk",
   "version": "0.1.0",
   "private": true,
-  "description": "KI-gestützter Dokumenten-, Prüf- und Übergabe-Assistent für Baufinanzierungsvermittler (immocockpit24.de)",
+  "description": "BaufiDesk – KI-gestützter Dokumenten-, Prüf- und Übergabe-Assistent für Baufinanzierungsvermittler (baufidesk.de)",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

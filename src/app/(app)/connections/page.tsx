@@ -39,7 +39,7 @@ const CONNECTOR_META: Record<
   finlink: {
     name: "FinLink",
     benefit:
-      "Bestehende Fälle und Kundenstammdaten landen direkt in UnterlagenPilot – der schnellste Einstieg.",
+      "Bestehende Fälle und Kundenstammdaten landen direkt in BaufiDesk – der schnellste Einstieg.",
     credentials: ["API-Key", "Base-URL"],
   },
   ehyp_home: {

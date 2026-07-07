@@ -69,7 +69,7 @@ const envSchema = z.object({
   // E-Mail-Versand (Resend). Ohne beide Werte ist der Versand deaktiviert
   // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().optional(), // z.B. "UnterlagenPilot <noreply@immocockpit24.de>"
+  EMAIL_FROM: z.string().optional(), // z.B. "BaufiDesk <noreply@baufidesk.de>"
 
   // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
   CRON_SECRET: z.string().optional(),

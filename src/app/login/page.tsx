@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Compass } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import {
   Card,
   CardHeader,
@@ -29,11 +29,8 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center gap-2 text-xl font-semibold">
-            <Compass className="h-6 w-6 text-primary" />
-            UnterlagenPilot
-          </div>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Logo className="h-11 w-auto" />
           <p className="text-sm text-muted-foreground">
             KI-Sachbearbeiter für Baufinanzierung
           </p>

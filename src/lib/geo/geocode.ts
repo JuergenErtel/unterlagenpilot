@@ -40,7 +40,7 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
   });
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: {
-      "User-Agent": "UnterlagenPilot/1.0 (immocockpit24.de)",
+      "User-Agent": "BaufiDesk/1.0 (baufidesk.de)",
       "Accept-Language": "de",
     },
   });
