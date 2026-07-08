@@ -15,6 +15,8 @@ import { toEinkommenDocs } from "@/lib/einkommen/schema";
 import { renderEinkommensanalyse } from "@/lib/pdf/renderer";
 import { getBrokerInfo, pdfFileName } from "@/lib/pdf/case-pdf";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/lib/domain/enums";
+import { buildSelfEmployedBankText } from "@/lib/einkommen/bank-text";
+import type { Trend } from "@/lib/einkommen/consolidate";
 
 const ai = new AIService();
 const VISION_MIME = new Set(["image/png", "image/jpeg"]);
@@ -288,6 +290,136 @@ export async function einkommenUploadOne(caseId: string, formData: FormData): Pr
   });
   if (result.ok && result.documentId) return { documentId: result.documentId };
   return { error: result.reason ?? "Datei konnte nicht verarbeitet werden." };
+}
+
+export interface SelfEmployedBankSummaryInput {
+  applicantPosition: number;
+  selfEmployment: { firma: string; rechtsform: string; gruendungsjahr: number | null };
+  jahre: number[];
+  rows: EinkommenPdfInput["rows"];
+  docNotes: Array<{ label: string; notiz: string }>;
+  einkommensansatzJahr: number | null;
+}
+
+/** Erzeugt Stammdaten + Begleittext + kombiniertes PDF für die Bankzusammenfassung eines Selbständigen. */
+export async function createSelfEmployedBankSummaryAction(
+  caseId: string,
+  input: SelfEmployedBankSummaryInput
+): Promise<{ documentId?: string; error?: string }> {
+  const { ctx } = await requireCaseAccess(caseId);
+  try {
+    const applicant = await prisma.applicant.findFirst({
+      where: { caseId, position: input.applicantPosition },
+      select: { id: true, vorname: true, nachname: true },
+    });
+    if (!applicant) return { error: "Der gewählte Antragsteller wurde nicht gefunden." };
+
+    // Stammdaten persistieren. `SelfEmploymentRecord.applicantId` ist NICHT unique
+    // (nur @@index) — daher findFirst + update/create statt upsert(where: { applicantId }).
+    const gruendungsdatum = input.selfEmployment.gruendungsjahr
+      ? new Date(Date.UTC(input.selfEmployment.gruendungsjahr, 0, 1, 12))
+      : null;
+    const stammdaten = {
+      firma: input.selfEmployment.firma || null,
+      rechtsform: input.selfEmployment.rechtsform || null,
+      gruendungsdatum,
+    };
+    const existing = await prisma.selfEmploymentRecord.findFirst({
+      where: { applicantId: applicant.id },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.selfEmploymentRecord.update({ where: { id: existing.id }, data: stammdaten });
+    } else {
+      await prisma.selfEmploymentRecord.create({ data: { applicantId: applicant.id, ...stammdaten } });
+    }
+
+    // Gewinn je Jahr (nur vorhandene Werte) für den Begleittext.
+    const gewinnRow = input.rows.find((r) => r.kennzahl === "gewinn");
+    const gewinnByYear = gewinnRow
+      ? input.jahre
+          .filter((j) => typeof gewinnRow.cells[j] === "number")
+          .sort((a, b) => a - b)
+          .map((j) => ({ jahr: j, betrag: gewinnRow.cells[j] as number }))
+      : [];
+    const trend = (gewinnRow?.trend ?? "unbekannt") as Trend;
+
+    const applicantName = [applicant.vorname, applicant.nachname].filter(Boolean).join(" ");
+    const begleittext = buildSelfEmployedBankText({
+      applicantName,
+      selfEmployment: {
+        firma: input.selfEmployment.firma,
+        rechtsform: input.selfEmployment.rechtsform,
+        gruendungsjahr: input.selfEmployment.gruendungsjahr,
+      },
+      gewinnByYear,
+      trend,
+      documents: input.docNotes.map((d) => ({ label: d.label })),
+      ansatzJahr: input.einkommensansatzJahr,
+    });
+
+    const broker = await getBrokerInfo(ctx.organizationId);
+    const caseRow = await prisma.case.findUniqueOrThrow({
+      where: { id: caseId },
+      include: { applicants: { orderBy: { position: "asc" } } },
+    });
+    const monat = input.einkommensansatzJahr != null ? Math.round(input.einkommensansatzJahr / 12) : null;
+
+    const buffer = await renderEinkommensanalyse({
+      applicantName,
+      caseNumber: caseRow.caseNumber,
+      dateStr: new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      broker,
+      jahre: input.jahre,
+      rows: input.rows.map((r) => ({
+        label: r.label || (KENNZAHL_LABELS[r.kennzahl as keyof typeof KENNZAHL_LABELS] ?? r.kennzahl),
+        cells: r.cells,
+        trend: r.trend as "steigend" | "fallend" | "stabil" | "unbekannt",
+      })),
+      docNotes: input.docNotes,
+      einkommensansatzJahr: input.einkommensansatzJahr,
+      einkommensansatzMonat: monat,
+      begleittext,
+    });
+
+    const fileName = pdfFileName("Bankzusammenfassung_Selbststaendig", caseRow.applicants);
+    const stored = await getStorage().put({
+      organizationId: ctx.organizationId,
+      caseId,
+      originalName: fileName,
+      mimeType: "application/pdf",
+      buffer,
+    });
+    const created = await prisma.document.create({
+      data: {
+        caseId,
+        applicantId: applicant.id,
+        originalName: fileName,
+        generatedName: fileName,
+        storageKey: stored.storageKey,
+        mimeType: "application/pdf",
+        sizeBytes: buffer.length,
+        documentType: "sonstige",
+        uploadSource: "vermittler",
+        scanStatus: "ready_for_ocr",
+        readable: true,
+      },
+      select: { id: true },
+    });
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "pdf.generated",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { feature: "einkommen-bankzusammenfassung", documentId: created.id },
+    });
+    revalidatePath(`/cases/${caseId}`);
+    return { documentId: created.id };
+  } catch (e) {
+    console.error("[einkommen] Bankzusammenfassung fehlgeschlagen:", e);
+    return { error: "Bankzusammenfassung konnte nicht erstellt werden." };
+  }
 }
 
 /** Signierte Upload-URL für große Selbständigen-Dateien (Direkt-Upload). */
