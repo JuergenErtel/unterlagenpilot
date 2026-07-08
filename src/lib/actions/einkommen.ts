@@ -132,6 +132,52 @@ export async function analyzeSelfEmployedAction(
   return { matrix, docNotes };
 }
 
+export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds: string[]): Promise<EinkommenState> {
+  const { ctx } = await requireCaseAccess(caseId);
+  if (documentIds.length === 0) return { matrix: null, docNotes: [], error: "Keine Dokumente zur Analyse ausgewählt." };
+
+  // Tenant-Isolation direkt in der Query: nur Dokumente der eigenen Organisation.
+  const docs = await prisma.document.findMany({
+    where: { id: { in: documentIds }, case: { organizationId: ctx.organizationId } },
+    select: { id: true, originalName: true, mimeType: true, storageKey: true },
+  });
+  if (docs.length === 0) return { matrix: null, docNotes: [], error: "Dokumente nicht gefunden." };
+
+  const storage = getStorage();
+  const images: Array<{ base64: string; mimeType: string }> = [];
+  const documents: Array<{ url: string; name?: string }> = [];
+  for (const d of docs) {
+    if (VISION_MIME.has(d.mimeType)) {
+      const buf = await storage.get(d.storageKey);
+      if (buf) images.push({ base64: buf.toString("base64"), mimeType: d.mimeType });
+    } else if (d.mimeType === "application/pdf") {
+      const signed = await storage.createSignedUrl(d.storageKey, 300);
+      if (signed) documents.push({ url: signed, name: d.originalName });
+    }
+  }
+  if (images.length === 0 && documents.length === 0) {
+    return { matrix: null, docNotes: [], error: "Die Dokumente konnten nicht für die KI-Analyse vorbereitet werden." };
+  }
+
+  try {
+    const analysis = await ai.analyzeSelfEmployedDocs(images, documents);
+    const eDocs = toEinkommenDocs(analysis);
+    const matrix = consolidateEinkommen(eDocs);
+    const docNotes = eDocs
+      .filter((x) => x.notiz.trim().length > 0)
+      .map((x) => ({ label: `${DOCUMENT_TYPE_LABELS[x.dokumenttyp as DocumentType] ?? x.dokumenttyp} ${x.jahr}`, notiz: x.notiz }));
+    if (!matrix || matrix.rows.length === 0) {
+      return { matrix: null, docNotes: [], error: "Aus den Unterlagen konnten keine auswertbaren Kennzahlen gelesen werden." };
+    }
+    await audit({ organizationId: ctx.organizationId, userId: ctx.userId, action: "ai.evaluated", entityType: "case", entityId: caseId, metadata: { feature: "einkommen", jahre: matrix.jahre.length } });
+    revalidatePath(`/cases/${caseId}/einkommen-selbststaendig`);
+    return { matrix, docNotes };
+  } catch (e) {
+    console.error("[einkommen] KI-Analyse fehlgeschlagen:", e);
+    return { matrix: null, docNotes: [], error: "KI-Analyse derzeit nicht möglich. Bitte später erneut versuchen." };
+  }
+}
+
 export interface EinkommenPdfInput {
   jahre: number[];
   rows: Array<{ kennzahl: string; label: string; cells: Record<number, number | null>; trend: string }>;
