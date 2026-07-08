@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { requireUploadTokenAccess, requireCaseAccess } from "@/lib/auth/context";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
-import { processUpload } from "@/lib/documents/pipeline";
+import { processUpload, processStoredUpload } from "@/lib/documents/pipeline";
+import { getStorage, isStorageKeyForCase } from "@/lib/storage";
 import { customerFormSchema } from "@/lib/domain/forms";
 import { audit } from "@/lib/audit";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
@@ -21,6 +22,17 @@ export interface UploadState {
 /** Kompatible Aliase für Kunden- bzw. Vermittler-Flow. */
 export type CustomerUploadState = UploadState;
 export type BrokerUploadState = UploadState;
+
+/** Antwort auf eine Slot-Anfrage: entweder Ziel-URL/Key oder ein Fehler. */
+export type UploadSlot = { uploadUrl: string; storageKey: string } | { error: string };
+
+/** Metadaten einer per Direkt-Upload gespeicherten Datei (zur Verarbeitung). */
+export interface StoredUploadMeta {
+  storageKey: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -169,6 +181,120 @@ export async function brokerUploadOne(caseId: string, formData: FormData): Promi
 export async function finishBrokerUpload(caseId: string): Promise<void> {
   await requireCaseAccess(caseId);
   revalidatePath(`/cases/${caseId}`);
+}
+
+/**
+ * Fordert für den Vermittler-Direkt-Upload eine signierte Upload-URL an. Der
+ * Browser lädt die Datei danach DIREKT zu Supabase (an der Function vorbei, kein
+ * Body-Limit) und ruft anschliessend `processBrokerStoredUpload`. Fällt auf
+ * `{error}` zurück, wenn der Storage-Provider keinen Direkt-Upload kann (local).
+ */
+export async function requestBrokerUploadSlot(
+  caseId: string,
+  originalName: string,
+  _mimeType: string
+): Promise<UploadSlot> {
+  const { ctx } = await requireCaseAccess(caseId);
+  const env = getEnv();
+  const limit = await checkRateLimit(`broker-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
+  if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
+
+  const target = await getStorage().createSignedUploadUrl({ organizationId: ctx.organizationId, caseId, originalName });
+  if (!target) return { error: "Direkt-Upload nicht verfügbar." };
+  return target;
+}
+
+/** Verarbeitet eine per Direkt-Upload gespeicherte Vermittler-Datei (ein Dokument). */
+export async function processBrokerStoredUpload(
+  caseId: string,
+  applicantPosition: string,
+  meta: StoredUploadMeta
+): Promise<UploadState> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  // Tenant-Isolation: der storageKey MUSS im eigenen Org-/Fall-Pfad liegen.
+  if (!isStorageKeyForCase(meta.storageKey, ctx.organizationId, caseId)) {
+    return { uploaded: 0, rejected: [{ name: meta.originalName, reason: "Ungültiger Upload-Pfad." }] };
+  }
+
+  let applicantId: string | null = null;
+  let applicantName: string | null = null;
+  if (applicantPosition === "1" || applicantPosition === "2") {
+    const applicant = await prisma.applicant.findFirst({
+      where: { caseId, position: Number(applicantPosition) },
+      select: { id: true, vorname: true, nachname: true },
+    });
+    if (applicant) {
+      applicantId = applicant.id;
+      applicantName = [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") || null;
+    }
+  }
+
+  const result = await processStoredUpload({
+    organizationId: ctx.organizationId,
+    caseId,
+    storageKey: meta.storageKey,
+    originalName: meta.originalName,
+    mimeType: meta.mimeType,
+    uploadSource: "vermittler",
+    applicantName,
+    applicantId,
+    actorUserId: ctx.userId,
+  });
+  if (result.ok) return { uploaded: 1, rejected: [] };
+  return { uploaded: 0, rejected: [{ name: meta.originalName, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
+}
+
+/** Fordert für den Kunden-Direkt-Upload (Token-Link) eine signierte Upload-URL an. */
+export async function requestCustomerUploadSlot(
+  token: string,
+  originalName: string,
+  _mimeType: string
+): Promise<UploadSlot> {
+  const access = await requireUploadTokenAccess(token);
+  if (!access) return { error: "Upload-Link ungültig oder abgelaufen." };
+
+  const env = getEnv();
+  const limit = await checkRateLimit(`upload:${access.linkId}:${await clientIp()}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
+  if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
+
+  const target = await getStorage().createSignedUploadUrl({ organizationId: access.organizationId, caseId: access.caseId, originalName });
+  if (!target) return { error: "Direkt-Upload nicht verfügbar." };
+  return target;
+}
+
+/** Verarbeitet eine per Direkt-Upload gespeicherte Kunden-Datei (ein Dokument). */
+export async function processCustomerStoredUpload(token: string, meta: StoredUploadMeta): Promise<UploadState> {
+  const access = await requireUploadTokenAccess(token);
+  if (!access) return { uploaded: 0, rejected: [], error: "Upload-Link ungültig oder abgelaufen." };
+
+  if (!isStorageKeyForCase(meta.storageKey, access.organizationId, access.caseId)) {
+    return { uploaded: 0, rejected: [{ name: meta.originalName, reason: "Ungültiger Upload-Pfad." }] };
+  }
+
+  const caseRow = await prisma.case.findUnique({
+    where: { id: access.caseId },
+    include: { applicants: { orderBy: { position: "asc" }, take: 1 } },
+  });
+  const applicant = caseRow?.applicants[0];
+  const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
+
+  const result = await processStoredUpload({
+    organizationId: access.organizationId,
+    caseId: access.caseId,
+    storageKey: meta.storageKey,
+    originalName: meta.originalName,
+    mimeType: meta.mimeType,
+    uploadSource: "kunde",
+    applicantName,
+    applicantId: applicant?.id ?? null,
+  });
+
+  if (result.ok) {
+    await prisma.uploadLink.update({ where: { id: access.linkId }, data: { usedCount: { increment: 1 } } });
+    return { uploaded: 1, rejected: [] };
+  }
+  return { uploaded: 0, rejected: [{ name: meta.originalName, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
 }
 
 /**

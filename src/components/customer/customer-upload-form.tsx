@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertTriangle, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { customerUploadOne, finishCustomerUpload } from "@/lib/actions/upload";
+import {
+  customerUploadOne,
+  finishCustomerUpload,
+  requestCustomerUploadSlot,
+  processCustomerStoredUpload,
+} from "@/lib/actions/upload";
 import { uploadFilesSequentially, type UploadOutcome, type UploadProgress } from "@/lib/upload/client-upload";
 
 function formatMb(bytes: number): string {
@@ -50,7 +55,11 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
       const outcome = await uploadFilesSequentially(
         files,
         (fd) => customerUploadOne(token, fd),
-        { onProgress: setProgress }
+        {
+          onProgress: setProgress,
+          requestSlot: (name, mime) => requestCustomerUploadSlot(token, name, mime),
+          processStored: (meta) => processCustomerStoredUpload(token, meta),
+        }
       );
       await finishCustomerUpload(token, outcome.uploaded);
       setResult(outcome);

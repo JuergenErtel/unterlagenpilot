@@ -2,6 +2,16 @@
 
 const isDev = process.env.NODE_ENV !== "production";
 
+// Ziel für den Browser-Direkt-Upload (Supabase Storage) muss in connect-src stehen,
+// sonst blockt die CSP den PUT. Spezifische Origin aus der Env, sonst Wildcard.
+const supabaseConnectSrc = (() => {
+  try {
+    return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : "https://*.supabase.co";
+  } catch {
+    return "https://*.supabase.co";
+  }
+})();
+
 // Content-Security-Policy: self-contained App (keine externen CDNs/Fonts/Bilder im
 // Browser – KI/OCR/E-Mail/Karten laufen serverseitig). 'unsafe-inline' ist für Next.js
 // ohne Nonce-Setup nötig; nonce-basierte CSP wäre die nächste Härtungsstufe.
@@ -17,8 +27,8 @@ const csp = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  // Dev braucht die HMR-WebSocket-Verbindung.
-  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+  // 'self' + Supabase (Direkt-Upload). Dev braucht zusätzlich die HMR-WebSocket.
+  `connect-src 'self' ${supabaseConnectSrc}${isDev ? " ws: wss:" : ""}`,
 ].join("; ");
 
 const securityHeaders = [

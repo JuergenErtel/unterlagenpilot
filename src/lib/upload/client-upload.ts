@@ -24,9 +24,23 @@ export interface UploadProgress {
 /** Ergebnis eines Einzel-Datei-Server-Calls. */
 type UploadOneResult = { uploaded: number; rejected: { name: string; reason: string }[]; error?: string };
 
+/** Signierte Upload-URL oder Fehler (vom Server). */
+type SlotResult = { uploadUrl: string; storageKey: string } | { error: string };
+
+/** Metadaten, die nach dem Direkt-Upload an die Verarbeitungs-Action gehen. */
+export interface StoredUploadMeta {
+  storageKey: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 const MAX_IMAGE_EDGE = 2200; // px – reicht für lesbare OCR, deutlich kleiner als Originale
 const IMAGE_QUALITY = 0.82;
 const COMPRESS_ABOVE_BYTES = 1_500_000; // kleine Bilder nicht unnötig neu kodieren
+// Ab dieser Größe geht die Datei per Direkt-Upload zum Storage (an der Serverless-
+// Function vorbei) – Vercel deckelt Function-Requests bei ~4,5 MB. Sicherheitsabstand.
+const DIRECT_UPLOAD_ABOVE_BYTES = 3_500_000;
 
 /** Verkleinert JPEG/PNG clientseitig; alle anderen Typen unverändert zurück. */
 async function prepareFile(file: File): Promise<File> {
@@ -57,12 +71,49 @@ export interface SequentialUploadOptions {
   /** Zusätzliche FormData-Felder pro Datei (z.B. applicantPosition). */
   extraFields?: Record<string, string>;
   onProgress?: (p: UploadProgress) => void;
+  /**
+   * Direkt-Upload für große Dateien (>3,5 MB), umgeht das Function-Body-Limit.
+   * Beide Callbacks müssen gesetzt sein, sonst läuft alles über `uploadOne`.
+   */
+  requestSlot?: (originalName: string, mimeType: string) => Promise<SlotResult>;
+  processStored?: (meta: StoredUploadMeta) => Promise<UploadOneResult>;
 }
 
 /**
- * Lädt `files` einzeln über `uploadOne` hoch und aggregiert das Ergebnis.
- * `uploadOne` erhält ein FormData mit genau einer Datei (Feld "files") plus
- * `extraFields` und liefert das Ergebnis dieser einen Datei zurück.
+ * Lädt eine große Datei direkt zum Supabase-Storage (signierte URL) und stößt danach
+ * die Verarbeitung an. Der PUT + FormData-Aufbau entspricht exakt dem, was
+ * `@supabase/storage-js` `uploadToSignedUrl` für einen Blob tut (Feldname "",
+ * `cacheControl`, kein eigener content-type – Multipart-Boundary setzt der Browser).
+ */
+async function uploadViaDirect(
+  file: File,
+  requestSlot: NonNullable<SequentialUploadOptions["requestSlot"]>,
+  processStored: NonNullable<SequentialUploadOptions["processStored"]>
+): Promise<UploadOneResult> {
+  const mimeType = file.type || "application/octet-stream";
+  const slot = await requestSlot(file.name, mimeType);
+  if ("error" in slot) return { uploaded: 0, rejected: [], error: slot.error };
+
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  form.append("", file, file.name);
+
+  const put = await fetch(slot.uploadUrl, {
+    method: "PUT",
+    headers: { "x-upsert": "false" },
+    body: form,
+  });
+  if (!put.ok) {
+    return { uploaded: 0, rejected: [{ name: file.name, reason: `Direkt-Upload fehlgeschlagen (${put.status}).` }] };
+  }
+
+  return processStored({ storageKey: slot.storageKey, originalName: file.name, mimeType, sizeBytes: file.size });
+}
+
+/**
+ * Lädt `files` einzeln hoch und aggregiert das Ergebnis. Kleine Dateien gehen über
+ * `uploadOne` (Server-Action mit FormData), große über den Direkt-Upload (falls
+ * `requestSlot`/`processStored` gesetzt), damit das Body-Limit nie greift.
  */
 export async function uploadFilesSequentially(
   files: File[],
@@ -71,18 +122,23 @@ export async function uploadFilesSequentially(
 ): Promise<UploadOutcome> {
   const rejected: { name: string; reason: string }[] = [];
   let uploaded = 0;
+  const canDirect = Boolean(options.requestSlot && options.processStored);
 
   for (let i = 0; i < files.length; i++) {
     const original = files[i]!;
     options.onProgress?.({ done: i, total: files.length, current: original.name });
     const prepared = await prepareFile(original);
 
-    const fd = new FormData();
-    for (const [k, v] of Object.entries(options.extraFields ?? {})) fd.append(k, v);
-    fd.append("files", prepared, prepared.name);
-
     try {
-      const res = await uploadOne(fd);
+      let res: UploadOneResult;
+      if (canDirect && prepared.size > DIRECT_UPLOAD_ABOVE_BYTES) {
+        res = await uploadViaDirect(prepared, options.requestSlot!, options.processStored!);
+      } else {
+        const fd = new FormData();
+        for (const [k, v] of Object.entries(options.extraFields ?? {})) fd.append(k, v);
+        fd.append("files", prepared, prepared.name);
+        res = await uploadOne(fd);
+      }
       if (res.error) {
         rejected.push({ name: original.name, reason: res.error });
       } else {
@@ -92,7 +148,7 @@ export async function uploadFilesSequentially(
     } catch {
       rejected.push({
         name: original.name,
-        reason: "Übertragung fehlgeschlagen – Datei evtl. zu groß. Bitte einzeln erneut versuchen.",
+        reason: "Übertragung fehlgeschlagen – bitte diese Datei einzeln erneut versuchen.",
       });
     }
   }

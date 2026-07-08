@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
-import { getStorage } from "@/lib/storage";
+import { getStorage, type StoredObject } from "@/lib/storage";
 import { getOCRProvider } from "@/lib/ai";
 import { AIService } from "@/lib/ai/service";
 import { generateFileName } from "@/lib/documents/filename";
@@ -71,8 +71,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
 
   // 2) Speichern (mandanten-/fallbezogener Pfad).
   //    MIME-Type stammt aus den Magic-Bytes (kanonisch) – nie vom Client.
-  const storage = getStorage();
-  const stored = await storage.put({
+  const stored = await getStorage().put({
     organizationId,
     caseId,
     originalName: file.name,
@@ -80,16 +79,112 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     buffer: file.buffer,
   });
 
+  return runPipelineAfterStore({
+    organizationId,
+    caseId,
+    uploadSource,
+    applicantName: input.applicantName,
+    applicantId: input.applicantId,
+    actorUserId: input.actorUserId,
+    originalName: file.name,
+    buffer: file.buffer,
+    stored,
+  });
+}
+
+export interface ProcessStoredUploadInput {
+  organizationId: string;
+  caseId: string;
+  /** Kanonischer Objektpfad der bereits (per Direkt-Upload) gespeicherten Datei. */
+  storageKey: string;
+  originalName: string;
+  /** Vom Client deklarierter MIME-Type (nur Hinweis; kanonisch zählen Magic-Bytes). */
+  mimeType?: string;
+  uploadSource: UploadSource;
+  applicantName?: string | null;
+  applicantId?: string | null;
+  actorUserId?: string | null;
+}
+
+/**
+ * Verarbeitet eine bereits per Browser-Direkt-Upload in den Storage gelegte Datei
+ * (umgeht das Function-Body-Limit für große Dateien, v.a. PDFs). Lädt die Bytes
+ * zur Validierung/Scan aus dem Storage, danach identische Pipeline wie processUpload.
+ */
+export async function processStoredUpload(input: ProcessStoredUploadInput): Promise<ProcessUploadResult> {
+  const { organizationId, caseId, uploadSource } = input;
+  const storage = getStorage();
+
+  const buffer = await storage.get(input.storageKey);
+  if (!buffer) {
+    return { ok: false, fileName: input.originalName, reason: "Datei nicht auffindbar (Upload unvollständig). Bitte erneut versuchen." };
+  }
+
+  // Validierung NACH Direkt-Upload (Endung/Größe/MIME/Magic-Bytes). Bei Ungültigkeit
+  // das hochgeladene Objekt wieder entfernen (kein verwaistes Objekt im Bucket).
+  const validation = validateUpload({
+    filename: input.originalName,
+    mimeType: input.mimeType ?? "",
+    size: buffer.byteLength,
+    buffer,
+  });
+  if (!validation.ok) {
+    await storage.remove(input.storageKey).catch(() => {});
+    await audit({
+      organizationId,
+      userId: input.actorUserId ?? null,
+      action: "document.rejected",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { source: uploadSource, reason: validation.error, stage: "validation", direct: true },
+    });
+    return { ok: false, fileName: input.originalName, reason: validation.error };
+  }
+
+  return runPipelineAfterStore({
+    organizationId,
+    caseId,
+    uploadSource,
+    applicantName: input.applicantName,
+    applicantId: input.applicantId,
+    actorUserId: input.actorUserId,
+    originalName: input.originalName,
+    buffer,
+    stored: { storageKey: input.storageKey, mimeType: validation.mimeType!, sizeBytes: buffer.byteLength },
+  });
+}
+
+interface AfterStoreInput {
+  organizationId: string;
+  caseId: string;
+  uploadSource: UploadSource;
+  applicantName?: string | null;
+  applicantId?: string | null;
+  actorUserId?: string | null;
+  originalName: string;
+  buffer: Buffer;
+  stored: StoredObject;
+}
+
+/**
+ * Gemeinsamer Pipeline-Teil ab „Datei liegt im Storage": Dokument anlegen
+ * (Quarantäne) → Virenscan → OCR + KI. Wird von processUpload und
+ * processStoredUpload genutzt.
+ */
+async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUploadResult> {
+  const { organizationId, caseId, uploadSource, originalName, buffer, stored } = input;
+  const storage = getStorage();
+
   // 3) Dokument anlegen, zunächst in Quarantäne (Scan ausstehend).
   const doc = await prisma.document.create({
     data: {
       caseId,
       applicantId: input.applicantId ?? undefined,
-      originalName: file.name,
+      originalName,
       generatedName: generateFileName({
         documentType: null,
         applicantName: input.applicantName ?? null,
-        originalName: file.name,
+        originalName,
       }),
       storageKey: stored.storageKey,
       mimeType: stored.mimeType,
@@ -104,7 +199,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
   const scanner = getVirusScanner();
   let scan;
   try {
-    scan = await scanner.scan({ buffer: file.buffer, filename: file.name, mimeType: stored.mimeType });
+    scan = await scanner.scan({ buffer, filename: originalName, mimeType: stored.mimeType });
   } catch {
     scan = { verdict: "error" as const, engine: scanner.name, demo: false };
   }
@@ -136,7 +231,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     return {
       ok: false,
       documentId: doc.id,
-      fileName: file.name,
+      fileName: originalName,
       scanStatus: "rejected",
       reason: "Aus Sicherheitsgründen abgelehnt (Schadsoftware erkannt).",
     };
@@ -150,7 +245,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     return {
       ok: false,
       documentId: doc.id,
-      fileName: file.name,
+      fileName: originalName,
       scanStatus: "virus_scan_failed",
       reason: "Sicherheitsprüfung derzeit nicht möglich. Die Datei wurde sicher zwischengelagert und wird geprüft.",
     };
@@ -171,8 +266,8 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     ocrResult = await ocr.extractText({
       storageKey: stored.storageKey,
       mimeType: stored.mimeType,
-      originalName: file.name,
-      buffer: file.buffer,
+      originalName,
+      buffer,
     });
     cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
     ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
@@ -185,7 +280,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     applicantName: cls?.detectedApplicant ?? input.applicantName ?? null,
     propertyRef: cls?.detectedPropertyRef,
     period: cls?.period,
-    originalName: file.name,
+    originalName,
   });
 
   await prisma.document.update({
@@ -220,7 +315,7 @@ export async function processUpload(input: ProcessUploadInput): Promise<ProcessU
     },
   });
 
-  return { ok: true, documentId: doc.id, fileName: file.name, scanStatus: "ready_for_ocr" };
+  return { ok: true, documentId: doc.id, fileName: originalName, scanStatus: "ready_for_ocr" };
 }
 
 /** Maximale Upload-Größe in MB (für UI-Hinweise). */

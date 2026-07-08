@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertTriangle, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { brokerUploadOne, finishBrokerUpload } from "@/lib/actions/upload";
+import {
+  brokerUploadOne,
+  finishBrokerUpload,
+  requestBrokerUploadSlot,
+  processBrokerStoredUpload,
+} from "@/lib/actions/upload";
 import { uploadFilesSequentially, type UploadOutcome, type UploadProgress } from "@/lib/upload/client-upload";
 
 function formatMb(bytes: number): string {
@@ -70,7 +75,12 @@ export function BrokerUploadForm({
       const outcome = await uploadFilesSequentially(
         files,
         (fd) => brokerUploadOne(caseId, fd),
-        { extraFields: { applicantPosition }, onProgress: setProgress }
+        {
+          extraFields: { applicantPosition },
+          onProgress: setProgress,
+          requestSlot: (name, mime) => requestBrokerUploadSlot(caseId, name, mime),
+          processStored: (meta) => processBrokerStoredUpload(caseId, applicantPosition, meta),
+        }
       );
       await finishBrokerUpload(caseId);
       setResult(outcome);

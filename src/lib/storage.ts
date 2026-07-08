@@ -32,18 +32,50 @@ export interface PutInput {
   buffer: Buffer;
 }
 
+/** Ziel für den Browser-Direkt-Upload (an der Serverless-Function vorbei). */
+export interface SignedUploadTarget {
+  /** URL, an die der Browser die Datei direkt hochlädt (PUT). */
+  uploadUrl: string;
+  /** Kanonischer Objektpfad, um die Datei danach serverseitig zu referenzieren. */
+  storageKey: string;
+}
+
 export interface StorageProvider {
   put(input: PutInput): Promise<StoredObject>;
   get(storageKey: string): Promise<Buffer | null>;
   remove(storageKey: string): Promise<void>;
   /** Signierte, kurzlebige Download-URL. null, wenn Provider keine direkte URL kann. */
   createSignedUrl(storageKey: string, expiresInSec: number): Promise<string | null>;
+  /**
+   * Signierte Upload-URL für Browser-Direkt-Upload (umgeht das Function-Body-Limit).
+   * null, wenn der Provider das nicht unterstützt (local/s3) → Fallback auf Server-Upload.
+   */
+  createSignedUploadUrl(input: {
+    organizationId: string;
+    caseId: string;
+    originalName: string;
+  }): Promise<SignedUploadTarget | null>;
+}
+
+/** Mandanten-/fallbezogener Objektpfad-Präfix (für Erzeugung + Sicherheitsprüfung). */
+export function casePathPrefix(organizationId: string, caseId: string): string {
+  return `organizations/${organizationId}/cases/${caseId}/documents/`;
 }
 
 /** Mandanten-/fallbezogener Objektpfad. */
 export function objectPath(organizationId: string, caseId: string, originalName: string): string {
   const safe = originalName.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80);
-  return `organizations/${organizationId}/cases/${caseId}/documents/${randomToken(8)}_${safe}`;
+  return `${casePathPrefix(organizationId, caseId)}${randomToken(8)}_${safe}`;
+}
+
+/**
+ * Prüft, ob ein (vom Client zurückgereichter) storageKey wirklich zum eigenen
+ * Mandanten-/Fall-Pfad gehört – verhindert das Registrieren fremder Objekte
+ * (Tenant-Isolation beim Direkt-Upload).
+ */
+export function isStorageKeyForCase(storageKey: string, organizationId: string, caseId: string): boolean {
+  if (storageKey.includes("..") || storageKey.includes("//")) return false;
+  return storageKey.startsWith(casePathPrefix(organizationId, caseId));
 }
 
 // ---- In-Memory (Dev/Demo) ----
@@ -63,6 +95,10 @@ class LocalStorageProvider implements StorageProvider {
   }
   async createSignedUrl(): Promise<string | null> {
     // In-Memory: kein direkter Link – Download läuft über die App-Route.
+    return null;
+  }
+  async createSignedUploadUrl(): Promise<SignedUploadTarget | null> {
+    // In-Memory: kein Direkt-Upload – Client fällt auf den Server-Upload zurück.
     return null;
   }
 }
@@ -122,6 +158,18 @@ class SupabaseStorageProvider implements StorageProvider {
     if (error || !data) return null;
     return data.signedUrl;
   }
+
+  async createSignedUploadUrl(input: {
+    organizationId: string;
+    caseId: string;
+    originalName: string;
+  }): Promise<SignedUploadTarget | null> {
+    const supabase = await this.client();
+    const key = objectPath(input.organizationId, input.caseId, input.originalName);
+    const { data, error } = await supabase.storage.from(this.bucket).createSignedUploadUrl(key);
+    if (error || !data) return null;
+    return { uploadUrl: data.signedUrl, storageKey: key };
+  }
 }
 
 // ---- S3-kompatibel (Stub) ----
@@ -137,6 +185,10 @@ class S3StorageProvider implements StorageProvider {
   }
   async createSignedUrl(_storageKey: string, _expiresInSec: number): Promise<string | null> {
     // TODO(prod): S3 GetObject Presigned URL (kurzlebig), Bucket privat + SSE-KMS.
+    return null;
+  }
+  async createSignedUploadUrl(): Promise<SignedUploadTarget | null> {
+    // TODO(prod): S3 PutObject Presigned URL. Stub → Client nutzt Server-Upload.
     return null;
   }
 }
