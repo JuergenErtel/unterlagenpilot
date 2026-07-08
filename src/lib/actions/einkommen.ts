@@ -4,8 +4,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireCaseAccess } from "@/lib/auth/context";
-import { processUpload } from "@/lib/documents/pipeline";
-import { getStorage } from "@/lib/storage";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
+import { getEnv } from "@/lib/env";
+import { processUpload, processStoredUpload } from "@/lib/documents/pipeline";
+import { getStorage, isStorageKeyForCase } from "@/lib/storage";
 import { audit } from "@/lib/audit";
 import { AIService } from "@/lib/ai/service";
 import { consolidateEinkommen, KENNZAHL_LABELS, type ConsolidatedMatrix } from "@/lib/einkommen/consolidate";
@@ -209,4 +211,63 @@ export async function createEinkommensPdfAction(
   } catch {
     return { error: "PDF konnte nicht erstellt werden." };
   }
+}
+
+export type EinkommenUploadResult = { documentId?: string; error?: string };
+
+/** Kleine Selbständigen-Datei über die Server-Action (Feld "files", genau eine). */
+export async function einkommenUploadOne(caseId: string, formData: FormData): Promise<EinkommenUploadResult> {
+  const { ctx } = await requireCaseAccess(caseId);
+  const env = getEnv();
+  const limit = await checkRateLimit(`einkommen-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
+  if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
+
+  const file = formData.get("files");
+  if (!(file instanceof File) || file.size === 0) return { error: "Keine Datei empfangen." };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await processUpload({
+    organizationId: ctx.organizationId,
+    caseId,
+    file: { name: file.name, type: file.type, size: file.size, buffer },
+    uploadSource: "vermittler",
+    actorUserId: ctx.userId,
+  });
+  if (result.ok && result.documentId) return { documentId: result.documentId };
+  return { error: result.reason ?? "Datei konnte nicht verarbeitet werden." };
+}
+
+/** Signierte Upload-URL für große Selbständigen-Dateien (Direkt-Upload). */
+export async function requestEinkommenUploadSlot(
+  caseId: string,
+  originalName: string,
+  _mimeType: string
+): Promise<{ uploadUrl: string; storageKey: string } | { error: string }> {
+  const { ctx } = await requireCaseAccess(caseId);
+  const env = getEnv();
+  const limit = await checkRateLimit(`einkommen-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
+  if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
+  const target = await getStorage().createSignedUploadUrl({ organizationId: ctx.organizationId, caseId, originalName });
+  if (!target) return { error: "Direkt-Upload nicht verfügbar." };
+  return target;
+}
+
+/** Verarbeitet eine per Direkt-Upload gespeicherte Selbständigen-Datei. */
+export async function processEinkommenStoredUpload(
+  caseId: string,
+  meta: { storageKey: string; originalName: string; mimeType: string; sizeBytes: number }
+): Promise<EinkommenUploadResult> {
+  const { ctx } = await requireCaseAccess(caseId);
+  if (!isStorageKeyForCase(meta.storageKey, ctx.organizationId, caseId)) return { error: "Ungültiger Upload-Pfad." };
+  const result = await processStoredUpload({
+    organizationId: ctx.organizationId,
+    caseId,
+    storageKey: meta.storageKey,
+    originalName: meta.originalName,
+    mimeType: meta.mimeType,
+    uploadSource: "vermittler",
+    actorUserId: ctx.userId,
+  });
+  if (result.ok && result.documentId) return { documentId: result.documentId };
+  return { error: result.reason ?? "Datei konnte nicht verarbeitet werden." };
 }
