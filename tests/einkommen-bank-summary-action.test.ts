@@ -64,9 +64,23 @@ describe("createSelfEmployedBankSummaryAction", () => {
     expect(selfEmpFindFirst).toHaveBeenCalled();
     expect(selfEmpCreate).toHaveBeenCalled();
     expect(selfEmpUpdate).not.toHaveBeenCalled();
+
+    // Exact payload assertion for create
+    expect(selfEmpCreate).toHaveBeenCalledWith({
+      data: {
+        applicantId: "app-1",
+        firma: "Sadykow Consulting",
+        rechtsform: "Einzelunternehmen",
+        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12))
+      }
+    });
+
+    // Begleittext with firma + gewinn amount
     const renderArg = renderEinkommensanalyse.mock.calls[0]![0] as { begleittext?: { paragraphs: string[] } };
     expect(renderArg.begleittext).toBeTruthy();
-    expect(renderArg.begleittext!.paragraphs.join("\n")).toContain("Sadykow Consulting");
+    const begleitext = renderArg.begleittext!.paragraphs.join("\n");
+    expect(begleitext).toContain("Sadykow Consulting");
+    expect(begleitext).toMatch(/91\.?000|2023/);
   });
 
   it("aktualisiert vorhandene Stammdaten statt neu anzulegen", async () => {
@@ -75,6 +89,16 @@ describe("createSelfEmployedBankSummaryAction", () => {
     expect(res.documentId).toBe("pdfdoc-1");
     expect(selfEmpUpdate).toHaveBeenCalled();
     expect(selfEmpCreate).not.toHaveBeenCalled();
+
+    // Exact payload assertion for update
+    expect(selfEmpUpdate).toHaveBeenCalledWith({
+      where: { id: "ser-1" },
+      data: {
+        firma: "Sadykow Consulting",
+        rechtsform: "Einzelunternehmen",
+        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12))
+      }
+    });
   });
 
   it("liefert Fehler, wenn der gewählte Antragsteller fehlt", async () => {
