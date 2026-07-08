@@ -33,7 +33,14 @@ beforeEach(() => {
 describe("analyzeStoredSelfEmployedDocs", () => {
   it("baut aus PDF-Dokumenten die Kennzahlen-Matrix", async () => {
     findMany.mockResolvedValue([
-      { id: "doc-1", originalName: "bwa.pdf", mimeType: "application/pdf", storageKey: "organizations/org-A/cases/case-A/documents/x_bwa.pdf", case: { organizationId: "org-A" } },
+      {
+        id: "doc-1",
+        originalName: "bwa.pdf",
+        mimeType: "application/pdf",
+        storageKey: "organizations/org-A/cases/case-A/documents/x_bwa.pdf",
+        scanStatus: "ready_for_ocr",
+        case: { organizationId: "org-A" },
+      },
     ]);
     const res = await analyzeStoredSelfEmployedDocs("case-A", ["doc-1"]);
     expect(res.error).toBeUndefined();
@@ -46,5 +53,23 @@ describe("analyzeStoredSelfEmployedDocs", () => {
     const res = await analyzeStoredSelfEmployedDocs("case-A", ["doc-x"]);
     expect(res.matrix).toBeNull();
     expect(res.error).toBeTruthy();
+  });
+
+  it("überspringt Dokumente mit fehlgeschlagenem Virenscan (nicht an KI gesendet)", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "doc-2",
+        originalName: "infected.pdf",
+        mimeType: "application/pdf",
+        storageKey: "organizations/org-A/cases/case-A/documents/x_infected.pdf",
+        scanStatus: "virus_scan_failed",
+        case: { organizationId: "org-A" },
+      },
+    ]);
+    const res = await analyzeStoredSelfEmployedDocs("case-A", ["doc-2"]);
+    expect(res.matrix).toBeNull();
+    expect(res.error).toBeTruthy();
+    expect(createSignedUrl).not.toHaveBeenCalled();
+    expect(analyzeSelfEmployedDocs).not.toHaveBeenCalled();
   });
 });

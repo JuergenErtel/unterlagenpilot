@@ -136,10 +136,10 @@ export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds:
   const { ctx } = await requireCaseAccess(caseId);
   if (documentIds.length === 0) return { matrix: null, docNotes: [], error: "Keine Dokumente zur Analyse ausgewählt." };
 
-  // Tenant-Isolation direkt in der Query: nur Dokumente der eigenen Organisation.
+  // Tenant- und Fall-Isolation direkt in der Query: nur Dokumente des eigenen Falls & der eigenen Organisation.
   const docs = await prisma.document.findMany({
-    where: { id: { in: documentIds }, case: { organizationId: ctx.organizationId } },
-    select: { id: true, originalName: true, mimeType: true, storageKey: true },
+    where: { id: { in: documentIds }, caseId, case: { organizationId: ctx.organizationId } },
+    select: { id: true, originalName: true, mimeType: true, storageKey: true, scanStatus: true },
   });
   if (docs.length === 0) return { matrix: null, docNotes: [], error: "Dokumente nicht gefunden." };
 
@@ -147,12 +147,19 @@ export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds:
   const images: Array<{ base64: string; mimeType: string }> = [];
   const documents: Array<{ url: string; name?: string }> = [];
   for (const d of docs) {
-    if (VISION_MIME.has(d.mimeType)) {
-      const buf = await storage.get(d.storageKey);
-      if (buf) images.push({ base64: buf.toString("base64"), mimeType: d.mimeType });
-    } else if (d.mimeType === "application/pdf") {
-      const signed = await storage.createSignedUrl(d.storageKey, 300);
-      if (signed) documents.push({ url: signed, name: d.originalName });
+    // Nur gescannte, freigegebene Dokumente dürfen gelesen und an die KI gesendet werden.
+    if (d.scanStatus !== "ready_for_ocr") continue;
+    try {
+      if (VISION_MIME.has(d.mimeType)) {
+        const buf = await storage.get(d.storageKey);
+        if (buf) images.push({ base64: buf.toString("base64"), mimeType: d.mimeType });
+      } else if (d.mimeType === "application/pdf") {
+        const signed = await storage.createSignedUrl(d.storageKey, 300);
+        if (signed) documents.push({ url: signed, name: d.originalName });
+      }
+    } catch (e) {
+      // Eine fehlerhafte Datei darf nicht die gesamte Analyse blockieren.
+      console.error(`[einkommen] Vorbereitung von Dokument "${d.originalName}" fehlgeschlagen:`, e);
     }
   }
   if (images.length === 0 && documents.length === 0) {
