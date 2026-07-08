@@ -31,7 +31,7 @@ export function buildSelfEmployedBankText(input: SelfEmployedBankTextInput): Sel
   let taetigkeit = `${name} ist selbstständig tätig`;
   const firma = se.firma?.trim();
   const rechtsform = se.rechtsform?.trim();
-  if (rechtsform && firma) taetigkeit += ` als ${rechtsform} „${firma}"`;
+  if (rechtsform && firma) taetigkeit += ` als ${rechtsform} „${firma}“`;
   else if (firma) taetigkeit += ` (${firma})`;
   else if (rechtsform) taetigkeit += ` (${rechtsform})`;
   if (se.gruendungsjahr) taetigkeit += ` (seit ${se.gruendungsjahr})`;
