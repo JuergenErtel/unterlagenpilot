@@ -333,6 +333,7 @@ export interface EinkommensanalyseData {
   docNotes: Array<{ label: string; notiz: string }>;
   einkommensansatzJahr: number | null;
   einkommensansatzMonat: number | null;
+  begleittext?: { heading: string; paragraphs: string[] };
 }
 
 const TREND_LABEL: Record<string, string> = {
@@ -350,6 +351,14 @@ function eur(n: number | null | undefined): string {
 export async function renderEinkommensanalyse(data: EinkommensanalyseData): Promise<Buffer> {
   const doc = newDoc(`Einkommensanalyse ${data.caseNumber}`);
   coverHeader(doc, data.broker, "Einkommensanalyse Selbständige", `${data.applicantName} · Vorgang ${data.caseNumber}`, data.dateStr);
+
+  if (data.begleittext) {
+    heading(doc, data.begleittext.heading);
+    data.begleittext.paragraphs.forEach((p) => {
+      doc.fillColor(COLORS.text).font("Helvetica").fontSize(10).text(p, { width: 495 });
+      doc.moveDown(0.3);
+    });
+  }
 
   heading(doc, "Kennzahlen je Jahr");
   doc.font("Helvetica").fontSize(9).fillColor("#1a1a1a");
