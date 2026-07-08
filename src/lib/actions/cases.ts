@@ -18,6 +18,7 @@ import { getBrokerInfo } from "@/lib/pdf/case-pdf";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { computeNextCaseNumber, caseNumberPrefix } from "@/lib/cases/case-number";
+import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import type {
   CaseStatus,
   EmploymentType,
@@ -405,7 +406,7 @@ export async function setDocumentReview(
   // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
   const owner = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { case: { select: { organizationId: true } } },
+    select: { caseId: true, applicantId: true, case: { select: { organizationId: true } } },
   });
   if (!owner || owner.case.organizationId !== ctx.organizationId) {
     const { notFound } = await import("next/navigation");
@@ -424,6 +425,80 @@ export async function setDocumentReview(
     entityId: documentId,
     metadata: { reviewStatus },
   });
+
+  // Manuelle Freigabe: beim Akzeptieren erkannte Stammdaten in die Kundendaten
+  // übernehmen (nur leere Felder). Best-effort – ein Fehler blockiert die Freigabe nie.
+  if (reviewStatus === "akzeptiert") {
+    try {
+      await applyExtractedFieldsToApplicant(documentId, owner!.caseId, owner!.applicantId, ctx);
+    } catch (e) {
+      console.error("[setDocumentReview] Stammdaten-Übernahme fehlgeschlagen:", e);
+    }
+  }
+
   revalidatePath(`/cases/${doc.caseId}`);
   revalidatePath(`/review`);
+}
+
+/** Zu prüfende/befüllende Stammdaten-Spalten des Antragstellers. */
+const APPLICANT_MASTER_SELECT = {
+  id: true,
+  vorname: true,
+  nachname: true,
+  geburtsdatum: true,
+  geburtsort: true,
+  staatsangehoerigkeit: true,
+  familienstand: true,
+  anzahlKinder: true,
+  street: true,
+  zip: true,
+  city: true,
+  email: true,
+  phone: true,
+} as const;
+
+/**
+ * Überträgt die (ggf. korrigierten) extrahierten Felder eines akzeptierten
+ * Dokuments in die Stammdaten des zugeordneten Antragstellers – nur leere Felder.
+ * Ziel = document.applicantId; falls nicht gesetzt, nur bei genau EINEM
+ * Antragsteller im Fall (sonst keine sichere Zuordnung).
+ */
+async function applyExtractedFieldsToApplicant(
+  documentId: string,
+  caseId: string,
+  applicantId: string | null,
+  ctx: { organizationId: string; userId: string }
+): Promise<void> {
+  const fields = await prisma.extractedFieldRecord.findMany({
+    where: { documentId },
+    select: { key: true, label: true, value: true, correctedValue: true },
+  });
+  if (fields.length === 0) return;
+
+  let target: ({ id: string } & CurrentApplicant) | null = null;
+  if (applicantId) {
+    target = await prisma.applicant.findUnique({ where: { id: applicantId }, select: APPLICANT_MASTER_SELECT });
+  } else {
+    const apps = await prisma.applicant.findMany({
+      where: { caseId },
+      select: APPLICANT_MASTER_SELECT,
+      orderBy: { position: "asc" },
+    });
+    if (apps.length === 1) target = apps[0]!;
+  }
+  if (!target) return;
+
+  const effective = fields.map((f) => ({ key: f.key, label: f.label, value: f.correctedValue ?? f.value }));
+  const { data, appliedLabels } = computeApplicantUpdate(effective, target);
+  if (appliedLabels.length === 0) return;
+
+  await prisma.applicant.update({ where: { id: target.id }, data });
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "applicant",
+    entityId: target.id,
+    metadata: { source: "document_extraction", documentId, fields: appliedLabels },
+  });
 }

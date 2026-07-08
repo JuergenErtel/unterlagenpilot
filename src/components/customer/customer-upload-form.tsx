@@ -1,25 +1,23 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertTriangle, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { customerUpload, type CustomerUploadState } from "@/lib/actions/upload";
+import { customerUploadOne, finishCustomerUpload } from "@/lib/actions/upload";
+import { uploadFilesSequentially, type UploadOutcome, type UploadProgress } from "@/lib/upload/client-upload";
 
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
 export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: number }) {
-  const action = customerUpload.bind(null, token);
-  const [state, formAction, pending] = useActionState<CustomerUploadState, FormData>(action, {
-    uploaded: 0,
-    rejected: [],
-  });
-
-  // Ausgewählte Dateien leben im React-State; ein verstecktes Input trägt sie
-  // ins FormData. So funktionieren Auswahl-Dialog, Kamera UND Drag&Drop zusammen.
+  // Ausgewählte Dateien leben im React-State; hochgeladen wird EINZELN nacheinander
+  // (siehe client-upload), damit auch viele Fotos zuverlässig durchlaufen.
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const [result, setResult] = useState<UploadOutcome | null>(null);
   const hiddenInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -28,11 +26,6 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
     files.forEach((f) => dt.items.add(f));
     hiddenInput.current.files = dt.files;
   }, [files]);
-
-  // Nach erfolgreichem Upload die Auswahl leeren.
-  useEffect(() => {
-    if (state.uploaded > 0) setFiles([]);
-  }, [state]);
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -47,8 +40,31 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || files.length === 0) return;
+    setBusy(true);
+    setResult(null);
+    setProgress({ done: 0, total: files.length });
+    try {
+      const outcome = await uploadFilesSequentially(
+        files,
+        (fd) => customerUploadOne(token, fd),
+        { onProgress: setProgress }
+      );
+      await finishCustomerUpload(token, outcome.uploaded);
+      setResult(outcome);
+      if (outcome.uploaded > 0) setFiles([]);
+    } catch {
+      setResult({ uploaded: 0, rejected: [], error: "Upload fehlgeschlagen. Bitte erneut versuchen." });
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <input ref={hiddenInput} type="file" name="files" multiple className="hidden" tabIndex={-1} aria-hidden />
 
       <div
@@ -75,6 +91,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
             multiple
             accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
             className="sr-only"
+            disabled={busy}
             onChange={(e) => {
               addFiles(e.target.files);
               e.target.value = "";
@@ -92,6 +109,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
             accept="image/*"
             capture="environment"
             className="sr-only"
+            disabled={busy}
             onChange={(e) => {
               addFiles(e.target.files);
               e.target.value = "";
@@ -112,7 +130,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
                 onClick={() => removeFile(i)}
                 aria-label={`${f.name} entfernen`}
                 className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted"
-                disabled={pending}
+                disabled={busy}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -121,39 +139,48 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
         </ul>
       ) : null}
 
-      <Button type="submit" size="lg" className="w-full" disabled={pending || files.length === 0}>
-        {pending
-          ? "Wird geprüft … bitte Seite geöffnet lassen"
+      {busy && progress ? (
+        <div className="space-y-1.5">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-ai transition-all"
+              style={{ width: `${progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)}%` }}
+            />
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Lade {Math.min(progress.done + 1, progress.total)} von {progress.total} hoch … bitte Seite geöffnet lassen
+          </p>
+        </div>
+      ) : null}
+
+      <Button type="submit" size="lg" className="w-full" disabled={busy || files.length === 0}>
+        {busy
+          ? "Wird geprüft …"
           : files.length > 0
             ? `${files.length} Datei(en) hochladen`
             : "Hochladen"}
       </Button>
-      {pending ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Ihre Dateien werden übertragen und automatisch geprüft – das kann bei Fotos einen Moment dauern.
-        </p>
-      ) : null}
 
-      {state.error ? (
+      {result?.error ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-          {state.error}
+          {result.error}
         </p>
       ) : null}
 
-      {state.uploaded > 0 ? (
+      {result && result.uploaded > 0 ? (
         <p className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success-foreground">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          {state.uploaded} Datei(en) erfolgreich hochgeladen und in Prüfung.
+          {result.uploaded} Datei(en) erfolgreich hochgeladen und in Prüfung.
         </p>
       ) : null}
 
-      {state.rejected.length > 0 ? (
+      {result && result.rejected.length > 0 ? (
         <div className="space-y-1.5 rounded-md bg-warning/10 px-3 py-2 text-sm" role="alert">
           <div className="flex items-center gap-2 font-medium text-warning-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" /> Einige Dateien wurden nicht übernommen
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {state.rejected.map((r, i) => (
+            {result.rejected.map((r, i) => (
               <li key={i}>
                 <span className="font-medium text-foreground">{r.name}</span>: {r.reason}
               </li>

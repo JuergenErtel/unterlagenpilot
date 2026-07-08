@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CaseTabs } from "@/components/case/case-tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { ProgressRing } from "@/components/case/progress-ring";
@@ -31,8 +32,15 @@ import {
   type Severity,
 } from "@/lib/domain/enums";
 
-export default async function CaseCockpitPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CaseCockpitPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const ctx = await requireContext();
 
   const caseRow = await prisma.case.findFirst({
@@ -98,7 +106,7 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
             <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
           </Card>
 
-          <Tabs defaultValue="fehlt">
+          <CaseTabs defaultValue="fehlt" tabParam={tab}>
             <TabsList className="flex-wrap">
               <TabsTrigger value="fehlt">Was fehlt noch? ({cockpit.counts.docsMissing})</TabsTrigger>
               <TabsTrigger value="dokumente">Dokumente ({documents.length})</TabsTrigger>
@@ -112,7 +120,7 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
 
             <TabsContent value="dokumente">
               <div className="space-y-4">
-                <Card>
+                <Card id="broker-upload" className="scroll-mt-24">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Dokumente hochladen</CardTitle>
                     <p className="text-xs text-muted-foreground">
@@ -212,13 +220,13 @@ export default async function CaseCockpitPage({ params }: { params: Promise<{ id
                 </Card>
               </div>
             </TabsContent>
-          </Tabs>
+          </CaseTabs>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
           <NextBestAction actions={cockpit.nextActions} />
-          <Card>
+          <Card id="upload-link" className="scroll-mt-24">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Link2 className="h-4 w-4" /> Sicherer Upload-Link

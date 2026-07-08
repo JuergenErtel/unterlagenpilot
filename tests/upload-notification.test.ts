@@ -35,7 +35,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { customerUpload } from "@/lib/actions/upload";
+import { customerUploadOne, finishCustomerUpload } from "@/lib/actions/upload";
 import { buildUploadNotification } from "@/lib/email/notifications";
 
 function pdf(name = "a.pdf"): File {
@@ -72,9 +72,15 @@ beforeEach(() => {
 });
 
 describe("Upload-Benachrichtigung an den Vermittler", () => {
-  it("benachrichtigt den zuständigen Vermittler nach erfolgreichem Upload", async () => {
-    const res = await customerUpload("tok", { uploaded: 0, rejected: [] }, form(pdf()));
+  it("lädt pro Aufruf genau eine Datei hoch, OHNE dabei zu benachrichtigen", async () => {
+    const res = await customerUploadOne("tok", form(pdf()));
     expect(res.uploaded).toBe(1);
+    expect(uploadLinkUpdate).toHaveBeenCalledTimes(1); // usedCount +1
+    expect(sendEmail).not.toHaveBeenCalled(); // Mail erst beim Abschluss
+  });
+
+  it("benachrichtigt den Vermittler genau einmal beim Abschluss (finishCustomerUpload)", async () => {
+    await finishCustomerUpload("tok", 4);
     expect(sendEmail).toHaveBeenCalledTimes(1);
     const arg = sendEmail.mock.calls[0]![0] as { to: string; subject: string; text: string };
     expect(arg.to).toBe("makler@example.com");
@@ -83,29 +89,26 @@ describe("Upload-Benachrichtigung an den Vermittler", () => {
 
   it("sendet keine E-Mail, wenn kein Vermittler zugeordnet ist", async () => {
     caseFindUnique.mockResolvedValue({ ...caseWithBroker, broker: null });
-    const res = await customerUpload("tok", { uploaded: 0, rejected: [] }, form(pdf()));
-    expect(res.uploaded).toBe(1);
+    await finishCustomerUpload("tok", 2);
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("sendet keine E-Mail, wenn der Mailversand nicht konfiguriert ist", async () => {
     isEmailConfigured.mockReturnValue(false);
-    await customerUpload("tok", { uploaded: 0, rejected: [] }, form(pdf()));
+    await finishCustomerUpload("tok", 2);
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("lässt den Upload erfolgreich, wenn der Mailversand fehlschlägt", async () => {
+  it("lässt den Abschluss erfolgreich, wenn der Mailversand fehlschlägt", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     sendEmail.mockRejectedValue(new Error("Resend down"));
-    const res = await customerUpload("tok", { uploaded: 0, rejected: [] }, form(pdf()));
-    expect(res.uploaded).toBe(1);
+    await expect(finishCustomerUpload("tok", 1)).resolves.toBeUndefined();
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
 
-  it("sendet keine E-Mail, wenn kein Upload erfolgreich war", async () => {
-    processUpload.mockResolvedValue({ ok: false, fileName: "a.pdf", reason: "abgelehnt" });
-    await customerUpload("tok", { uploaded: 0, rejected: [] }, form(pdf()));
+  it("sendet keine E-Mail, wenn keine Datei erfolgreich war (count 0)", async () => {
+    await finishCustomerUpload("tok", 0);
     expect(sendEmail).not.toHaveBeenCalled();
   });
 });

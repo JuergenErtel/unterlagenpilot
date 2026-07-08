@@ -12,14 +12,15 @@ import { audit } from "@/lib/audit";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
 import { buildUploadNotification } from "@/lib/email/notifications";
 
-export interface CustomerUploadState {
+export interface UploadState {
   uploaded: number;
   rejected: { name: string; reason: string }[];
   error?: string;
 }
 
-/** Gleiche Form wie CustomerUploadState – eigener Alias für den Vermittler-Flow. */
-export type BrokerUploadState = CustomerUploadState;
+/** Kompatible Aliase für Kunden- bzw. Vermittler-Flow. */
+export type CustomerUploadState = UploadState;
+export type BrokerUploadState = UploadState;
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -28,15 +29,15 @@ async function clientIp(): Promise<string> {
 }
 
 /**
- * Kunden-Upload über sicheren Token-Link. Validierung, Virenscan und OCR/KI
- * laufen in der gesicherten Pipeline; abgelehnte Dateien werden dem Kunden
- * verständlich gemeldet, ohne interne Details preiszugeben.
+ * Kunden-Upload über sicheren Token-Link – EINE Datei pro Aufruf.
+ *
+ * Der Client lädt die Dateien einzeln nacheinander hoch (statt alle in einem
+ * Request). So bleibt jeder Request klein genug für das Plattform-Body-Limit
+ * (Vercel deckelt Function-Requests unter dem Framework-Limit) – große
+ * Sammel-Uploads (z.B. 15 Fotos) schlagen sonst komplett fehl.
+ * Die einmalige Broker-Benachrichtigung erfolgt separat über `finishCustomerUpload`.
  */
-export async function customerUpload(
-  token: string,
-  _prev: CustomerUploadState,
-  formData: FormData
-): Promise<CustomerUploadState> {
+export async function customerUploadOne(token: string, formData: FormData): Promise<UploadState> {
   const access = await requireUploadTokenAccess(token);
   if (!access) return { uploaded: 0, rejected: [], error: "Upload-Link ungültig oder abgelaufen." };
 
@@ -46,72 +47,78 @@ export async function customerUpload(
     return { uploaded: 0, rejected: [], error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
   }
 
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) return { uploaded: 0, rejected: [], error: "Bitte mindestens eine Datei auswählen." };
+  const file = formData.get("files");
+  if (!(file instanceof File) || file.size === 0) {
+    return { uploaded: 0, rejected: [], error: "Keine Datei empfangen." };
+  }
 
   const caseRow = await prisma.case.findUnique({
     where: { id: access.caseId },
-    include: {
-      applicants: { orderBy: { position: "asc" }, take: 1 },
-      broker: { select: { email: true, name: true } },
-    },
+    include: { applicants: { orderBy: { position: "asc" }, take: 1 } },
   });
   const applicant = caseRow?.applicants[0];
   const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await processUpload({
+    organizationId: access.organizationId,
+    caseId: access.caseId,
+    file: { name: file.name, type: file.type, size: file.size, buffer },
+    uploadSource: "kunde",
+    applicantName,
+    applicantId: applicant?.id ?? null,
+  });
+
+  if (result.ok) {
+    await prisma.uploadLink.update({
+      where: { id: access.linkId },
+      data: { usedCount: { increment: 1 } },
+    });
+    return { uploaded: 1, rejected: [] };
+  }
+  return { uploaded: 0, rejected: [{ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
+}
+
+/**
+ * Schliesst einen Kunden-Sammel-Upload ab: EINE Broker-Benachrichtigung für alle
+ * Dateien zusammen (statt pro Datei) und Revalidierung. `uploaded` = Anzahl der
+ * erfolgreich übernommenen Dateien.
+ */
+export async function finishCustomerUpload(token: string, uploaded: number): Promise<void> {
+  const access = await requireUploadTokenAccess(token);
+  if (!access) return;
 
   await audit({
     organizationId: access.organizationId,
     action: "upload_link.accessed",
     entityType: "case",
     entityId: access.caseId,
-    metadata: { linkId: access.linkId, files: files.length, ip: await clientIp() },
+    metadata: { linkId: access.linkId, files: uploaded, ip: await clientIp() },
   });
 
-  const rejected: { name: string; reason: string }[] = [];
-  let uploaded = 0;
-  let successfulUploads = 0;
-
-  for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await processUpload({
-      organizationId: access.organizationId,
-      caseId: access.caseId,
-      file: { name: file.name, type: file.type, size: file.size, buffer },
-      uploadSource: "kunde",
-      applicantName,
-      applicantId: applicant?.id ?? null,
+  if (uploaded > 0) {
+    const caseRow = await prisma.case.findUnique({
+      where: { id: access.caseId },
+      include: {
+        applicants: { orderBy: { position: "asc" }, take: 1 },
+        broker: { select: { email: true, name: true } },
+      },
     });
-    if (result.ok) {
-      uploaded += 1;
-      successfulUploads += 1;
-    } else {
-      rejected.push({ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." });
-    }
-  }
-
-  if (successfulUploads > 0) {
-    await prisma.uploadLink.update({
-      where: { id: access.linkId },
-      data: { usedCount: { increment: successfulUploads } },
-    });
-    await notifyBrokerOfUpload(caseRow, applicantName, successfulUploads);
+    const applicant = caseRow?.applicants[0];
+    const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
+    await notifyBrokerOfUpload(caseRow, applicantName, uploaded);
   }
 
   revalidatePath(`/upload/${token}`);
   revalidatePath(`/cases/${access.caseId}`);
-  return { uploaded, rejected };
 }
 
 /**
- * Vermittler-Upload direkt in einen Fall (ohne Kunden-Link). Nutzt dieselbe
- * gesicherte Pipeline (Validierung, Virenscan, OCR/KI). Die Antragsteller-Zuordnung
- * wählt der Vermittler über applicantPosition ("1" | "2" | "none").
+ * Vermittler-Upload direkt in einen Fall (ohne Kunden-Link) – EINE Datei pro Aufruf.
+ * Gleiche gesicherte Pipeline; Antragsteller-Zuordnung über applicantPosition
+ * ("1" | "2" | "none"). Revalidierung erfolgt gesammelt über `finishBrokerUpload`.
  */
-export async function brokerUpload(
-  caseId: string,
-  _prev: BrokerUploadState,
-  formData: FormData
-): Promise<BrokerUploadState> {
+export async function brokerUploadOne(caseId: string, formData: FormData): Promise<UploadState> {
   const { ctx } = await requireCaseAccess(caseId);
 
   const env = getEnv();
@@ -124,8 +131,10 @@ export async function brokerUpload(
     return { uploaded: 0, rejected: [], error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
   }
 
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) return { uploaded: 0, rejected: [], error: "Bitte mindestens eine Datei auswählen." };
+  const file = formData.get("files");
+  if (!(file instanceof File) || file.size === 0) {
+    return { uploaded: 0, rejected: [], error: "Keine Datei empfangen." };
+  }
 
   // Antragsteller-Zuordnung auflösen (Vorauswahl 1; "none" = keine Zuordnung).
   const position = String(formData.get("applicantPosition") ?? "1");
@@ -142,25 +151,24 @@ export async function brokerUpload(
     }
   }
 
-  const rejected: { name: string; reason: string }[] = [];
-  let uploaded = 0;
-  for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await processUpload({
-      organizationId: ctx.organizationId,
-      caseId,
-      file: { name: file.name, type: file.type, size: file.size, buffer },
-      uploadSource: "vermittler",
-      applicantName,
-      applicantId,
-      actorUserId: ctx.userId,
-    });
-    if (result.ok) uploaded += 1;
-    else rejected.push({ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." });
-  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await processUpload({
+    organizationId: ctx.organizationId,
+    caseId,
+    file: { name: file.name, type: file.type, size: file.size, buffer },
+    uploadSource: "vermittler",
+    applicantName,
+    applicantId,
+    actorUserId: ctx.userId,
+  });
+  if (result.ok) return { uploaded: 1, rejected: [] };
+  return { uploaded: 0, rejected: [{ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
+}
 
+/** Schliesst einen Vermittler-Sammel-Upload ab (einmalige Revalidierung). */
+export async function finishBrokerUpload(caseId: string): Promise<void> {
+  await requireCaseAccess(caseId);
   revalidatePath(`/cases/${caseId}`);
-  return { uploaded, rejected };
 }
 
 /**

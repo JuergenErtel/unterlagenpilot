@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertTriangle, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { brokerUpload, type BrokerUploadState } from "@/lib/actions/upload";
+import { brokerUploadOne, finishBrokerUpload } from "@/lib/actions/upload";
+import { uploadFilesSequentially, type UploadOutcome, type UploadProgress } from "@/lib/upload/client-upload";
 
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
@@ -16,8 +17,9 @@ export interface BrokerUploadApplicant {
 
 /**
  * Vermittler-Upload direkt im Fall-Cockpit: beliebige Dokumente selbst hochladen,
- * Antragsteller-Zuordnung wählbar. Nutzt dieselbe gesicherte Pipeline wie der
- * Kunden-Upload. Bewusst eigene Komponente (kein Refactoring der Kunden-Form).
+ * Antragsteller-Zuordnung wählbar. Dateien werden EINZELN nacheinander hochgeladen
+ * (siehe client-upload), damit auch große Sammel-Uploads zuverlässig durchlaufen.
+ * Nutzt dieselbe gesicherte Pipeline wie der Kunden-Upload.
  */
 export function BrokerUploadForm({
   caseId,
@@ -28,14 +30,14 @@ export function BrokerUploadForm({
   maxMb: number;
   applicants: BrokerUploadApplicant[];
 }) {
-  const action = brokerUpload.bind(null, caseId);
-  const [state, formAction, pending] = useActionState<BrokerUploadState, FormData>(action, {
-    uploaded: 0,
-    rejected: [],
-  });
-
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const [result, setResult] = useState<UploadOutcome | null>(null);
+  const [applicantPosition, setApplicantPosition] = useState<string>(
+    applicants.length > 0 ? String(applicants[0]!.position) : "none"
+  );
   const hiddenInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,10 +46,6 @@ export function BrokerUploadForm({
     files.forEach((f) => dt.items.add(f));
     hiddenInput.current.files = dt.files;
   }, [files]);
-
-  useEffect(() => {
-    if (state.uploaded > 0) setFiles([]);
-  }, [state]);
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -62,8 +60,31 @@ export function BrokerUploadForm({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || files.length === 0) return;
+    setBusy(true);
+    setResult(null);
+    setProgress({ done: 0, total: files.length });
+    try {
+      const outcome = await uploadFilesSequentially(
+        files,
+        (fd) => brokerUploadOne(caseId, fd),
+        { extraFields: { applicantPosition }, onProgress: setProgress }
+      );
+      await finishBrokerUpload(caseId);
+      setResult(outcome);
+      if (outcome.uploaded > 0) setFiles([]);
+    } catch {
+      setResult({ uploaded: 0, rejected: [], error: "Upload fehlgeschlagen. Bitte erneut versuchen." });
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <input ref={hiddenInput} type="file" name="files" multiple className="hidden" tabIndex={-1} aria-hidden />
 
       {applicants.length > 0 ? (
@@ -71,7 +92,9 @@ export function BrokerUploadForm({
           <span className="font-medium">Antragsteller zuordnen</span>
           <select
             name="applicantPosition"
-            defaultValue={String(applicants[0]!.position)}
+            value={applicantPosition}
+            onChange={(e) => setApplicantPosition(e.target.value)}
+            disabled={busy}
             className="h-9 rounded-md border bg-background px-3 text-sm"
           >
             {applicants.map((a) => (
@@ -82,9 +105,7 @@ export function BrokerUploadForm({
             <option value="none">Nicht zuordnen</option>
           </select>
         </label>
-      ) : (
-        <input type="hidden" name="applicantPosition" value="none" />
-      )}
+      ) : null}
 
       <div
         onDragOver={(e) => {
@@ -110,6 +131,7 @@ export function BrokerUploadForm({
             multiple
             accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
             className="sr-only"
+            disabled={busy}
             onChange={(e) => {
               addFiles(e.target.files);
               e.target.value = "";
@@ -126,6 +148,7 @@ export function BrokerUploadForm({
             accept="image/*"
             capture="environment"
             className="sr-only"
+            disabled={busy}
             onChange={(e) => {
               addFiles(e.target.files);
               e.target.value = "";
@@ -146,7 +169,7 @@ export function BrokerUploadForm({
                 onClick={() => removeFile(i)}
                 aria-label={`${f.name} entfernen`}
                 className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted"
-                disabled={pending}
+                disabled={busy}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -155,34 +178,48 @@ export function BrokerUploadForm({
         </ul>
       ) : null}
 
-      <Button type="submit" size="lg" className="w-full" disabled={pending || files.length === 0}>
-        {pending
-          ? "Wird geprüft … bitte Seite geöffnet lassen"
+      {busy && progress ? (
+        <div className="space-y-1.5">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-ai transition-all"
+              style={{ width: `${progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)}%` }}
+            />
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Lade {Math.min(progress.done + 1, progress.total)} von {progress.total} hoch … bitte Seite geöffnet lassen
+          </p>
+        </div>
+      ) : null}
+
+      <Button type="submit" size="lg" className="w-full" disabled={busy || files.length === 0}>
+        {busy
+          ? "Wird geprüft …"
           : files.length > 0
             ? `${files.length} Datei(en) hochladen`
             : "Hochladen"}
       </Button>
 
-      {state.error ? (
+      {result?.error ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-          {state.error}
+          {result.error}
         </p>
       ) : null}
 
-      {state.uploaded > 0 ? (
+      {result && result.uploaded > 0 ? (
         <p className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success-foreground">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          {state.uploaded} Datei(en) hochgeladen und automatisch klassifiziert.
+          {result.uploaded} Datei(en) hochgeladen und automatisch klassifiziert.
         </p>
       ) : null}
 
-      {state.rejected.length > 0 ? (
+      {result && result.rejected.length > 0 ? (
         <div className="space-y-1.5 rounded-md bg-warning/10 px-3 py-2 text-sm" role="alert">
           <div className="flex items-center gap-2 font-medium text-warning-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" /> Einige Dateien wurden nicht übernommen
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {state.rejected.map((r, i) => (
+            {result.rejected.map((r, i) => (
               <li key={i}>
                 <span className="font-medium text-foreground">{r.name}</span>: {r.reason}
               </li>

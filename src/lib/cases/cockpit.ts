@@ -14,7 +14,7 @@ export interface CockpitData {
   scoreLabel: string;
   blockers: string[];
   platformReadiness: Array<{ platform: Platform; percent: number; missingFields: number; missingDocs: number }>;
-  roadmap: Array<{ title: string; tone: Tone; summary: string; blocker?: string; action?: { label: string; href: string } }>;
+  roadmap: Array<{ title: string; tone: Tone; summary: string; blocker?: string; action?: { label: string; href: string }; actions?: Array<{ label: string; href: string; variant?: "default" | "outline" }> }>;
   nextActions: Array<{ title: string; detail?: string; href?: string; tone?: Tone }>;
   missingGroups: Array<{
     key: string;
@@ -74,7 +74,10 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       title: "Dokumente",
       tone: agg.missing.length > 0 ? "review" : "ready",
       summary: `${docsPresent} vorhanden, ${agg.missing.length} fehlen.`,
-      action: { label: "Upload-Link erstellen", href: `/cases/${caseId}` },
+      actions: [
+        { label: "Selbst hochladen", href: `/cases/${caseId}?tab=dokumente#broker-upload`, variant: "default" },
+        { label: "Upload-Link erstellen", href: `/cases/${caseId}#upload-link` },
+      ],
     },
     {
       title: "KI-Auswertung",

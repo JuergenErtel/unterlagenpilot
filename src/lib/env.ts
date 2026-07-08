@@ -23,7 +23,8 @@ const envSchema = z.object({
   // Rate-Limiting (in-memory; produktiv: zentraler Store wie Upstash/Redis)
   LOGIN_RATE_MAX: z.coerce.number().int().min(1).default(5),
   LOGIN_RATE_WINDOW_SEC: z.coerce.number().int().min(10).default(300),
-  UPLOAD_RATE_MAX: z.coerce.number().int().min(1).default(30),
+  // Pro-Datei-Uploads: höheres Limit, da jede Datei ein eigener Request ist.
+  UPLOAD_RATE_MAX: z.coerce.number().int().min(1).default(60),
   UPLOAD_RATE_WINDOW_SEC: z.coerce.number().int().min(10).default(600),
 
   STORAGE_PROVIDER: z.enum(["local", "s3", "supabase"]).default("local"),

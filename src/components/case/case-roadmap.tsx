@@ -11,6 +11,8 @@ export interface RoadmapStep {
   summary: string;
   blocker?: string;
   action?: { label: string; href: string };
+  /** Mehrere Aktionen (z.B. „Selbst hochladen" + „Upload-Link erstellen"). Hat Vorrang vor `action`. */
+  actions?: Array<{ label: string; href: string; variant?: "default" | "outline" }>;
 }
 
 /** Vertikale Roadmap des Falls: Kundendaten → … → Plattform-Export. */
@@ -39,11 +41,19 @@ export function CaseRoadmap({ steps }: { steps: RoadmapStep[] }) {
               {s.blocker && <Badge variant="destructive">{s.blocker}</Badge>}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">{s.summary}</p>
-            {s.action && (
+            {s.actions && s.actions.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {s.actions.map((a) => (
+                  <Button key={`${a.href}|${a.label}`} asChild size="sm" variant={a.variant ?? "outline"}>
+                    <Link href={a.href}>{a.label}</Link>
+                  </Button>
+                ))}
+              </div>
+            ) : s.action ? (
               <Button asChild size="sm" variant="outline" className="mt-2">
                 <Link href={s.action.href}>{s.action.label}</Link>
               </Button>
-            )}
+            ) : null}
           </div>
         </li>
       ))}
