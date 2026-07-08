@@ -30,21 +30,46 @@ interface EditRow {
   cells: Record<number, number | null>;
 }
 
+interface SelfEmploymentEntry {
+  firma: string;
+  rechtsform: string;
+  gruendungsjahr: number | null;
+}
+
+function deriveSelfEmploymentEntry(
+  map: Record<number, SelfEmploymentEntry>,
+  position: number
+): SelfEmploymentEntry {
+  return map[position] ?? { firma: "", rechtsform: "", gruendungsjahr: null };
+}
+
 export function EinkommenEditor({
   caseId,
   applicants,
-  selfEmployment,
+  selfEmploymentByPosition,
 }: {
   caseId: string;
   applicants: Array<{ position: number; name: string }>;
-  selfEmployment: { position: number; firma: string; rechtsform: string; gruendungsjahr: number | null } | null;
+  selfEmploymentByPosition: Record<number, SelfEmploymentEntry>;
 }) {
   const [applicantPosition, setApplicantPosition] = useState<number>(applicants[0]?.position ?? 1);
-  const [firma, setFirma] = useState(selfEmployment?.firma ?? "");
-  const [rechtsform, setRechtsform] = useState(selfEmployment?.rechtsform ?? "");
-  const [gruendungsjahr, setGruendungsjahr] = useState(
-    selfEmployment?.gruendungsjahr ? String(selfEmployment.gruendungsjahr) : ""
+  const [firma, setFirma] = useState(
+    () => deriveSelfEmploymentEntry(selfEmploymentByPosition, applicantPosition).firma
   );
+  const [rechtsform, setRechtsform] = useState(
+    () => deriveSelfEmploymentEntry(selfEmploymentByPosition, applicantPosition).rechtsform
+  );
+  const [gruendungsjahr, setGruendungsjahr] = useState(() => {
+    const jahr = deriveSelfEmploymentEntry(selfEmploymentByPosition, applicantPosition).gruendungsjahr;
+    return jahr ? String(jahr) : "";
+  });
+
+  useEffect(() => {
+    const entry = deriveSelfEmploymentEntry(selfEmploymentByPosition, applicantPosition);
+    setFirma(entry.firma);
+    setRechtsform(entry.rechtsform);
+    setGruendungsjahr(entry.gruendungsjahr ? String(entry.gruendungsjahr) : "");
+  }, [applicantPosition, selfEmploymentByPosition]);
 
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);

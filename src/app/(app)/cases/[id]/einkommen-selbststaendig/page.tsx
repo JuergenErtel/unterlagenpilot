@@ -33,16 +33,22 @@ export default async function EinkommenPage({
     name: [a.vorname, a.nachname].filter(Boolean).join(" "),
   }));
 
-  const defaultApplicant = caseRow.applicants[0];
-  const record = defaultApplicant?.selfEmployment[0];
-  const selfEmployment = defaultApplicant
-    ? {
-        position: defaultApplicant.position,
-        firma: record?.firma ?? "",
-        rechtsform: record?.rechtsform ?? "",
-        gruendungsjahr: record?.gruendungsdatum ? record.gruendungsdatum.getUTCFullYear() : null,
-      }
-    : null;
+  const selfEmploymentByPosition: Record<
+    number,
+    { firma: string; rechtsform: string; gruendungsjahr: number | null }
+  > = Object.fromEntries(
+    caseRow.applicants.map((a) => {
+      const record = a.selfEmployment[0];
+      return [
+        a.position,
+        {
+          firma: record?.firma ?? "",
+          rechtsform: record?.rechtsform ?? "",
+          gruendungsjahr: record?.gruendungsdatum ? record.gruendungsdatum.getUTCFullYear() : null,
+        },
+      ];
+    })
+  );
 
   return (
     <div className="space-y-6">
@@ -59,7 +65,11 @@ export default async function EinkommenPage({
           </Button>
         }
       />
-      <EinkommenEditor caseId={id} applicants={applicants} selfEmployment={selfEmployment} />
+      <EinkommenEditor
+        caseId={id}
+        applicants={applicants}
+        selfEmploymentByPosition={selfEmploymentByPosition}
+      />
     </div>
   );
 }
