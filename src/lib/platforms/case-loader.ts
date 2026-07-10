@@ -1,5 +1,17 @@
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { CanonicalCase } from "@/lib/domain/canonical";
+
+/** Alle Relationen, die das kanonische Modell benötigt. */
+const CANONICAL_INCLUDE = {
+  applicants: { include: { employment: true, income: true }, orderBy: { position: "asc" } },
+  property: true,
+  financingRequest: true,
+  liabilities: true,
+  assets: true,
+} satisfies Prisma.CaseInclude;
+
+type CaseWithRelations = Prisma.CaseGetPayload<{ include: typeof CANONICAL_INCLUDE }>;
 
 /**
  * Lädt einen Fall aus der DB und überführt ihn in das kanonische Modell.
@@ -8,15 +20,24 @@ import type { CanonicalCase } from "@/lib/domain/canonical";
 export async function caseToCanonical(caseId: string): Promise<CanonicalCase> {
   const c = await prisma.case.findUniqueOrThrow({
     where: { id: caseId },
-    include: {
-      applicants: { include: { employment: true, income: true }, orderBy: { position: "asc" } },
-      property: true,
-      financingRequest: true,
-      liabilities: true,
-      assets: true,
-    },
+    include: CANONICAL_INCLUDE,
   });
+  return mapCaseToCanonical(c);
+}
 
+/**
+ * Batch-Variante: lädt viele Fälle in EINER Query. Für Übersichten (Dashboard),
+ * die sonst pro Fall eine eigene Abfrage bräuchten (N+1).
+ */
+export async function casesToCanonical(
+  where: Prisma.CaseWhereInput
+): Promise<Map<string, CanonicalCase>> {
+  const rows = await prisma.case.findMany({ where, include: CANONICAL_INCLUDE });
+  return new Map(rows.map((c) => [c.id, mapCaseToCanonical(c)]));
+}
+
+/** Reine Abbildung Prisma-Zeile → kanonisches Modell (ohne I/O). */
+export function mapCaseToCanonical(c: CaseWithRelations): CanonicalCase {
   return {
     caseNumber: c.caseNumber,
     financingType: c.financingType ?? undefined,
@@ -101,6 +122,8 @@ export async function caseToCanonical(caseId: string): Promise<CanonicalCase> {
       maklerprovisionProzent: c.financingRequest?.maklerprovisionProzent ?? undefined,
       eigenkapital: c.financingRequest?.eigenkapital ?? undefined,
       darlehenswunsch: c.financingRequest?.darlehenswunsch ?? undefined,
+      darlehensbetrag: c.darlehensbetrag ?? undefined,
+      sollzinsProzent: c.sollzinsProzent ?? undefined,
       kapitalanlage: c.kapitalanlage,
       selbstnutzung: c.selbstnutzung,
     },

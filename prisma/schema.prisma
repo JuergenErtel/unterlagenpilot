@@ -38,8 +38,23 @@ enum CaseStatus {
   einreichungsfertig
   exportiert
   uebertragen
+  bank_nachforderung
   abgeschlossen
   archiviert
+}
+
+enum CaseNoteKind {
+  notiz
+  telefon
+  email
+  wiedervorlage
+}
+
+enum DeadlineKind {
+  zinsbindung
+  notartermin
+  nachreichung
+  sonstige
 }
 
 enum CaseSourceType {
@@ -200,6 +215,9 @@ enum MessageTemplateType {
   unterlage_fehlt_weiterhin
   pdf_checkliste
   interne_notiz
+  status_eingereicht
+  status_nachforderung
+  status_genehmigt
 }
 
 enum PlanTier {
@@ -283,6 +301,7 @@ model User {
 
   casesAsBroker Case[]       @relation("CaseBroker")
   auditLogs     AuditLog[]
+  caseNotes     CaseNote[]
 
   @@index([organizationId])
   @@map("users")
@@ -360,11 +379,26 @@ model Case {
   broker         User?    @relation("CaseBroker", fields: [brokerId], references: [id], onDelete: SetNull)
 
   status         CaseStatus    @default(neu)
+  // Status vor dem Archivieren – beim Entarchivieren wiederhergestellt, damit ein
+  // abgeschlossener Fall nicht als "Unterlagen fehlen" zurückkommt.
+  statusBeforeArchive CaseStatus?
   financingType  FinancingType?
   primaryEmploymentType EmploymentType?
   kapitalanlage  Boolean       @default(false)
   selbstnutzung  Boolean       @default(true)
   vermieteterAnteil Int?
+
+  // Ziel-/einreichende Bank (steuert bankindividuelle Anforderungen & Aufbereitung)
+  bankName       String?
+  // Manuelle Wiedervorlage (Vermittler legt einen Termin fest)
+  wiedervorlage  DateTime?
+
+  // Abschlussdaten (Provisions-/Pipeline-Tracking) – erst nach Zusage relevant
+  abschlussBank    String?
+  darlehensbetrag  Float?
+  sollzinsProzent  Float?
+  courtageProzent  Float?
+  abschlussdatum   DateTime?
 
   // Plattform-IDs
   finlinkId          String?
@@ -400,10 +434,42 @@ model Case {
   aiJobs             AiJob[]
   plausibilityChecks PlausibilityCheck[]
   wohnflaechen       WohnflaechenBerechnung[]
+  caseNotes          CaseNote[]
+  deadlines          CaseDeadline[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
   @@map("cases")
+}
+
+// Kontakthistorie / Notizen am Fall (Telefonnotizen, Wiedervorlagen, freie Notizen).
+model CaseNote {
+  id        String       @id @default(cuid())
+  caseId    String
+  case      Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  kind      CaseNoteKind @default(notiz)
+  body      String
+  createdAt DateTime     @default(now())
+
+  @@index([caseId, createdAt])
+  @@map("case_notes")
+}
+
+// Fristen am Fall (Zinsbindung Angebot, Notartermin, Nachreichfrist der Bank …).
+model CaseDeadline {
+  id        String       @id @default(cuid())
+  caseId    String
+  case      Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kind      DeadlineKind @default(sonstige)
+  title     String
+  dueDate   DateTime
+  done      Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  @@index([caseId, dueDate])
+  @@map("case_deadlines")
 }
 
 model CaseSource {
@@ -808,8 +874,13 @@ model MissingDocumentRequest {
   level          RequirementLevel @default(zwingend)
   platform       String?  // europace|finlink|ehyp_home|allgemein
   bank           String?
+  // "bank" = von der Bank nachgefordert (nach Einreichung), sonst systemseitig erkannt.
+  requestSource  String   @default("system")
+  // Frist, bis wann die Unterlage nachgereicht sein muss (Bank-Nachforderung).
+  dueDate        DateTime?
   customerVisible Boolean @default(true)
   resolved       Boolean  @default(false)
+  resolvedAt     DateTime?
   createdAt      DateTime @default(now())
 
   @@index([caseId])

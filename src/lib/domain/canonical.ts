@@ -93,6 +93,10 @@ export interface CanonicalFinancing {
   maklerprovisionProzent?: number;
   eigenkapital?: number;
   darlehenswunsch?: number;
+  /** Konkreter Darlehensbetrag nach Zusage (falls bekannt). */
+  darlehensbetrag?: number;
+  /** Sollzins nach Angebot (% p. a.), falls bekannt – sonst Stress-Annahme. */
+  sollzinsProzent?: number;
   kapitalanlage?: boolean;
   selbstnutzung?: boolean;
 }

@@ -26,6 +26,7 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
       { href: "/cases", label: "Fälle", icon: FolderOpen },
       { href: "/review", label: "Review-Center", icon: ScanSearch },
       { href: "/messages", label: "Nachrichten", icon: Send },
+      { href: "/pipeline", label: "Abschlüsse", icon: BadgeEuro },
     ],
   },
   {

@@ -23,10 +23,22 @@ export const CASE_STATUSES = [
   "einreichungsfertig",
   "exportiert",
   "uebertragen",
+  "bank_nachforderung",
   "abgeschlossen",
   "archiviert",
 ] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
+
+/**
+ * Fälle in diesen Status sind fachlich abgeschlossen: die KI-Prüfung darf sie
+ * nicht mehr verändern (sonst würde ein bereits eingereichter Stand überschrieben).
+ */
+export const LOCKED_CASE_STATUSES: ReadonlySet<CaseStatus> = new Set<CaseStatus>([
+  "exportiert",
+  "uebertragen",
+  "abgeschlossen",
+  "archiviert",
+]);
 
 export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   neu: "Neu",
@@ -36,10 +48,60 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   unterlagen_fehlen: "Unterlagen fehlen",
   einreichungsfertig: "Einreichungsfertig",
   exportiert: "Exportiert",
-  uebertragen: "Übertragen",
+  uebertragen: "Bei Bank eingereicht",
+  bank_nachforderung: "Bank-Nachforderung",
   abgeschlossen: "Abgeschlossen",
   archiviert: "Archiviert",
 };
+
+/** Art eines Fall-Vermerks (Kontakthistorie). */
+export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "wiedervorlage"] as const;
+export type CaseNoteKind = (typeof CASE_NOTE_KINDS)[number];
+
+export const CASE_NOTE_KIND_LABELS: Record<CaseNoteKind, string> = {
+  notiz: "Notiz",
+  telefon: "Telefonat",
+  email: "E-Mail",
+  wiedervorlage: "Wiedervorlage",
+};
+
+/** Art einer Frist am Fall. */
+export const DEADLINE_KINDS = ["zinsbindung", "notartermin", "nachreichung", "sonstige"] as const;
+export type DeadlineKind = (typeof DEADLINE_KINDS)[number];
+
+export const DEADLINE_KIND_LABELS: Record<DeadlineKind, string> = {
+  zinsbindung: "Zinsbindung Angebot",
+  notartermin: "Notartermin",
+  nachreichung: "Nachreichfrist Bank",
+  sonstige: "Sonstige Frist",
+};
+
+/**
+ * Häufige Banken/Produktgeber in der Baufinanzierung (Auswahl am Fall). Bewusst
+ * eine kuratierte Liste + Freitext, keine erschöpfende Enum – Vermittler nutzen
+ * je nach Pool unterschiedliche Häuser.
+ */
+export const COMMON_BANKS = [
+  "ING",
+  "DSL Bank",
+  "Deutsche Bank",
+  "Commerzbank",
+  "Sparkasse",
+  "Volksbank Raiffeisenbank",
+  "PSD Bank",
+  "Münchener Hypothekenbank",
+  "DKB",
+  "Santander",
+  "Postbank",
+  "Sparda-Bank",
+  "BHW",
+  "Wüstenrot",
+  "Allianz",
+  "R+V",
+  "Debeka",
+  "Hypofriend",
+  "Interhyp",
+] as const;
 
 /** Startpunkt / Herkunft eines Falls */
 export const CASE_SOURCE_TYPES = [
@@ -61,6 +123,15 @@ export const FINANCING_TYPES = [
   "kapitalbeschaffung",
 ] as const;
 export type FinancingType = (typeof FINANCING_TYPES)[number];
+
+export const FINANCING_TYPE_LABELS: Record<FinancingType, string> = {
+  kauf: "Kauf einer Bestandsimmobilie",
+  neubau: "Neubau",
+  anschlussfinanzierung: "Anschlussfinanzierung",
+  umschuldung: "Umschuldung",
+  modernisierung: "Modernisierung",
+  kapitalbeschaffung: "Kapitalbeschaffung",
+};
 
 /** Beschäftigungsart / Kundentyp */
 export const EMPLOYMENT_TYPES = [
@@ -98,6 +169,15 @@ export const MARITAL_STATUSES = [
 ] as const;
 export type MaritalStatus = (typeof MARITAL_STATUSES)[number];
 
+export const MARITAL_STATUS_LABELS: Record<MaritalStatus, string> = {
+  ledig: "Ledig",
+  verheiratet: "Verheiratet",
+  geschieden: "Geschieden",
+  verwitwet: "Verwitwet",
+  eingetragene_partnerschaft: "Eingetragene Partnerschaft",
+  getrennt_lebend: "Getrennt lebend",
+};
+
 /** Objektart */
 export const PROPERTY_TYPES = [
   "einfamilienhaus",
@@ -125,6 +205,12 @@ export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
 /** Nutzung */
 export const USAGE_TYPES = ["selbstnutzung", "vermietet", "gemischt"] as const;
 export type UsageType = (typeof USAGE_TYPES)[number];
+
+export const USAGE_TYPE_LABELS: Record<UsageType, string> = {
+  selbstnutzung: "Selbstnutzung",
+  vermietet: "Vermietet",
+  gemischt: "Teils selbst genutzt, teils vermietet",
+};
 
 /** Dokumenttypen – MVP-Pflicht + vorbereitete Erweiterung */
 export const DOCUMENT_TYPES = [
@@ -211,6 +297,14 @@ export const DOCUMENT_REVIEW_STATUSES = [
 ] as const;
 export type DocumentReviewStatus = (typeof DOCUMENT_REVIEW_STATUSES)[number];
 
+export const DOCUMENT_REVIEW_STATUS_LABELS: Record<DocumentReviewStatus, string> = {
+  offen: "Prüfbereit",
+  akzeptiert: "Akzeptiert",
+  abgelehnt: "Abgelehnt",
+  ersetzt: "Ersetzt",
+  duplikat: "Duplikat",
+};
+
 /** Sicherheits-/Scan-Status eines Uploads */
 export const DOCUMENT_SCAN_STATUSES = [
   "uploaded",
@@ -222,6 +316,18 @@ export const DOCUMENT_SCAN_STATUSES = [
   "ready_for_ocr",
 ] as const;
 export type DocumentScanStatus = (typeof DOCUMENT_SCAN_STATUSES)[number];
+
+/**
+ * Nur diese Status belegen einen abgeschlossenen, sauberen Virenscan. Alles
+ * andere (u. a. `virus_scan_failed`, `virus_scan_pending`) wird weder
+ * ausgeliefert noch exportiert – bewusst als Allowlist, damit ein neu
+ * hinzugefügter Status per Default gesperrt ist (fail-closed).
+ */
+export const DELIVERABLE_SCAN_STATUSES = ["virus_scan_clean", "ready_for_ocr"] as const;
+
+export function isDeliverableScanStatus(status: string): boolean {
+  return (DELIVERABLE_SCAN_STATUSES as readonly string[]).includes(status);
+}
 
 /** Schweregrad von Prüfungen / Warnungen */
 export const SEVERITIES = ["ok", "warnung", "kritisch", "fehlt"] as const;
@@ -275,6 +381,9 @@ export const MESSAGE_TEMPLATE_TYPES = [
   "unterlage_fehlt_weiterhin",
   "pdf_checkliste",
   "interne_notiz",
+  "status_eingereicht",
+  "status_nachforderung",
+  "status_genehmigt",
 ] as const;
 export type MessageTemplateType = (typeof MESSAGE_TEMPLATE_TYPES)[number];
 

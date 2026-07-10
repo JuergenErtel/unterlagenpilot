@@ -7,6 +7,7 @@ import { isEmailConfigured } from "@/lib/email/resend";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { MessagePreview } from "@/components/case/message-preview";
 import { SendEmailButton } from "@/components/case/send-email-button";
 import type { MessageChannel, MessageTemplateType } from "@/lib/domain/enums";
@@ -19,6 +20,9 @@ const ACTIONS: Array<{ type: MessageTemplateType; channel: MessageChannel; label
   { type: "datei_nicht_lesbar", channel: "email", label: "Datei nicht lesbar" },
   { type: "datei_veraltet", channel: "email", label: "Datei veraltet" },
   { type: "unterlage_fehlt_weiterhin", channel: "email", label: "Erinnerung" },
+  { type: "status_eingereicht", channel: "email", label: "Status: Bei Bank eingereicht" },
+  { type: "status_nachforderung", channel: "email", label: "Status: Bank-Nachforderung" },
+  { type: "status_genehmigt", channel: "email", label: "Status: Genehmigt" },
   { type: "interne_notiz", channel: "intern", label: "Interne Notiz" },
 ];
 
@@ -76,14 +80,22 @@ export default async function CaseMessagesPage({
             Fall <span className="font-mono tabular">{caseRecord.caseNumber}</span> · {kundenName}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {ACTIONS.map((a) => (
-            <form key={`${a.type}-${a.channel}`} action={generateMessage.bind(null, id, a.type, a.channel)}>
-              <Button size="sm" variant="outline" type="submit">
-                {a.label}
-              </Button>
-            </form>
-          ))}
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {ACTIONS.map((a) => (
+              <form key={`${a.type}-${a.channel}`} action={generateMessage.bind(null, id, a.type, a.channel)}>
+                <SubmitButton size="sm" variant="outline" pendingLabel="Wird erzeugt …">
+                  {a.label}
+                </SubmitButton>
+              </form>
+            ))}
+          </div>
+          {/* Diese Vorlagen erzeugen im Hintergrund einen frischen Upload-Link.
+              Das darf der Nutzer nicht erst am wachsenden Link-Bestand im Cockpit merken. */}
+          <p className="text-xs text-muted-foreground">
+            Erstnachforderung, Erinnerung und PDF-Checkliste enthalten einen neuen,
+            14 Tage gültigen Upload-Link. Versendet wird nichts automatisch.
+          </p>
         </CardContent>
       </Card>
 

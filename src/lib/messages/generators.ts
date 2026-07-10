@@ -192,6 +192,59 @@ ${warnings.length ? bulletList(warnings, "⚠") : "—"}`,
   };
 }
 
+// ---------------- Status-Updates nach der Einreichung ----------------
+
+export function buildSubmitted(ctx: MessageContext): GeneratedMessage {
+  return {
+    channel: "email",
+    subject: "Ihre Finanzierung wurde bei der Bank eingereicht",
+    body: `${anrede(ctx)}
+
+gute Nachrichten: Ihre vollständigen Unterlagen habe ich bei der Bank eingereicht. Die Bank prüft nun Ihren Antrag. Sobald mir eine Rückmeldung oder ein Angebot vorliegt, melde ich mich umgehend bei Ihnen.
+
+Sie müssen aktuell nichts weiter tun.
+
+Viele Grüße
+${SIGNATURE}`,
+  };
+}
+
+export function buildBankRequest(
+  missing: Array<{ title: string }>,
+  ctx: MessageContext
+): GeneratedMessage {
+  return {
+    channel: "email",
+    subject: "Rückfrage der Bank – noch eine Unterlage benötigt",
+    body: `${anrede(ctx)}
+
+die Bank hat Ihren Antrag geprüft und benötigt für die abschließende Entscheidung noch:
+
+${bulletList(missing)}
+
+Bitte laden Sie die Unterlage(n) zeitnah hier hoch, damit es ohne Verzögerung weitergeht:
+${link(ctx)}
+
+Viele Grüße
+${SIGNATURE}`,
+  };
+}
+
+export function buildApproved(ctx: MessageContext): GeneratedMessage {
+  return {
+    channel: "email",
+    subject: "Ihre Finanzierung wurde genehmigt",
+    body: `${anrede(ctx)}
+
+herzlichen Glückwunsch – die Bank hat Ihre Finanzierung genehmigt! Ich habe alle Unterlagen erhalten und melde mich mit den nächsten Schritten (Vertrag, Termine) bei Ihnen.
+
+Bei Fragen bin ich jederzeit für Sie da.
+
+Viele Grüße
+${SIGNATURE}`,
+  };
+}
+
 export function generateByType(
   type: MessageTemplateType,
   ctx: MessageContext,
@@ -212,5 +265,11 @@ export function generateByType(
       return buildPdfChecklistText(items, ctx);
     case "interne_notiz":
       return buildInternalNote(items, []);
+    case "status_eingereicht":
+      return buildSubmitted(ctx);
+    case "status_nachforderung":
+      return buildBankRequest(items.length ? items : [{ title: "die von der Bank genannte Unterlage" }], ctx);
+    case "status_genehmigt":
+      return buildApproved(ctx);
   }
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound } from "lucide-react";
+import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, ClipboardList, Banknote, CalendarClock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
@@ -23,11 +23,17 @@ import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
+import { ApplicantSelect } from "@/components/review/applicant-select";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
+import { SubmitButton } from "@/components/ui/submit-button";
 import {
+  CASE_STATUS_LABELS,
+  DOCUMENT_REVIEW_STATUS_LABELS,
+  LOCKED_CASE_STATUSES,
   type CaseStatus,
+  type DocumentReviewStatus,
   type DocumentType,
   type Severity,
 } from "@/lib/domain/enums";
@@ -68,8 +74,33 @@ export default async function CaseCockpitPage({
     usedCount: l.usedCount,
   }));
 
+  // Die KI-Prüfung verweigert bei diesen Status still den Dienst – das sagen wir
+  // dem Nutzer, statt einen Button anzubieten, auf dessen Klick nichts passiert.
+  const aiCheckLocked = LOCKED_CASE_STATUSES.has(caseRow.status as CaseStatus);
+
+  // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
+  // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
+  const mehrereAntragsteller = caseRow.applicants.length > 1;
+  const applicantSelectOptions = caseRow.applicants.map((a) => ({
+    id: a.id,
+    name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
+  }));
+  const istSelbststaendig =
+    caseRow.primaryEmploymentType === "selbststaendiger" ||
+    caseRow.primaryEmploymentType === "geschaeftsfuehrer" ||
+    caseRow.primaryEmploymentType === "gesellschafter";
+
   return (
     <div className="space-y-6">
+      {/* Rückweg zur Fallliste – auf Mobile (Sidebar eingeklappt) der einzige. */}
+      <Link
+        href="/cases"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Alle Fälle
+      </Link>
+
       {/* Hero / Case-Kopf */}
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center">
@@ -79,6 +110,15 @@ export default async function CaseCockpitPage({
               <h1 className="text-xl font-semibold tracking-tight">{cockpit.applicantNames}</h1>
               <span className="font-mono text-sm text-muted-foreground">{cockpit.caseNumber}</span>
               <CaseStatusBadge status={caseRow.status as CaseStatus} />
+              {caseRow.bankName && (
+                <Badge variant="neutral" className="gap-1"><Banknote className="h-3 w-3" />{caseRow.bankName}</Badge>
+              )}
+              {caseRow.wiedervorlage && (
+                <Badge variant={caseRow.wiedervorlage < new Date() ? "warning" : "neutral"} className="gap-1">
+                  <CalendarClock className="h-3 w-3" />
+                  WV {caseRow.wiedervorlage.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                </Badge>
+              )}
             </div>
             {cockpit.blockers.length > 0 && (
               <div className="mt-2 space-y-1">
@@ -138,6 +178,7 @@ export default async function CaseCockpitPage({
                         <TableRow>
                           <TableHead>Dateiname</TableHead>
                           <TableHead>Typ</TableHead>
+                          {mehrereAntragsteller && <TableHead>Antragsteller</TableHead>}
                           <TableHead>Konfidenz</TableHead>
                           <TableHead>Hinweise</TableHead>
                           <TableHead>Status</TableHead>
@@ -145,20 +186,30 @@ export default async function CaseCockpitPage({
                       </TableHeader>
                       <TableBody>
                         {documents.length === 0 && (
-                          <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
                         )}
                         {documents.map((d) => (
                           <TableRow key={d.id}>
                             <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
                             <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
+                            {mehrereAntragsteller && (
+                              <TableCell>
+                                <ApplicantSelect documentId={d.id} value={d.applicantId} applicants={applicantSelectOptions} />
+                              </TableCell>
+                            )}
                             <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
                             <TableCell>
-                              {d.reviewStatus === "offen"
-                                ? <Badge variant="ai">prüfbereit</Badge>
-                                : d.reviewStatus === "akzeptiert"
-                                  ? <Badge variant="success">akzeptiert</Badge>
-                                  : <Badge variant="neutral">{d.reviewStatus}</Badge>}
+                              {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
+                              {d.reviewStatus === "offen" ? (
+                                <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
+                              ) : d.reviewStatus === "akzeptiert" ? (
+                                <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+                              ) : (
+                                <Badge variant="neutral">
+                                  {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                                </Badge>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -239,14 +290,38 @@ export default async function CaseCockpitPage({
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">Aktionen</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
-              <form action={runAiCheck.bind(null, id)}><Button type="submit" variant="ai" className="w-full justify-start"><ScanSearch />KI-Prüfung starten</Button></form>
+              {aiCheckLocked ? (
+                <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                  Die KI-Prüfung ist gesperrt, weil der Fall bereits{" "}
+                  {CASE_STATUS_LABELS[caseRow.status as CaseStatus].toLowerCase()} ist.
+                </div>
+              ) : (
+                <form action={runAiCheck.bind(null, id)}>
+                  <SubmitButton variant="ai" className="w-full justify-start" pendingLabel="KI prüft die Unterlagen …">
+                    <ScanSearch />KI-Prüfung starten
+                  </SubmitButton>
+                </form>
+              )}
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Dokumente erzeugen</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><FileBarChart />Wohnflächenberechnung</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><FileBarChart />Selbständigen-Unterlagen → Bankzusammenfassung</Link></Button>
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><Ruler />Wohnflächenberechnung</Link></Button>
+              {/* Selbständigen-Werkzeug nur zeigen, wenn es zum Fall passt. */}
+              {istSelbststaendig && (
+                <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
+              )}
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
             </CardContent>

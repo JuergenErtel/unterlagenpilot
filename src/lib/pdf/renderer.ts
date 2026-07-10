@@ -465,3 +465,66 @@ export async function renderLageplan(data: LageplanData): Promise<Buffer> {
   footer(doc, data.broker);
   return docToBuffer(doc);
 }
+
+// ---------------------------------------------------------------------------
+// F) Übergabe-Deckblatt (bankfertiges Einreichpaket)
+// ---------------------------------------------------------------------------
+
+export interface HandoverData {
+  caseNumber: string;
+  dateStr: string;
+  broker: BrokerInfo;
+  bankName?: string;
+  applicants: string; // "Max & Erika Mustermann"
+  objekt?: string;
+  finanzierung?: string;
+  /** Beigefügte Unterlagen in Reihenfolge (Inhaltsverzeichnis). */
+  enthalten: string[];
+  /** Noch nachzureichen. */
+  nachreichen: string[];
+  /** Kurzfazit Haushaltsrechnung, optional. */
+  haushalt?: { ueberschuss: string; tragfaehig: boolean };
+  hinweis?: string;
+}
+
+export async function renderHandover(data: HandoverData): Promise<Buffer> {
+  const doc = newDoc(`Übergabe ${data.caseNumber}`);
+  coverHeader(
+    doc,
+    data.broker,
+    "Einreichungspaket – Übergabe",
+    `Vorgang ${data.caseNumber}${data.bankName ? " · " + data.bankName : ""}`,
+    data.dateStr
+  );
+
+  heading(doc, "Eckdaten");
+  kv(doc, "Antragsteller", data.applicants || "—");
+  if (data.objekt) kv(doc, "Objekt", data.objekt);
+  if (data.finanzierung) kv(doc, "Finanzierung", data.finanzierung);
+  if (data.bankName) kv(doc, "Einreichung bei", data.bankName);
+  if (data.haushalt) {
+    kv(doc, "Haushaltsrechnung", `Überschuss ${data.haushalt.ueberschuss} (${data.haushalt.tragfaehig ? "tragfähig" : "prüfen"})`);
+  }
+
+  heading(doc, `Beigefügte Unterlagen (${data.enthalten.length})`);
+  if (data.enthalten.length === 0) doc.text("Keine freigegebenen Unterlagen im Paket.");
+  data.enthalten.forEach((name, i) => {
+    doc.fillColor(COLORS.text).fontSize(10).text(`${String(i + 1).padStart(2, "0")}.  ${name}`, { width: 495 });
+    doc.moveDown(0.05);
+  });
+
+  heading(doc, `Noch nachzureichen (${data.nachreichen.length})`);
+  if (data.nachreichen.length === 0) {
+    doc.fillColor(COLORS.text).fontSize(10).text("Keine offenen Unterlagen – Paket vollständig.");
+  } else {
+    data.nachreichen.forEach((name) => bullet(doc, name, COLORS.warn));
+  }
+
+  if (data.hinweis) {
+    heading(doc, "Übergabenotiz");
+    doc.fillColor(COLORS.text).fontSize(10).text(data.hinweis, { width: 495 });
+  }
+
+  footer(doc, data.broker);
+  return docToBuffer(doc);
+}

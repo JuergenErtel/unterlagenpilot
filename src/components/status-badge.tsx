@@ -14,6 +14,7 @@ const CASE_VARIANT: Record<CaseStatus, "default" | "secondary" | "success" | "wa
   einreichungsfertig: "success",
   exportiert: "default",
   uebertragen: "success",
+  bank_nachforderung: "warning",
   abgeschlossen: "success",
   archiviert: "secondary",
 };

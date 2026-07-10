@@ -6,6 +6,7 @@ import {
   type ResolvedChecklistItem,
 } from "@/lib/checklists/engine";
 import { computeReadiness, type ReadinessResult } from "@/lib/documents/readiness";
+import { bankRequirementItems, resolveBankRequirements } from "@/lib/rules/bank-requirements";
 import { AIService } from "@/lib/ai/service";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import type {
@@ -41,6 +42,26 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     }),
   ]);
 
+  // Bankindividuelle Anforderungen (statischer Katalog + org-spezifische DB-Pflege)
+  // als zusätzliche Checklisten-Positionen auflösen.
+  const dbBankReqs = caseRow.bankName
+    ? await prisma.bankRequirement.findMany({
+        where: {
+          bankName: caseRow.bankName,
+          OR: [{ organizationId: caseRow.organizationId }, { organizationId: null }],
+        },
+        select: { key: true, title: true, documentType: true, level: true },
+      })
+    : [];
+  const extraItems = bankRequirementItems(
+    resolveBankRequirements(caseRow.bankName, dbBankReqs.map((r) => ({
+      key: r.key,
+      title: r.title,
+      documentType: r.documentType,
+      level: r.level,
+    })))
+  );
+
   const canonical = await caseToCanonical(caseId);
 
   const existing: ExistingDocument[] = documents.map((d) => ({
@@ -48,6 +69,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     reviewStatus: d.reviewStatus,
     readable: d.readable,
     ageDays: ageFromPeriod(d.period),
+    applicantId: d.applicantId,
   }));
 
   const checklist = buildChecklistForCase(
@@ -58,8 +80,13 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
       usage: (caseRow.property?.nutzung as UsageType) ?? undefined,
       kapitalanlage: caseRow.kapitalanlage,
       applicantCount: caseRow.applicants.length,
+      applicantIds: caseRow.applicants
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((a) => a.id),
     },
-    existing
+    existing,
+    extraItems
   );
 
   const docFields = documents.map((d) => ({
