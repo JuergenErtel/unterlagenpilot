@@ -18,6 +18,11 @@ const envSchema = z.object({
   // Auth-Modus: "demo" = automatischer Seed-Vermittler ohne Login (nur Dev/Demo),
   // "session" = echte Login-/Session-Pflicht (für echte Pilotdaten verbindlich).
   AUTH_MODE: z.enum(["demo", "session"]).default("demo"),
+  // Globaler Passwortschutz (Site-Gate) für den Pilotbetrieb: Ist dieser Wert
+  // gesetzt, muss vor dem Zugriff auf die App einmalig ein geteiltes Passwort
+  // eingegeben werden. Leer = Gate aus. Kunden-Upload-Links bleiben immer offen.
+  // Hinweis: Wird in der Middleware direkt aus process.env gelesen.
+  SITE_GATE_PASSWORD: z.string().optional(),
   SESSION_COOKIE_NAME: z.string().default("up_session"),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
   // Rate-Limiting (in-memory; produktiv: zentraler Store wie Upstash/Redis)
