@@ -5,6 +5,8 @@ import {
   FinLinkAuthError,
   FinLinkApiError,
 } from "@/lib/platforms/finlink/client";
+import { FinLinkConnector } from "@/lib/platforms/connectors";
+import type { FinLinkClient } from "@/lib/platforms/finlink/client";
 
 function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -49,5 +51,45 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
     const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "supersecret" }, mockFetch(500, {}));
     const err = (await client.fetchVorgang("x").catch((e) => e)) as Error;
     expect(err.message).not.toContain("supersecret");
+  });
+});
+
+vi.mock("@/lib/platforms/case-writer", () => ({
+  createCaseFromCanonical: vi.fn(async (_ctx, canonical) => ({
+    caseId: "case-123",
+    caseNumber: "UP-2026-0001",
+    deduped: Boolean((canonical as any).__dedup),
+  })),
+}));
+
+const ctx = { organizationId: "org-1", userId: "user-1" };
+
+function clientReturning(dto: any): FinLinkClient {
+  return { fetchVorgang: vi.fn().mockResolvedValue(dto) };
+}
+
+describe("FinLinkConnector.importCaseById", () => {
+  it("importiert und liefert die neue caseId", async () => {
+    const connector = new FinLinkConnector();
+    const client = clientReturning({ id: "FL-1", antragsteller: [{ vorname: "Anna" }] });
+    const res = await connector.importCaseById("FL-1", ctx, { client });
+    expect(res.ok).toBe(true);
+    expect(res.importedCaseIds).toEqual(["case-123"]);
+  });
+
+  it("meldet 'nicht konfiguriert', wenn kein Client vorhanden ist", async () => {
+    const connector = new FinLinkConnector();
+    const res = await connector.importCaseById("FL-1", ctx, { client: null });
+    expect(res.ok).toBe(false);
+    expect(res.message).toMatch(/nicht (verbunden|konfiguriert)/i);
+  });
+
+  it("meldet eine klare Fehlermeldung bei unbekanntem Vorgang (404)", async () => {
+    const { FinLinkNotFoundError } = await import("@/lib/platforms/finlink/client");
+    const connector = new FinLinkConnector();
+    const client: FinLinkClient = { fetchVorgang: vi.fn().mockRejectedValue(new FinLinkNotFoundError("x")) };
+    const res = await connector.importCaseById("nope", ctx, { client });
+    expect(res.ok).toBe(false);
+    expect(res.message).toMatch(/nicht gefunden/i);
   });
 });

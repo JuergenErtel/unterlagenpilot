@@ -68,7 +68,11 @@ export interface PlatformConnector {
   isConfigured(): Promise<boolean>;
   testConnection(): Promise<ConnectionStatus>;
   importCases?(): Promise<ImportResult>;
-  importCaseById?(externalId: string): Promise<ImportResult>;
+  importCaseById?(
+    externalId: string,
+    ctx?: { organizationId: string; userId: string },
+    deps?: unknown
+  ): Promise<ImportResult>;
   mapCaseData(caseId: string): Promise<PlatformPayload>;
   validatePayload(payload: PlatformPayload): Promise<ValidationResult>;
   pushCaseData(payload: PlatformPayload): Promise<PushResult>;
