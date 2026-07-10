@@ -7,35 +7,55 @@ import {
 } from "./enums";
 
 /**
+ * HTML-Formulare liefern für „nicht ausgefüllt" immer `""`, nie `undefined`.
+ * Ohne Vorverarbeitung würde
+ *  - ein leeres `<select>` das Enum-Schema sprengen (safeParse schlägt fürs
+ *    GANZE Objekt fehl → Stammdaten-Übernahme wird still übersprungen), und
+ *  - ein leeres Zahlenfeld über `z.coerce.number()` zu `0` werden – fachlich
+ *    ein Unterschied ums Ganze: „0 € Eigenkapital" statt „keine Angabe".
+ * Daher: `""` → `undefined`, bevor validiert wird.
+ */
+const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
+
+const optionalText = () => z.string().optional().or(z.literal(""));
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(emptyToUndefined, z.enum(values).optional());
+const optionalNumber = (opts?: { int?: boolean }) =>
+  z.preprocess(
+    emptyToUndefined,
+    (opts?.int ? z.coerce.number().int() : z.coerce.number()).min(0).optional()
+  );
+
+/**
  * Kunden-Erstformular (über den sicheren Upload-Link).
  * Speicherbar (Teilstand) und mit extrahierten Dokumentdaten abgleichbar.
  */
 export const customerFormSchema = z.object({
-  vorname: z.string().min(1, "Bitte Vorname angeben").optional().or(z.literal("")),
-  nachname: z.string().optional().or(z.literal("")),
-  geburtsdatum: z.string().optional().or(z.literal("")),
-  strasse: z.string().optional().or(z.literal("")),
-  plz: z.string().optional().or(z.literal("")),
-  ort: z.string().optional().or(z.literal("")),
+  vorname: optionalText(),
+  nachname: optionalText(),
+  geburtsdatum: optionalText(),
+  strasse: optionalText(),
+  plz: optionalText(),
+  ort: optionalText(),
   email: z.string().email("Bitte gültige E-Mail").optional().or(z.literal("")),
-  telefon: z.string().optional().or(z.literal("")),
-  familienstand: z.enum(MARITAL_STATUSES).optional(),
-  anzahlKinder: z.coerce.number().int().min(0).optional(),
-  beruf: z.string().optional().or(z.literal("")),
-  arbeitgeber: z.string().optional().or(z.literal("")),
-  eintrittsdatum: z.string().optional().or(z.literal("")),
-  beschaeftigungsart: z.enum(EMPLOYMENT_TYPES).optional(),
-  nettoEinkommen: z.coerce.number().min(0).optional(),
-  sonstigeEinnahmen: z.coerce.number().min(0).optional(),
-  bestehendeKredite: z.string().optional().or(z.literal("")),
-  eigenkapital: z.coerce.number().min(0).optional(),
-  objektart: z.enum(PROPERTY_TYPES).optional(),
-  objektStrasse: z.string().optional().or(z.literal("")),
-  objektPlz: z.string().optional().or(z.literal("")),
-  objektOrt: z.string().optional().or(z.literal("")),
-  kaufpreis: z.coerce.number().min(0).optional(),
-  baukosten: z.coerce.number().min(0).optional(),
-  geplanteNutzung: z.enum(USAGE_TYPES).optional(),
+  telefon: optionalText(),
+  familienstand: optionalEnum(MARITAL_STATUSES),
+  anzahlKinder: optionalNumber({ int: true }),
+  beruf: optionalText(),
+  arbeitgeber: optionalText(),
+  eintrittsdatum: optionalText(),
+  beschaeftigungsart: optionalEnum(EMPLOYMENT_TYPES),
+  nettoEinkommen: optionalNumber(),
+  sonstigeEinnahmen: optionalNumber(),
+  bestehendeKredite: optionalText(),
+  eigenkapital: optionalNumber(),
+  objektart: optionalEnum(PROPERTY_TYPES),
+  objektStrasse: optionalText(),
+  objektPlz: optionalText(),
+  objektOrt: optionalText(),
+  kaufpreis: optionalNumber(),
+  baukosten: optionalNumber(),
+  geplanteNutzung: optionalEnum(USAGE_TYPES),
 });
 
 export type CustomerFormData = z.infer<typeof customerFormSchema>;

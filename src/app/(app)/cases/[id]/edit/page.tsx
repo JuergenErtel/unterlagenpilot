@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MARITAL_STATUSES } from "@/lib/domain/enums";
+import { MARITAL_STATUSES, MARITAL_STATUS_LABELS } from "@/lib/domain/enums";
 
 function isoDate(value: Date | null | undefined): string {
   if (!value) return "";
@@ -139,7 +139,7 @@ export default async function CaseEditPage({
                       <option value="">– wählen –</option>
                       {MARITAL_STATUSES.map((m) => (
                         <option key={m} value={m}>
-                          {m}
+                          {MARITAL_STATUS_LABELS[m]}
                         </option>
                       ))}
                     </select>

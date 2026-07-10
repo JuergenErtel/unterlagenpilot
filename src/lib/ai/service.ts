@@ -29,6 +29,7 @@ import type { DocumentType, Platform } from "@/lib/domain/enums";
 import { floorplanAnalysisSchema, floorplanJsonSchema, type FloorplanAnalysis } from "@/lib/wohnflaeche/schema";
 import { selfEmployedAnalysisSchema, selfEmployedJsonSchema, type SelfEmployedAnalysis } from "@/lib/einkommen/schema";
 import type { CanonicalCase } from "@/lib/domain/canonical";
+import { crossDocumentChecks, parseGermanNumber } from "@/lib/ai/cross-checks";
 
 /**
  * AIService – die einzige Schnittstelle für KI-Auswertungen.
@@ -283,18 +284,38 @@ export class AIService {
     return { checks, overallConfidence: 0.78 };
   }
 
-  /** Kontoauszüge (vorbereitet). */
+  /**
+   * Kontoauszug-Analyse (deterministisch): wertet Rücklastschriften, Pfändungen/
+   * Inkasso und einen negativen Endsaldo aus – die bonitätsrelevanten Signale, auf
+   * die eine Backoffice-Kraft im Kontoauszug zuerst schaut.
+   */
   analyzeBankStatements(
     extractedFields: ExtractedField[],
     _caseContext?: Partial<CanonicalCase>
   ): PlausibilityResult {
-    // Architektur vorbereitet – im MVP keine Pflicht.
-    return {
-      checks: [
-        mk("bank.ok", "Kontoauszug", extractedFields.length ? "ok" : "fehlt", extractedFields.length ? "Kontoauszüge vorhanden (Detailanalyse vorbereitet)." : "Keine Kontoauszüge vorhanden."),
-      ],
-      overallConfidence: 0.6,
-    };
+    if (extractedFields.length === 0) {
+      return { checks: [mk("bank.fehlt", "Kontoauszug", "fehlt", "Keine Kontoauszüge vorhanden.")], overallConfidence: 0.6 };
+    }
+    const raw = (k: string) => String(extractedFields.find((f) => f.key === k)?.value ?? "").trim();
+    const hatWert = (s: string) => s !== "" && !/^(keine?|nein|0|0,00|-)$/i.test(s.toLowerCase());
+
+    const checks: PlausibilityResult["checks"] = [];
+    const pfaendung = raw("pfaendung");
+    if (hatWert(pfaendung)) {
+      checks.push(mk("bank.pfaendung", "Kontoauszug", "kritisch", `Pfändung/Inkasso im Kontoauszug erkennbar (${pfaendung}).`));
+    }
+    const ruecklast = raw("ruecklastschriften");
+    if (hatWert(ruecklast)) {
+      checks.push(mk("bank.ruecklastschrift", "Kontoauszug", "warnung", `Rücklastschrift(en) im Kontoauszug (${ruecklast}) – Bonität prüfen.`));
+    }
+    const endsaldo = parseGermanNumber(raw("endsaldo"));
+    if (endsaldo != null && endsaldo < 0) {
+      checks.push(mk("bank.dispo", "Kontoauszug", "warnung", `Negativer Endsaldo (${Math.round(endsaldo).toLocaleString("de-DE")} €) – Kontoführung/Dispo prüfen.`));
+    }
+    if (checks.length === 0) {
+      checks.push(mk("bank.ok", "Kontoauszug", "ok", "Keine Auffälligkeiten im Kontoauszug erkannt."));
+    }
+    return { checks, overallConfidence: 0.75 };
   }
 
   /** Exposé/Objektunterlagen: Vollständigkeit. */
@@ -383,6 +404,8 @@ export class AIService {
     if (byType("grundbuchauszug").length) checks.push(...this.analyzeLandRegister(byType("grundbuchauszug")).checks);
     // Exposé
     if (byType("expose").length) checks.push(...this.analyzePropertyDocuments(byType("expose")).checks);
+    // Kontoauszug (Rücklastschrift, Pfändung, negativer Saldo)
+    if (byType("kontoauszug").length) checks.push(...this.analyzeBankStatements(byType("kontoauszug")).checks);
 
     // Eigenkapital belegt?
     const ek = input.caseData.financing?.eigenkapital ?? 0;
@@ -390,6 +413,9 @@ export class AIService {
     if (ek > 0 && !ekBelegt) {
       checks.push(mk("plaus.ek", "Eigenkapital", "warnung", "Eigenkapital angegeben, aber nicht durch Nachweis belegt."));
     }
+
+    // Cross-Dokument-Abgleiche (Kaufpreis, Eigentümer/Verkäufer, Netto, Kontoinhaber).
+    checks.push(...crossDocumentChecks(input.caseData, input.documents));
 
     return plausibilityResultSchema.parse({ checks, overallConfidence: 0.8 });
   }

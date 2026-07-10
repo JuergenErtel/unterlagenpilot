@@ -1,3 +1,5 @@
+import { averageOfLastYears } from "@/lib/einkommen/ansatz";
+
 export interface SelfEmployedBankTextInput {
   applicantName: string;
   selfEmployment: { firma?: string | null; rechtsform?: string | null; gruendungsjahr?: number | null };
@@ -44,9 +46,13 @@ export function buildSelfEmployedBankText(input: SelfEmployedBankTextInput): Sel
   if (input.gewinnByYear.length > 0) {
     const list = input.gewinnByYear.map((g) => `${g.jahr}: ${EUR(g.betrag)}`).join(" · ");
     let p = `Gewinnentwicklung: ${list}.`;
-    if (input.gewinnByYear.length >= 2) {
-      const avg = input.gewinnByYear.reduce((a, g) => a + g.betrag, 0) / input.gewinnByYear.length;
-      p += ` Durchschnitt der letzten ${input.gewinnByYear.length} Jahre: ${EUR(avg)}. Tendenz: ${TREND_WORD[input.trend]}.`;
+    // Der genannte Durchschnitt MUSS sich auf dieselbe Jahresmenge stützen wie
+    // der Ansatz-Vorschlag (letzte bis zu 3 Jahre). Sonst stünden im selben PDF
+    // zwei widersprüchliche „Durchschnitte" – z. B. Ø 4 Jahre im Text, Ø 3 Jahre
+    // als angesetztes Einkommen.
+    const avg = averageOfLastYears(input.gewinnByYear);
+    if (avg && avg.years.length >= 2) {
+      p += ` Durchschnitt der letzten ${avg.years.length} Jahre: ${EUR(avg.average)}. Tendenz: ${TREND_WORD[input.trend]}.`;
     }
     paragraphs.push(p);
   }

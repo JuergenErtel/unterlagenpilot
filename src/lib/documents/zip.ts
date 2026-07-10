@@ -4,6 +4,8 @@
  * Bytes und das Packen übernimmt die Route.
  */
 
+import { isDeliverableScanStatus } from "@/lib/domain/enums";
+
 export interface ZipDoc {
   generatedName: string | null;
   originalName: string;
@@ -18,7 +20,6 @@ export interface ZipEntry {
 }
 
 // Diese Dokumente gehören nicht in ein Einreichungspaket.
-const EXCLUDED_SCAN = new Set(["rejected", "quarantined", "virus_scan_pending", "virus_scan_failed"]);
 const EXCLUDED_REVIEW = new Set(["abgelehnt", "duplikat"]);
 
 /** Liefert einen im Set noch nicht vergebenen Dateinamen (fügt _2, _3 … vor der Endung ein). */
@@ -49,7 +50,7 @@ export function buildZipManifest(docs: ZipDoc[]): ZipEntry[] {
   const used = new Set<string>();
   const entries: ZipEntry[] = [];
   for (const doc of docs) {
-    if (EXCLUDED_SCAN.has(doc.scanStatus) || EXCLUDED_REVIEW.has(doc.reviewStatus)) continue;
+    if (!isDeliverableScanStatus(doc.scanStatus) || EXCLUDED_REVIEW.has(doc.reviewStatus)) continue;
     const desired = (doc.generatedName?.trim() || doc.originalName || "dokument").trim();
     entries.push({ name: uniqueEntryName(desired, used), storageKey: doc.storageKey });
   }

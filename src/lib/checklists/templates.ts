@@ -24,6 +24,11 @@ export interface ChecklistItemDef {
   recencyDays?: number;
   acceptedFileTypes?: string[];
   requiredCount?: number;
+  /**
+   * Position wird je Antragsteller verlangt (Legitimation, Einkommen), nicht
+   * einmal pro Fall. `requiredCount` gilt dann PRO PERSON.
+   */
+  perApplicant?: boolean;
   example?: string;
 }
 
@@ -58,6 +63,7 @@ const I = {
     internalDescription: "Legitimation, Adressabgleich, Gültigkeit prüfen.",
     documentType: "personalausweis",
     requiredCount: 2,
+    perApplicant: true,
     example: "Personalausweis_Max_Mustermann.pdf",
   }),
   gehalt: item({
@@ -68,6 +74,7 @@ const I = {
     documentType: "gehaltsabrechnung",
     requiredCount: 3,
     recencyDays: 120,
+    perApplicant: true,
     example: "Gehaltsabrechnung_Max_Mustermann_2026-05.pdf",
   }),
   estBescheid: item({

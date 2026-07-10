@@ -4,6 +4,8 @@ import { validateUpload } from "@/lib/security/file-validation";
 import { MockVirusScanner } from "@/lib/security/virus-scan";
 import { hashToken, createUploadToken, verifyUploadToken } from "@/lib/security/upload-token";
 import { rateLimit, __resetRateLimits } from "@/lib/auth/rate-limit";
+import { safeRedirect } from "@/lib/auth/redirect";
+import { isDeliverableScanStatus } from "@/lib/domain/enums";
 
 // Magic-Bytes-Header für gültige Dateien.
 const PDF = Buffer.from("%PDF-1.7\n...rest...");
@@ -17,6 +19,101 @@ describe("Passwort-Hashing (scrypt)", () => {
     expect(verifyPassword("Pilot2026!", hash)).toBe(true);
     expect(verifyPassword("falsch", hash)).toBe(false);
     expect(verifyPassword("Pilot2026!", null)).toBe(false);
+  });
+
+  it("akzeptiert NIEMALS ein Passwort gegen einen Hash mit leerem Salt/Key", () => {
+    // Regression: "scrypt$16384$x$x" dekodiert zu 0 Byte Salt UND 0 Byte Key.
+    // scryptSync(pw, salt, 0) liefert einen leeren Buffer, timingSafeEqual(leer, leer)
+    // ist true – der Dummy-Hash verifizierte damit JEDES Passwort.
+    expect(verifyPassword("beliebig", "scrypt$16384$x$x")).toBe(false);
+    expect(verifyPassword("", "scrypt$16384$x$x")).toBe(false);
+    expect(verifyPassword("beliebig", "scrypt$16384$$")).toBe(false);
+  });
+
+  it("lehnt Hashes mit abweichender Key-Länge ab", () => {
+    const salt = Buffer.from("0123456789abcdef").toString("base64url");
+    const kurz = Buffer.from([1, 2, 3, 4]).toString("base64url");
+    expect(verifyPassword("beliebig", `scrypt$16384$${salt}$${kurz}`)).toBe(false);
+  });
+});
+
+describe("safeRedirect (Open-Redirect-Schutz)", () => {
+  it("lässt eigene, relative Pfade durch", () => {
+    expect(safeRedirect("/cases/abc")).toBe("/cases/abc");
+    expect(safeRedirect("/review?status=offen")).toBe("/review?status=offen");
+  });
+
+  it("weist protokoll-relative Ziele ab – auch die Backslash-Variante", () => {
+    expect(safeRedirect("//evil.com")).toBe("/dashboard");
+    // Regression: "/\evil.com" beginnt mit "/" und nicht mit "//", wird vom
+    // Browser aber als "//evil.com" gelesen → fremde Origin.
+    expect(safeRedirect("/\\evil.com")).toBe("/dashboard");
+    expect(safeRedirect("/\\/evil.com")).toBe("/dashboard");
+  });
+
+  it("weist Ziele mit Steuerzeichen und absolute URLs ab", () => {
+    expect(safeRedirect("/\t/evil.com")).toBe("/dashboard");
+    expect(safeRedirect("https://evil.com")).toBe("/dashboard");
+    expect(safeRedirect("javascript:alert(1)")).toBe("/dashboard");
+    expect(safeRedirect("")).toBe("/dashboard");
+    expect(safeRedirect(null)).toBe("/dashboard");
+  });
+
+  it("erreicht für KEINEN Angriffskandidaten eine fremde Origin", () => {
+    // Stärker als Einzelvergleiche: das Ergebnis wird gegen echtes WHATWG-URL-
+    // Parsing gehalten – genau so liest der Browser den Location-Header.
+    const BASE = "https://baufidesk.de";
+    const TAB = String.fromCharCode(9);
+    const LF = String.fromCharCode(10);
+    const CR = String.fromCharCode(13);
+    const NUL = String.fromCharCode(0);
+
+    const angriffe = [
+      "//evil.com",
+      "/\\evil.com",
+      "/\\/evil.com",
+      "/\\\\evil.com",
+      "///evil.com",
+      `/${TAB}/evil.com`,
+      `/${CR}${LF}/evil.com`,
+      `/${TAB}\\evil.com`,
+      `/${NUL}/evil.com`,
+      `${TAB}//evil.com`,
+      "https://evil.com",
+      "http:evil.com",
+      "javascript:alert(1)",
+      "\\\\evil.com",
+      "\\/evil.com",
+    ];
+
+    for (const angriff of angriffe) {
+      const ziel = safeRedirect(angriff);
+      const origin = new URL(ziel, BASE).origin;
+      expect(origin, `"${JSON.stringify(angriff)}" führte auf ${origin}`).toBe(BASE);
+    }
+  });
+
+  it("blockiert legitime interne Ziele nicht", () => {
+    for (const ziel of ["/cases/abc", "/review?status=offen", "/dashboard#frag", "/cases/1/export"]) {
+      expect(safeRedirect(ziel)).toBe(ziel);
+    }
+  });
+});
+
+describe("Auslieferbare Scan-Status (fail-closed)", () => {
+  it("liefert nur nachweislich sauber gescannte Dokumente aus", () => {
+    expect(isDeliverableScanStatus("virus_scan_clean")).toBe(true);
+    expect(isDeliverableScanStatus("ready_for_ocr")).toBe(true);
+  });
+
+  it("sperrt Dokumente ohne abgeschlossenen Scan", () => {
+    // Regression: `virus_scan_failed` stand nicht auf der Sperrliste der
+    // Download-Route – eine nie geprüfte Datei war voll abrufbar.
+    expect(isDeliverableScanStatus("virus_scan_failed")).toBe(false);
+    expect(isDeliverableScanStatus("virus_scan_pending")).toBe(false);
+    expect(isDeliverableScanStatus("quarantined")).toBe(false);
+    expect(isDeliverableScanStatus("rejected")).toBe(false);
+    expect(isDeliverableScanStatus("uploaded")).toBe(false);
   });
 });
 

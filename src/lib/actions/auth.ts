@@ -11,6 +11,7 @@ import {
   clearSessionCookie,
 } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
+import { safeRedirect } from "@/lib/auth/redirect";
 
 export interface LoginState {
   error?: string;
@@ -20,13 +21,6 @@ async function clientIp(): Promise<string> {
   const h = await headers();
   // x-real-ip wird von Vercel gesetzt (nicht client-spoofbar); x-forwarded-for als Fallback.
   return (h.get("x-real-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown");
-}
-
-/** Nur relative, eigene Pfade erlauben (Schutz gegen Open-Redirect). */
-function safeRedirect(target: string | null | undefined): string {
-  if (!target) return "/dashboard";
-  if (!target.startsWith("/") || target.startsWith("//")) return "/dashboard";
-  return target;
 }
 
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {

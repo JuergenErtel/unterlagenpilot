@@ -17,8 +17,9 @@ import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buil
 import { getBrokerInfo } from "@/lib/pdf/case-pdf";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
-import { computeNextCaseNumber, caseNumberPrefix } from "@/lib/cases/case-number";
+import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
+import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import type {
   CaseStatus,
   EmploymentType,
@@ -31,26 +32,20 @@ import type {
 
 const ai = new AIService();
 
-/** Terminal-/Post-Export-Status: hier darf eine Aktion den Status nicht zurücksetzen. */
-const LOCKED_STATUSES: ReadonlySet<CaseStatus> = new Set<CaseStatus>([
-  "exportiert",
-  "uebertragen",
-  "abgeschlossen",
-  "archiviert",
-]);
-
 /** true, wenn der Fehler eine Prisma-Unique-Constraint-Verletzung (P2002) ist. */
 function isUniqueViolation(e: unknown): boolean {
   return typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002";
 }
 
 async function nextCaseNumber(organizationId: string, year: number): Promise<string> {
-  const highest = await prisma.case.findFirst({
+  // Numerisches Maximum statt `orderBy: { caseNumber: "desc" }`: die DB sortiert
+  // Strings, wodurch ab "…-10000" dauerhaft "…-9999" als höchste Nummer gälte
+  // und jede weitere Fallanlage an der Unique-Constraint scheitern würde.
+  const rows = await prisma.case.findMany({
     where: { organizationId, caseNumber: { startsWith: caseNumberPrefix(year) } },
-    orderBy: { caseNumber: "desc" },
     select: { caseNumber: true },
   });
-  return computeNextCaseNumber(highest?.caseNumber ?? null, year);
+  return formatCaseNumber(year, highestSequence(rows.map((r) => r.caseNumber)) + 1);
 }
 
 export async function createCase(formData: FormData): Promise<void> {
@@ -132,7 +127,7 @@ export async function createUploadLink(caseId: string, days = 14): Promise<strin
 /** Setzt den Status auf "upload_offen", ohne einen abgeschlossenen Fall zurückzuwerfen. */
 async function setUploadOpenIfNotLocked(caseId: string): Promise<void> {
   const row = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true } });
-  if (row && !LOCKED_STATUSES.has(row.status as CaseStatus)) {
+  if (row && !LOCKED_CASE_STATUSES.has(row.status as CaseStatus)) {
     await prisma.case.update({ where: { id: caseId }, data: { status: "upload_offen" } });
   }
 }
@@ -198,7 +193,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
     where: { id: caseId },
     select: { status: true },
   });
-  if (LOCKED_STATUSES.has(current.status as CaseStatus)) {
+  if (LOCKED_CASE_STATUSES.has(current.status as CaseStatus)) {
     return;
   }
   const previousStatus = current.status;
@@ -298,7 +293,7 @@ export async function generateMessage(
   const a = agg.canonical.applicants[0];
   // Token wird nur gehasht gespeichert → für Nachrichten mit Upload-Bezug einen
   // frischen, gültigen Link erzeugen (sonst kein Klartext-Link verfügbar).
-  const needsLink = ["erstnachforderung", "unterlage_fehlt_weiterhin", "pdf_checkliste"].includes(type);
+  const needsLink = ["erstnachforderung", "unterlage_fehlt_weiterhin", "pdf_checkliste", "status_nachforderung"].includes(type);
   let uploadLink: string | undefined;
   if (needsLink) {
     const created = await createSecureUploadLink(

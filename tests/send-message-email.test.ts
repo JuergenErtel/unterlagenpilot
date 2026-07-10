@@ -16,11 +16,13 @@ vi.mock("@/lib/email/resend", () => ({
 
 const messageFindUnique = vi.fn();
 const messageUpdate = vi.fn();
+const messageUpdateMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     generatedMessage: {
       findUnique: (...a: unknown[]) => messageFindUnique(...a),
       update: (...a: unknown[]) => messageUpdate(...a),
+      updateMany: (...a: unknown[]) => messageUpdateMany(...a),
     },
   },
 }));
@@ -44,10 +46,11 @@ function msg(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  [sendEmail, isEmailConfigured, messageFindUnique, messageUpdate].forEach((m) => m.mockReset());
+  [sendEmail, isEmailConfigured, messageFindUnique, messageUpdate, messageUpdateMany].forEach((m) => m.mockReset());
   isEmailConfigured.mockReturnValue(true);
   sendEmail.mockResolvedValue({ id: "email_1" });
   messageUpdate.mockResolvedValue({});
+  messageUpdateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("sendMessageByEmail", () => {
@@ -57,7 +60,19 @@ describe("sendMessageByEmail", () => {
     expect(res.ok).toBe(true);
     expect(res.to).toBe("kunde@example.de");
     expect(sendEmail).toHaveBeenCalledOnce();
-    expect(messageUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sent: true }) }));
+    // Reservierung erfolgt atomar VOR dem Versand.
+    expect(messageUpdateMany).toHaveBeenCalledWith({ where: { id: "m1", sent: false }, data: { sent: true } });
+  });
+
+  it("verhindert Doppelversand bei parallelen Klicks (Reservierung greift nicht)", async () => {
+    // Regression: "lesen → prüfen → senden → sent=true" ließ zwei gleichzeitige
+    // Requests beide durchlaufen; der Kunde erhielt die Nachricht doppelt.
+    messageFindUnique.mockResolvedValue(msg());
+    messageUpdateMany.mockResolvedValue({ count: 0 }); // anderer Request war schneller
+    const res = await sendMessageByEmail("m1");
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/bereits versendet/i);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("verweigert fremde Organisationen (Tenant)", async () => {
@@ -97,11 +112,14 @@ describe("sendMessageByEmail", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("gibt einen Fehler zurück (kein Crash), wenn der Versand fehlschlägt", async () => {
+  it("gibt einen Fehler zurück (kein Crash) und nimmt die Reservierung zurück, wenn der Versand fehlschlägt", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     messageFindUnique.mockResolvedValue(msg());
     sendEmail.mockRejectedValue(new Error("Resend HTTP 422: domain not verified"));
     const res = await sendMessageByEmail("m1");
     expect(res.ok).toBe(false);
-    expect(messageUpdate).not.toHaveBeenCalled();
+    // sent wird zurückgesetzt, sonst wäre die Nachricht dauerhaft blockiert.
+    expect(messageUpdateMany).toHaveBeenCalledWith({ where: { id: "m1" }, data: { sent: false } });
+    errSpy.mockRestore();
   });
 });

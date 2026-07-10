@@ -60,6 +60,17 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
     return { ok: false, error: "Für diesen Fall ist keine E-Mail-Adresse hinterlegt. Bitte in den Kundendaten ergänzen." };
   }
 
+  // Versand-Slot ATOMAR reservieren, bevor die Mail rausgeht. Ein einfaches
+  // "lesen → prüfen → senden → sent=true" ließ zwei parallele Klicks beide
+  // durchlaufen, der Kunde bekam die Nachforderung doppelt.
+  const reserved = await prisma.generatedMessage.updateMany({
+    where: { id: messageId, sent: false },
+    data: { sent: true },
+  });
+  if (reserved.count !== 1) {
+    return { ok: false, error: "Diese Nachricht wurde bereits versendet." };
+  }
+
   try {
     await sendEmail({
       to,
@@ -68,10 +79,10 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
     });
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);
+    // Reservierung zurücknehmen, damit ein erneuter Versuch möglich bleibt.
+    await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false } });
     return { ok: false, error: "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen." };
   }
-
-  await prisma.generatedMessage.update({ where: { id: messageId }, data: { sent: true } });
 
   await audit({
     organizationId: ctx.organizationId,

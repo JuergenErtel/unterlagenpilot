@@ -4,13 +4,14 @@ import { getCurrentContext } from "@/lib/auth/context";
 import { getStorage } from "@/lib/storage";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
+import { isDeliverableScanStatus } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Authentifizierter, auditierter Dokumenten-Download/-Preview.
  * - Zugriff nur für angemeldete Nutzer der besitzenden Organisation (Tenant).
- * - Infizierte/abgelehnte Dateien werden nie ausgeliefert.
+ * - Nur sauber gescannte Dateien werden ausgeliefert (Allowlist, fail-closed).
  * - Supabase: Weiterleitung auf eine kurzlebige signierte URL.
  * - local: direkter Stream aus dem Storage.
  */
@@ -35,7 +36,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!doc || doc.case.organizationId !== ctx.organizationId) {
     return new NextResponse("Nicht gefunden.", { status: 404 });
   }
-  if (doc.scanStatus === "rejected" || doc.scanStatus === "quarantined") {
+  // Allowlist statt Sperrliste: nur nachweislich sauber gescannte Dateien
+  // verlassen den Storage. `virus_scan_failed`/`virus_scan_pending` bleiben
+  // gesperrt, sonst wäre eine nie geprüfte Datei abrufbar (fail-closed).
+  if (!isDeliverableScanStatus(doc.scanStatus)) {
     return new NextResponse("Dokument ist aus Sicherheitsgründen gesperrt.", { status: 403 });
   }
 

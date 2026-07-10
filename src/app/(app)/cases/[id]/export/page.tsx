@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, FileText, Lock, ShieldCheck, FileJson, Sheet, Copy } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, FileText, Lock, ShieldCheck, FileJson, Sheet, Copy } from "lucide-react";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
@@ -8,6 +8,7 @@ import { releasePlatform } from "@/lib/actions/cases";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -54,12 +55,34 @@ export default async function ExportPage({
         title="Einreichungsassistent"
         subtitle="Aufbereitete Felder pro Plattform – kopieren, exportieren und manuell freigeben. Keine automatische Übertragung im MVP."
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/cases/${id}`}>
-              <ArrowLeft />
-              Zur Fallakte
-            </Link>
-          </Button>
+          <>
+            {/* Der eHyp-Übernahmeworkflow war von nirgendwo verlinkt und nur per
+                URL erreichbar. Er gehört an den Ort, an dem eingereicht wird. */}
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/cases/${id}/ehyp-workflow`}>
+                <ArrowLeftRight />
+                Übernahme Europace → eHyp
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <a href={`/api/cases/${id}/pdf?type=handover`}>
+                <FileText />
+                Übergabe-Deckblatt
+              </a>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <a href={`/api/cases/${id}/zip`}>
+                <FileText />
+                Einreichpaket (ZIP)
+              </a>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/cases/${id}`}>
+                <ArrowLeft />
+                Zur Fallakte
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -146,9 +169,14 @@ export default async function ExportPage({
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <form action={releasePlatform.bind(null, id, p)}>
-                        <Button size="sm" variant="success" type="submit" disabled={missing.length > 0}>
+                        <SubmitButton
+                          size="sm"
+                          variant="success"
+                          disabled={missing.length > 0}
+                          pendingLabel="Freigabe läuft …"
+                        >
                           Für {PLATFORM_LABELS[p]} freigeben
-                        </Button>
+                        </SubmitButton>
                       </form>
                       <Button asChild variant="outline" size="sm">
                         <a href={`/api/cases/${id}/pdf?type=platform&platform=${p}`}>

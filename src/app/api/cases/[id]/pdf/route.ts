@@ -8,6 +8,7 @@ import {
   renderAuditProtocol,
   renderPlatformExport,
   renderWohnflaeche,
+  renderHandover,
 } from "@/lib/pdf/renderer";
 import {
   buildBankSummaryData,
@@ -15,6 +16,7 @@ import {
   buildAuditProtocolData,
   buildPlatformExportData,
   buildWohnflaecheData,
+  buildHandoverData,
   type CasePdfType,
 } from "@/lib/pdf/case-pdf";
 import { PLATFORMS, type Platform } from "@/lib/domain/enums";
@@ -55,6 +57,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       case "checklist": {
         const { data, fileName: fn } = await buildChecklistData(id, ctx.organizationId);
         buffer = await renderMissingChecklist(data);
+        fileName = fn;
+        break;
+      }
+      case "handover": {
+        const { data, fileName: fn } = await buildHandoverData(id, ctx.organizationId);
+        buffer = await renderHandover(data);
         fileName = fn;
         break;
       }

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getStorage } from "@/lib/storage";
+import { getStorage, casePathPrefix } from "@/lib/storage";
 import { audit } from "@/lib/audit";
 
 export interface PurgeOptions {
@@ -10,33 +10,65 @@ export interface PurgeOptions {
 }
 
 /**
- * Löscht einen Fall vollständig: protokolliert die Löschung, entfernt den Fall
- * inkl. aller abhängigen Zeilen (Prisma onDelete: Cascade) und die Storage-Dateien
- * (best-effort). Kein Auth/Redirect – Aufrufer stellt die Berechtigung sicher.
+ * Löscht einen Fall vollständig: entfernt die Storage-Dateien, dann den Fall
+ * inkl. aller abhängigen Zeilen (Prisma onDelete: Cascade), und protokolliert die
+ * vollzogene Löschung. Kein Auth/Redirect – Aufrufer stellt die Berechtigung sicher.
+ *
+ * Reihenfolge ist bewusst gewählt:
+ *  - Storage ZUERST, solange die storageKeys noch in der DB stehen. Umgekehrt
+ *    bliebe bei einem Storage-Ausfall eine personenbezogene Datei im Bucket, ohne
+ *    dass noch ein Verweis auf sie existiert.
+ *  - Audit ZULETZT (AuditLog.entityId ist ein reiner String ohne FK auf Case,
+ *    der Nachweis überlebt das Cascade-Delete), damit kein Löschnachweis für
+ *    einen Fall entsteht, dessen Löschung gescheitert ist.
+ *
+ * Ein fehlgeschlagenes Storage-Remove bricht die Löschung NICHT ab (das Recht auf
+ * Löschung darf nicht an einer Storage-Störung hängen), wird aber protokolliert,
+ * statt still verschluckt zu werden.
  */
-export async function purgeCase(caseId: string, opts: PurgeOptions): Promise<{ documents: number }> {
+export async function purgeCase(
+  caseId: string,
+  opts: PurgeOptions
+): Promise<{ documents: number; storageErrors: number }> {
   const [caseRow, docs] = await Promise.all([
     prisma.case.findUnique({ where: { id: caseId }, select: { caseNumber: true } }),
     prisma.document.findMany({ where: { caseId }, select: { storageKey: true } }),
   ]);
 
-  // Zuerst protokollieren: der Audit-Log referenziert den Fall nicht per FK und
-  // bleibt daher auch nach dem Cascade-Delete als Löschnachweis erhalten.
+  const storage = getStorage();
+  let storageErrors = 0;
+  for (const d of docs) {
+    if (!d.storageKey) continue;
+    try {
+      await storage.remove(d.storageKey);
+    } catch (e) {
+      storageErrors += 1;
+      // Nur ins flüchtige Server-Log: storageKeys enthalten den (bereinigten)
+      // Originaldateinamen und damit personenbezogene Daten.
+      console.error(`[purgeCase] Storage-Objekt ${d.storageKey} nicht entfernbar:`, e);
+    }
+  }
+
+  await prisma.case.delete({ where: { id: caseId } });
+
   await audit({
     organizationId: opts.organizationId,
     userId: opts.userId,
     action: "case.deleted",
     entityType: "case",
     entityId: caseId,
-    metadata: { caseNumber: caseRow?.caseNumber, documents: docs.length, reason: opts.reason },
+    metadata: {
+      caseNumber: caseRow?.caseNumber,
+      documents: docs.length,
+      reason: opts.reason,
+      // NUR die Anzahl – niemals die storageKeys selbst: sie enthalten
+      // Dateinamen wie "Personalausweis_Max_Mustermann.pdf" und würden die
+      // gerade gelöschten personenbezogenen Daten im Audit-Log verewigen.
+      // Zum Aufräumen genügt der fallbezogene Objekt-Präfix (nur IDs).
+      storageErrors,
+      ...(storageErrors > 0 ? { orphanPrefix: casePathPrefix(opts.organizationId, caseId) } : {}),
+    },
   });
 
-  await prisma.case.delete({ where: { id: caseId } });
-
-  const storage = getStorage();
-  for (const d of docs) {
-    if (d.storageKey) await storage.remove(d.storageKey).catch(() => {});
-  }
-
-  return { documents: docs.length };
+  return { documents: docs.length, storageErrors };
 }

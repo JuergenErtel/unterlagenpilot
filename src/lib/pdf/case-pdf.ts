@@ -4,6 +4,8 @@ import { AIService } from "@/lib/ai/service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatEUR } from "@/lib/utils";
+import { buildZipManifest } from "@/lib/documents/zip";
+import { berechneHaushalt } from "@/lib/haushalt/rechnung";
 import {
   EMPLOYMENT_TYPE_LABELS,
   PROPERTY_TYPE_LABELS,
@@ -19,11 +21,12 @@ import type {
   AuditProtocolData,
   PlatformExportData,
   WohnflaecheData,
+  HandoverData,
 } from "@/lib/pdf/renderer";
 
 const ai = new AIService();
 
-export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform" | "wohnflaeche";
+export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform" | "wohnflaeche" | "handover";
 
 function dateStr(d = new Date()): string {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -108,6 +111,76 @@ export async function buildBankSummaryData(caseId: string, organizationId: strin
   };
 
   return { data, fileName: pdfFileName("Bankzusammenfassung", c.applicants) };
+}
+
+export async function buildHandoverData(
+  caseId: string,
+  organizationId: string
+): Promise<{ data: HandoverData; fileName: string }> {
+  const [agg, broker, caseRow, documents] = await Promise.all([
+    getCaseAggregate(caseId),
+    getBrokerInfo(organizationId),
+    prisma.case.findUniqueOrThrow({
+      where: { id: caseId },
+      select: {
+        bankName: true,
+        applicants: { select: { anzahlKinder: true }, orderBy: { position: "asc" } },
+      },
+    }),
+    prisma.document.findMany({
+      where: { caseId },
+      select: { generatedName: true, originalName: true, storageKey: true, scanStatus: true, reviewStatus: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  const c = agg.canonical;
+
+  // Reihenfolge/Benennung wie im ZIP-Export (freigegeben, sauber, dedupliziert).
+  const enthalten = buildZipManifest(
+    documents.map((d) => ({
+      generatedName: d.generatedName,
+      originalName: d.originalName,
+      storageKey: d.storageKey,
+      scanStatus: d.scanStatus,
+      reviewStatus: d.reviewStatus,
+    }))
+  ).map((e) => e.name);
+
+  const haushalt = berechneHaushalt({
+    income: c.income,
+    liabilities: c.liabilities,
+    property: c.property,
+    financing: c.financing,
+    applicantCount: c.applicants.length,
+    anzahlKinder: caseRow.applicants[0]?.anzahlKinder ?? 0,
+  });
+
+  const p = c.property;
+  const f = c.financing;
+  const data: HandoverData = {
+    caseNumber: agg.caseNumber,
+    dateStr: dateStr(),
+    broker,
+    bankName: caseRow.bankName ?? undefined,
+    applicants: applicantDisplayNames(c.applicants),
+    objekt: p
+      ? [p.objektart ? PROPERTY_TYPE_LABELS[p.objektart as PropertyType] : undefined, [p.strasse, p.ort].filter(Boolean).join(", ")]
+          .filter(Boolean)
+          .join(", ")
+      : undefined,
+    finanzierung: [
+      f.kaufpreis != null ? `Kaufpreis ${formatEUR(f.kaufpreis)}` : null,
+      f.darlehenswunsch != null ? `Darlehen ${formatEUR(f.darlehenswunsch)}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined,
+    enthalten,
+    // Nur bankrelevante Positionen als Nachreichliste (keine Kunden-Wordings).
+    nachreichen: agg.missing.map((i) => i.name),
+    haushalt: { ueberschuss: formatEUR(haushalt.ueberschuss), tragfaehig: haushalt.tragfaehig },
+  };
+
+  return { data, fileName: pdfFileName("Uebergabe", c.applicants) };
 }
 
 export async function buildChecklistData(caseId: string, organizationId: string): Promise<{ data: ChecklistData; fileName: string }> {

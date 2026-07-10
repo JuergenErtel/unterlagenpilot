@@ -19,6 +19,11 @@ export interface CaseChecklistInput {
   usage?: UsageType;
   kapitalanlage?: boolean;
   applicantCount?: number;
+  /**
+   * IDs der Antragsteller. Nötig, um personenbezogene Positionen (Ausweis,
+   * Gehaltsabrechnung) je Person statt fallweit zu prüfen.
+   */
+  applicantIds?: string[];
 }
 
 export interface ResolvedChecklistItem extends ChecklistItemDef {
@@ -32,6 +37,8 @@ export interface ResolvedChecklistItem extends ChecklistItemDef {
     | "nicht_erforderlich";
   matchedDocuments: number;
   customerVisible: boolean;
+  /** Tatsächlich verlangte Anzahl (bei perApplicant × Anzahl Antragsteller). */
+  effectiveRequiredCount: number;
 }
 
 /** Wählt die relevanten Template-Keys für einen Fall. */
@@ -111,6 +118,8 @@ export interface ExistingDocument {
   reviewStatus: string; // offen|akzeptiert|abgelehnt|ersetzt|duplikat
   readable?: boolean | null;
   ageDays?: number | null; // Alter des Dokumentinhalts (z.B. Abrechnungsmonat)
+  /** Zugeordneter Antragsteller (null = noch nicht zugeordnet). */
+  applicantId?: string | null;
 }
 
 /**
@@ -119,48 +128,85 @@ export interface ExistingDocument {
  */
 export function buildChecklistForCase(
   input: CaseChecklistInput,
-  documents: ExistingDocument[] = []
+  documents: ExistingDocument[] = [],
+  /** Zusätzliche, fallbezogen aufgelöste Positionen (z. B. Bankanforderungen). */
+  extraItems: ChecklistItemDef[] = []
 ): ResolvedChecklistItem[] {
   const keys = selectTemplateKeys(input);
   const merged = new Map<string, ChecklistItemDef>();
 
+  const addItem = (it: ChecklistItemDef) => {
+    // Strengste Anforderung gewinnt bei Dubletten.
+    const existing = merged.get(it.key);
+    if (!existing || rank(it.level) > rank(existing.level)) merged.set(it.key, it);
+  };
+
   for (const tplKey of keys) {
     const tpl = CHECKLIST_TEMPLATES.find((t) => t.key === tplKey);
     if (!tpl) continue;
-    for (const it of tpl.items) {
-      // Strengste Anforderung gewinnt bei Dubletten.
-      const existing = merged.get(it.key);
-      if (!existing || rank(it.level) > rank(existing.level)) merged.set(it.key, it);
-    }
+    for (const it of tpl.items) addItem(it);
   }
+  for (const it of extraItems) addItem(it);
+
+  const applicantIds = input.applicantIds ?? [];
+  const applicantCount = Math.max(input.applicantCount ?? applicantIds.length ?? 1, 1);
 
   return [...merged.values()]
     .sort((a, b) => rank(b.level) - rank(a.level))
-    .map((def) => resolveStatus(def, documents));
+    .map((def) => resolveStatus(def, documents, applicantIds, applicantCount));
+}
+
+/** Zählt lesbare, hinreichend aktuelle Treffer und bewertet eine Teilmenge. */
+function evaluateMatches(
+  def: ChecklistItemDef,
+  matches: ExistingDocument[],
+  required: number
+): { fulfilled: boolean; tooOld: boolean } {
+  // Unlesbare Dokumente zählen nicht zur Erfüllung.
+  const readable = matches.filter((m) => m.readable !== false);
+  const fulfilled = readable.length >= required;
+
+  // Aktualität nur anhand von Dokumenten mit BEKANNTEM Alter beurteilen.
+  // Ein Dokument ohne erkannten Zeitraum beweist weder Aktualität noch das
+  // Gegenteil – früher galt `ageDays ?? 0`, also "unbekannt = brandaktuell",
+  // wodurch ein einziges undatiertes Dokument veraltete Unterlagen kaschierte.
+  let tooOld = false;
+  if (def.recencyDays != null && fulfilled) {
+    const dated = readable.filter((m) => m.ageDays != null);
+    tooOld = dated.length > 0 && dated.every((m) => m.ageDays! > def.recencyDays!);
+  }
+  return { fulfilled, tooOld };
 }
 
 function resolveStatus(
   def: ChecklistItemDef,
-  documents: ExistingDocument[]
+  documents: ExistingDocument[],
+  applicantIds: string[],
+  applicantCount: number
 ): ResolvedChecklistItem {
   const matches = documents.filter(
     (d) => d.documentType === def.documentType && d.reviewStatus !== "abgelehnt" && d.reviewStatus !== "duplikat"
   );
+  const perPerson = def.requiredCount ?? 1;
+  const perApplicant = def.perApplicant === true && applicantCount > 1;
+  const effectiveRequiredCount = perApplicant ? perPerson * applicantCount : perPerson;
+
   let status: ResolvedChecklistItem["status"] = "offen";
 
   if (matches.length > 0) {
-    const required = def.requiredCount ?? 1;
-    // Unlesbare Dokumente zählen nicht zur Erfüllung, blockieren aber auch nicht
-    // eine bereits mit genügend LESBAREN Dokumenten erfüllte Position.
-    const readableMatches = matches.filter((m) => m.readable !== false);
-    const tooOld =
-      def.recencyDays != null &&
-      readableMatches.length > 0 &&
-      readableMatches.every((m) => (m.ageDays ?? 0) > def.recencyDays!);
-    if (readableMatches.length >= required) {
-      status = tooOld ? "nicht_aktuell" : "vorhanden";
+    if (perApplicant && applicantIds.length > 0) {
+      // Jede Person muss ihr eigenes Soll erfüllen. Nicht zugeordnete Dokumente
+      // können keiner Person gutgeschrieben werden – der Vermittler ordnet sie
+      // im Review-Center zu. Sonst gälte die Position als erfüllt, obwohl von
+      // Antragsteller 2 nichts vorliegt.
+      const perResults = applicantIds.map((id) =>
+        evaluateMatches(def, matches.filter((m) => m.applicantId === id), perPerson)
+      );
+      const allFulfilled = perResults.every((r) => r.fulfilled);
+      status = allFulfilled ? (perResults.some((r) => r.tooOld) ? "nicht_aktuell" : "vorhanden") : "unvollstaendig";
     } else {
-      status = "unvollstaendig";
+      const { fulfilled, tooOld } = evaluateMatches(def, matches, effectiveRequiredCount);
+      status = fulfilled ? (tooOld ? "nicht_aktuell" : "vorhanden") : "unvollstaendig";
     }
   }
 
@@ -168,6 +214,7 @@ function resolveStatus(
     ...def,
     status,
     matchedDocuments: matches.length,
+    effectiveRequiredCount,
     // KO-/Risikobewertungen sind intern; reine Unterlagen-Checkliste ist für Kunde sichtbar.
     customerVisible: def.scope !== "bankbezogen",
   };

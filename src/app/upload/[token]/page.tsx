@@ -1,9 +1,8 @@
 import { Lock } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { prisma } from "@/lib/db";
-import { requireUploadTokenAccess } from "@/lib/auth/context";
+import { resolveUploadToken } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
-import { saveCustomerForm } from "@/lib/actions/upload";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import {
   Card,
@@ -12,13 +11,11 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CustomerUploadProgress } from "@/components/customer/customer-upload-progress";
 import { CustomerUploadForm } from "@/components/customer/customer-upload-form";
-import { MARITAL_STATUSES, type PropertyType } from "@/lib/domain/enums";
+import { CustomerDataForm } from "@/components/customer/customer-data-form";
+import { type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +25,17 @@ export default async function PublicUploadPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const access = await requireUploadTokenAccess(token);
+  // Bewusst `resolveUploadToken` (ohne Kontingent-Prüfung): ist das Limit
+  // erreicht, soll der Kunde weiterhin seinen Stand sehen und Angaben ergänzen
+  // können – statt einer irreführenden "Link ungültig"-Seite.
+  const access = await resolveUploadToken(token);
   const link = access
     ? await prisma.uploadLink.findUnique({
         where: { id: access.linkId },
         include: {
           case: {
             include: {
+              organization: { select: { name: true } },
               applicants: true,
               property: true,
               documents: true,
@@ -72,11 +73,16 @@ export default async function PublicUploadPage({
       propertyType: (c.property?.objektart as PropertyType | undefined) ?? undefined,
       kapitalanlage: c.kapitalanlage,
       applicantCount: c.applicants.length,
+      applicantIds: c.applicants
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((a) => a.id),
     },
     c.documents.map((d) => ({
       documentType: d.documentType,
       reviewStatus: d.reviewStatus,
       readable: d.readable,
+      applicantId: d.applicantId,
     }))
   ).filter((i) => i.customerVisible);
 
@@ -87,6 +93,18 @@ export default async function PublicUploadPage({
     ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ")
     : "";
   const form = (c.customerForm?.data ?? {}) as Record<string, string>;
+  const beraterName = c.organization?.name || "Ihr Finanzierungsberater";
+
+  // Ist das Upload-Kontingent erschöpft, bleibt die Seite lesbar – nur der
+  // Upload-Bereich wird gesperrt.
+  const uploadsExhausted = link.maxUploads != null && link.usedCount >= link.maxUploads;
+
+  // Was der Kunde bereits eingereicht hat (nicht verworfene Dateien), damit er
+  // sieht, dass sein Upload angekommen ist – auch wenn die Checkliste noch
+  // "fehlt" zeigt, weil die Zuordnung erst nach der Prüfung feststeht.
+  const eingereicht = c.documents
+    .filter((d) => d.uploadSource === "kunde" && d.reviewStatus !== "abgelehnt")
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return (
     <main className="min-h-screen bg-muted/30 pb-16">
@@ -96,7 +114,7 @@ export default async function PublicUploadPage({
           <span className="text-right text-[11px] leading-tight text-muted-foreground">
             Sicherer Bereich
             <br />
-            Jürgen Ertel Baufinanzierung
+            {beraterName}
           </span>
         </div>
       </header>
@@ -140,7 +158,7 @@ export default async function PublicUploadPage({
                     {i.customerDescription}
                   </div>
                 </div>
-                <ItemStatusBadge status={i.status} />
+                <ItemStatusBadge status={i.status} matchedDocuments={i.matchedDocuments} />
               </div>
             ))}
           </CardContent>
@@ -155,9 +173,44 @@ export default async function PublicUploadPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CustomerUploadForm token={token} maxMb={maxUploadMb()} />
+            {uploadsExhausted ? (
+              <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                Über diesen Link wurden bereits alle vorgesehenen Dateien
+                hochgeladen. Wenn Sie noch etwas nachreichen möchten, melden Sie
+                sich kurz bei {beraterName} – Sie erhalten dann einen neuen Link.
+              </p>
+            ) : (
+              <CustomerUploadForm token={token} maxMb={maxUploadMb()} />
+            )}
           </CardContent>
         </Card>
+
+        {eingereicht.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Das haben Sie bereits eingereicht</CardTitle>
+              <CardDescription>
+                Ihre Dateien sind angekommen. Die Zuordnung zur Checkliste oben
+                erfolgt, sobald {beraterName} sie geprüft hat.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {eingereicht.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm">{d.originalName}</span>
+                  {d.reviewStatus === "akzeptiert" ? (
+                    <Badge variant="success">angenommen</Badge>
+                  ) : (
+                    <Badge variant="neutral">in Prüfung</Badge>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -169,82 +222,21 @@ export default async function PublicUploadPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form
-              action={saveCustomerForm.bind(null, token)}
-              className="space-y-4"
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field
-                  name="vorname"
-                  label="Vorname"
-                  defaultValue={form.vorname ?? applicant?.vorname ?? ""}
-                />
-                <Field
-                  name="nachname"
-                  label="Nachname"
-                  defaultValue={form.nachname ?? applicant?.nachname ?? ""}
-                />
-                <Field
-                  name="geburtsdatum"
-                  label="Geburtsdatum"
-                  type="date"
-                  defaultValue={form.geburtsdatum ?? ""}
-                />
-                <Field
-                  name="telefon"
-                  label="Telefon"
-                  type="tel"
-                  defaultValue={form.telefon ?? applicant?.phone ?? ""}
-                />
-                <Field
-                  name="email"
-                  label="E-Mail"
-                  type="email"
-                  defaultValue={form.email ?? applicant?.email ?? ""}
-                />
-                <div className="space-y-1.5">
-                  <Label htmlFor="familienstand">Familienstand</Label>
-                  <select
-                    id="familienstand"
-                    name="familienstand"
-                    defaultValue={form.familienstand ?? ""}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">– wählen –</option>
-                    {MARITAL_STATUSES.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Field
-                  name="beruf"
-                  label="Beruf"
-                  defaultValue={form.beruf ?? ""}
-                />
-                <Field
-                  name="arbeitgeber"
-                  label="Arbeitgeber"
-                  defaultValue={form.arbeitgeber ?? ""}
-                />
-                <Field
-                  name="nettoEinkommen"
-                  label="Netto/Monat (€)"
-                  type="number"
-                  defaultValue={form.nettoEinkommen ?? ""}
-                />
-                <Field
-                  name="eigenkapital"
-                  label="Eigenkapital (€)"
-                  type="number"
-                  defaultValue={form.eigenkapital ?? ""}
-                />
-              </div>
-              <Button type="submit" variant="outline" size="lg" className="w-full">
-                Angaben speichern
-              </Button>
-            </form>
+            <CustomerDataForm
+              token={token}
+              defaults={{
+                vorname: form.vorname ?? applicant?.vorname ?? "",
+                nachname: form.nachname ?? applicant?.nachname ?? "",
+                geburtsdatum: form.geburtsdatum ?? "",
+                telefon: form.telefon ?? applicant?.phone ?? "",
+                email: form.email ?? applicant?.email ?? "",
+                familienstand: form.familienstand ?? applicant?.familienstand ?? "",
+                beruf: form.beruf ?? "",
+                arbeitgeber: form.arbeitgeber ?? "",
+                nettoEinkommen: form.nettoEinkommen != null ? String(form.nettoEinkommen) : "",
+                eigenkapital: form.eigenkapital != null ? String(form.eigenkapital) : "",
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -257,31 +249,27 @@ export default async function PublicUploadPage({
   );
 }
 
-function ItemStatusBadge({ status }: { status: string }) {
+function ItemStatusBadge({
+  status,
+  matchedDocuments,
+}: {
+  status: string;
+  matchedDocuments: number;
+}) {
   if (status === "vorhanden")
     return <Badge variant="success">hochgeladen / akzeptiert</Badge>;
-  if (status === "unvollstaendig")
-    return <Badge variant="warning">bitte erneut hochladen</Badge>;
+  if (status === "unvollstaendig") {
+    // Es liegen bereits Dateien vor – sie sind nur noch nicht geprüft bzw. der
+    // Person zugeordnet (bei zwei Antragstellern weiß die App nicht, wer
+    // hochgeladen hat). "Bitte erneut hochladen" wäre hier schlicht falsch.
+    return matchedDocuments > 0 ? (
+      <Badge variant="neutral">eingegangen, wird geprüft</Badge>
+    ) : (
+      <Badge variant="warning">bitte erneut hochladen</Badge>
+    );
+  }
   if (status === "nicht_aktuell")
     return <Badge variant="warning">bitte aktuelle Version</Badge>;
   return <Badge variant="neutral">fehlt</Badge>;
 }
 
-function Field({
-  name,
-  label,
-  type = "text",
-  defaultValue,
-}: {
-  name: string;
-  label: string;
-  type?: string;
-  defaultValue?: string | number;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} defaultValue={defaultValue} />
-    </div>
-  );
-}

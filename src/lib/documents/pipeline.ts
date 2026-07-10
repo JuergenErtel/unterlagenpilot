@@ -219,7 +219,11 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
       data: { scanStatus: "rejected", scanEngine: scan.engine, scannedAt: new Date(), readable: false },
     });
     // Infizierte Datei aus dem Storage entfernen (keine weitere Verarbeitung).
-    await storage.remove(stored.storageKey).catch(() => {});
+    // Der Upload gilt trotzdem als abgelehnt; ein Fehlschlag darf ihn nicht
+    // durchgehen lassen, muss aber sichtbar sein (Datei liegt dann noch im Bucket).
+    await storage.remove(stored.storageKey).catch((e) => {
+      console.error(`[pipeline] Infizierte Datei ${stored.storageKey} nicht entfernt:`, e);
+    });
     await audit({
       organizationId,
       userId: input.actorUserId ?? null,

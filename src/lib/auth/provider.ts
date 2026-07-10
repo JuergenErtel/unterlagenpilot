@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { verifyPassword } from "@/lib/auth/session";
+import { getDummyPasswordHash, verifyPassword } from "@/lib/auth/session";
 import type { UserRole } from "@/lib/domain/enums";
 
 /**
@@ -33,10 +33,14 @@ class CredentialsAuthProvider implements AuthProvider {
   async authenticate(email: string, password: string): Promise<AuthenticatedUser | null> {
     const normalized = email.trim().toLowerCase();
     const user = await prisma.user.findUnique({ where: { email: normalized } });
-    // Konstante-Zeit-ähnliches Verhalten: auch ohne Treffer eine Hash-Prüfung
-    // ausführen, damit „User existiert nicht" nicht über Timing erkennbar ist.
-    const ok = verifyPassword(password, user?.passwordHash ?? "scrypt$16384$x$x");
-    if (!user || !user.active || !ok) return null;
+    // Konstante-Zeit-ähnliches Verhalten: auch ohne Treffer (oder ohne gesetztes
+    // Passwort) eine Hash-Prüfung ausführen, damit „User existiert nicht" nicht
+    // über Timing erkennbar ist. Passwortlose Konten (z. B. per Einladung
+    // angelegt) können sich niemals per Credentials anmelden.
+    // Die Hash-Prüfung läuft IMMER (auch ohne Treffer), erst danach die
+    // Bedingungen – sonst verriete die Antwortzeit, ob das Konto existiert.
+    const ok = verifyPassword(password, user?.passwordHash || getDummyPasswordHash());
+    if (!user || !user.active || !user.passwordHash || !ok) return null;
     return {
       id: user.id,
       organizationId: user.organizationId,
