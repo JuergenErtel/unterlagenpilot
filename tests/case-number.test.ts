@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeNextCaseNumber } from "@/lib/cases/case-number";
+import { computeNextCaseNumber, highestSequence, formatCaseNumber } from "@/lib/cases/case-number";
 
 describe("computeNextCaseNumber", () => {
   it("startet bei 0001, wenn noch keine Fälle existieren", () => {
@@ -18,5 +18,26 @@ describe("computeNextCaseNumber", () => {
 
   it("beginnt in einem neuen Jahr wieder bei 0001", () => {
     expect(computeNextCaseNumber(null, 2027)).toBe("UP-2027-0001");
+  });
+});
+
+describe("highestSequence (numerisch statt lexikografisch)", () => {
+  it("findet die höchste Nummer auch jenseits von 9999", () => {
+    // "UP-2026-9999" > "UP-2026-10000" im STRING-Vergleich – genau daran scheiterte
+    // die Vergabe zuvor dauerhaft.
+    expect(highestSequence(["UP-2026-9999", "UP-2026-10000", "UP-2026-0001"])).toBe(10000);
+  });
+
+  it("liefert 0 für eine leere Menge", () => {
+    expect(highestSequence([])).toBe(0);
+  });
+
+  it("ignoriert Nummern ohne erkennbare Laufnummer", () => {
+    expect(highestSequence(["UP-2026-", "UP-2026-0007"])).toBe(7);
+  });
+
+  it("formatCaseNumber polstert auf 4 Stellen, wächst aber darüber hinaus", () => {
+    expect(formatCaseNumber(2026, 7)).toBe("UP-2026-0007");
+    expect(formatCaseNumber(2026, 10001)).toBe("UP-2026-10001");
   });
 });

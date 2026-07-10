@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
-import { requireUploadTokenAccess, requireCaseAccess } from "@/lib/auth/context";
+import {
+  requireUploadTokenAccess,
+  requireCaseAccess,
+  resolveUploadToken,
+  consumeUploadSlot,
+  releaseUploadSlot,
+} from "@/lib/auth/context";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { processUpload, processStoredUpload } from "@/lib/documents/pipeline";
 import { getStorage, isStorageKeyForCase } from "@/lib/storage";
@@ -41,6 +47,31 @@ async function clientIp(): Promise<string> {
 }
 
 /**
+ * Antragsteller-Zuordnung für Kunden-Uploads.
+ *
+ * Über den Kundenlink lädt bei Paar-Finanzierungen JEDER Beteiligte hoch – die
+ * Quelle sagt nicht, wessen Ausweis das ist. Nur bei genau einem Antragsteller
+ * ist die Zuordnung eindeutig. Sonst bleibt sie offen (`null`), damit der
+ * Vermittler sie im Review-Center setzt und `applyExtractedFieldsToApplicant`
+ * keine fremden Stammdaten in Antragsteller 1 schreibt.
+ */
+async function resolveCustomerApplicant(
+  caseId: string
+): Promise<{ applicantId: string | null; applicantName: string | null }> {
+  const applicants = await prisma.applicant.findMany({
+    where: { caseId },
+    orderBy: { position: "asc" },
+    select: { id: true, vorname: true, nachname: true },
+  });
+  if (applicants.length !== 1) return { applicantId: null, applicantName: null };
+  const only = applicants[0]!;
+  return {
+    applicantId: only.id,
+    applicantName: [only.vorname, only.nachname].filter(Boolean).join(" ") || null,
+  };
+}
+
+/**
  * Kunden-Upload über sicheren Token-Link – EINE Datei pro Aufruf.
  *
  * Der Client lädt die Dateien einzeln nacheinander hoch (statt alle in einem
@@ -64,30 +95,34 @@ export async function customerUploadOne(token: string, formData: FormData): Prom
     return { uploaded: 0, rejected: [], error: "Keine Datei empfangen." };
   }
 
-  const caseRow = await prisma.case.findUnique({
-    where: { id: access.caseId },
-    include: { applicants: { orderBy: { position: "asc" }, take: 1 } },
-  });
-  const applicant = caseRow?.applicants[0];
-  const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const result = await processUpload({
-    organizationId: access.organizationId,
-    caseId: access.caseId,
-    file: { name: file.name, type: file.type, size: file.size, buffer },
-    uploadSource: "kunde",
-    applicantName,
-    applicantId: applicant?.id ?? null,
-  });
-
-  if (result.ok) {
-    await prisma.uploadLink.update({
-      where: { id: access.linkId },
-      data: { usedCount: { increment: 1 } },
-    });
-    return { uploaded: 1, rejected: [] };
+  // Kontingent VOR der Verarbeitung atomar reservieren (sonst könnten parallele
+  // Requests das Limit gemeinsam überschreiten).
+  if (!(await consumeUploadSlot(access.linkId))) {
+    return { uploaded: 0, rejected: [], error: "Das Upload-Kontingent dieses Links ist aufgebraucht." };
   }
+
+  // Ab hier ist ein Slot reserviert: JEDER Fehlerpfad (auch eine Exception aus
+  // der Pipeline) muss ihn zurückgeben, sonst verfällt Kontingent unbemerkt.
+  let result: Awaited<ReturnType<typeof processUpload>>;
+  try {
+    const { applicantId, applicantName } = await resolveCustomerApplicant(access.caseId);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    result = await processUpload({
+      organizationId: access.organizationId,
+      caseId: access.caseId,
+      file: { name: file.name, type: file.type, size: file.size, buffer },
+      uploadSource: "kunde",
+      applicantName,
+      applicantId,
+    });
+  } catch (e) {
+    await releaseUploadSlot(access.linkId);
+    throw e;
+  }
+
+  if (result.ok) return { uploaded: 1, rejected: [] };
+  // Abgelehnte Datei darf kein Kontingent verbrauchen.
+  await releaseUploadSlot(access.linkId);
   return { uploaded: 0, rejected: [{ name: file.name, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
 }
 
@@ -97,7 +132,10 @@ export async function customerUploadOne(token: string, formData: FormData): Prom
  * erfolgreich übernommenen Dateien.
  */
 export async function finishCustomerUpload(token: string, uploaded: number): Promise<void> {
-  const access = await requireUploadTokenAccess(token);
+  // Bewusst OHNE Kontingent-Prüfung: nach der letzten erlaubten Datei ist der
+  // Link "aufgebraucht" – der Abschluss (Benachrichtigung, Audit, Revalidierung)
+  // muss trotzdem laufen, sonst erfährt der Vermittler nie vom Upload.
+  const access = await resolveUploadToken(token);
   if (!access) return;
 
   await audit({
@@ -272,28 +310,31 @@ export async function processCustomerStoredUpload(token: string, meta: StoredUpl
     return { uploaded: 0, rejected: [{ name: meta.originalName, reason: "Ungültiger Upload-Pfad." }] };
   }
 
-  const caseRow = await prisma.case.findUnique({
-    where: { id: access.caseId },
-    include: { applicants: { orderBy: { position: "asc" }, take: 1 } },
-  });
-  const applicant = caseRow?.applicants[0];
-  const applicantName = applicant ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ") : null;
-
-  const result = await processStoredUpload({
-    organizationId: access.organizationId,
-    caseId: access.caseId,
-    storageKey: meta.storageKey,
-    originalName: meta.originalName,
-    mimeType: meta.mimeType,
-    uploadSource: "kunde",
-    applicantName,
-    applicantId: applicant?.id ?? null,
-  });
-
-  if (result.ok) {
-    await prisma.uploadLink.update({ where: { id: access.linkId }, data: { usedCount: { increment: 1 } } });
-    return { uploaded: 1, rejected: [] };
+  if (!(await consumeUploadSlot(access.linkId))) {
+    return { uploaded: 0, rejected: [], error: "Das Upload-Kontingent dieses Links ist aufgebraucht." };
   }
+
+  // Reservierter Slot: jeder Fehlerpfad gibt ihn zurück (siehe customerUploadOne).
+  let result: Awaited<ReturnType<typeof processStoredUpload>>;
+  try {
+    const { applicantId, applicantName } = await resolveCustomerApplicant(access.caseId);
+    result = await processStoredUpload({
+      organizationId: access.organizationId,
+      caseId: access.caseId,
+      storageKey: meta.storageKey,
+      originalName: meta.originalName,
+      mimeType: meta.mimeType,
+      uploadSource: "kunde",
+      applicantName,
+      applicantId,
+    });
+  } catch (e) {
+    await releaseUploadSlot(access.linkId);
+    throw e;
+  }
+
+  if (result.ok) return { uploaded: 1, rejected: [] };
+  await releaseUploadSlot(access.linkId);
   return { uploaded: 0, rejected: [{ name: meta.originalName, reason: result.reason ?? "Datei konnte nicht verarbeitet werden." }] };
 }
 
@@ -324,40 +365,63 @@ async function notifyBrokerOfUpload(
   }
 }
 
-/** Speichert das Kunden-Erstformular (auch Teilstand). */
-export async function saveCustomerForm(token: string, formData: FormData): Promise<void> {
-  const access = await requireUploadTokenAccess(token);
-  if (!access) throw new Error("Upload-Link ungültig oder abgelaufen.");
+export interface CustomerFormState {
+  ok?: boolean;
+  error?: string;
+  /** Feldbezogene Fehler (Feldname → Meldung), z. B. ungültige E-Mail. */
+  fieldErrors?: Record<string, string>;
+}
+
+/**
+ * Speichert das Kunden-Erstformular (auch Teilstand).
+ *
+ * Zugriff über `resolveUploadToken`: das Formular muss auch dann noch speicherbar
+ * sein, wenn das Upload-Kontingent des Links bereits aufgebraucht ist.
+ */
+export async function saveCustomerForm(
+  token: string,
+  _prev: CustomerFormState,
+  formData: FormData
+): Promise<CustomerFormState> {
+  const access = await resolveUploadToken(token);
+  if (!access) return { error: "Upload-Link ungültig oder abgelaufen." };
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = customerFormSchema.safeParse(raw);
-  const data = parsed.success ? parsed.data : raw;
+  if (!parsed.success) {
+    // Niemals unvalidierte Rohdaten persistieren – der Kunde bekommt stattdessen
+    // eine konkrete Rückmeldung, welches Feld nicht stimmt.
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "");
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { error: "Bitte prüfen Sie die markierten Felder.", fieldErrors };
+  }
 
+  const d = parsed.data;
   await prisma.customerForm.upsert({
     where: { caseId: access.caseId },
-    create: { caseId: access.caseId, data: data as object, submitted: true },
-    update: { data: data as object, submitted: true },
+    create: { caseId: access.caseId, data: d as object, submitted: true },
+    update: { data: d as object, submitted: true },
   });
 
-  if (parsed.success) {
-    const d = parsed.data;
-    const applicant = await prisma.applicant.findFirst({
-      where: { caseId: access.caseId },
-      orderBy: { position: "asc" },
+  const applicant = await prisma.applicant.findFirst({
+    where: { caseId: access.caseId },
+    orderBy: { position: "asc" },
+  });
+  if (applicant) {
+    await prisma.applicant.update({
+      where: { id: applicant.id },
+      data: {
+        vorname: d.vorname || applicant.vorname,
+        nachname: d.nachname || applicant.nachname,
+        email: d.email || applicant.email,
+        phone: d.telefon || applicant.phone,
+        familienstand: d.familienstand ?? applicant.familienstand,
+        anzahlKinder: d.anzahlKinder ?? applicant.anzahlKinder,
+      },
     });
-    if (applicant) {
-      await prisma.applicant.update({
-        where: { id: applicant.id },
-        data: {
-          vorname: d.vorname || applicant.vorname,
-          nachname: d.nachname || applicant.nachname,
-          email: d.email || applicant.email,
-          phone: d.telefon || applicant.phone,
-          familienstand: d.familienstand ?? applicant.familienstand,
-          anzahlKinder: d.anzahlKinder ?? applicant.anzahlKinder,
-        },
-      });
-    }
   }
 
   await audit({
@@ -368,4 +432,5 @@ export async function saveCustomerForm(token: string, formData: FormData): Promi
     metadata: { customerForm: true },
   });
   revalidatePath(`/upload/${token}`);
+  return { ok: true };
 }

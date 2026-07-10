@@ -39,8 +39,27 @@ export function verifyPassword(password: string, stored: string | null | undefin
   } catch {
     return false;
   }
+  // Ein leeres Salt/Hash würde scryptSync(…, keylen 0) einen leeren Buffer liefern
+  // lassen – timingSafeEqual(leer, leer) ist true und jedes Passwort gälte als korrekt.
+  if (salt.length === 0 || expected.length !== SCRYPT_KEYLEN) return false;
   const actual = crypto.scryptSync(password, salt, expected.length, { N: n });
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+/**
+ * Nie zutreffender, aber strukturell valider Hash. Vergleichsziel für nicht
+ * existierende bzw. passwortlose Nutzer, damit die Antwortzeit nicht verrät, ob
+ * ein Konto existiert.
+ *
+ * Bewusst LAZY: `session.ts` hängt an `auth/context.ts` und wird damit bei jedem
+ * Seitenaufruf geladen. Eine scryptSync-Berechnung auf Modulebene kostete jeden
+ * Kaltstart ~25 ms – auch bei Requests, die sich nie anmelden.
+ */
+let dummyPasswordHash: string | null = null;
+
+export function getDummyPasswordHash(): string {
+  dummyPasswordHash ??= hashPassword(crypto.randomBytes(32).toString("hex"));
+  return dummyPasswordHash;
 }
 
 // ---------------------------------------------------------------------------

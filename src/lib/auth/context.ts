@@ -143,11 +143,12 @@ export interface UploadTokenAccess {
 }
 
 /**
- * Verifiziert einen Kunden-Upload-Token (signiert) gegen den gespeicherten,
- * gehashten Link. Erlaubt Zugriff ausschließlich auf den zugeordneten Fall.
- * Gibt null zurück bei ungültig/abgelaufen/deaktiviert/Limit erreicht.
+ * Prüft Signatur, Hash, Aktivität, Ablauf und Fallbindung eines Upload-Tokens –
+ * OHNE das Upload-Kontingent zu betrachten. Für Aktionen, die auch nach dem
+ * letzten Upload noch laufen müssen (Abschluss-Benachrichtigung, Formular,
+ * Seitenanzeige). Neue Uploads gehen über `requireUploadTokenAccess`.
  */
-export async function requireUploadTokenAccess(token: string): Promise<UploadTokenAccess | null> {
+export async function resolveUploadToken(token: string): Promise<UploadTokenAccess | null> {
   const payload = verifyUploadToken(token);
   if (!payload) return null;
   const { hashToken } = await import("@/lib/security/upload-token");
@@ -158,8 +159,6 @@ export async function requireUploadTokenAccess(token: string): Promise<UploadTok
       token: true,
       active: true,
       expiresAt: true,
-      maxUploads: true,
-      usedCount: true,
       caseId: true,
       case: { select: { organizationId: true } },
     },
@@ -169,6 +168,55 @@ export async function requireUploadTokenAccess(token: string): Promise<UploadTok
   if (link.caseId !== payload.caseId) return null;
   // Token-Hash-Abgleich (Klartext-Token wird nicht gespeichert).
   if (link.token !== hashToken(token)) return null;
-  if (link.maxUploads != null && link.usedCount >= link.maxUploads) return null;
   return { linkId: link.id, caseId: link.caseId, organizationId: link.case.organizationId };
+}
+
+/**
+ * Wie `resolveUploadToken`, zusätzlich mit Kontingent-Vorprüfung.
+ * Gibt null zurück bei ungültig/abgelaufen/deaktiviert/Limit erreicht.
+ *
+ * Achtung: Die Prüfung allein ist nicht rennsicher – vor dem eigentlichen
+ * Upload muss `consumeUploadSlot` das Kontingent atomar reservieren.
+ */
+export async function requireUploadTokenAccess(token: string): Promise<UploadTokenAccess | null> {
+  const access = await resolveUploadToken(token);
+  if (!access) return null;
+  const link = await prisma.uploadLink.findUnique({
+    where: { id: access.linkId },
+    select: { maxUploads: true, usedCount: true },
+  });
+  if (!link) return null;
+  if (link.maxUploads != null && link.usedCount >= link.maxUploads) return null;
+  return access;
+}
+
+/**
+ * Reserviert atomar einen Upload-Slot. Der bedingte `updateMany` verhindert,
+ * dass parallele Requests das Limit gemeinsam überschreiten (TOCTOU):
+ * Nur wer die Zeile tatsächlich hochzählt (count === 1), darf hochladen.
+ * Gibt `true` bei unbegrenzten Links direkt zurück.
+ */
+export async function consumeUploadSlot(linkId: string): Promise<boolean> {
+  const link = await prisma.uploadLink.findUnique({
+    where: { id: linkId },
+    select: { maxUploads: true },
+  });
+  if (!link) return false;
+  if (link.maxUploads == null) {
+    await prisma.uploadLink.update({ where: { id: linkId }, data: { usedCount: { increment: 1 } } });
+    return true;
+  }
+  const { count } = await prisma.uploadLink.updateMany({
+    where: { id: linkId, usedCount: { lt: link.maxUploads } },
+    data: { usedCount: { increment: 1 } },
+  });
+  return count === 1;
+}
+
+/** Gibt einen zuvor reservierten Slot zurück (wenn der Upload scheiterte). */
+export async function releaseUploadSlot(linkId: string): Promise<void> {
+  await prisma.uploadLink.updateMany({
+    where: { id: linkId, usedCount: { gt: 0 } },
+    data: { usedCount: { decrement: 1 } },
+  });
 }

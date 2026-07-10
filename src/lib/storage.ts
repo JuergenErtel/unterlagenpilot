@@ -147,7 +147,11 @@ class SupabaseStorageProvider implements StorageProvider {
 
   async remove(storageKey: string): Promise<void> {
     const supabase = await this.client();
-    await supabase.storage.from(this.bucket).remove([storageKey]);
+    const { error } = await supabase.storage.from(this.bucket).remove([storageKey]);
+    // Fehler MUSS sichtbar werden: die DSGVO-Löschung verlässt sich darauf, dass
+    // ein erfolgreiches remove() auch wirklich gelöscht hat. Ein nicht vorhandener
+    // Key gilt bei Supabase nicht als Fehler (idempotent).
+    if (error) throw new Error(`Storage-Löschung fehlgeschlagen: ${error.message}`);
   }
 
   async createSignedUrl(storageKey: string, expiresInSec: number): Promise<string | null> {

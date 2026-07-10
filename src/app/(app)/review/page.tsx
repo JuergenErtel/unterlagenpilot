@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
-import { setDocumentReview, releasePlatform } from "@/lib/actions/cases";
+import { setDocumentReview } from "@/lib/actions/cases";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,12 +12,12 @@ import { SeverityBadge } from "@/components/status-badge";
 import { ConfidenceBadge } from "@/components/case/confidence-badge";
 import { ExtractedFieldActions } from "@/components/review/extracted-field-actions";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
+import { ApplicantSelect } from "@/components/review/applicant-select";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { formatConfidence } from "@/lib/utils";
 import {
-  PLATFORM_LABELS,
   type DocumentType,
   type Severity,
-  type Platform,
 } from "@/lib/domain/enums";
 
 export default async function ReviewCenterPage({ searchParams }: { searchParams: Promise<{ case?: string }> }) {
@@ -57,12 +57,23 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
       ) : (
         documents.map((d) => {
           const name = d.case.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ");
+          // Bei mehreren Antragstellern muss der Vermittler zuordnen können: der
+          // gemeinsame Kunden-Upload-Link verrät nicht, wessen Unterlage das ist.
+          const applicantOptions = [...d.case.applicants]
+            .sort((a, b) => a.position - b.position)
+            .map((a) => ({
+              id: a.id,
+              name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
+            }));
           return (
             <Card key={d.id} className="overflow-hidden">
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b bg-muted/30">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-base">{d.generatedName ?? d.originalName}</CardTitle>
                   <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
+                  {applicantOptions.length > 1 && (
+                    <ApplicantSelect documentId={d.id} value={d.applicantId} applicants={applicantOptions} />
+                  )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{d.case.caseNumber} · {name}</span>
@@ -142,19 +153,28 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   </div>
                   <Separator />
                   <div className="space-y-1.5">
-                    <form action={setDocumentReview.bind(null, d.id, "akzeptiert")}><Button size="sm" variant="success" type="submit" className="w-full">Dokument akzeptieren</Button></form>
+                    <form action={setDocumentReview.bind(null, d.id, "akzeptiert")}>
+                      <SubmitButton size="sm" variant="success" className="w-full" pendingLabel="Wird übernommen …">
+                        Dokument akzeptieren
+                      </SubmitButton>
+                    </form>
                     <div className="grid grid-cols-2 gap-1.5">
                       <Button asChild size="sm" variant="outline"><Link href={`/cases/${d.caseId}/messages`}>Nachfordern</Link></Button>
-                      <form action={setDocumentReview.bind(null, d.id, "abgelehnt")}><Button size="sm" variant="outline" type="submit" className="w-full">Unlesbar</Button></form>
+                      <form action={setDocumentReview.bind(null, d.id, "abgelehnt")}>
+                        <SubmitButton size="sm" variant="outline" className="w-full" pendingLabel="…">
+                          Unlesbar
+                        </SubmitButton>
+                      </form>
                     </div>
-                    <div className="pt-1 text-[11px] font-medium text-muted-foreground">Für Plattform freigeben</div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {(["europace", "finlink", "ehyp_home"] as Platform[]).map((p) => (
-                        <form key={p} action={releasePlatform.bind(null, d.caseId, p)}>
-                          <Button size="sm" variant="ghost" type="submit" className="w-full px-1 text-[11px]">{PLATFORM_LABELS[p]}</Button>
-                        </form>
-                      ))}
-                    </div>
+                    {/*
+                      Früher standen hier drei "Für Plattform freigeben"-Buttons. Sie gaben
+                      den GANZEN FALL frei (nicht das Dokument), umgingen den Pflichtfeld-Guard
+                      der Export-Seite und revalidierten nur /export – im Review-Center passierte
+                      sichtbar nichts. Die Freigabe gehört in den Einreichungsassistenten.
+                    */}
+                    <Button asChild size="sm" variant="ghost" className="w-full text-[11px]">
+                      <Link href={`/cases/${d.caseId}/export`}>Zum Einreichungsassistenten →</Link>
+                    </Button>
                   </div>
                 </div>
               </CardContent>

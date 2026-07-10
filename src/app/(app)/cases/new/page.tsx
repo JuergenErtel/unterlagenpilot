@@ -1,11 +1,12 @@
 import { createCase } from "@/lib/actions/cases";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
 import {
   FINANCING_TYPES,
+  FINANCING_TYPE_LABELS,
   EMPLOYMENT_TYPES,
   EMPLOYMENT_TYPE_LABELS,
   PROPERTY_TYPES,
@@ -34,8 +35,10 @@ export default function NewCasePage() {
                 <Input id="vorname" name="vorname" placeholder="Max" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="nachname">Nachname</Label>
-                <Input id="nachname" name="nachname" placeholder="Mustermann" />
+                <Label htmlFor="nachname">
+                  Nachname <span className="text-destructive">*</span>
+                </Label>
+                <Input id="nachname" name="nachname" placeholder="Mustermann" required />
               </div>
             </div>
 
@@ -44,7 +47,7 @@ export default function NewCasePage() {
                 <Label htmlFor="financingType">Finanzierungsart</Label>
                 <select id="financingType" name="financingType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                   <option value="">– bitte wählen –</option>
-                  {FINANCING_TYPES.map((f) => (<option key={f} value={f}>{f}</option>))}
+                  {FINANCING_TYPES.map((f) => (<option key={f} value={f}>{FINANCING_TYPE_LABELS[f]}</option>))}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -70,8 +73,11 @@ export default function NewCasePage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="submit">Fall anlegen</Button>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <p className="text-xs text-muted-foreground">
+                <span className="text-destructive">*</span> Pflichtfeld
+              </p>
+              <SubmitButton pendingLabel="Fall wird angelegt …">Fall anlegen</SubmitButton>
             </div>
           </form>
         </CardContent>

@@ -61,6 +61,80 @@ export async function reviewExtractedField(
 }
 
 /**
+ * Ordnet ein Dokument einem Antragsteller zu (oder hebt die Zuordnung auf).
+ *
+ * Nötig bei mehreren Antragstellern: Über den gemeinsamen Kunden-Upload-Link ist
+ * nicht erkennbar, WESSEN Ausweis oder Gehaltsabrechnung hochgeladen wurde. Die
+ * Dokumente kommen daher ohne Zuordnung an, und die Checkliste wertet sie erst
+ * als erfüllt, wenn jede Person ihr Soll nachweislich geliefert hat.
+ *
+ * @param applicantId ID des Antragstellers oder null zum Aufheben der Zuordnung.
+ */
+export async function assignDocumentApplicant(
+  documentId: string,
+  applicantId: string | null
+): Promise<void> {
+  const ctx = await requireContext();
+
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      id: true,
+      caseId: true,
+      originalName: true,
+      period: true,
+      documentType: true,
+      case: { select: { organizationId: true } },
+    },
+  });
+  if (!doc || doc.case.organizationId !== ctx.organizationId) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+
+  // Der Antragsteller MUSS zum selben Fall gehören (kein Querschreiben).
+  let applicantName: string | null = null;
+  if (applicantId) {
+    const applicant = await prisma.applicant.findFirst({
+      where: { id: applicantId, caseId: doc!.caseId },
+      select: { vorname: true, nachname: true },
+    });
+    if (!applicant) {
+      const { notFound } = await import("next/navigation");
+      notFound();
+    }
+    applicantName = [applicant!.vorname, applicant!.nachname].filter(Boolean).join(" ") || null;
+  }
+
+  // Dateiname trägt den Antragstellernamen – nach Umzuordnung neu erzeugen.
+  const generatedName = doc!.documentType
+    ? generateFileName({
+        documentType: doc!.documentType,
+        applicantName,
+        period: doc!.period,
+        originalName: doc!.originalName,
+      })
+    : undefined;
+
+  await prisma.document.update({
+    where: { id: documentId },
+    data: { applicantId, ...(generatedName ? { generatedName } : {}) },
+  });
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "document.reviewed",
+    entityType: "document",
+    entityId: documentId,
+    metadata: { assignedApplicant: applicantId ?? "none" },
+  });
+
+  revalidatePath(`/cases/${doc!.caseId}`);
+  revalidatePath("/review");
+}
+
+/**
  * Manuelles Umkategorisieren eines Dokuments (KI-Fehlsortierung korrigieren).
  * Setzt den Typ und erzeugt den Dateinamen deterministisch neu – KEIN KI-Aufruf.
  * Bereits extrahierte Felder bleiben unverändert; eine Neu-Extraktion für den neuen
