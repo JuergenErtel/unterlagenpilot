@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { caseToCanonical } from "./case-loader";
 import { buildPlatformMapping } from "./mapping";
+import { getFinLinkClient, type FinLinkClient, FinLinkNotFoundError, FinLinkAuthError } from "./finlink/client";
+import { finlinkToCanonical } from "./finlink/mapping";
+import { createCaseFromCanonical } from "./case-writer";
 import type {
   ConnectionStatus,
   ImportResult,
@@ -119,8 +122,29 @@ export class FinLinkConnector extends BaseConnector {
     // TODO(prod): FinLink-Fälle abrufen und übernehmen.
     return { ok: false, importedCaseIds: [], message: "FinLink-Import-Stub (TODO: API-Key + Endpunkt)." };
   }
-  async importCaseById(externalId: string): Promise<ImportResult> {
-    return { ok: false, importedCaseIds: [], message: `FinLink-Import-Stub für ${externalId} (TODO: API).` };
+  async importCaseById(
+    externalId: string,
+    ctx: { organizationId: string; userId: string },
+    deps?: { client?: FinLinkClient | null }
+  ): Promise<ImportResult> {
+    const client = deps && "client" in deps ? deps.client : getFinLinkClient();
+    if (!client) {
+      return { ok: false, importedCaseIds: [], message: "FinLink ist nicht verbunden. Bitte FINLINK_BASE_URL/FINLINK_API_KEY setzen." };
+    }
+    try {
+      const dto = await client.fetchVorgang(externalId);
+      const canonical = finlinkToCanonical(dto);
+      const { caseId, deduped } = await createCaseFromCanonical(ctx, canonical);
+      return {
+        ok: true,
+        importedCaseIds: [caseId],
+        message: deduped ? "Vorgang bereits importiert – bestehender Fall geöffnet." : "FinLink-Vorgang übernommen.",
+      };
+    } catch (e) {
+      if (e instanceof FinLinkNotFoundError) return { ok: false, importedCaseIds: [], message: "FinLink-Vorgang nicht gefunden. Bitte ID prüfen." };
+      if (e instanceof FinLinkAuthError) return { ok: false, importedCaseIds: [], message: "FinLink-Zugang abgelehnt. Bitte API-Key prüfen." };
+      return { ok: false, importedCaseIds: [], message: "FinLink-Import fehlgeschlagen. Bitte später erneut versuchen." };
+    }
   }
 }
 
