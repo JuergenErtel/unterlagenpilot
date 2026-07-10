@@ -3,9 +3,7 @@ import { Download, ArrowRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { FinLinkImportForm } from "@/components/finlink/finlink-import-form";
 
 export default function FinLinkImportPage() {
   return (
@@ -31,18 +29,9 @@ export default function FinLinkImportPage() {
           <CardTitle className="text-base">Vorgang übernehmen</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="finlinkId">FinLink-Vorgangs-ID</Label>
-            <Input id="finlinkId" placeholder="z. B. FL-2026-04821" disabled />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button disabled>
-              Import vorbereiten
-              <Badge variant="neutral" className="ml-1">bald verfügbar</Badge>
-            </Button>
-          </div>
+          <FinLinkImportForm />
           <p className="text-xs text-muted-foreground">
-            Sobald die FinLink-Zugangsdaten hinterlegt sind, lädt BaufiDesk den Vorgang automatisch und legt den Fall an.
+            Sobald die FinLink-Zugangsdaten hinterlegt sind, lädt BaufiDesk den Vorgang und legt den Fall an.
           </p>
         </CardContent>
       </Card>
