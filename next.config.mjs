@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+import { withSentryConfig } from "@sentry/nextjs";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -56,4 +57,21 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Source-Maps-Upload nur, wenn Zugangsdaten gesetzt sind – sonst überspringt der
+  // Plugin den Upload lautlos (Fehler werden trotzdem gemeldet, nur mit minifizierten
+  // Stacktraces).
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  // Fehler-Reports laufen über die eigene Domain (/monitoring) statt direkt an
+  // sentry.io: umgeht die strenge CSP (connect-src 'self') und Ad-Blocker.
+  tunnelRoute: "/monitoring",
+  webpack: {
+    // Verkleinert das Client-Bundle: Sentry-Logger-Statements werden entfernt.
+    treeshake: { removeDebugLogging: true },
+    // Vercel-Cron-Monitore automatisch instrumentieren.
+    automaticVercelMonitors: true,
+  },
+});
