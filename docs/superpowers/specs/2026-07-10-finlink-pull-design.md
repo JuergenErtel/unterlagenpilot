@@ -69,7 +69,7 @@ Import-Seite (cases/import)  ──►  Server-Action  ──►  FinLinkConnect
 - **`src/lib/platforms/case-writer.ts`** (neu): `createCaseFromCanonical(ctx,
   canonical, source)` – schreibt Case + Applicants + (Employment/Income) +
   Property + FinancingRequest in **einer** Prisma-Transaktion. Markiert Herkunft
-  (`importSource`, `externalId`). Legt immer einen frischen Fall an und schreibt
+  über das **bereits vorhandene** `Case.finlinkId`. Legt immer einen frischen Fall an und schreibt
   alle gemappten Felder (Merge in bestehende Fälle ist nicht Teil dieses Slice –
   siehe Datenfluss).
 - **`FinLinkConnector.importCaseById`** (`connectors.ts`): orchestriert
@@ -81,9 +81,11 @@ Import-Seite (cases/import)  ──►  Server-Action  ──►  FinLinkConnect
 - **Env** (`src/lib/env.ts`, `.env.example`): `FINLINK_BASE_URL`,
   `FINLINK_API_KEY` dokumentieren (Werte optional; ohne sie ist der Connector
   „nicht konfiguriert").
-- **Prisma-Schema**: Falls noch nicht vorhanden, Felder `importSource` (String?)
-  und `externalId` (String?) an `Case` ergänzen; Index/Unique auf
-  (`organizationId`, `externalId`) für Dedup.
+- **Prisma-Schema**: KEINE Migration nötig. `Case` besitzt bereits `finlinkId`
+  (String?) – das dient als externe Vorgangs-ID **und** Herkunftsmarker. Dedup
+  läuft als `findFirst`-Abfrage auf (`organizationId`, `finlinkId`). Ein
+  Unique-Index darauf wäre eine spätere Härtung (eigene Migration), für den
+  Pilot genügt die Query-Prüfung.
 
 ## Datenfluss
 
@@ -93,8 +95,8 @@ Import-Seite (cases/import)  ──►  Server-Action  ──►  FinLinkConnect
 3. `fetchVorgang(id)` lädt den Vorgang; Antwort wird gegen das DTO-Zod-Schema
    validiert.
 4. `finlinkToCanonical(dto)` mappt in das kanonische Modell.
-5. **Dedup-Check**: existiert (`organizationId`, `externalId`) bereits → Redirect
-   auf den bestehenden Fall statt Dublette; Hinweis anzeigen.
+5. **Dedup-Check**: existiert ein Fall mit (`organizationId`, `finlinkId`)
+   bereits → Redirect auf den bestehenden Fall statt Dublette; Hinweis anzeigen.
 6. `createCaseFromCanonical` legt den Fall an (Transaktion) → Redirect auf
    `/cases/[neueId]`. Da der Dedup-Check (Schritt 5) eine erneute Übernahme
    verhindert, wird immer ein frischer Fall angelegt und alle gemappten Felder
