@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+// Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
+// die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
+export const maxDuration = 300;
 import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, ClipboardList, Banknote, CalendarClock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";

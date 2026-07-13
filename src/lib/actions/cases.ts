@@ -12,6 +12,7 @@ import {
 } from "@/lib/security/upload-link";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
+import { mapLimit } from "@/lib/util/concurrency";
 import { generateByType } from "@/lib/messages/generators";
 import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buildSignature } from "@/lib/messages/render";
 import { getBrokerInfo } from "@/lib/pdf/case-pdf";
@@ -31,6 +32,10 @@ import type {
 } from "@/lib/domain/enums";
 
 const ai = new AIService();
+
+// Wie viele Dokumente die KI-Prüfung gleichzeitig verarbeitet. Genug, um die
+// Gesamtdauer klein zu halten, ohne den KI-Anbieter mit Requests zu überfahren.
+const AI_CHECK_CONCURRENCY = 4;
 
 /** true, wenn der Fehler eine Prisma-Unique-Constraint-Verletzung (P2002) ist. */
 function isUniqueViolation(e: unknown): boolean {
@@ -206,7 +211,11 @@ export async function runAiCheck(caseId: string): Promise<void> {
       include: { pages: true, extractedFields: true },
     });
 
-    for (const doc of docs) {
+    // Dokumente begrenzt parallel prüfen statt streng nacheinander: das war die
+    // Hauptursache, dass die KI-Prüfung bei mehreren Dokumenten über das
+    // Function-Timeout lief und mit "Etwas ist schiefgelaufen" abbrach.
+    // Jedes Dokument ist ein eigener DB-Datensatz -> keine Schreibkonflikte.
+    await mapLimit(docs, AI_CHECK_CONCURRENCY, async (doc) => {
       const text = doc.pages.map((p) => p.ocrText ?? "").join("\n");
       try {
         const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
@@ -251,7 +260,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
           data: { classificationStatus: "fehler", extractionStatus: "fehler" },
         });
       }
-    }
+    });
 
     const agg = await getCaseAggregate(caseId);
     await prisma.case.update({

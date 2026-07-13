@@ -2,6 +2,7 @@ import type { AICompletionRequest, AIProvider } from "./types";
 import { getEnv } from "@/lib/env";
 import { extractJson } from "./json-extract";
 import { buildSystemPrompt } from "./azure-provider";
+import { fetchWithTimeout, AI_TIMEOUT_MS } from "./http";
 
 /**
  * Baut den User-Inhalt: reiner Text, oder multimodal (Text + Bilder + Dokumente).
@@ -57,25 +58,29 @@ export class OpenAICompatibleProvider implements AIProvider {
     const base = env.OPENAI_COMPATIBLE_BASE_URL!.replace(/\/$/, "");
     const url = `${base}/chat/completions`;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_COMPATIBLE_API_KEY}`,
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.OPENAI_COMPATIBLE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: env.OPENAI_COMPATIBLE_MODEL,
+          messages: [
+            { role: "system", content: buildSystemPrompt(req) },
+            {
+              role: "user",
+              content: buildUserContent(req),
+            },
+          ],
+          temperature: 0,
+          response_format: { type: "json_object" },
+        }),
       },
-      body: JSON.stringify({
-        model: env.OPENAI_COMPATIBLE_MODEL,
-        messages: [
-          { role: "system", content: buildSystemPrompt(req) },
-          {
-            role: "user",
-            content: buildUserContent(req),
-          },
-        ],
-        temperature: 0,
-        response_format: { type: "json_object" },
-      }),
-    });
+      AI_TIMEOUT_MS
+    );
 
     if (!res.ok) {
       // Antwort-Body mitnehmen (gekürzt, keine Kundendaten – nur die Anbieter-Fehlermeldung),
