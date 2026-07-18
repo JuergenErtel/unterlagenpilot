@@ -30,12 +30,19 @@ function greeting() {
 
 export default async function DashboardPage() {
   const ctx = await requireContext();
-  const data = await getDashboardData(ctx.organizationId);
-  const status = await getSystemStatus(ctx.organizationId);
-  const demoCase = await prisma.case.findFirst({
-    where: { organizationId: ctx.organizationId, caseNumber: "UP-2026-0001" },
-    select: { id: true },
-  });
+  // Die vier Datenquellen sind voneinander unabhängig. Parallel geladen, damit
+  // die DB-Verbindung möglichst kurz gehalten wird (unter Fluid Compute teilen
+  // sich gleichzeitige Requests denselben Pool – lange Haltezeiten führten zu
+  // "Timed out fetching a new connection from the connection pool").
+  const [data, status, demoCase, caseCount] = await Promise.all([
+    getDashboardData(ctx.organizationId),
+    getSystemStatus(ctx.organizationId),
+    prisma.case.findFirst({
+      where: { organizationId: ctx.organizationId, caseNumber: "UP-2026-0001" },
+      select: { id: true },
+    }),
+    prisma.case.count({ where: { organizationId: ctx.organizationId } }),
+  ]);
 
   const hours = Math.floor(data.kpis.zeitersparnisMin / 60);
   const mins = data.kpis.zeitersparnisMin % 60;
@@ -43,7 +50,7 @@ export default async function DashboardPage() {
 
   // Unterscheidet "noch nie einen Fall angelegt" von "alles erledigt" – die
   // Pipeline taugt dafür nicht, weil abgeschlossene Fälle dort nicht auftauchen.
-  const keineFaelle = (await prisma.case.count({ where: { organizationId: ctx.organizationId } })) === 0;
+  const keineFaelle = caseCount === 0;
 
   return (
     <div className="space-y-7">
