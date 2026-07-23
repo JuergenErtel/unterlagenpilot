@@ -149,10 +149,13 @@ export default async function DashboardPage() {
                 <div>
                   <span className="font-medium">{f.kundenName}</span>
                   <span className="ml-2 font-mono text-xs text-muted-foreground">{f.caseNumber}</span>
+                  {/* Ein stabiler <span> je Grund – React manipuliert nie rohe
+                      Textknoten-Geschwister, die ein Auto-Übersetzer wegziehen
+                      könnte (parentNode-Crash). */}
                   <div className="text-xs text-muted-foreground">
-                    {f.grund === "wiedervorlage" && "Wiedervorlage fällig"}
-                    {f.grund === "frist" && `Frist: ${f.naechsteFrist?.title ?? "—"}`}
-                    {f.grund === "bank_nachforderung" && `${f.offeneBankforderungen} offene Bank-Nachforderung(en)`}
+                    {f.grund === "wiedervorlage" && <span>Wiedervorlage fällig</span>}
+                    {f.grund === "frist" && <span>Frist: {f.naechsteFrist?.title ?? "—"}</span>}
+                    {f.grund === "bank_nachforderung" && <span>{f.offeneBankforderungen} offene Bank-Nachforderung(en)</span>}
                   </div>
                 </div>
                 {f.faelligAm && (

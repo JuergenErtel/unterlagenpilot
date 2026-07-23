@@ -16,6 +16,11 @@ export const metadata: Metadata = {
     locale: "de_DE",
     siteName: "BaufiDesk",
   },
+  // Auto-Übersetzer (Google Translate, In-App-Browser) dürfen die App-UI nicht
+  // umbauen: sie ersetzen Textknoten, danach findet React beim Reconcile den
+  // parentNode nicht mehr → "Cannot read properties of null (reading
+  // 'parentNode')". Die Oberfläche ist ohnehin fest deutsch.
+  other: { google: "notranslate" },
 };
 
 export default function RootLayout({
@@ -24,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="de" translate="no" className={`notranslate ${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="min-h-screen bg-canvas font-sans antialiased">{children}</body>
     </html>
   );
