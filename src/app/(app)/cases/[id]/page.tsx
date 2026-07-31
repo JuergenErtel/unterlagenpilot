@@ -25,6 +25,8 @@ import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
+import { AiCheckRunning } from "@/components/case/ai-check-running";
+import { isAiCheckStale } from "@/lib/cases/ai-check-status";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
 import { maxUploadMb } from "@/lib/documents/pipeline";
@@ -80,6 +82,10 @@ export default async function CaseCockpitPage({
   // Die KI-Prüfung verweigert bei diesen Status still den Dienst – das sagen wir
   // dem Nutzer, statt einen Button anzubieten, auf dessen Klick nichts passiert.
   const aiCheckLocked = LOCKED_CASE_STATUSES.has(caseRow.status as CaseStatus);
+  // Läuft die Prüfung im Hintergrund, zeigt die Seite Fortschritt statt Button.
+  // Ein veralteter läuft-Status (abgestürzter Lauf) gibt den Button wieder frei.
+  const aiCheckRunning = caseRow.status === "ki_pruefung_laeuft" && !isAiCheckStale(caseRow.updatedAt);
+  const aiCheckDone = documents.filter((d) => d.classificationStatus !== "laeuft").length;
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -298,9 +304,11 @@ export default async function CaseCockpitPage({
                   Die KI-Prüfung ist gesperrt, weil der Fall bereits{" "}
                   {CASE_STATUS_LABELS[caseRow.status as CaseStatus].toLowerCase()} ist.
                 </div>
+              ) : aiCheckRunning ? (
+                <AiCheckRunning done={aiCheckDone} total={documents.length} />
               ) : (
                 <form action={runAiCheck.bind(null, id)}>
-                  <SubmitButton variant="ai" className="w-full justify-start" pendingLabel="KI prüft die Unterlagen …">
+                  <SubmitButton variant="ai" className="w-full justify-start" pendingLabel="KI-Prüfung wird gestartet …">
                     <ScanSearch />KI-Prüfung starten
                   </SubmitButton>
                 </form>
