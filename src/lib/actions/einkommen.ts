@@ -24,7 +24,13 @@ const VISION_MIME = new Set(["image/png", "image/jpeg"]);
 export interface EinkommenState {
   matrix: ConsolidatedMatrix | null;
   docNotes: Array<{ label: string; notiz: string }>;
+  /** Labels ALLER ausgewerteten Dokumente – docNotes enthält nur die mit Notiz. */
+  docLabels?: string[];
   error?: string;
+}
+
+function einkommenDocLabel(d: { dokumenttyp: string; jahr: number }): string {
+  return `${DOCUMENT_TYPE_LABELS[d.dokumenttyp as DocumentType] ?? d.dokumenttyp} ${d.jahr}`;
 }
 
 export async function analyzeSelfEmployedAction(
@@ -91,16 +97,15 @@ export async function analyzeSelfEmployedAction(
 
   let matrix: ConsolidatedMatrix | null = null;
   let docNotes: Array<{ label: string; notiz: string }> = [];
+  let docLabels: string[] = [];
   try {
     const analysis = await ai.analyzeSelfEmployedDocs(images, documents);
     const docs = toEinkommenDocs(analysis);
     matrix = consolidateEinkommen(docs);
+    docLabels = Array.from(new Set(docs.map(einkommenDocLabel)));
     docNotes = docs
       .filter((d) => d.notiz.trim().length > 0)
-      .map((d) => ({
-        label: `${DOCUMENT_TYPE_LABELS[d.dokumenttyp as DocumentType] ?? d.dokumenttyp} ${d.jahr}`,
-        notiz: d.notiz,
-      }));
+      .map((d) => ({ label: einkommenDocLabel(d), notiz: d.notiz }));
   } catch (e) {
     // Echten Fehler protokollieren (Server-Log/Vercel), aber dem Nutzer keine Interna zeigen.
     console.error("[einkommen] KI-Analyse fehlgeschlagen:", e);
@@ -131,7 +136,7 @@ export async function analyzeSelfEmployedAction(
   });
 
   revalidatePath(`/cases/${caseId}/einkommen-selbststaendig`);
-  return { matrix, docNotes };
+  return { matrix, docNotes, docLabels };
 }
 
 export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds: string[]): Promise<EinkommenState> {
@@ -172,15 +177,16 @@ export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds:
     const analysis = await ai.analyzeSelfEmployedDocs(images, documents);
     const eDocs = toEinkommenDocs(analysis);
     const matrix = consolidateEinkommen(eDocs);
+    const docLabels = Array.from(new Set(eDocs.map(einkommenDocLabel)));
     const docNotes = eDocs
       .filter((x) => x.notiz.trim().length > 0)
-      .map((x) => ({ label: `${DOCUMENT_TYPE_LABELS[x.dokumenttyp as DocumentType] ?? x.dokumenttyp} ${x.jahr}`, notiz: x.notiz }));
+      .map((x) => ({ label: einkommenDocLabel(x), notiz: x.notiz }));
     if (!matrix || matrix.rows.length === 0) {
       return { matrix: null, docNotes: [], error: "Aus den Unterlagen konnten keine auswertbaren Kennzahlen gelesen werden." };
     }
     await audit({ organizationId: ctx.organizationId, userId: ctx.userId, action: "ai.evaluated", entityType: "case", entityId: caseId, metadata: { feature: "einkommen", jahre: matrix.jahre.length } });
     revalidatePath(`/cases/${caseId}/einkommen-selbststaendig`);
-    return { matrix, docNotes };
+    return { matrix, docNotes, docLabels };
   } catch (e) {
     console.error("[einkommen] KI-Analyse fehlgeschlagen:", e);
     return { matrix: null, docNotes: [], error: "KI-Analyse derzeit nicht möglich. Bitte später erneut versuchen." };
@@ -298,6 +304,8 @@ export interface SelfEmployedBankSummaryInput {
   jahre: number[];
   rows: EinkommenPdfInput["rows"];
   docNotes: Array<{ label: string; notiz: string }>;
+  /** Labels ALLER ausgewerteten Unterlagen für den Begleittext; fehlt das Feld, greifen die docNotes-Labels. */
+  documents?: Array<{ label: string }>;
   einkommensansatzJahr: number | null;
 }
 
@@ -314,8 +322,6 @@ export async function createSelfEmployedBankSummaryAction(
     });
     if (!applicant) return { error: "Der gewählte Antragsteller wurde nicht gefunden." };
 
-    // Stammdaten persistieren. `SelfEmploymentRecord.applicantId` ist NICHT unique
-    // (nur @@index) — daher findFirst + update/create statt upsert(where: { applicantId }).
     const gruendungsdatum = input.selfEmployment.gruendungsjahr
       ? new Date(Date.UTC(input.selfEmployment.gruendungsjahr, 0, 1, 12))
       : null;
@@ -324,15 +330,11 @@ export async function createSelfEmployedBankSummaryAction(
       rechtsform: input.selfEmployment.rechtsform || null,
       gruendungsdatum,
     };
-    const existing = await prisma.selfEmploymentRecord.findFirst({
+    await prisma.selfEmploymentRecord.upsert({
       where: { applicantId: applicant.id },
-      select: { id: true },
+      update: stammdaten,
+      create: { applicantId: applicant.id, ...stammdaten },
     });
-    if (existing) {
-      await prisma.selfEmploymentRecord.update({ where: { id: existing.id }, data: stammdaten });
-    } else {
-      await prisma.selfEmploymentRecord.create({ data: { applicantId: applicant.id, ...stammdaten } });
-    }
 
     // Gewinn je Jahr (nur vorhandene Werte) für den Begleittext.
     const gewinnRow = input.rows.find((r) => r.kennzahl === "gewinn");
@@ -354,7 +356,7 @@ export async function createSelfEmployedBankSummaryAction(
       },
       gewinnByYear,
       trend,
-      documents: input.docNotes.map((d) => ({ label: d.label })),
+      documents: (input.documents ?? input.docNotes).map((d) => ({ label: d.label })),
       ansatzJahr: input.einkommensansatzJahr,
     });
 

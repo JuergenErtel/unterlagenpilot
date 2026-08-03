@@ -18,6 +18,9 @@ import { CustomerDataForm } from "@/components/customer/customer-data-form";
 import { type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
+// Headroom für die Hintergrund-Verarbeitung (OCR/KI) der Kunden-Upload-Actions,
+// die per after() nach der Antwort weiterläuft.
+export const maxDuration = 300;
 
 export default async function PublicUploadPage({
   params,

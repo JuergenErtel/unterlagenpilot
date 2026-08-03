@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noise";
 
 /**
  * Sentry – clientseitige Fehlererfassung (Browser).
@@ -17,6 +18,11 @@ Sentry.init({
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
   sendDefaultPii: false,
   tracesSampleRate: 0.1,
+  // Reacts Streaming-Skripte melden bei einem Hydration-Mismatch pro Teilstück
+  // denselben parentNode-Fehler (Dashboard: 12x pro Aufruf, Issue BAUFIDESK-B),
+  // obwohl die Seite vollständig bleibt. Nur diese Kaskade wird verworfen – die
+  // Ursache (Hydration-Fehler) bleibt sichtbar. Details siehe Modul-Kommentar.
+  beforeSend: (event) => (isReactStreamingCascade(event) ? null : event),
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

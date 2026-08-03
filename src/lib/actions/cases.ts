@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireContext, requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/security/upload-link";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
+import { mapLimit } from "@/lib/util/concurrency";
 import { generateByType } from "@/lib/messages/generators";
 import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buildSignature } from "@/lib/messages/render";
 import { getBrokerInfo } from "@/lib/pdf/case-pdf";
@@ -19,6 +21,7 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
+import { isAiCheckStale } from "@/lib/cases/ai-check-status";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import type {
   CaseStatus,
@@ -31,6 +34,10 @@ import type {
 } from "@/lib/domain/enums";
 
 const ai = new AIService();
+
+// Wie viele Dokumente die KI-Prüfung gleichzeitig verarbeitet. Genug, um die
+// Gesamtdauer klein zu halten, ohne den KI-Anbieter mit Requests zu überfahren.
+const AI_CHECK_CONCURRENCY = 4;
 
 /** true, wenn der Fehler eine Prisma-Unique-Constraint-Verletzung (P2002) ist. */
 function isUniqueViolation(e: unknown): boolean {
@@ -183,7 +190,16 @@ export async function deactivateUploadLinkAction(caseId: string, linkId: string)
   revalidatePath(`/cases/${caseId}`);
 }
 
-/** Startet die (deterministische) KI-Prüfung über alle Dokumente eines Falls. */
+/**
+ * Startet die KI-Prüfung über alle Dokumente eines Falls – im Hintergrund.
+ *
+ * Die Aktion kehrt sofort zurück; die eigentliche Prüfung (2 KI-Aufrufe je
+ * Dokument) läuft via after() weiter. Vorher lief sie synchron im Request:
+ * Bei einem echten Fall mit 10 Dokumenten stand der Vermittler ~2 Minuten vor
+ * einem stummen Spinner und hielt die Funktion für kaputt (29.07., Fall
+ * UP-2026-0002). Den Fortschritt zeigt die Fallseite über den Fallstatus
+ * `ki_pruefung_laeuft` plus Dokument-Status, die Seite pollt selbst.
+ */
 export async function runAiCheck(caseId: string): Promise<void> {
   const { ctx } = await requireCaseAccess(caseId);
 
@@ -191,22 +207,61 @@ export async function runAiCheck(caseId: string): Promise<void> {
   // nicht durch eine erneute KI-Prüfung zurücksetzen.
   const current = await prisma.case.findUniqueOrThrow({
     where: { id: caseId },
-    select: { status: true },
+    select: { status: true, updatedAt: true },
   });
   if (LOCKED_CASE_STATUSES.has(current.status as CaseStatus)) {
     return;
   }
-  const previousStatus = current.status;
+  // Läuft bereits eine frische Prüfung, keine zweite parallel starten. Ein
+  // veralteter läuft-Status (abgestürzter Lauf) darf dagegen neu gestartet
+  // werden – als Revert-Ziel dient dann ein neutraler Status.
+  if (current.status === "ki_pruefung_laeuft" && !isAiCheckStale(current.updatedAt)) {
+    return;
+  }
+  const previousStatus = current.status === "ki_pruefung_laeuft" ? "unterlagen_fehlen" : current.status;
 
   await prisma.case.update({ where: { id: caseId }, data: { status: "ki_pruefung_laeuft" } });
+  // Alle Dokumente sichtbar auf "läuft" setzen – daraus speist sich die
+  // Fortschrittsanzeige ("n von m geprüft") auf der Fallseite.
+  await prisma.document.updateMany({
+    where: { caseId },
+    data: { classificationStatus: "laeuft", extractionStatus: "laeuft" },
+  });
 
+  after(() =>
+    processAiCheckInBackground({
+      caseId,
+      previousStatus,
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+    })
+  );
+
+  revalidatePath(`/cases/${caseId}`);
+}
+
+/**
+ * Der eigentliche Prüflauf. Läuft nach der Antwort weiter (after()) und darf
+ * deshalb niemals werfen – Fehler räumt er selbst auf (Status-Revert).
+ */
+async function processAiCheckInBackground(params: {
+  caseId: string;
+  previousStatus: string;
+  organizationId: string;
+  userId: string;
+}): Promise<void> {
+  const { caseId, previousStatus, organizationId, userId } = params;
   try {
     const docs = await prisma.document.findMany({
       where: { caseId },
       include: { pages: true, extractedFields: true },
     });
 
-    for (const doc of docs) {
+    // Dokumente begrenzt parallel prüfen statt streng nacheinander: das war die
+    // Hauptursache, dass die KI-Prüfung bei mehreren Dokumenten über das
+    // Function-Timeout lief und mit "Etwas ist schiefgelaufen" abbrach.
+    // Jedes Dokument ist ein eigener DB-Datensatz -> keine Schreibkonflikte.
+    await mapLimit(docs, AI_CHECK_CONCURRENCY, async (doc) => {
       const text = doc.pages.map((p) => p.ocrText ?? "").join("\n");
       try {
         const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
@@ -251,7 +306,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
           data: { classificationStatus: "fehler", extractionStatus: "fehler" },
         });
       }
-    }
+    });
 
     const agg = await getCaseAggregate(caseId);
     await prisma.case.update({
@@ -263,8 +318,8 @@ export async function runAiCheck(caseId: string): Promise<void> {
     });
 
     await audit({
-      organizationId: ctx.organizationId,
-      userId: ctx.userId,
+      organizationId,
+      userId,
       action: "ai.evaluated",
       entityType: "case",
       entityId: caseId,
@@ -275,12 +330,9 @@ export async function runAiCheck(caseId: string): Promise<void> {
     // hängen lassen -> vorherigen Status wiederherstellen.
     console.error(`[runAiCheck] Prüfung für Fall ${caseId} fehlgeschlagen:`, e);
     await prisma.case
-      .update({ where: { id: caseId }, data: { status: previousStatus } })
+      .update({ where: { id: caseId }, data: { status: previousStatus as CaseStatus } })
       .catch(() => {});
-    throw e;
   }
-
-  revalidatePath(`/cases/${caseId}`);
 }
 
 export async function generateMessage(

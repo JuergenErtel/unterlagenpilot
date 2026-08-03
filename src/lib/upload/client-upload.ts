@@ -77,7 +77,12 @@ export interface SequentialUploadOptions {
    */
   requestSlot?: (originalName: string, mimeType: string) => Promise<SlotResult>;
   processStored?: (meta: StoredUploadMeta) => Promise<UploadOneResult>;
+  /** Wie viele Dateien gleichzeitig hochgeladen werden (Default 3). */
+  concurrency?: number;
 }
+
+/** Wie viele Dateien gleichzeitig hochgeladen werden. */
+const DEFAULT_CONCURRENCY = 3;
 
 /**
  * Lädt eine große Datei direkt zum Supabase-Storage (signierte URL) und stößt danach
@@ -122,13 +127,17 @@ export async function uploadFilesSequentially(
 ): Promise<UploadOutcome> {
   const rejected: { name: string; reason: string }[] = [];
   let uploaded = 0;
+  let done = 0;
   const canDirect = Boolean(options.requestSlot && options.processStored);
+  const total = files.length;
 
-  for (let i = 0; i < files.length; i++) {
-    const original = files[i]!;
-    options.onProgress?.({ done: i, total: files.length, current: original.name });
+  // Dateien begrenzt parallel statt streng nacheinander hochladen. Der frühere
+  // strikt sequentielle Upload ließ mehrere Dateien "ewig" dauern; jetzt laufen
+  // bis zu `concurrency` Übertragungen gleichzeitig, und der Fortschritt bewegt
+  // sich mit jeder fertigen Datei. (JS ist single-threaded → die geteilten Zähler
+  // sind hier ungefährlich.)
+  async function handleOne(original: File): Promise<void> {
     const prepared = await prepareFile(original);
-
     try {
       let res: UploadOneResult;
       if (canDirect && prepared.size > DIRECT_UPLOAD_ABOVE_BYTES) {
@@ -150,9 +159,24 @@ export async function uploadFilesSequentially(
         name: original.name,
         reason: "Übertragung fehlgeschlagen – bitte diese Datei einzeln erneut versuchen.",
       });
+    } finally {
+      done += 1;
+      options.onProgress?.({ done, total });
     }
   }
 
-  options.onProgress?.({ done: files.length, total: files.length });
+  options.onProgress?.({ done: 0, total });
+  let next = 0;
+  const workers = Math.max(1, Math.min(options.concurrency ?? DEFAULT_CONCURRENCY, total || 1));
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = next++;
+      if (i >= total) return;
+      await handleOne(files[i]!);
+    }
+  }
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+
+  options.onProgress?.({ done: total, total });
   return { uploaded, rejected };
 }

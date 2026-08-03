@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
@@ -255,13 +256,53 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
     };
   }
 
-  // Sauber → für OCR freigegeben.
+  // Sauber → für OCR freigegeben. Marker "läuft", damit die UI zwischen
+  // "wird noch analysiert" und einem echten Fehler unterscheiden kann.
   await prisma.document.update({
     where: { id: doc.id },
-    data: { scanStatus: "ready_for_ocr", scanEngine: scan.engine, scannedAt: new Date() },
+    data: {
+      scanStatus: "ready_for_ocr",
+      scanEngine: scan.engine,
+      scannedAt: new Date(),
+      ocrStatus: "laeuft",
+      classificationStatus: "laeuft",
+      extractionStatus: "laeuft",
+    },
   });
 
-  // 5) OCR + KI (best effort; Ausfall blockiert den Upload nicht).
+  // 5) OCR + KI laufen NACH der Antwort im Hintergrund (after()). Früher blockierten
+  //    OCR + 2 LLM-Calls je Datei den Upload-Request – das ließ den Upload
+  //    "unendlich" wirken. Jetzt kehrt der Upload sofort zurück; die Analyse füllt
+  //    Typ/Felder wenige Sekunden später nach.
+  after(() =>
+    processOcrAndAi({
+      documentId: doc.id,
+      buffer,
+      stored,
+      originalName,
+      applicantName: input.applicantName ?? null,
+    })
+  );
+
+  return { ok: true, documentId: doc.id, fileName: originalName, scanStatus: "ready_for_ocr" };
+}
+
+interface OcrAndAiInput {
+  documentId: string;
+  buffer: Buffer;
+  stored: StoredObject;
+  originalName: string;
+  applicantName: string | null;
+}
+
+/**
+ * OCR + Klassifikation + Feld-Extraktion für ein bereits gespeichertes, sauberes
+ * Dokument. Läuft im Hintergrund (after()) und aktualisiert den Datensatz, sobald
+ * fertig. Ein Ausfall blockiert nichts – das Dokument wird als Fehler markiert und
+ * kann per "KI-Prüfung starten" erneut verarbeitet werden.
+ */
+async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
+  const { documentId, buffer, stored, originalName, applicantName } = input;
   const ocr = getOCRProvider();
   let ocrResult: Awaited<ReturnType<typeof ocr.extractText>> | null = null;
   let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
@@ -281,45 +322,47 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
 
   const generatedName = generateFileName({
     documentType: cls?.documentType ?? null,
-    applicantName: cls?.detectedApplicant ?? input.applicantName ?? null,
+    applicantName: cls?.detectedApplicant ?? applicantName ?? null,
     propertyRef: cls?.detectedPropertyRef,
     period: cls?.period,
     originalName,
   });
 
-  await prisma.document.update({
-    where: { id: doc.id },
-    data: {
-      generatedName,
-      pageCount: ocrResult?.pageCount,
-      documentType: cls?.documentType ?? null,
-      ocrStatus: ocrResult ? "fertig" : "fehler",
-      classificationStatus: cls ? "fertig" : "fehler",
-      extractionStatus: ext ? "fertig" : "fehler",
-      confidence: cls?.confidence,
-      readable: ocrResult ? true : null,
-      period: cls?.period ?? undefined,
-      pages: ocrResult
-        ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) }
-        : undefined,
-      extractedFields: ext
-        ? {
-            create: ext.fields.map((f) => ({
-              key: f.key,
-              label: f.label,
-              value: f.value == null ? null : String(f.value),
-              confidence: f.confidence,
-              source: f.source,
-            })),
-          }
-        : undefined,
-      warnings: ext
-        ? { create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })) }
-        : undefined,
-    },
-  });
-
-  return { ok: true, documentId: doc.id, fileName: originalName, scanStatus: "ready_for_ocr" };
+  try {
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        generatedName,
+        pageCount: ocrResult?.pageCount,
+        documentType: cls?.documentType ?? null,
+        ocrStatus: ocrResult ? "fertig" : "fehler",
+        classificationStatus: cls ? "fertig" : "fehler",
+        extractionStatus: ext ? "fertig" : "fehler",
+        confidence: cls?.confidence,
+        readable: ocrResult ? true : null,
+        period: cls?.period ?? undefined,
+        pages: ocrResult
+          ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) }
+          : undefined,
+        extractedFields: ext
+          ? {
+              create: ext.fields.map((f) => ({
+                key: f.key,
+                label: f.label,
+                value: f.value == null ? null : String(f.value),
+                confidence: f.confidence,
+                source: f.source,
+              })),
+            }
+          : undefined,
+        warnings: ext
+          ? { create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })) }
+          : undefined,
+      },
+    });
+  } catch (e) {
+    console.error(`[pipeline] Hintergrund-Analyse für Dokument ${documentId} fehlgeschlagen:`, e);
+  }
 }
 
 /** Maximale Upload-Größe in MB (für UI-Hinweise). */

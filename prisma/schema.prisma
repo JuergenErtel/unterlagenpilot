@@ -608,7 +608,7 @@ model EmploymentRecord {
 
 model SelfEmploymentRecord {
   id            String   @id @default(cuid())
-  applicantId   String
+  applicantId   String   @unique
   applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
   firma         String?
   rechtsform    String?
@@ -616,7 +616,6 @@ model SelfEmploymentRecord {
   gruendungsdatum DateTime?
   createdAt     DateTime @default(now())
 
-  @@index([applicantId])
   @@map("self_employment_records")
 }
 

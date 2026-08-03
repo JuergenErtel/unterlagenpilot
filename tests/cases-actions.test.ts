@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// after() sammelt die Hintergrund-Arbeit ein, damit Tests sie gezielt ausführen können.
+const afterCallbacks: Array<() => void | Promise<void>> = [];
+vi.mock("next/server", () => ({
+  after: vi.fn((cb: () => void | Promise<void>) => {
+    afterCallbacks.push(cb);
+  }),
+}));
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
   notFound: vi.fn(() => {
@@ -32,6 +39,7 @@ const caseFindMany = vi.fn();
 const caseCreate = vi.fn();
 const caseUpdate = vi.fn();
 const documentFindMany = vi.fn();
+const documentUpdateMany = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -43,32 +51,77 @@ vi.mock("@/lib/db", () => ({
       create: (...a: unknown[]) => caseCreate(...a),
       update: (...a: unknown[]) => caseUpdate(...a),
     },
-    document: { findMany: (...a: unknown[]) => documentFindMany(...a) },
+    document: {
+      findMany: (...a: unknown[]) => documentFindMany(...a),
+      updateMany: (...a: unknown[]) => documentUpdateMany(...a),
+    },
   },
 }));
 
 import { runAiCheck, createCase } from "@/lib/actions/cases";
 
 beforeEach(() => {
-  [caseFindUnique, caseFindUniqueOrThrow, caseFindFirst, caseFindMany, caseCreate, caseUpdate, documentFindMany].forEach((m) => m.mockReset());
+  [caseFindUnique, caseFindUniqueOrThrow, caseFindFirst, caseFindMany, caseCreate, caseUpdate, documentFindMany, documentUpdateMany].forEach((m) => m.mockReset());
+  afterCallbacks.length = 0;
 });
 
-describe("runAiCheck – Status-Guard & Revert", () => {
+describe("runAiCheck – Status-Guard, Hintergrundlauf & Revert", () => {
   it("lässt einen exportierten Fall unverändert (kein Zurücksetzen)", async () => {
-    caseFindUniqueOrThrow.mockResolvedValue({ status: "exportiert" });
+    caseFindUniqueOrThrow.mockResolvedValue({ status: "exportiert", updatedAt: new Date() });
     await runAiCheck("case-A");
     expect(caseUpdate).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
   });
 
-  it("stellt bei einem Fehler während der Prüfung den vorherigen Status wieder her", async () => {
-    caseFindUniqueOrThrow.mockResolvedValue({ status: "unterlagen_fehlen" });
+  it("startet keine zweite Prüfung, solange eine frische läuft", async () => {
+    caseFindUniqueOrThrow.mockResolvedValue({ status: "ki_pruefung_laeuft", updatedAt: new Date() });
+    await runAiCheck("case-A");
+    expect(caseUpdate).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("erlaubt den Neustart, wenn ein läuft-Status veraltet ist (abgestürzter Lauf)", async () => {
+    const alt = new Date(Date.now() - 11 * 60 * 1000);
+    caseFindUniqueOrThrow.mockResolvedValue({ status: "ki_pruefung_laeuft", updatedAt: alt });
     caseUpdate.mockResolvedValue({});
+    documentUpdateMany.mockResolvedValue({});
+    await runAiCheck("case-A");
+    expect(afterCallbacks).toHaveLength(1);
+  });
+
+  it("kehrt sofort zurück und verarbeitet die Dokumente im Hintergrund", async () => {
+    caseFindUniqueOrThrow.mockResolvedValue({ status: "unterlagen_fehlen", updatedAt: new Date() });
+    caseUpdate.mockResolvedValue({});
+    documentUpdateMany.mockResolvedValue({});
+    documentFindMany.mockResolvedValue([]);
+
+    await runAiCheck("case-A");
+
+    // Aktion selbst: nur Status auf "läuft" + Dokumente markieren, keine KI-Arbeit.
+    const statuses = caseUpdate.mock.calls.map((c) => (c[0] as { data: { status?: string } }).data.status);
+    expect(statuses).toEqual(["ki_pruefung_laeuft"]);
+    expect(documentUpdateMany).toHaveBeenCalledTimes(1);
+    expect(documentFindMany).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(1);
+
+    // Hintergrundlauf: verarbeitet Dokumente und setzt den Endstatus.
+    await afterCallbacks[0]!();
+    expect(documentFindMany).toHaveBeenCalledTimes(1);
+    const allStatuses = caseUpdate.mock.calls.map((c) => (c[0] as { data: { status?: string } }).data.status);
+    expect(allStatuses[allStatuses.length - 1]).toBe("vermittlerpruefung_erforderlich");
+  });
+
+  it("stellt bei einem Fehler im Hintergrundlauf den vorherigen Status wieder her", async () => {
+    caseFindUniqueOrThrow.mockResolvedValue({ status: "unterlagen_fehlen", updatedAt: new Date() });
+    caseUpdate.mockResolvedValue({});
+    documentUpdateMany.mockResolvedValue({});
     documentFindMany.mockRejectedValue(new Error("DB weg"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(runAiCheck("case-A")).rejects.toThrow("DB weg");
+    await runAiCheck("case-A");
+    // Der Hintergrundlauf darf nicht werfen (niemand fängt ihn) – er räumt selbst auf.
+    await expect(afterCallbacks[0]!()).resolves.toBeUndefined();
 
-    // 1. Update: ki_pruefung_laeuft, letztes Update: revert auf unterlagen_fehlen
     const statuses = caseUpdate.mock.calls.map((c) => (c[0] as { data: { status?: string } }).data.status);
     expect(statuses[0]).toBe("ki_pruefung_laeuft");
     expect(statuses[statuses.length - 1]).toBe("unterlagen_fehlen");

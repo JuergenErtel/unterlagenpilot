@@ -1,5 +1,6 @@
 import type { OCRProvider, OcrInput, OcrResult } from "./types";
 import { getEnv } from "@/lib/env";
+import { fetchWithTimeout, OCR_TIMEOUT_MS } from "./http";
 
 /**
  * EU-/DSGVO-konforme OCR via Mistral OCR (mistral-ocr-latest).
@@ -38,14 +39,18 @@ export class MistralOCRProvider implements OCRProvider {
       ? { type: "image_url" as const, image_url: dataUri }
       : { type: "document_url" as const, document_url: dataUri };
 
-    const res = await fetch(`${env.MISTRAL_API_BASE_URL.replace(/\/$/, "")}/ocr`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
+    const res = await fetchWithTimeout(
+      `${env.MISTRAL_API_BASE_URL.replace(/\/$/, "")}/ocr`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({ model: env.MISTRAL_OCR_MODEL, document }),
       },
-      body: JSON.stringify({ model: env.MISTRAL_OCR_MODEL, document }),
-    });
+      OCR_TIMEOUT_MS
+    );
 
     if (!res.ok) {
       // Nur Status loggen – keine Kundendaten.

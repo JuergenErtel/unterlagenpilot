@@ -7,18 +7,14 @@ const requireCaseAccess = vi.fn();
 vi.mock("@/lib/auth/context", () => ({ requireCaseAccess: (...a: unknown[]) => requireCaseAccess(...a) }));
 
 const applicantFindFirst = vi.fn();
-const selfEmpFindFirst = vi.fn();
-const selfEmpUpdate = vi.fn();
-const selfEmpCreate = vi.fn();
+const selfEmpUpsert = vi.fn();
 const caseFindUniqueOrThrow = vi.fn();
 const docCreate = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     applicant: { findFirst: (...a: unknown[]) => applicantFindFirst(...a) },
     selfEmploymentRecord: {
-      findFirst: (...a: unknown[]) => selfEmpFindFirst(...a),
-      update: (...a: unknown[]) => selfEmpUpdate(...a),
-      create: (...a: unknown[]) => selfEmpCreate(...a),
+      upsert: (...a: unknown[]) => selfEmpUpsert(...a),
     },
     case: { findUniqueOrThrow: (...a: unknown[]) => caseFindUniqueOrThrow(...a) },
     document: { create: (...a: unknown[]) => docCreate(...a) },
@@ -39,9 +35,7 @@ import { createSelfEmployedBankSummaryAction } from "@/lib/actions/einkommen";
 beforeEach(() => {
   requireCaseAccess.mockReset().mockResolvedValue({ ctx: { organizationId: "org-A", userId: "u1" } });
   applicantFindFirst.mockReset().mockResolvedValue({ id: "app-1", vorname: "Angelina", nachname: "Sadykow" });
-  selfEmpFindFirst.mockReset().mockResolvedValue(null);
-  selfEmpUpdate.mockReset().mockResolvedValue({});
-  selfEmpCreate.mockReset().mockResolvedValue({});
+  selfEmpUpsert.mockReset().mockResolvedValue({});
   caseFindUniqueOrThrow.mockReset().mockResolvedValue({ caseNumber: "2026-0007", applicants: [{ id: "app-1", vorname: "Angelina", nachname: "Sadykow", position: 1 }] });
   renderEinkommensanalyse.mockReset().mockResolvedValue(Buffer.from("%PDF-1.4 test"));
   put.mockReset().mockResolvedValue({ storageKey: "organizations/org-A/cases/case-A/documents/x_Bankzusammenfassung.pdf" });
@@ -61,18 +55,21 @@ describe("createSelfEmployedBankSummaryAction", () => {
   it("speichert Stammdaten, rendert PDF mit Begleittext und legt Dokument ab", async () => {
     const res = await createSelfEmployedBankSummaryAction("case-A", input as never);
     expect(res.documentId).toBe("pdfdoc-1");
-    expect(selfEmpFindFirst).toHaveBeenCalled();
-    expect(selfEmpCreate).toHaveBeenCalled();
-    expect(selfEmpUpdate).not.toHaveBeenCalled();
 
-    // Exact payload assertion for create
-    expect(selfEmpCreate).toHaveBeenCalledWith({
-      data: {
+    // Upsert statt findFirst+create/update: race-sicher über den Unique-Key applicantId.
+    expect(selfEmpUpsert).toHaveBeenCalledWith({
+      where: { applicantId: "app-1" },
+      update: {
+        firma: "Sadykow Consulting",
+        rechtsform: "Einzelunternehmen",
+        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12)),
+      },
+      create: {
         applicantId: "app-1",
         firma: "Sadykow Consulting",
         rechtsform: "Einzelunternehmen",
-        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12))
-      }
+        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12)),
+      },
     });
 
     // Begleittext with firma + gewinn amount
@@ -83,22 +80,27 @@ describe("createSelfEmployedBankSummaryAction", () => {
     expect(begleitext).toMatch(/91\.?000|2023/);
   });
 
-  it("aktualisiert vorhandene Stammdaten statt neu anzulegen", async () => {
-    selfEmpFindFirst.mockResolvedValue({ id: "ser-1" });
-    const res = await createSelfEmployedBankSummaryAction("case-A", input as never);
+  it("nutzt für den Begleittext alle ausgewerteten Unterlagen, nicht nur die mit Notiz", async () => {
+    const res = await createSelfEmployedBankSummaryAction("case-A", {
+      ...input,
+      docNotes: [{ label: "BWA 2024", notiz: "vorläufig" }],
+      documents: [{ label: "BWA 2024" }, { label: "Jahresabschluss 2023" }],
+    } as never);
     expect(res.documentId).toBe("pdfdoc-1");
-    expect(selfEmpUpdate).toHaveBeenCalled();
-    expect(selfEmpCreate).not.toHaveBeenCalled();
+    const renderArg = renderEinkommensanalyse.mock.calls[0]![0] as { begleittext?: { paragraphs: string[] } };
+    const begleitext = renderArg.begleittext!.paragraphs.join("\n");
+    expect(begleitext).toContain("BWA 2024");
+    expect(begleitext).toContain("Jahresabschluss 2023");
+  });
 
-    // Exact payload assertion for update
-    expect(selfEmpUpdate).toHaveBeenCalledWith({
-      where: { id: "ser-1" },
-      data: {
-        firma: "Sadykow Consulting",
-        rechtsform: "Einzelunternehmen",
-        gruendungsdatum: new Date(Date.UTC(2019, 0, 1, 12))
-      }
-    });
+  it("fällt ohne documents-Feld auf die docNotes-Labels zurück", async () => {
+    const res = await createSelfEmployedBankSummaryAction("case-A", {
+      ...input,
+      docNotes: [{ label: "BWA 2024", notiz: "" }],
+    } as never);
+    expect(res.documentId).toBe("pdfdoc-1");
+    const renderArg = renderEinkommensanalyse.mock.calls[0]![0] as { begleittext?: { paragraphs: string[] } };
+    expect(renderArg.begleittext!.paragraphs.join("\n")).toContain("BWA 2024");
   });
 
   it("liefert Fehler, wenn der gewählte Antragsteller fehlt", async () => {
