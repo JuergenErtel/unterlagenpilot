@@ -26,7 +26,9 @@ import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
+import { DocumentsProcessing } from "@/components/case/documents-processing";
 import { isAiCheckStale } from "@/lib/cases/ai-check-status";
+import { countProcessingDocuments } from "@/lib/documents/processing";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
 import { maxUploadMb } from "@/lib/documents/pipeline";
@@ -86,6 +88,10 @@ export default async function CaseCockpitPage({
   // Ein veralteter läuft-Status (abgestürzter Lauf) gibt den Button wieder frei.
   const aiCheckRunning = caseRow.status === "ki_pruefung_laeuft" && !isAiCheckStale(caseRow.updatedAt);
   const aiCheckDone = documents.filter((d) => d.classificationStatus !== "laeuft").length;
+  // Nach einem Upload trudeln Typ/Felder asynchron nach – solange pollt die Seite,
+  // damit die Tabelle ohne manuelles Neuladen aktuell wird. Läuft bereits die
+  // KI-Prüfungs-Anzeige, pollt die schon; kein zweites Intervall nötig.
+  const processingCount = aiCheckRunning ? 0 : countProcessingDocuments(documents);
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -180,6 +186,7 @@ export default async function CaseCockpitPage({
                     <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={applicantOptions} />
                   </CardContent>
                 </Card>
+                {processingCount > 0 && <DocumentsProcessing count={processingCount} />}
                 <Card>
                   <CardContent className="p-0">
                     <Table>

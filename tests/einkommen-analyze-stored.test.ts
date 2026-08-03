@@ -48,6 +48,31 @@ describe("analyzeStoredSelfEmployedDocs", () => {
     expect(createSignedUrl).toHaveBeenCalled();
   });
 
+  it("liefert docLabels aller ausgewerteten Dokumente – auch ohne Notiz", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "doc-1",
+        originalName: "unterlagen.pdf",
+        mimeType: "application/pdf",
+        storageKey: "organizations/org-A/cases/case-A/documents/x_unterlagen.pdf",
+        scanStatus: "ready_for_ocr",
+        case: { organizationId: "org-A" },
+      },
+    ]);
+    analyzeSelfEmployedDocs.mockResolvedValue({
+      docs: [
+        { dokumenttyp: "bwa", jahr: 2024, kennzahlen: { gewinn: 96000 }, notiz: "", konfidenz: 0.9 },
+        { dokumenttyp: "jahresabschluss", jahr: 2023, kennzahlen: { gewinn: 91000 }, notiz: "vorläufig", konfidenz: 0.8 },
+      ],
+    });
+    const res = await analyzeStoredSelfEmployedDocs("case-A", ["doc-1"]);
+    expect(res.error).toBeUndefined();
+    // Nur das Dokument mit Notiz landet in docNotes …
+    expect(res.docNotes).toEqual([{ label: "Jahresabschluss 2023", notiz: "vorläufig" }]);
+    // … aber ALLE ausgewerteten Dokumente in docLabels (für den Begleittext).
+    expect(res.docLabels).toEqual(["BWA 2024", "Jahresabschluss 2023"]);
+  });
+
   it("verweigert fremde Dokumente (Tenant-Isolation)", async () => {
     findMany.mockResolvedValue([]); // findMany filtert per organizationId -> nichts
     const res = await analyzeStoredSelfEmployedDocs("case-A", ["doc-x"]);

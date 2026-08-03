@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Save, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +72,7 @@ export function EinkommenEditor({
   }, [applicantPosition, selfEmploymentByPosition]);
 
   const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [state, setState] = useState<EinkommenState>({ matrix: null, docNotes: [] });
@@ -79,6 +80,7 @@ export function EinkommenEditor({
   const [jahre, setJahre] = useState<number[]>([]);
   const [rows, setRows] = useState<EditRow[]>([]);
   const [notes, setNotes] = useState<Array<{ label: string; notiz: string }>>([]);
+  const [docLabels, setDocLabels] = useState<string[]>([]);
   const [ansatz, setAnsatz] = useState<string>("");
   const [docId, setDocId] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -97,6 +99,7 @@ export function EinkommenEditor({
       }))
     );
     setNotes(state.docNotes);
+    setDocLabels(state.docLabels ?? state.docNotes.map((n) => n.label));
     setDocId(null);
     setPdfError(null);
     if (ansatz.trim() === "" && state.matrix) {
@@ -152,6 +155,12 @@ export function EinkommenEditor({
     }
     const res = await analyzeStoredSelfEmployedDocs(caseId, ids);
     setState(res);
+    if (res.matrix) {
+      // Auswahl leeren: Die Dateien sind hochgeladen und ausgewertet – ein
+      // erneuter Klick auf „Analysieren" würde sonst Duplikate anlegen.
+      setFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
     if (failed.length) setUploadError(`${failed.length} Datei(en) nicht verarbeitet: ${failed.join(", ")}`);
     setBusy(false);
   }
@@ -185,6 +194,7 @@ export function EinkommenEditor({
           return { kennzahl: r.kennzahl, label: r.label, cells: r.cells, trend: trendFor(vals) };
         }),
         docNotes: notes,
+        documents: docLabels.map((label) => ({ label })),
         einkommensansatzJahr: ansatz.trim() === "" ? null : Number(ansatz),
       });
       if (res.documentId) setDocId(res.documentId);
@@ -204,6 +214,7 @@ export function EinkommenEditor({
             mehrjährig)
           </span>
           <input
+            ref={fileInputRef}
             type="file"
             name="files"
             multiple
