@@ -1,15 +1,16 @@
 import { z } from "zod";
 
 /**
- * PROVISORISCHES FinLink-Vorgangs-Schema.
+ * FinLink-Vorgangs-DTO (interne Form) + Parser für die echte Partner-API.
  *
- * Die reale FinLink-API-Struktur liegt noch nicht vor (Doku/Beispiel-JSON
- * ausstehend). Diese Form ist eine fundierte Annahme, damit Mapping, Writer,
- * Connector und UI jetzt gebaut und getestet werden können. Beim Vorliegen des
- * echten Schemas wird NUR diese Datei (+ client.ts) angepasst.
+ * Die Partner-API (https://api.finlink.de/partner-api/docs/redoc) liefert
+ * unter GET /leads eine JSON:API-Liste; einen Einzel-Abruf per ID gibt es
+ * nicht. `parseFinLinkLeadsResponse` sucht den Lead in der Liste und übersetzt
+ * ihn in die interne Vorgangs-Form, auf der Mapping/Writer aufsetzen.
  *
  * Grundsätze: alles außer `id` optional; unbekannte Felder werden ignoriert
- * (kein `.strict()`), damit ein erweiterter Payload nicht bricht.
+ * (kein `.strict()`), damit ein erweiterter Payload nicht bricht; unbekannte
+ * Vokabeln werden weggelassen statt geraten.
  */
 const beschaeftigung = z
   .object({
@@ -72,4 +73,190 @@ export type FinLinkVorgangDTO = z.infer<typeof finlinkVorgangSchema>;
 /** Validiert einen rohen FinLink-Payload; wirft ZodError bei ungültig. */
 export function parseFinLinkVorgang(input: unknown): FinLinkVorgangDTO {
   return finlinkVorgangSchema.parse(input);
+}
+
+// ─── Echte Partner-API (JSON:API unter /leads) ───────────────────────────────
+
+/**
+ * Vokabel-Übersetzungen Partner-API → kanonische Enums. `finance_type` ist im
+ * finlink-Repo dokumentiert; die übrigen Werte sind die naheliegenden
+ * englischen API-Vokabeln – Unbekanntes fällt auf undefined zurück (das
+ * Mapping lässt das Feld dann leer, es wird nie geraten).
+ */
+const FINANCE_TYPE_DE: Record<string, string> = {
+  buy_existing: "kauf",
+  self_construction: "neubau",
+  construction_financing: "neubau",
+  follow_up_financing: "anschlussfinanzierung",
+  refinancing: "umschuldung",
+  modernization: "modernisierung",
+};
+const RELATIONSHIP_DE: Record<string, string> = {
+  single: "ledig",
+  married: "verheiratet",
+  divorced: "geschieden",
+  widowed: "verwitwet",
+  registered_partnership: "eingetragene_partnerschaft",
+  civil_union: "eingetragene_partnerschaft",
+  separated: "getrennt_lebend",
+};
+const EMPLOYMENT_DE: Record<string, string> = {
+  employed: "angestellter",
+  employee: "angestellter",
+  self_employed: "selbststaendiger",
+  freelancer: "selbststaendiger",
+  civil_servant: "beamter",
+  retired: "rentner",
+  pensioner: "rentner",
+  managing_director: "geschaeftsfuehrer",
+  shareholder: "gesellschafter",
+};
+const PROPERTY_TYPE_DE: Record<string, string> = {
+  single_family_house: "einfamilienhaus",
+  detached_house: "einfamilienhaus",
+  semi_detached_house: "doppelhaushaelfte",
+  terraced_house: "reihenhaus",
+  townhouse: "reihenhaus",
+  condominium: "eigentumswohnung",
+  apartment: "eigentumswohnung",
+  flat: "eigentumswohnung",
+  multi_family_house: "mehrfamilienhaus",
+  apartment_building: "mehrfamilienhaus",
+  plot: "grundstueck",
+  land: "grundstueck",
+  commercial: "gewerbe",
+};
+
+const translate = (map: Record<string, string>, raw: string | undefined | null): string | undefined =>
+  raw ? map[raw.trim().toLowerCase()] : undefined;
+
+/** Die API liefert Beträge teils als String ("3200.0"); leere Strings/NaN → undefined. */
+const toNumber = (v: string | number | undefined | null): number | undefined => {
+  if (v == null || v === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+const joinStrasse = (street?: string | null, houseNumber?: string | null): string | undefined => {
+  const s = [street, houseNumber].filter(Boolean).join(" ").trim();
+  return s || undefined;
+};
+
+const numOrStr = z.union([z.number(), z.string()]).optional().nullable();
+
+const apiApplicantMeta = z.object({
+  first_name: z.string().optional().nullable(),
+  last_name: z.string().optional().nullable(),
+  dob: z.string().optional().nullable(),
+  birth_city: z.string().optional().nullable(),
+  email_address: z.string().optional().nullable(),
+  phone_number: z.string().optional().nullable(),
+  relationship_status: z.string().optional().nullable(),
+  employment_status: z.string().optional().nullable(),
+  monthly_net_income: numOrStr,
+  street_address: z.string().optional().nullable(),
+  house_number: z.string().optional().nullable(),
+  german_zipcode_number: z.string().optional().nullable(),
+  city_name: z.string().optional().nullable(),
+  children_meta: z.array(z.unknown()).optional().nullable(),
+  employer_meta: z
+    .object({ name: z.string().optional().nullable(), role_title: z.string().optional().nullable() })
+    .optional()
+    .nullable(),
+});
+
+const apiLeadSchema = z.object({
+  id: z.string().min(1),
+  attributes: z.object({
+    applicant_meta: apiApplicantMeta.optional().nullable(),
+    user_meta: z
+      .object({ email: z.string().optional().nullable(), phone_number: z.string().optional().nullable() })
+      .optional()
+      .nullable(),
+    property_meta: z
+      .object({
+        property_type: z.string().optional().nullable(),
+        street_address: z.string().optional().nullable(),
+        house_number: z.string().optional().nullable(),
+        german_zipcode_number: z.string().optional().nullable(),
+        city_name: z.string().optional().nullable(),
+        listed_price: z.number().optional().nullable(),
+        final_sale_price: z.number().optional().nullable(),
+      })
+      .optional()
+      .nullable(),
+    loan_application_meta: z
+      .object({
+        finance_type: z.string().optional().nullable(),
+        financing_wish: z.array(z.object({ amount: z.number().optional().nullable() })).optional().nullable(),
+      })
+      .optional()
+      .nullable(),
+  }),
+});
+
+const apiLeadsResponseSchema = z.object({ data: z.array(apiLeadSchema) });
+
+/**
+ * Sucht den Lead mit `externalId` in der /leads-Antwort und übersetzt ihn in
+ * das interne Vorgangs-DTO. `null`, wenn die ID nicht vorkommt; wirft bei
+ * strukturell ungültiger Antwort.
+ */
+export function parseFinLinkLeadsResponse(body: unknown, externalId: string): FinLinkVorgangDTO | null {
+  const parsed = apiLeadsResponseSchema.parse(body);
+  const lead = parsed.data.find((l) => l.id === externalId);
+  if (!lead) return null;
+
+  const am = lead.attributes.applicant_meta;
+  const pm = lead.attributes.property_meta;
+  const lm = lead.attributes.loan_application_meta;
+  const um = lead.attributes.user_meta;
+
+  const netto = toNumber(am?.monthly_net_income ?? undefined);
+  const beschaeftigungsart = translate(EMPLOYMENT_DE, am?.employment_status ?? undefined);
+  const arbeitgeber = am?.employer_meta?.name ?? undefined;
+  const beruf = am?.employer_meta?.role_title ?? undefined;
+
+  const wishSum = (lm?.financing_wish ?? [])
+    .map((w) => w.amount ?? 0)
+    .reduce((sum, a) => sum + a, 0);
+
+  return parseFinLinkVorgang({
+    id: lead.id,
+    antragsteller: am
+      ? [
+          {
+            vorname: am.first_name ?? undefined,
+            nachname: am.last_name ?? undefined,
+            geburtsdatum: am.dob ?? undefined,
+            geburtsort: am.birth_city ?? undefined,
+            familienstand: translate(RELATIONSHIP_DE, am.relationship_status ?? undefined),
+            anzahlKinder: am.children_meta ? am.children_meta.length : undefined,
+            strasse: joinStrasse(am.street_address, am.house_number),
+            plz: am.german_zipcode_number ?? undefined,
+            ort: am.city_name ?? undefined,
+            email: am.email_address ?? um?.email ?? undefined,
+            telefon: am.phone_number ?? um?.phone_number ?? undefined,
+            beschaeftigung:
+              beschaeftigungsart || beruf || arbeitgeber
+                ? { art: beschaeftigungsart, beruf, arbeitgeber }
+                : undefined,
+            einkommen: netto != null ? { nettoMonatlich: netto } : undefined,
+          },
+        ]
+      : [],
+    objekt: pm
+      ? {
+          art: translate(PROPERTY_TYPE_DE, pm.property_type ?? undefined),
+          strasse: joinStrasse(pm.street_address, pm.house_number),
+          plz: pm.german_zipcode_number ?? undefined,
+          ort: pm.city_name ?? undefined,
+        }
+      : undefined,
+    finanzierung: {
+      art: translate(FINANCE_TYPE_DE, lm?.finance_type ?? undefined),
+      kaufpreis: pm?.final_sale_price ?? pm?.listed_price ?? undefined,
+      darlehenswunsch: wishSum > 0 ? wishSum : undefined,
+    },
+  });
 }

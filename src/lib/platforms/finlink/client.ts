@@ -1,4 +1,4 @@
-import { parseFinLinkVorgang, type FinLinkVorgangDTO } from "./dto";
+import { parseFinLinkLeadsResponse, type FinLinkVorgangDTO } from "./dto";
 
 export class FinLinkNotConfiguredError extends Error {}
 export class FinLinkNotFoundError extends Error {}
@@ -17,26 +17,24 @@ interface FinLinkConfig {
 type FetchLike = typeof fetch;
 
 /**
- * HTTP-Anbindung an die FinLink-API.
+ * HTTP-Anbindung an die FinLink Partner-API
+ * (https://api.finlink.de/partner-api/docs/redoc).
  *
- * PROVISORISCH: Endpunktpfad und Auth-Schema sind eine Annahme, bis die
- * FinLink-Doku vorliegt. Anzupassen sind später NUR:
- *   - VORGANG_PATH (Endpunkt zum Abruf eines Vorgangs per ID)
- *   - der Auth-Header (aktuell `Authorization: Bearer <key>`)
- * Die Fehlerklassifizierung und DTO-Validierung bleiben unverändert.
+ * Auth: `X-API-Key`-Header. Die API bietet keinen Einzel-Abruf per ID –
+ * es wird die Lead-Liste unter /leads geholt und der Vorgang darin gesucht.
  */
-const VORGANG_PATH = (id: string) => `/vorgaenge/${encodeURIComponent(id)}`;
+const LEADS_PATH = "/leads";
 
 export class HttpFinLinkClient implements FinLinkClient {
   constructor(private readonly config: FinLinkConfig, private readonly fetchImpl: FetchLike = fetch) {}
 
   async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
-    const url = new URL(VORGANG_PATH(externalId), this.config.baseUrl);
+    const url = `${this.config.baseUrl.replace(/\/$/, "")}${LEADS_PATH}`;
     let res: Response;
     try {
       res = await this.fetchImpl(url, {
         method: "GET",
-        headers: { Authorization: `Bearer ${this.config.apiKey}`, Accept: "application/json" },
+        headers: { "X-API-Key": this.config.apiKey, Accept: "application/json" },
       });
     } catch {
       // Netzwerk/Timeout – KEINE Details/Key durchreichen.
@@ -53,21 +51,27 @@ export class HttpFinLinkClient implements FinLinkClient {
     } catch {
       throw new FinLinkApiError("FinLink-Antwort war kein gültiges JSON.");
     }
+    let dto: FinLinkVorgangDTO | null;
     try {
-      return parseFinLinkVorgang(body);
+      dto = parseFinLinkLeadsResponse(body, externalId);
     } catch {
       throw new FinLinkApiError("FinLink-Antwort hat ein unerwartetes Format.");
     }
+    if (!dto) throw new FinLinkNotFoundError("FinLink-Vorgang nicht gefunden.");
+    return dto;
   }
 }
 
+const DEFAULT_BASE_URL = "https://api.finlink.de/partner-api";
+
 /**
  * Baut den Client aus der Umgebung. Gibt null zurück, wenn FinLink nicht
- * konfiguriert ist (FINLINK_BASE_URL / FINLINK_API_KEY fehlen).
+ * konfiguriert ist (FINLINK_API_KEY fehlt); FINLINK_BASE_URL ist optional
+ * und übersteuert nur die Standard-Partner-API-URL.
  */
 export function getFinLinkClient(fetchImpl: FetchLike = fetch): FinLinkClient | null {
-  const baseUrl = process.env.FINLINK_BASE_URL;
   const apiKey = process.env.FINLINK_API_KEY;
-  if (!baseUrl || !apiKey) return null;
+  if (!apiKey) return null;
+  const baseUrl = process.env.FINLINK_BASE_URL || DEFAULT_BASE_URL;
   return new HttpFinLinkClient({ baseUrl, apiKey }, fetchImpl);
 }

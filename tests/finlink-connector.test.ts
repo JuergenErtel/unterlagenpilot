@@ -16,25 +16,54 @@ function mockFetch(status: number, body: unknown) {
   } as Response);
 }
 
-const validBody = { id: "FL-1", antragsteller: [{ vorname: "Anna" }] };
+/** Minimaler JSON:API-Lead, wie ihn die Partner-API unter /leads liefert. */
+function apiLeadBody(id: string) {
+  return {
+    data: [
+      {
+        id,
+        type: "lead",
+        attributes: {
+          applicant_meta: { first_name: "Anna", last_name: "Muster" },
+          user_meta: {},
+          property_meta: {},
+          loan_application_meta: {},
+          extras_meta: {},
+          imported: false,
+          external_id: null,
+          contact_id: null,
+          created_at: "2026-07-01T10:00:00Z",
+          updated_at: "2026-07-01T10:00:00Z",
+        },
+        relationships: { advisor: { data: null }, contact: { data: null }, loan_applications: { data: [] } },
+      },
+    ],
+  };
+}
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("HttpFinLinkClient.fetchVorgang", () => {
-  it("sendet Auth-Header + Base-URL und validiert die Antwort", async () => {
-    const fetchMock = mockFetch(200, validBody);
-    const client = new HttpFinLinkClient({ baseUrl: "https://api.finlink.test", apiKey: "secret" }, fetchMock);
+  it("ruft /leads mit X-API-Key auf und findet den Vorgang per ID", async () => {
+    const fetchMock = mockFetch(200, apiLeadBody("FL-1"));
+    const client = new HttpFinLinkClient({ baseUrl: "https://api.finlink.test/partner-api", apiKey: "secret" }, fetchMock);
     const dto = await client.fetchVorgang("FL-1");
     expect(dto.id).toBe("FL-1");
+    expect(dto.antragsteller[0]?.vorname).toBe("Anna");
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toContain("https://api.finlink.test");
-    expect(String(url)).toContain("FL-1");
-    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer secret");
+    expect(String(url)).toBe("https://api.finlink.test/partner-api/leads");
+    expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("secret");
+    expect((init.headers as Record<string, string>)["Authorization"]).toBeUndefined();
   });
 
   it("wirft FinLinkNotFoundError bei 404", async () => {
     const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(404, {}));
     await expect(client.fetchVorgang("nope")).rejects.toBeInstanceOf(FinLinkNotFoundError);
+  });
+
+  it("wirft FinLinkNotFoundError, wenn die ID nicht in der Lead-Liste ist", async () => {
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, apiLeadBody("ANDERE-ID")));
+    await expect(client.fetchVorgang("FL-1")).rejects.toBeInstanceOf(FinLinkNotFoundError);
   });
 
   it("wirft FinLinkAuthError bei 401/403", async () => {
@@ -45,6 +74,25 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
   it("wirft FinLinkApiError bei unerwartetem Schema", async () => {
     const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, { unerwartet: true }));
     await expect(client.fetchVorgang("x")).rejects.toBeInstanceOf(FinLinkApiError);
+  });
+
+  it("braucht nur FINLINK_API_KEY – Base-URL hat die Partner-API als Default", async () => {
+    const { getFinLinkClient } = await import("@/lib/platforms/finlink/client");
+    const prevKey = process.env.FINLINK_API_KEY;
+    const prevUrl = process.env.FINLINK_BASE_URL;
+    process.env.FINLINK_API_KEY = "k";
+    delete process.env.FINLINK_BASE_URL;
+    try {
+      const fetchMock = mockFetch(200, apiLeadBody("FL-9"));
+      const client = getFinLinkClient(fetchMock);
+      expect(client).not.toBeNull();
+      await client!.fetchVorgang("FL-9");
+      expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.finlink.de/partner-api/leads");
+    } finally {
+      if (prevKey === undefined) delete process.env.FINLINK_API_KEY;
+      else process.env.FINLINK_API_KEY = prevKey;
+      if (prevUrl !== undefined) process.env.FINLINK_BASE_URL = prevUrl;
+    }
   });
 
   it("leakt den API-Key nicht in Fehlermeldungen", async () => {
