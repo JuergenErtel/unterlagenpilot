@@ -119,6 +119,27 @@ describe("parseFinLinkLeadsResponse", () => {
     expect(dto!.finanzierung?.darlehenswunsch).toBe(380000);
   });
 
+  it("übersetzt die real beobachteten API-Vokabeln (Live-Abgleich 2026-08-03)", () => {
+    const lead = structuredClone(apiLead);
+    lead.attributes.applicant_meta.employment_status = "employed_unlimited";
+    lead.attributes.property_meta.property_type = "single_family";
+    lead.attributes.loan_application_meta.finance_type = "capital_raising";
+    const dto = parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711");
+    expect(dto!.antragsteller[0]!.beschaeftigung?.art).toBe("angestellter");
+    expect(dto!.objekt?.art).toBe("einfamilienhaus");
+    expect(dto!.finanzierung?.art).toBe("kapitalbeschaffung");
+
+    lead.attributes.applicant_meta.employment_status = "worker";
+    lead.attributes.loan_application_meta.finance_type = "new_from_developer";
+    const dto2 = parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711");
+    expect(dto2!.antragsteller[0]!.beschaeftigung?.art).toBe("angestellter");
+    expect(dto2!.finanzierung?.art).toBe("neubau");
+
+    // Zwei-/Doppelfamilienhaus wird bewusst NICHT geraten (Bank unterscheidet 1-2 vs. 3+ Einheiten).
+    lead.attributes.property_meta.property_type = "two_family";
+    expect(parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711")!.objekt?.art).toBeUndefined();
+  });
+
   it("lässt unbekannte Vokabeln weg statt zu raten", () => {
     const lead = structuredClone(apiLead);
     lead.attributes.applicant_meta.relationship_status = "unbekannt-xyz";
@@ -134,6 +155,24 @@ describe("parseFinLinkLeadsResponse", () => {
 
   it("wirft bei strukturell ungültiger Antwort", () => {
     expect(() => parseFinLinkLeadsResponse({ unerwartet: true }, "x")).toThrow();
+  });
+
+  it("akzeptiert PLZ als Zahl (kommt in Echtdaten vor) und liefert sie als String", () => {
+    const lead = structuredClone(apiLead);
+    lead.attributes.applicant_meta.german_zipcode_number = 76131 as never;
+    lead.attributes.property_meta.german_zipcode_number = 76133 as never;
+    const dto = parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711");
+    expect(dto!.antragsteller[0]!.plz).toBe("76131");
+    expect(dto!.objekt?.plz).toBe("76133");
+  });
+
+  it("akzeptiert Preise und Finanzierungswünsche als String (kommt in Echtdaten vor)", () => {
+    const lead = structuredClone(apiLead);
+    lead.attributes.property_meta.final_sale_price = "450000.0" as never;
+    lead.attributes.loan_application_meta.financing_wish = [{ amount: "300000.0" }, { amount: 80000 }] as never;
+    const dto = parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711");
+    expect(dto!.finanzierung?.kaufpreis).toBe(450000);
+    expect(dto!.finanzierung?.darlehenswunsch).toBe(380000);
   });
 
   it("fällt beim Kaufpreis auf listed_price zurück und ignoriert leere Einkommens-Strings", () => {

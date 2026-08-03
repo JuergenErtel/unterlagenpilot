@@ -78,20 +78,25 @@ export function parseFinLinkVorgang(input: unknown): FinLinkVorgangDTO {
 // ─── Echte Partner-API (JSON:API unter /leads) ───────────────────────────────
 
 /**
- * Vokabel-Übersetzungen Partner-API → kanonische Enums. `finance_type` ist im
- * finlink-Repo dokumentiert; die übrigen Werte sind die naheliegenden
- * englischen API-Vokabeln – Unbekanntes fällt auf undefined zurück (das
- * Mapping lässt das Feld dann leer, es wird nie geraten).
+ * Vokabel-Übersetzungen Partner-API → kanonische Enums. Mit der echten API
+ * abgeglichen (Live-Bestand 2026-08-03, 100 Leads); zusätzlich plausible, noch
+ * nicht beobachtete Werte. Unbekanntes fällt auf undefined zurück (das Mapping
+ * lässt das Feld dann leer, es wird nie geraten).
  */
 const FINANCE_TYPE_DE: Record<string, string> = {
+  // live beobachtet:
   buy_existing: "kauf",
+  new_from_developer: "neubau", // Kauf vom Bauträger
   self_construction: "neubau",
+  capital_raising: "kapitalbeschaffung",
+  modernization: "modernisierung",
+  // plausibel, noch nicht beobachtet:
   construction_financing: "neubau",
   follow_up_financing: "anschlussfinanzierung",
   refinancing: "umschuldung",
-  modernization: "modernisierung",
 };
 const RELATIONSHIP_DE: Record<string, string> = {
+  // live beobachtet: single, married, widowed
   single: "ledig",
   married: "verheiratet",
   divorced: "geschieden",
@@ -101,27 +106,38 @@ const RELATIONSHIP_DE: Record<string, string> = {
   separated: "getrennt_lebend",
 };
 const EMPLOYMENT_DE: Record<string, string> = {
-  employed: "angestellter",
-  employee: "angestellter",
+  // live beobachtet:
+  employed_unlimited: "angestellter",
+  worker: "angestellter", // Arbeiter:in (nichtselbständig)
   self_employed: "selbststaendiger",
   freelancer: "selbststaendiger",
   civil_servant: "beamter",
+  other: "sonstiges",
+  // plausibel, noch nicht beobachtet:
+  employed_limited: "angestellter",
+  employed: "angestellter",
+  employee: "angestellter",
   retired: "rentner",
   pensioner: "rentner",
   managing_director: "geschaeftsfuehrer",
   shareholder: "gesellschafter",
 };
 const PROPERTY_TYPE_DE: Record<string, string> = {
+  // live beobachtet:
+  apartment: "eigentumswohnung",
+  single_family: "einfamilienhaus",
+  apartment_building: "mehrfamilienhaus",
+  // two_family/double_family (Zweifamilienhaus) bewusst NICHT gemappt:
+  // Banken unterscheiden 1-2 Einheiten vs. Mehrfamilienhaus (3+) – nicht raten.
+  // plausibel, noch nicht beobachtet:
   single_family_house: "einfamilienhaus",
   detached_house: "einfamilienhaus",
   semi_detached_house: "doppelhaushaelfte",
   terraced_house: "reihenhaus",
   townhouse: "reihenhaus",
   condominium: "eigentumswohnung",
-  apartment: "eigentumswohnung",
   flat: "eigentumswohnung",
   multi_family_house: "mehrfamilienhaus",
-  apartment_building: "mehrfamilienhaus",
   plot: "grundstueck",
   land: "grundstueck",
   commercial: "gewerbe",
@@ -143,6 +159,10 @@ const joinStrasse = (street?: string | null, houseNumber?: string | null): strin
 };
 
 const numOrStr = z.union([z.number(), z.string()]).optional().nullable();
+// PLZ kommt in Echtdaten mal als String, mal als Zahl.
+const plzField = z.union([z.string(), z.number()]).optional().nullable();
+const toPlz = (v: string | number | undefined | null): string | undefined =>
+  v == null || v === "" ? undefined : String(v);
 
 const apiApplicantMeta = z.object({
   first_name: z.string().optional().nullable(),
@@ -156,7 +176,7 @@ const apiApplicantMeta = z.object({
   monthly_net_income: numOrStr,
   street_address: z.string().optional().nullable(),
   house_number: z.string().optional().nullable(),
-  german_zipcode_number: z.string().optional().nullable(),
+  german_zipcode_number: plzField,
   city_name: z.string().optional().nullable(),
   children_meta: z.array(z.unknown()).optional().nullable(),
   employer_meta: z
@@ -178,17 +198,17 @@ const apiLeadSchema = z.object({
         property_type: z.string().optional().nullable(),
         street_address: z.string().optional().nullable(),
         house_number: z.string().optional().nullable(),
-        german_zipcode_number: z.string().optional().nullable(),
+        german_zipcode_number: plzField,
         city_name: z.string().optional().nullable(),
-        listed_price: z.number().optional().nullable(),
-        final_sale_price: z.number().optional().nullable(),
+        listed_price: numOrStr,
+        final_sale_price: numOrStr,
       })
       .optional()
       .nullable(),
     loan_application_meta: z
       .object({
         finance_type: z.string().optional().nullable(),
-        financing_wish: z.array(z.object({ amount: z.number().optional().nullable() })).optional().nullable(),
+        financing_wish: z.array(z.object({ amount: numOrStr })).optional().nullable(),
       })
       .optional()
       .nullable(),
@@ -218,7 +238,7 @@ export function parseFinLinkLeadsResponse(body: unknown, externalId: string): Fi
   const beruf = am?.employer_meta?.role_title ?? undefined;
 
   const wishSum = (lm?.financing_wish ?? [])
-    .map((w) => w.amount ?? 0)
+    .map((w) => toNumber(w.amount) ?? 0)
     .reduce((sum, a) => sum + a, 0);
 
   return parseFinLinkVorgang({
@@ -233,7 +253,7 @@ export function parseFinLinkLeadsResponse(body: unknown, externalId: string): Fi
             familienstand: translate(RELATIONSHIP_DE, am.relationship_status ?? undefined),
             anzahlKinder: am.children_meta ? am.children_meta.length : undefined,
             strasse: joinStrasse(am.street_address, am.house_number),
-            plz: am.german_zipcode_number ?? undefined,
+            plz: toPlz(am.german_zipcode_number),
             ort: am.city_name ?? undefined,
             email: am.email_address ?? um?.email ?? undefined,
             telefon: am.phone_number ?? um?.phone_number ?? undefined,
@@ -249,13 +269,13 @@ export function parseFinLinkLeadsResponse(body: unknown, externalId: string): Fi
       ? {
           art: translate(PROPERTY_TYPE_DE, pm.property_type ?? undefined),
           strasse: joinStrasse(pm.street_address, pm.house_number),
-          plz: pm.german_zipcode_number ?? undefined,
+          plz: toPlz(pm.german_zipcode_number),
           ort: pm.city_name ?? undefined,
         }
       : undefined,
     finanzierung: {
       art: translate(FINANCE_TYPE_DE, lm?.finance_type ?? undefined),
-      kaufpreis: pm?.final_sale_price ?? pm?.listed_price ?? undefined,
+      kaufpreis: toNumber(pm?.final_sale_price) ?? toNumber(pm?.listed_price),
       darlehenswunsch: wishSum > 0 ? wishSum : undefined,
     },
   });
