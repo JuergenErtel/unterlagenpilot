@@ -50,8 +50,8 @@ Das manuelle UUID-Feld bleibt als sekundärer Fallback unterhalb der Liste erhal
 
 ## Bewusst nicht enthalten (YAGNI)
 
-Pagination/Suche (100 Leads, eine Seite reicht im Pilot), Sammel-Import,
-Auto-Refresh, per-Organisation-Keys (kommt mit Multi-Tenant, siehe Chat 04.08.).
+Pagination (100 Leads, eine Seite reicht im Pilot; Suche kam per Nachtrag, s. u.),
+Sammel-Import, Auto-Refresh, per-Organisation-Keys (kommt mit Multi-Tenant, siehe Chat 04.08.).
 
 ## Nachtrag 2026-08-04 (nachmittags): Suchfunktion
 
