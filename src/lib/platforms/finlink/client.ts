@@ -1,4 +1,7 @@
 import {
+  mergeAntragstellerDetails,
+  parseFinLinkApplicantsResponse,
+  parseFinLinkLeadLoanApplicationIds,
   parseFinLinkLeadsSummaries,
   parseFinLinkSalesStates,
   parseFinLinkSingleLeadResponse,
@@ -133,12 +136,31 @@ export class HttpFinLinkClient implements FinLinkClient {
 
   async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
     const body = await this.fetchJson(`${LEADS_PATH}/${encodeURIComponent(externalId)}`);
+    let dto: FinLinkVorgangDTO;
     try {
-      return parseFinLinkSingleLeadResponse(body);
+      dto = parseFinLinkSingleLeadResponse(body);
     } catch (e) {
       console.warn(`[finlink] /leads/{id}-Antwort unparsebar: ${e instanceof Error ? e.message : String(e)}`);
       throw new FinLinkApiError("FinLink-Antwort hat ein unerwartetes Format.");
     }
+
+    // Anreicherung: /loan_applications/{id}/applicants liefert Geburtsdatum,
+    // E-Mail, Familienstand, Kinder UND Mit-Antragsteller, die am Lead fehlen.
+    // Schlägt das fehl, bleibt der Lead-Stand – der Import scheitert daran nie.
+    for (const laId of parseFinLinkLeadLoanApplicationIds(body).slice(0, 3)) {
+      try {
+        const apBody = await this.fetchJson(
+          `${LOAN_APPLICATIONS_PATH}/${encodeURIComponent(laId)}/applicants`
+        );
+        const detailed = parseFinLinkApplicantsResponse(apBody);
+        if (detailed.length > 0) return mergeAntragstellerDetails(dto, detailed);
+      } catch (e) {
+        console.warn(
+          `[finlink] Antragsteller-Detailabruf für Antrag ${laId} fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+    return dto;
   }
 }
 

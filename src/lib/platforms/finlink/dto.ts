@@ -317,6 +317,119 @@ export function parseFinLinkSingleLeadResponse(body: unknown): FinLinkVorgangDTO
   return mapApiLead(parsed.data);
 }
 
+/** IDs der Anträge (loan_applications) aus der /leads/{id}-Antwort. */
+export function parseFinLinkLeadLoanApplicationIds(body: unknown): string[] {
+  const schema = z.object({
+    data: z
+      .object({
+        relationships: z
+          .object({
+            loan_applications: z
+              .object({ data: z.array(z.object({ id: z.string() })).optional().nullable() })
+              .optional()
+              .nullable(),
+          })
+          .passthrough()
+          .optional()
+          .nullable(),
+      })
+      .passthrough(),
+  });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return [];
+  return (parsed.data.data.relationships?.loan_applications?.data ?? []).map((d) => d.id);
+}
+
+/**
+ * Antragsteller aus GET /loan_applications/{id}/applicants. Deutlich reicher
+ * als die Lead-Ebene (Geburtsdatum/-ort, E-Mail, Familienstand, Kinder,
+ * Staatsangehörigkeit) und enthält auch Mit-Antragsteller, die am Lead
+ * komplett fehlen.
+ */
+const apiLoanApplicantSchema = z.object({
+  attributes: z
+    .object({
+      first_name: z.string().optional().nullable(),
+      last_name: z.string().optional().nullable(),
+      dob: z.string().optional().nullable(), // ISO-Datetime, z. B. 1990-04-29T00:00:00.000+02:00
+      birth_city: z.string().optional().nullable(),
+      nationality: z.string().optional().nullable(),
+      relationship_status: z.string().optional().nullable(),
+      number_of_dependants: numOrStr,
+      email_address: z.string().optional().nullable(),
+      phone_number: z.string().optional().nullable(),
+      employment_status: z.string().optional().nullable(),
+      monthly_net_income: numOrStr,
+      street_address: z.string().optional().nullable(),
+      house_number: z.string().optional().nullable(),
+      german_zipcode_number: plzField,
+      city_name: z.string().optional().nullable(),
+      employer_meta: z
+        .object({ name: z.string().optional().nullable(), role_title: z.string().optional().nullable() })
+        .optional()
+        .nullable(),
+    })
+    .passthrough(),
+});
+
+type Antragsteller = FinLinkVorgangDTO["antragsteller"][number];
+
+export function parseFinLinkApplicantsResponse(body: unknown): Antragsteller[] {
+  const parsed = z.object({ data: z.array(apiLoanApplicantSchema) }).parse(body);
+  return parsed.data.map((ap) => {
+    const at = ap.attributes;
+    const kinder = toNumber(at.number_of_dependants);
+    const beschaeftigungsart = translate(EMPLOYMENT_DE, at.employment_status ?? undefined);
+    const arbeitgeber = at.employer_meta?.name ?? undefined;
+    const beruf = at.employer_meta?.role_title ?? undefined;
+    const netto = toNumber(at.monthly_net_income);
+    return {
+      vorname: at.first_name ?? undefined,
+      nachname: at.last_name ?? undefined,
+      geburtsdatum: at.dob ? at.dob.slice(0, 10) : undefined,
+      geburtsort: at.birth_city ?? undefined,
+      staatsangehoerigkeit: at.nationality ?? undefined,
+      familienstand: translate(RELATIONSHIP_DE, at.relationship_status ?? undefined),
+      anzahlKinder: kinder != null && Number.isInteger(kinder) ? kinder : undefined,
+      strasse: joinStrasse(at.street_address, at.house_number),
+      plz: toPlz(at.german_zipcode_number),
+      ort: at.city_name ?? undefined,
+      email: at.email_address ?? undefined,
+      telefon: at.phone_number ?? undefined,
+      beschaeftigung:
+        beschaeftigungsart || beruf || arbeitgeber ? { art: beschaeftigungsart, beruf, arbeitgeber } : undefined,
+      einkommen: netto != null ? { nettoMonatlich: netto } : undefined,
+    };
+  });
+}
+
+const stripUndefined = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+/**
+ * Reichert das Lead-DTO mit den Detail-Antragstellern an. Detailwerte haben
+ * Vorrang; für den ersten Antragsteller bleiben Lead-Felder (v. a. Adresse)
+ * als Fallback erhalten. Ohne Detaildaten bleibt das DTO unverändert.
+ */
+export function mergeAntragstellerDetails(dto: FinLinkVorgangDTO, detailed: Antragsteller[]): FinLinkVorgangDTO {
+  if (detailed.length === 0) return dto;
+  const lead1 = dto.antragsteller[0];
+  const antragsteller = detailed.map((d, i) => {
+    if (i > 0 || !lead1) return d;
+    return {
+      ...lead1,
+      ...stripUndefined(d),
+      beschaeftigung:
+        d.beschaeftigung || lead1.beschaeftigung
+          ? { ...lead1.beschaeftigung, ...stripUndefined(d.beschaeftigung ?? {}) }
+          : undefined,
+      einkommen:
+        d.einkommen || lead1.einkommen ? { ...lead1.einkommen, ...stripUndefined(d.einkommen ?? {}) } : undefined,
+    };
+  });
+  return parseFinLinkVorgang({ ...dto, antragsteller });
+}
+
 function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
   const am = lead.attributes.applicant_meta;
   const pm = lead.attributes.property_meta;

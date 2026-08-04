@@ -4,7 +4,96 @@ import {
   parseFinLinkLeadsResponse,
   parseFinLinkLeadsSummaries,
   parseFinLinkSingleLeadResponse,
+  parseFinLinkLeadLoanApplicationIds,
+  parseFinLinkApplicantsResponse,
+  mergeAntragstellerDetails,
 } from "@/lib/platforms/finlink/dto";
+
+describe("Antragsteller-Detaildaten aus /loan_applications/{id}/applicants", () => {
+  // Nachbau der echten Antwort für Lead Colell (04.08.2026): zwei Antragsteller,
+  // dob als ISO-Datetime, Kinderzahl als String.
+  const applicantsBody = {
+    data: [
+      {
+        attributes: {
+          first_name: "Laura",
+          last_name: "Colell",
+          dob: "1990-04-29T00:00:00.000+02:00",
+          birth_city: "Gelnhausen",
+          nationality: "Germany",
+          relationship_status: "married",
+          number_of_dependants: "4.0",
+          email_address: "laura@example.com",
+          phone_number: "+4915756197464",
+          employment_status: "employed_unlimited",
+          monthly_net_income: "8050.0",
+        },
+      },
+      {
+        attributes: {
+          first_name: "Thomas Philipp",
+          last_name: "Colell",
+          dob: "1989-10-24T00:00:00.000+01:00",
+          birth_city: "Groß Gerau",
+          employment_status: "civil_servant",
+        },
+      },
+    ],
+  };
+
+  it("mappt beide Antragsteller inkl. Geburtsdatum, Familienstand und Kindern", () => {
+    const a = parseFinLinkApplicantsResponse(applicantsBody);
+    expect(a).toHaveLength(2);
+    expect(a[0]).toMatchObject({
+      vorname: "Laura",
+      nachname: "Colell",
+      geburtsdatum: "1990-04-29",
+      geburtsort: "Gelnhausen",
+      staatsangehoerigkeit: "Germany",
+      familienstand: "verheiratet",
+      anzahlKinder: 4,
+      email: "laura@example.com",
+    });
+    expect(a[0]?.beschaeftigung?.art).toBe("angestellter");
+    expect(a[0]?.einkommen?.nettoMonatlich).toBe(8050);
+    expect(a[1]).toMatchObject({ vorname: "Thomas Philipp", geburtsdatum: "1989-10-24" });
+    expect(a[1]?.beschaeftigung?.art).toBe("beamter");
+  });
+
+  it("merge: Detailwerte gewinnen, Lead-Adresse bleibt als Fallback am ersten Antragsteller", () => {
+    const leadDto = parseFinLinkVorgang({
+      id: "L-1",
+      antragsteller: [{ vorname: "Laura", strasse: "Leadweg 1", plz: "64319", ort: "Pfungstadt" }],
+    });
+    const merged = mergeAntragstellerDetails(leadDto, parseFinLinkApplicantsResponse(applicantsBody));
+    expect(merged.antragsteller).toHaveLength(2);
+    expect(merged.antragsteller[0]).toMatchObject({
+      nachname: "Colell",
+      geburtsdatum: "1990-04-29",
+      strasse: "Leadweg 1",
+      plz: "64319",
+      ort: "Pfungstadt",
+    });
+    expect(merged.antragsteller[1]?.vorname).toBe("Thomas Philipp");
+  });
+
+  it("merge ohne Detaildaten lässt das DTO unverändert", () => {
+    const leadDto = parseFinLinkVorgang({ id: "L-1", antragsteller: [{ vorname: "A" }] });
+    expect(mergeAntragstellerDetails(leadDto, [])).toBe(leadDto);
+  });
+
+  it("liest die Antrags-IDs aus der Einzel-Lead-Antwort", () => {
+    const body = {
+      data: {
+        id: "L-1",
+        attributes: {},
+        relationships: { loan_applications: { data: [{ id: "LA-1" }, { id: "LA-2" }] } },
+      },
+    };
+    expect(parseFinLinkLeadLoanApplicationIds(body)).toEqual(["LA-1", "LA-2"]);
+    expect(parseFinLinkLeadLoanApplicationIds({ data: { id: "L-1" } })).toEqual([]);
+  });
+});
 
 describe("user_meta-Fallback (576 von 905 Bestands-Leads haben Namen NUR dort)", () => {
   const leadNurUserMeta = {

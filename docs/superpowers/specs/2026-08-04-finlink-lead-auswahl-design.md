@@ -76,3 +76,12 @@ Befund aus dem Praxistest: Die Liste zeigte nur die neuesten 100 Leads
   (mit Status-Badge). Leads ohne Antrag gelten als inaktiv.
 - Next-Datencache 120 s auf den Listenabrufen; loading.tsx erklärt den ersten
   Abruf (~10–15 s). financing_wish kommt in Altdaten als Objekt → Schema tolerant.
+
+## Nachtrag 2026-08-04 (spät): Antragsteller-Detaildaten + Mit-Antragsteller
+
+Befund: Am Lead fehlen Geburtsdatum/-ort, E-Mail, Familienstand, Kinder,
+Staatsangehörigkeit – und Mit-Antragsteller komplett. All das liefert
+GET /loan_applications/{id}/applicants (Antrags-IDs stehen am Lead).
+Der Import reichert damit an (Detailwerte gewinnen, Lead-Adresse bleibt
+Fallback am ersten Antragsteller) und legt alle Antragsteller an.
+Scheitert der Detailabruf, importiert der Lead-Stand wie bisher.

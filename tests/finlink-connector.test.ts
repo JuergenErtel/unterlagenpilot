@@ -70,6 +70,39 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
     expect((init.headers as Record<string, string>)["Authorization"]).toBeUndefined();
   });
 
+  it("reichert Antragsteller über /loan_applications/{id}/applicants an", async () => {
+    const leadBody = apiSingleLeadBody("FL-1") as any;
+    leadBody.data.relationships = { loan_applications: { data: [{ id: "LA-7" }] } };
+    const applicants = {
+      data: [
+        { attributes: { first_name: "Anna", last_name: "Muster", dob: "1990-04-29T00:00:00.000+02:00" } },
+        { attributes: { first_name: "Ben", last_name: "Muster", dob: "1989-10-24T00:00:00.000+01:00" } },
+      ],
+    };
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\/LA-7\/applicants$/, { status: 200, body: applicants }],
+      [/\/leads\/FL-1$/, { status: 200, body: leadBody }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const dto = await client.fetchVorgang("FL-1");
+    expect(dto.antragsteller).toHaveLength(2);
+    expect(dto.antragsteller[0]?.geburtsdatum).toBe("1990-04-29");
+    expect(dto.antragsteller[1]?.vorname).toBe("Ben");
+  });
+
+  it("fällt auf Lead-Daten zurück, wenn der Antragsteller-Detailabruf scheitert", async () => {
+    const leadBody = apiSingleLeadBody("FL-1") as any;
+    leadBody.data.relationships = { loan_applications: { data: [{ id: "LA-7" }] } };
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\/LA-7\/applicants$/, { status: 500, body: {} }],
+      [/\/leads\/FL-1$/, { status: 200, body: leadBody }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const dto = await client.fetchVorgang("FL-1");
+    expect(dto.antragsteller[0]?.vorname).toBe("Anna");
+    expect(dto.antragsteller).toHaveLength(1);
+  });
+
   it("wirft FinLinkNotFoundError bei 404 (unbekannte ID)", async () => {
     const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(404, {}));
     await expect(client.fetchVorgang("nope")).rejects.toBeInstanceOf(FinLinkNotFoundError);
