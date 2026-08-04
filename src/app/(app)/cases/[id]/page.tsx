@@ -217,7 +217,9 @@ export default async function CaseCockpitPage({
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
                             <TableCell>
                               {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
-                              {d.reviewStatus === "offen" ? (
+                              {d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
+                                <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
+                              ) : d.reviewStatus === "offen" ? (
                                 <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
                               ) : d.reviewStatus === "akzeptiert" ? (
                                 <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>

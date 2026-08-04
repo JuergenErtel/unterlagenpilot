@@ -14,7 +14,18 @@ export const confidence = z.number().min(0).max(1);
 export const extractedFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
-  value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  // LLMs liefern für Listen-Felder (z. B. mehrere Plan-Maßstäbe) gelegentlich
+  // Arrays oder Objekte. Ein einzelnes solches Feld darf nicht die gesamte
+  // Extraktion kippen – deshalb werden Arrays/Objekte zu Strings normalisiert.
+  value: z.preprocess(
+    (v) =>
+      Array.isArray(v)
+        ? v.map((x) => (typeof x === "object" && x !== null ? JSON.stringify(x) : String(x))).join(", ")
+        : typeof v === "object" && v !== null
+          ? JSON.stringify(v)
+          : v,
+    z.union([z.string(), z.number(), z.boolean(), z.null()])
+  ),
   confidence,
   source: z.string().optional(), // z.B. "Seite 1, Zeile Netto"
 });

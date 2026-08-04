@@ -298,9 +298,13 @@ async function processAiCheckInBackground(params: {
             },
           },
         });
-      } catch {
+      } catch (e) {
         // KI-/OCR-Dienst nicht erreichbar o.ä.: Dokument markieren, Vorgang fortsetzen.
-        // (Keine Kundendaten loggen.)
+        // Fehlerart loggen (ohne Kundendaten/Dokumenttext) – sonst ist die
+        // Ursache in Prod unauffindbar (04.08.: Schema-Fehler blieb unsichtbar).
+        console.warn(
+          `[ki-pruefung] Dokument ${doc.id} fehlgeschlagen: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`
+        );
         await prisma.document.update({
           where: { id: doc.id },
           data: { classificationStatus: "fehler", extractionStatus: "fehler" },
