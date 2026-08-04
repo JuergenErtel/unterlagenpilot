@@ -115,3 +115,138 @@ export async function createCaseFromCanonical(
   }
   return { caseId: created!.id, caseNumber: created!.caseNumber, deduped: false };
 }
+
+export interface RefreshResult {
+  /** Namen der nachgetragenen Felder (nur Metadaten, keine Werte). */
+  filledFields: string[];
+  createdApplicants: number;
+}
+
+/**
+ * Zieht Plattformdaten in einen BESTEHENDEN Fall nach („Aus FinLink
+ * aktualisieren“). Eiserne Regel: vorhandene Werte werden NIE überschrieben –
+ * nur leere Felder werden gefüllt und fehlende Antragsteller (samt
+ * Beschäftigung/Einkommen) angelegt. Der Vermittler bleibt Herr seiner Akte.
+ */
+export async function fillCaseFromCanonical(caseId: string, canonical: CanonicalCase): Promise<RefreshResult> {
+  const c = await prisma.case.findUniqueOrThrow({
+    where: { id: caseId },
+    include: {
+      applicants: { orderBy: { position: "asc" }, include: { employment: true, income: true } },
+      property: true,
+      financingRequest: true,
+    },
+  });
+
+  const filledFields: string[] = [];
+  let createdApplicants = 0;
+
+  await prisma.$transaction(async (tx) => {
+    // Antragsteller: pro Position füllen bzw. neu anlegen.
+    for (const a of canonical.applicants) {
+      const emp = canonical.employment.find((e) => e.applicantPosition === a.position);
+      const inc = canonical.income.find((i) => i.applicantPosition === a.position);
+      const existing = c.applicants.find((x) => x.position === a.position);
+
+      if (!existing) {
+        await tx.applicant.create({
+          data: {
+            caseId: c.id,
+            position: a.position,
+            vorname: a.vorname ?? null,
+            nachname: a.nachname ?? null,
+            geburtsdatum: a.geburtsdatum ? new Date(a.geburtsdatum) : null,
+            geburtsort: a.geburtsort ?? null,
+            staatsangehoerigkeit: a.staatsangehoerigkeit ?? null,
+            familienstand: a.familienstand ?? null,
+            anzahlKinder: a.anzahlKinder ?? null,
+            street: a.strasse ?? null,
+            zip: a.plz ?? null,
+            city: a.ort ?? null,
+            email: a.email ?? null,
+            phone: a.telefon ?? null,
+            employment: emp
+              ? { create: [{ beschaeftigungsart: emp.beschaeftigungsart ?? null, beruf: emp.beruf ?? null, arbeitgeber: emp.arbeitgeber ?? null }] }
+              : undefined,
+            income: inc?.nettoMonatlich != null ? { create: [{ nettoMonatlich: inc.nettoMonatlich }] } : undefined,
+          },
+        });
+        createdApplicants += 1;
+        continue;
+      }
+
+      const data: Record<string, unknown> = {};
+      const fill = (feld: string, vorhanden: unknown, neu: unknown) => {
+        if ((vorhanden == null || vorhanden === "") && neu != null && neu !== "") {
+          data[feld] = neu;
+          filledFields.push(`${feld} (Antragsteller ${a.position})`);
+        }
+      };
+      fill("vorname", existing.vorname, a.vorname);
+      fill("nachname", existing.nachname, a.nachname);
+      fill("geburtsdatum", existing.geburtsdatum, a.geburtsdatum ? new Date(a.geburtsdatum) : undefined);
+      fill("geburtsort", existing.geburtsort, a.geburtsort);
+      fill("staatsangehoerigkeit", existing.staatsangehoerigkeit, a.staatsangehoerigkeit);
+      fill("familienstand", existing.familienstand, a.familienstand);
+      fill("anzahlKinder", existing.anzahlKinder, a.anzahlKinder);
+      fill("street", existing.street, a.strasse);
+      fill("zip", existing.zip, a.plz);
+      fill("city", existing.city, a.ort);
+      fill("email", existing.email, a.email);
+      fill("phone", existing.phone, a.telefon);
+      if (Object.keys(data).length > 0) await tx.applicant.update({ where: { id: existing.id }, data });
+
+      if (existing.employment.length === 0 && emp) {
+        await tx.employmentRecord.create({
+          data: {
+            applicantId: existing.id,
+            beschaeftigungsart: emp.beschaeftigungsart ?? null,
+            beruf: emp.beruf ?? null,
+            arbeitgeber: emp.arbeitgeber ?? null,
+          },
+        });
+        filledFields.push(`Beschäftigung (Antragsteller ${a.position})`);
+      }
+      if (existing.income.length === 0 && inc?.nettoMonatlich != null) {
+        await tx.incomeRecord.create({ data: { applicantId: existing.id, nettoMonatlich: inc.nettoMonatlich } });
+        filledFields.push(`Einkommen (Antragsteller ${a.position})`);
+      }
+    }
+
+    // Objekt: anlegen falls fehlt, sonst nur leere Felder füllen.
+    const p = canonical.property;
+    if (p) {
+      if (!c.property) {
+        await tx.property.create({
+          data: { caseId: c.id, objektart: p.objektart ?? null, street: p.strasse ?? null, zip: p.plz ?? null, city: p.ort ?? null },
+        });
+        filledFields.push("Objekt");
+      } else {
+        const data: Record<string, unknown> = {};
+        if (c.property.objektart == null && p.objektart) { data.objektart = p.objektart; filledFields.push("Objektart"); }
+        if (!c.property.street && p.strasse) { data.street = p.strasse; filledFields.push("Objekt-Straße"); }
+        if (!c.property.zip && p.plz) { data.zip = p.plz; filledFields.push("Objekt-PLZ"); }
+        if (!c.property.city && p.ort) { data.city = p.ort; filledFields.push("Objekt-Ort"); }
+        if (Object.keys(data).length > 0) await tx.property.update({ where: { id: c.property.id }, data });
+      }
+    }
+
+    // Finanzierung + Finanzierungsart am Fall.
+    const f = canonical.financing;
+    if (c.financingRequest) {
+      const data: Record<string, unknown> = {};
+      if (c.financingRequest.kaufpreis == null && f.kaufpreis != null) { data.kaufpreis = f.kaufpreis; filledFields.push("Kaufpreis"); }
+      if (c.financingRequest.darlehenswunsch == null && f.darlehenswunsch != null) { data.darlehenswunsch = f.darlehenswunsch; filledFields.push("Darlehenswunsch"); }
+      if (Object.keys(data).length > 0) await tx.financingRequest.update({ where: { id: c.financingRequest.id }, data });
+    } else if (f.kaufpreis != null || f.darlehenswunsch != null) {
+      await tx.financingRequest.create({ data: { caseId: c.id, kaufpreis: f.kaufpreis ?? null, darlehenswunsch: f.darlehenswunsch ?? null } });
+      filledFields.push("Finanzierung");
+    }
+    if (c.financingType == null && canonical.financingType) {
+      await tx.case.update({ where: { id: c.id }, data: { financingType: canonical.financingType } });
+      filledFields.push("Finanzierungsart");
+    }
+  });
+
+  return { filledFields, createdApplicants };
+}

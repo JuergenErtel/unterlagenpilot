@@ -23,6 +23,7 @@ import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -350,6 +351,7 @@ export default async function CaseCockpitPage({
                   </SubmitButton>
                 </form>
               )}
+              {caseRow.finlinkId && <FinLinkRefreshButton caseId={id} />}
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>

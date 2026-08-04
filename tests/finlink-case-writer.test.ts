@@ -67,6 +67,74 @@ describe.runIf(RUN)("createCaseFromCanonical (PGlite)", () => {
     expect(row.financingRequest.kaufpreis).toBe(450000);
   });
 
+  it("fillCaseFromCanonical füllt nur leere Felder und legt fehlende Antragsteller an", async () => {
+    const { createCaseFromCanonical, fillCaseFromCanonical } = await import("@/lib/platforms/case-writer");
+    const created = await createCaseFromCanonical(
+      { organizationId: orgId, userId },
+      {
+        caseNumber: "",
+        applicants: [{ position: 1, vorname: "Laura", nachname: "Alt" }],
+        employment: [],
+        income: [],
+        liabilities: [],
+        assets: [],
+        financing: {},
+        platformIds: { finlinkId: "FL-REFRESH" },
+      } as any
+    );
+
+    const res = await fillCaseFromCanonical(created.caseId, {
+      caseNumber: "",
+      financingType: "kauf",
+      applicants: [
+        // Position 1: nachname anders (darf NICHT überschrieben werden), geburtsdatum neu (leer → füllen)
+        { position: 1, vorname: "Laura", nachname: "Neu", geburtsdatum: "1990-04-29", familienstand: "verheiratet" },
+        // Position 2: existiert nicht → anlegen
+        { position: 2, vorname: "Thomas", nachname: "Neu", geburtsdatum: "1989-10-24" },
+      ],
+      employment: [
+        { applicantPosition: 1, beschaeftigungsart: "angestellter" },
+        { applicantPosition: 2, beschaeftigungsart: "beamter" },
+      ],
+      income: [{ applicantPosition: 1, nettoMonatlich: 8050 }],
+      liabilities: [],
+      assets: [],
+      property: { ort: "Pfungstadt" },
+      financing: { kaufpreis: 489000 },
+      platformIds: { finlinkId: "FL-REFRESH" },
+    } as any);
+
+    expect(res.createdApplicants).toBe(1);
+    expect(res.filledFields).toContain("geburtsdatum (Antragsteller 1)");
+    expect(res.filledFields).not.toContain("nachname (Antragsteller 1)");
+
+    const row = await prisma.case.findUnique({
+      where: { id: created.caseId },
+      include: { applicants: { include: { employment: true, income: true }, orderBy: { position: "asc" } }, property: true, financingRequest: true },
+    });
+    expect(row.applicants).toHaveLength(2);
+    expect(row.applicants[0].nachname).toBe("Alt"); // nie überschreiben
+    expect(row.applicants[0].geburtsdatum?.toISOString().slice(0, 10)).toBe("1990-04-29");
+    expect(row.applicants[0].familienstand).toBe("verheiratet");
+    expect(row.applicants[0].employment[0]?.beschaeftigungsart).toBe("angestellter");
+    expect(row.applicants[0].income[0]?.nettoMonatlich).toBe(8050);
+    expect(row.applicants[1].vorname).toBe("Thomas");
+    expect(row.applicants[1].employment[0]?.beschaeftigungsart).toBe("beamter");
+    expect(row.property?.city).toBe("Pfungstadt");
+    expect(row.financingRequest?.kaufpreis).toBe(489000);
+    expect(row.financingType).toBe("kauf");
+
+    // Zweiter Lauf: idempotent, nichts mehr zu tun.
+    const res2 = await fillCaseFromCanonical(created.caseId, {
+      caseNumber: "",
+      applicants: [{ position: 1, nachname: "NochNeuer" }],
+      employment: [], income: [], liabilities: [], assets: [], financing: {},
+      platformIds: { finlinkId: "FL-REFRESH" },
+    } as any);
+    expect(res2.createdApplicants).toBe(0);
+    expect(res2.filledFields).toHaveLength(0);
+  });
+
   it("dedupliziert bei gleicher finlinkId in derselben Organisation", async () => {
     const { createCaseFromCanonical } = await import("@/lib/platforms/case-writer");
     const base = {

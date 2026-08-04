@@ -85,3 +85,14 @@ GET /loan_applications/{id}/applicants (Antrags-IDs stehen am Lead).
 Der Import reichert damit an (Detailwerte gewinnen, Lead-Adresse bleibt
 Fallback am ersten Antragsteller) und legt alle Antragsteller an.
 Scheitert der Detailabruf, importiert der Lead-Stand wie bisher.
+
+## Nachtrag 2026-08-04 (nachts): „Aus FinLink aktualisieren“-Aktion
+
+Fallseite → Aktionen (nur bei Fällen mit finlinkId): Button holt den Vorgang
+live aus der Partner-API (inkl. Antragsteller-Details) und zieht ihn in den
+bestehenden Fall nach. Eiserne Regel: vorhandene Werte werden NIE
+überschrieben – nur leere Felder gefüllt, fehlende Antragsteller (samt
+Beschäftigung/Einkommen), Objekt- und Finanzierungsangaben ergänzt.
+Ergebnis-Feedback direkt am Button, Audit-Log-Eintrag (case.updated,
+source=finlink_refresh, nur Feldnamen). Logik: fillCaseFromCanonical in
+case-writer.ts, PGlite-Integrationstest (Füllen/Anlegen/Idempotenz).
