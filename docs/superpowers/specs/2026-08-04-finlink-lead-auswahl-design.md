@@ -52,3 +52,11 @@ Das manuelle UUID-Feld bleibt als sekundärer Fallback unterhalb der Liste erhal
 
 Pagination/Suche (100 Leads, eine Seite reicht im Pilot), Sammel-Import,
 Auto-Refresh, per-Organisation-Keys (kommt mit Multi-Tenant, siehe Chat 04.08.).
+
+## Nachtrag 2026-08-04 (nachmittags): Suchfunktion
+
+Clientseitiges Suchfeld oberhalb der Liste (alle Leads sind bereits geladen,
+keine zusätzlichen API-Calls): filtert live über Name, Ort, Objektort,
+Finanzierungsart (deutsches Label) und Fallnummer; mehrere Suchwörter wirken
+als UND. Trefferzähler bei aktiver Suche, klare Leermeldung ohne Treffer.
+Filterlogik als exportierte Funktion `filterLeads` mit eigenen Tests.
