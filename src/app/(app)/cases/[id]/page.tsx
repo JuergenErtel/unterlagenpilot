@@ -157,11 +157,21 @@ export default async function CaseCockpitPage({
 
       {/* Geführte Fallreise: die eine Antwort auf „Was muss ich jetzt tun?“ */}
       {(() => {
-        const step = computeNextStep(cockpit);
+        let step = computeNextStep(cockpit);
+        // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
+        // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg.
+        if (step.key === "ki_laeuft" && !aiCheckRunning) {
+          step = {
+            key: "ki_fehler",
+            title: "KI-Prüfung wurde unterbrochen",
+            reason: "Der letzte Lauf ist nicht sauber zu Ende gekommen (z. B. durch ein Update). Ein Neustart holt das nach.",
+            tone: "review",
+          };
+        }
         const actionSlot =
           step.key === "ki_laeuft" ? (
             <AiCheckRunning done={aiCheckDone} total={documents.length} />
-          ) : step.key === "ki_fehler" && !aiCheckLocked && !aiCheckRunning ? (
+          ) : step.key === "ki_fehler" && !aiCheckLocked ? (
             <form action={runAiCheck.bind(null, id)}>
               <SubmitButton variant="ai" size="lg" className="w-full justify-center" pendingLabel="KI-Prüfung wird gestartet …">
                 <ScanSearch />KI-Prüfung wiederholen
