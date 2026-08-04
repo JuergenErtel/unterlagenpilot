@@ -29,7 +29,20 @@ const SALES_STATE_LABEL: Record<string, string> = {
 };
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-const datum = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+// timeZone gepinnt: der Server (Vercel, UTC) und der Browser (Europe/Berlin) müssen
+// identischen Text rendern, sonst gibt es einen Hydration-Mismatch bei Leads,
+// die zwischen 0 und 2 Uhr nachts angelegt wurden.
+const datum = new Intl.DateTimeFormat("de-DE", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "Europe/Berlin",
+});
+
+export function formatLeadDate(iso: string): string {
+  return datum.format(new Date(iso));
+}
 
 const FINANZIERUNG_LABEL: Record<string, string> = {
   kauf: "Kauf",
@@ -81,7 +94,7 @@ function LeadRow({ lead }: { lead: LeadRowData }) {
             lead.ort,
             lead.objektOrt && lead.objektOrt !== lead.ort ? `Objekt: ${lead.objektOrt}` : null,
             lead.kaufpreis != null ? eur.format(lead.kaufpreis) : null,
-            lead.createdAt ? datum.format(new Date(lead.createdAt)) : null,
+            lead.createdAt ? formatLeadDate(lead.createdAt) : null,
           ]
             .filter(Boolean)
             .join(" · ") || "Keine weiteren Angaben"}

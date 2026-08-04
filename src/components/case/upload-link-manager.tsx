@@ -91,7 +91,7 @@ export function UploadLinkManager({ caseId, links }: { caseId: string; links: Up
                   <Badge variant={status === "aktiv" ? "success" : "neutral"}>{status}</Badge>
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    bis {new Date(l.expiresAt).toLocaleDateString("de-DE")}
+                    bis {new Date(l.expiresAt).toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" })}
                   </span>
                   <span className="text-muted-foreground">
                     {l.usedCount} Upload(s){l.maxUploads != null ? ` / max. ${l.maxUploads}` : ""}
