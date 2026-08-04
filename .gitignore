@@ -12,3 +12,4 @@ next-env.d.ts
 /prisma/dev.db
 /uploads
 .vercel
+.env.prod-check

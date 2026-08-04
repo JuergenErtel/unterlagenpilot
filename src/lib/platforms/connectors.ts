@@ -147,6 +147,7 @@ export class FinLinkConnector extends BaseConnector {
     } catch (e) {
       if (e instanceof FinLinkNotFoundError) return { ok: false, importedCaseIds: [], message: "FinLink-Vorgang nicht gefunden. Bitte ID prüfen." };
       if (e instanceof FinLinkAuthError) return { ok: false, importedCaseIds: [], message: "FinLink-Zugang abgelehnt. Bitte API-Key prüfen." };
+      console.error(`[finlink] Import fehlgeschlagen: ${e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e)}`);
       return { ok: false, importedCaseIds: [], message: "FinLink-Import fehlgeschlagen. Bitte später erneut versuchen." };
     }
   }

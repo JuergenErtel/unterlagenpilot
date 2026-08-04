@@ -41,6 +41,10 @@ export class HttpFinLinkClient implements FinLinkClient {
       throw new FinLinkApiError("FinLink nicht erreichbar (Netzwerkfehler).");
     }
 
+    if (!res.ok) {
+      // Diagnose ohne Key/PII – landet in den Runtime-Logs.
+      console.warn(`[finlink] GET ${LEADS_PATH} -> HTTP ${res.status}`);
+    }
     if (res.status === 404) throw new FinLinkNotFoundError("FinLink-Vorgang nicht gefunden.");
     if (res.status === 401 || res.status === 403) throw new FinLinkAuthError("FinLink-Zugang abgelehnt (Auth).");
     if (!res.ok) throw new FinLinkApiError(`FinLink-Fehler (HTTP ${res.status}).`);
@@ -54,10 +58,18 @@ export class HttpFinLinkClient implements FinLinkClient {
     let dto: FinLinkVorgangDTO | null;
     try {
       dto = parseFinLinkLeadsResponse(body, externalId);
-    } catch {
+    } catch (e) {
+      console.warn(`[finlink] /leads-Antwort unparsebar: ${e instanceof Error ? e.message : String(e)}`);
       throw new FinLinkApiError("FinLink-Antwort hat ein unerwartetes Format.");
     }
-    if (!dto) throw new FinLinkNotFoundError("FinLink-Vorgang nicht gefunden.");
+    if (!dto) {
+      const count = Array.isArray((body as { data?: unknown[] })?.data)
+        ? (body as { data: unknown[] }).data.length
+        : -1;
+      // Nur die gesuchte ID + Listengröße loggen, keine Lead-Daten.
+      console.warn(`[finlink] Lead ${externalId} nicht in /leads-Antwort (${count} Einträge).`);
+      throw new FinLinkNotFoundError("FinLink-Vorgang nicht gefunden.");
+    }
     return dto;
   }
 }
