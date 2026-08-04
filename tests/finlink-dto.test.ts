@@ -1,5 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { parseFinLinkVorgang, parseFinLinkLeadsResponse } from "@/lib/platforms/finlink/dto";
+import {
+  parseFinLinkVorgang,
+  parseFinLinkLeadsResponse,
+  parseFinLinkLeadsSummaries,
+  parseFinLinkSingleLeadResponse,
+} from "@/lib/platforms/finlink/dto";
+
+describe("user_meta-Fallback (576 von 905 Bestands-Leads haben Namen NUR dort)", () => {
+  const leadNurUserMeta = {
+    id: "lead-um-1",
+    attributes: {
+      applicant_meta: null,
+      user_meta: { first_name: "Laura", last_name: "Colell", email: "l@example.com", phone_number: "0157" },
+      property_meta: { city_name: "Wörth" },
+      loan_application_meta: { finance_type: "buy_existing" },
+      created_at: "2026-07-27T17:47:02Z",
+    },
+  };
+
+  it("Zusammenfassung nimmt den Namen aus user_meta, wenn applicant_meta leer ist", () => {
+    const s = parseFinLinkLeadsSummaries({ data: [leadNurUserMeta] });
+    expect(s[0]).toMatchObject({ vorname: "Laura", nachname: "Colell" });
+  });
+
+  it("Import baut den Antragsteller aus user_meta (Name, E-Mail, Telefon)", () => {
+    const dto = parseFinLinkSingleLeadResponse({ data: leadNurUserMeta });
+    expect(dto.antragsteller).toHaveLength(1);
+    expect(dto.antragsteller[0]).toMatchObject({
+      vorname: "Laura",
+      nachname: "Colell",
+      email: "l@example.com",
+      telefon: "0157",
+    });
+  });
+
+  it("applicant_meta hat Vorrang vor user_meta", () => {
+    const lead = structuredClone(leadNurUserMeta);
+    (lead.attributes as any).applicant_meta = { first_name: "Anna", last_name: "Muster" };
+    const s = parseFinLinkLeadsSummaries({ data: [lead] });
+    expect(s[0]).toMatchObject({ vorname: "Anna", nachname: "Muster" });
+  });
+});
 
 const valid = {
   id: "FL-2026-04821",

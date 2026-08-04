@@ -189,8 +189,15 @@ const apiLeadSchema = z.object({
   id: z.string().min(1),
   attributes: z.object({
     applicant_meta: apiApplicantMeta.optional().nullable(),
+    // Bei vielen Leads (576 von 905 im Bestand 08/2026) stehen Name/Telefon
+    // NUR hier und nicht in applicant_meta – user_meta ist der Fallback.
     user_meta: z
-      .object({ email: z.string().optional().nullable(), phone_number: z.string().optional().nullable() })
+      .object({
+        email: z.string().optional().nullable(),
+        phone_number: z.string().optional().nullable(),
+        first_name: z.string().optional().nullable(),
+        last_name: z.string().optional().nullable(),
+      })
       .optional()
       .nullable(),
     property_meta: z
@@ -278,10 +285,11 @@ export function parseFinLinkLeadsSummaries(body: unknown): FinLinkLeadSummary[] 
     const am = lead.attributes.applicant_meta;
     const pm = lead.attributes.property_meta;
     const lm = lead.attributes.loan_application_meta;
+    const um = lead.attributes.user_meta;
     return {
       id: lead.id,
-      vorname: am?.first_name ?? undefined,
-      nachname: am?.last_name ?? undefined,
+      vorname: am?.first_name ?? um?.first_name ?? undefined,
+      nachname: am?.last_name ?? um?.last_name ?? undefined,
       ort: am?.city_name ?? undefined,
       objektOrt: pm?.city_name ?? undefined,
       finanzierungsart: translate(FINANCE_TYPE_DE, lm?.finance_type ?? undefined),
@@ -326,20 +334,20 @@ function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
 
   return parseFinLinkVorgang({
     id: lead.id,
-    antragsteller: am
+    antragsteller: am || um
       ? [
           {
-            vorname: am.first_name ?? undefined,
-            nachname: am.last_name ?? undefined,
-            geburtsdatum: am.dob ?? undefined,
-            geburtsort: am.birth_city ?? undefined,
-            familienstand: translate(RELATIONSHIP_DE, am.relationship_status ?? undefined),
-            anzahlKinder: am.children_meta ? am.children_meta.length : undefined,
-            strasse: joinStrasse(am.street_address, am.house_number),
-            plz: toPlz(am.german_zipcode_number),
-            ort: am.city_name ?? undefined,
-            email: am.email_address ?? um?.email ?? undefined,
-            telefon: am.phone_number ?? um?.phone_number ?? undefined,
+            vorname: am?.first_name ?? um?.first_name ?? undefined,
+            nachname: am?.last_name ?? um?.last_name ?? undefined,
+            geburtsdatum: am?.dob ?? undefined,
+            geburtsort: am?.birth_city ?? undefined,
+            familienstand: translate(RELATIONSHIP_DE, am?.relationship_status ?? undefined),
+            anzahlKinder: am?.children_meta ? am.children_meta.length : undefined,
+            strasse: joinStrasse(am?.street_address, am?.house_number),
+            plz: toPlz(am?.german_zipcode_number),
+            ort: am?.city_name ?? undefined,
+            email: am?.email_address ?? um?.email ?? undefined,
+            telefon: am?.phone_number ?? um?.phone_number ?? undefined,
             beschaeftigung:
               beschaeftigungsart || beruf || arbeitgeber
                 ? { art: beschaeftigungsart, beruf, arbeitgeber }
