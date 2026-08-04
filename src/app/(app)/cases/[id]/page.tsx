@@ -21,6 +21,8 @@ import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { ProgressRing } from "@/components/case/progress-ring";
 import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
+import { NextStepCard } from "@/components/case/next-step-card";
+import { computeNextStep } from "@/lib/cases/next-step";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -152,6 +154,22 @@ export default async function CaseCockpitPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Geführte Fallreise: die eine Antwort auf „Was muss ich jetzt tun?“ */}
+      {(() => {
+        const step = computeNextStep(cockpit);
+        const actionSlot =
+          step.key === "ki_laeuft" ? (
+            <AiCheckRunning done={aiCheckDone} total={documents.length} />
+          ) : step.key === "ki_fehler" && !aiCheckLocked && !aiCheckRunning ? (
+            <form action={runAiCheck.bind(null, id)}>
+              <SubmitButton variant="ai" size="lg" className="w-full justify-center" pendingLabel="KI-Prüfung wird gestartet …">
+                <ScanSearch />KI-Prüfung wiederholen
+              </SubmitButton>
+            </form>
+          ) : undefined;
+        return <NextStepCard step={step} actionSlot={actionSlot} />;
+      })()}
 
       {/* Hauptbereich: Roadmap + Tabs | Sidebar */}
       <div className="grid gap-6 lg:grid-cols-3">

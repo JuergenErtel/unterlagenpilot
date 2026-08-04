@@ -22,14 +22,26 @@ export interface CockpitData {
     tone: Tone;
     items: Array<{ key: string; title: string; reason: string; platform?: Platform | "allgemein"; internalNote?: string }>;
   }>;
-  counts: { docsPresent: number; docsMissing: number; pruefbereit: number; warnings: number };
+  counts: {
+    docsPresent: number;
+    docsMissing: number;
+    pruefbereit: number;
+    warnings: number;
+    criticals: number;
+    docsFehler: number;
+    docsLaufend: number;
+  };
+  missingCustomerFields: string[];
 }
 
 export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   const agg = await getCaseAggregate(caseId);
   const [caseRow, docs, missingRequests] = await Promise.all([
     prisma.case.findUniqueOrThrow({ where: { id: caseId }, include: { applicants: { orderBy: { position: "asc" } } } }),
-    prisma.document.findMany({ where: { caseId }, select: { reviewStatus: true, classificationStatus: true, documentType: true } }),
+    prisma.document.findMany({
+      where: { caseId },
+      select: { reviewStatus: true, classificationStatus: true, extractionStatus: true, documentType: true },
+    }),
     prisma.missingDocumentRequest.findMany({ where: { caseId, resolved: false } }),
   ]);
 
@@ -44,6 +56,8 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
 
   const docsPresent = docs.filter((d) => d.reviewStatus !== "abgelehnt" && d.reviewStatus !== "duplikat").length;
   const pruefbereit = docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length;
+  const docsFehler = docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length;
+  const docsLaufend = docs.filter((d) => d.classificationStatus === "laeuft").length;
   const warnings = agg.plausibility.filter((p) => p.status !== "ok").length;
   const criticals = agg.plausibility.filter((p) => p.status === "kritisch");
 
@@ -128,7 +142,16 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
     roadmap,
     nextActions: nextActions.slice(0, 5),
     missingGroups,
-    counts: { docsPresent, docsMissing: agg.missing.length, pruefbereit, warnings },
+    counts: {
+      docsPresent,
+      docsMissing: agg.missing.length,
+      pruefbereit,
+      warnings,
+      criticals: criticals.length,
+      docsFehler,
+      docsLaufend,
+    },
+    missingCustomerFields,
   };
 }
 

@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { setDocumentReview } from "@/lib/actions/cases";
+import { getCaseCockpit } from "@/lib/cases/cockpit";
+import { computeNextStep } from "@/lib/cases/next-step";
+import { NextStepCard } from "@/components/case/next-step-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,15 +39,65 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
     take: 20,
   });
 
+  // Geführter Modus: aus einem Fall heraus geöffnet („Nächster Schritt“-Karte).
+  const caseScope = caseId
+    ? await prisma.case.findFirst({
+        where: { id: caseId, organizationId: ctx.organizationId },
+        select: { id: true, caseNumber: true },
+      })
+    : null;
+
+  // Abschluss des geführten Modus: nichts mehr offen → nächster Schritt des Falls.
+  const completion =
+    caseScope && documents.length === 0
+      ? await (async () => {
+          const cockpit = await getCaseCockpit(caseScope.id);
+          return { cockpit, step: computeNextStep(cockpit) };
+        })()
+      : null;
+
   return (
     <div className="space-y-6">
+      {caseScope && (
+        <Link
+          href={`/cases/${caseScope.id}`}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Zurück zum Fall {caseScope.caseNumber}
+        </Link>
+      )}
       <PageHeader
         eyebrow="KI-Auswertung"
-        title="Review-Center"
-        subtitle="Links die Vorschau, in der Mitte die erkannten Daten, rechts Hinweise. Prüfe, korrigiere und gib frei – jede Aktion wird im Audit-Log protokolliert."
+        title={caseScope ? `Dokumente freigeben · ${caseScope.caseNumber}` : "Review-Center"}
+        subtitle={
+          caseScope
+            ? documents.length > 0
+              ? `Noch ${documents.length} Dokument${documents.length === 1 ? "" : "e"} zu prüfen. Übernimm die erkannten Daten mit einem Klick – oder korrigiere einzelne Felder.`
+              : "Alle Dokumente dieses Falls sind freigegeben."
+            : "Links die Vorschau, in der Mitte die erkannten Daten, rechts Hinweise. Prüfe, korrigiere und gib frei – jede Aktion wird im Audit-Log protokolliert."
+        }
       />
 
-      {documents.length === 0 ? (
+      {completion ? (
+        <div className="space-y-4">
+          <Card className="border-success/30 bg-success/5">
+            <CardContent className="flex items-center gap-3 p-6">
+              <CheckCircle2 className="h-8 w-8 shrink-0 text-success" />
+              <div>
+                <p className="font-medium">Alles freigegeben – gut gemacht!</p>
+                <p className="text-sm text-muted-foreground">
+                  Die übernommenen Daten stehen jetzt in der Fallakte
+                  {completion.cockpit.counts.docsFehler > 0
+                    ? ` – ${completion.cockpit.counts.docsFehler} Dokument${completion.cockpit.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis wartet${completion.cockpit.counts.docsFehler === 1 ? "" : "en"} noch auf eine wiederholte KI-Prüfung.`
+                    : "."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <NextStepCard step={completion.step} />
+        </div>
+      ) : documents.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Sparkles className="mx-auto mb-3 h-8 w-8 text-ai" />
@@ -55,7 +108,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
           </CardContent>
         </Card>
       ) : (
-        documents.map((d) => {
+        documents.map((d, docIndex) => {
           const name = d.case.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ");
           // Bei mehreren Antragstellern muss der Vermittler zuordnen können: der
           // gemeinsame Kunden-Upload-Link verrät nicht, wessen Unterlage das ist.
@@ -69,6 +122,11 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             <Card key={d.id} className="overflow-hidden">
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b bg-muted/30">
                 <div className="flex flex-wrap items-center gap-2">
+                  {caseScope && (
+                    <Badge variant="ai" className="font-mono tabular">
+                      {docIndex + 1} von {documents.length}
+                    </Badge>
+                  )}
                   <CardTitle className="text-base">{d.generatedName ?? d.originalName}</CardTitle>
                   <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
                   {applicantOptions.length > 1 && (
@@ -76,7 +134,9 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{d.case.caseNumber} · {name}</span>
+                  <Link href={`/review?case=${d.caseId}`} className="hover:text-foreground hover:underline">
+                    {d.case.caseNumber} · {name}
+                  </Link>
                   <Badge variant="neutral" className="font-mono tabular">Konfidenz {formatConfidence(d.confidence)}</Badge>
                 </div>
               </CardHeader>
@@ -155,7 +215,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   <div className="space-y-1.5">
                     <form action={setDocumentReview.bind(null, d.id, "akzeptiert")}>
                       <SubmitButton size="sm" variant="success" className="w-full" pendingLabel="Wird übernommen …">
-                        Dokument akzeptieren
+                        {caseScope ? "Alle Felder übernehmen & Dokument freigeben" : "Dokument akzeptieren"}
                       </SubmitButton>
                     </form>
                     <div className="grid grid-cols-2 gap-1.5">
