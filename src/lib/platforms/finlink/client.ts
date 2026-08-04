@@ -1,4 +1,9 @@
-import { parseFinLinkLeadsResponse, type FinLinkVorgangDTO } from "./dto";
+import {
+  parseFinLinkLeadsResponse,
+  parseFinLinkLeadsSummaries,
+  type FinLinkLeadSummary,
+  type FinLinkVorgangDTO,
+} from "./dto";
 
 export class FinLinkNotConfiguredError extends Error {}
 export class FinLinkNotFoundError extends Error {}
@@ -7,6 +12,7 @@ export class FinLinkApiError extends Error {}
 
 export interface FinLinkClient {
   fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO>;
+  listLeads(): Promise<FinLinkLeadSummary[]>;
 }
 
 interface FinLinkConfig {
@@ -28,7 +34,8 @@ const LEADS_PATH = "/leads";
 export class HttpFinLinkClient implements FinLinkClient {
   constructor(private readonly config: FinLinkConfig, private readonly fetchImpl: FetchLike = fetch) {}
 
-  async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
+  /** Holt /leads und liefert den JSON-Body; Fehler-Mapping für alle Aufrufer gleich. */
+  private async fetchLeadsBody(): Promise<unknown> {
     const url = `${this.config.baseUrl.replace(/\/$/, "")}${LEADS_PATH}`;
     let res: Response;
     try {
@@ -49,12 +56,25 @@ export class HttpFinLinkClient implements FinLinkClient {
     if (res.status === 401 || res.status === 403) throw new FinLinkAuthError("FinLink-Zugang abgelehnt (Auth).");
     if (!res.ok) throw new FinLinkApiError(`FinLink-Fehler (HTTP ${res.status}).`);
 
-    let body: unknown;
     try {
-      body = await res.json();
+      return await res.json();
     } catch {
       throw new FinLinkApiError("FinLink-Antwort war kein gültiges JSON.");
     }
+  }
+
+  async listLeads(): Promise<FinLinkLeadSummary[]> {
+    const body = await this.fetchLeadsBody();
+    try {
+      return parseFinLinkLeadsSummaries(body);
+    } catch (e) {
+      console.warn(`[finlink] /leads-Antwort unparsebar: ${e instanceof Error ? e.message : String(e)}`);
+      throw new FinLinkApiError("FinLink-Antwort hat ein unerwartetes Format.");
+    }
+  }
+
+  async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
+    const body = await this.fetchLeadsBody();
     let dto: FinLinkVorgangDTO | null;
     try {
       dto = parseFinLinkLeadsResponse(body, externalId);

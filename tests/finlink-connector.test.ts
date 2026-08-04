@@ -102,6 +102,36 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
   });
 });
 
+describe("HttpFinLinkClient.listLeads", () => {
+  it("liefert Anzeige-Zusammenfassungen aller Leads", async () => {
+    const body = apiLeadBody("FL-1");
+    (body.data[0]!.attributes as any).property_meta = { city_name: "Wörth", listed_price: "850000.0" };
+    (body.data[0]!.attributes as any).loan_application_meta = { finance_type: "buy_existing" };
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, body));
+    const leads = await client.listLeads();
+    expect(leads).toHaveLength(1);
+    expect(leads[0]).toMatchObject({
+      id: "FL-1",
+      vorname: "Anna",
+      nachname: "Muster",
+      objektOrt: "Wörth",
+      kaufpreis: 850000,
+      finanzierungsart: "kauf",
+      createdAt: "2026-07-01T10:00:00Z",
+    });
+  });
+
+  it("mappt 401 auf FinLinkAuthError", async () => {
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(401, {}));
+    await expect(client.listLeads()).rejects.toBeInstanceOf(FinLinkAuthError);
+  });
+
+  it("wirft FinLinkApiError bei unerwartetem Format", async () => {
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, { kaputt: true }));
+    await expect(client.listLeads()).rejects.toBeInstanceOf(FinLinkApiError);
+  });
+});
+
 vi.mock("@/lib/platforms/case-writer", () => ({
   createCaseFromCanonical: vi.fn(async (_ctx, canonical) => ({
     caseId: "case-123",
@@ -113,7 +143,7 @@ vi.mock("@/lib/platforms/case-writer", () => ({
 const ctx = { organizationId: "org-1", userId: "user-1" };
 
 function clientReturning(dto: any): FinLinkClient {
-  return { fetchVorgang: vi.fn().mockResolvedValue(dto) };
+  return { fetchVorgang: vi.fn().mockResolvedValue(dto), listLeads: vi.fn().mockResolvedValue([]) };
 }
 
 describe("FinLinkConnector.importCaseById", () => {
@@ -135,7 +165,10 @@ describe("FinLinkConnector.importCaseById", () => {
   it("meldet eine klare Fehlermeldung bei unbekanntem Vorgang (404)", async () => {
     const { FinLinkNotFoundError } = await import("@/lib/platforms/finlink/client");
     const connector = new FinLinkConnector();
-    const client: FinLinkClient = { fetchVorgang: vi.fn().mockRejectedValue(new FinLinkNotFoundError("x")) };
+    const client: FinLinkClient = {
+      fetchVorgang: vi.fn().mockRejectedValue(new FinLinkNotFoundError("x")),
+      listLeads: vi.fn().mockResolvedValue([]),
+    };
     const res = await connector.importCaseById("nope", ctx, { client });
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/nicht gefunden/i);

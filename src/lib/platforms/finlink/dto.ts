@@ -212,10 +212,47 @@ const apiLeadSchema = z.object({
       })
       .optional()
       .nullable(),
+    created_at: z.string().optional().nullable(),
   }),
 });
 
 const apiLeadsResponseSchema = z.object({ data: z.array(apiLeadSchema) });
+
+/**
+ * Kompakte Lead-Zusammenfassung für die Auswahlliste auf der Import-Seite.
+ * Nur Anzeigefelder – der vollständige Import läuft weiterhin über
+ * `parseFinLinkLeadsResponse` + Mapping/Writer.
+ */
+export interface FinLinkLeadSummary {
+  id: string;
+  vorname?: string;
+  nachname?: string;
+  ort?: string;
+  objektOrt?: string;
+  finanzierungsart?: string;
+  kaufpreis?: number;
+  createdAt?: string; // ISO
+}
+
+/** Übersetzt die komplette /leads-Antwort in Anzeige-Zusammenfassungen. */
+export function parseFinLinkLeadsSummaries(body: unknown): FinLinkLeadSummary[] {
+  const parsed = apiLeadsResponseSchema.parse(body);
+  return parsed.data.map((lead) => {
+    const am = lead.attributes.applicant_meta;
+    const pm = lead.attributes.property_meta;
+    const lm = lead.attributes.loan_application_meta;
+    return {
+      id: lead.id,
+      vorname: am?.first_name ?? undefined,
+      nachname: am?.last_name ?? undefined,
+      ort: am?.city_name ?? undefined,
+      objektOrt: pm?.city_name ?? undefined,
+      finanzierungsart: translate(FINANCE_TYPE_DE, lm?.finance_type ?? undefined),
+      kaufpreis: toNumber(pm?.final_sale_price) ?? toNumber(pm?.listed_price),
+      createdAt: lead.attributes.created_at ?? undefined,
+    };
+  });
+}
 
 /**
  * Sucht den Lead mit `externalId` in der /leads-Antwort und übersetzt ihn in
