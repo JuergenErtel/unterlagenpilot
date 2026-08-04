@@ -3,6 +3,7 @@ import { getCaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
+import { computeNextStep } from "@/lib/cases/next-step";
 import type { Platform, CaseStatus } from "@/lib/domain/enums";
 import type { TodoCase } from "@/components/dashboard/todo-case-card";
 
@@ -90,6 +91,13 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     take: 12,
   });
 
+  // Dokument-Status für alle Kandidaten in EINER Query – speist die
+  // Next-Step-Engine (gleiche Prioritätsleiter wie auf der Fallseite).
+  const todoDocs = await prisma.document.findMany({
+    where: { caseId: { in: todoCandidates.map((c) => c.id) } },
+    select: { caseId: true, reviewStatus: true, classificationStatus: true, extractionStatus: true },
+  });
+
   const enriched = await Promise.all(
     todoCandidates.map(async (c) => {
       const agg = await getCaseAggregate(c.id);
@@ -97,10 +105,23 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       const name =
         c.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ") ||
         "Ohne Namen";
-      const geburtsLücke = c.applicants.some((a) => !a.geburtsdatum);
-      const nextStep = buildNextStep(geburtsLücke, agg.missing.map((m) => m.name));
+      const docs = todoDocs.filter((d) => d.caseId === c.id);
+      const step = computeNextStep({
+        caseId: c.id,
+        status: c.status,
+        counts: {
+          pruefbereit: docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length,
+          docsMissing: agg.missing.length,
+          criticals: agg.plausibility.filter((p) => p.status === "kritisch").length,
+          docsFehler: docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length,
+          docsLaufend: docs.filter((d) => d.classificationStatus === "laeuft").length,
+        },
+        missingCustomerFields: c.applicants
+          .filter((a) => !a.geburtsdatum)
+          .map((a) => `Geburtsdatum ${a.vorname ?? `Antragsteller ${a.position}`}`),
+      });
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
-      return { c, agg, name, nextStep, blockers };
+      return { c, agg, name, step, blockers };
     })
   );
 
@@ -114,10 +135,10 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       name: e.name,
       status: e.c.status as CaseStatus,
       readiness: e.agg.readiness.score,
-      nextStep: e.nextStep,
+      nextStep: e.step.title,
       blockers: e.blockers,
-      buttonLabel: "Fall einreichungsfertig machen",
-      buttonHref: `/cases/${e.c.id}`,
+      buttonLabel: e.step.cta?.label ?? "Fall öffnen",
+      buttonHref: e.step.cta?.href ?? `/cases/${e.c.id}`,
     }));
 
   // "Heute fällig": Wiedervorlagen, Fristen und offene Bank-Nachforderungen.
@@ -158,10 +179,3 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   return { kpis, pipeline, todos, followups };
 }
 
-function buildNextStep(geburtsLücke: boolean, missing: string[]): string {
-  const parts: string[] = [];
-  if (geburtsLücke) parts.push("Geburtsdatum ergänzen");
-  if (missing.length) parts.push(`${missing.slice(0, 2).join(" & ")} nachfordern`);
-  parts.push("KI-Prüfung freigeben");
-  return parts.join(", ");
-}

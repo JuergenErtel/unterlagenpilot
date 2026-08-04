@@ -1,5 +1,4 @@
 import type { Tone } from "@/lib/ui/tone";
-import type { CockpitData } from "./cockpit";
 
 /**
  * Der EINE nächste Schritt eines Falls – Herzstück der geführten Fallreise.
@@ -25,7 +24,24 @@ export interface NextStep {
   secondary?: Array<{ label: string; href: string }>;
 }
 
-export function computeNextStep(c: CockpitData): NextStep {
+/**
+ * Struktureller Ausschnitt aus CockpitData – so kann auch das Dashboard den
+ * Schritt je Fall berechnen, ohne das komplette (teure) Cockpit zu laden.
+ */
+export interface NextStepInput {
+  caseId: string;
+  status: string;
+  counts: {
+    pruefbereit: number;
+    docsMissing: number;
+    criticals: number;
+    docsFehler: number;
+    docsLaufend: number;
+  };
+  missingCustomerFields: string[];
+}
+
+export function computeNextStep(c: NextStepInput): NextStep {
   const id = c.caseId;
 
   if (c.status === "ki_pruefung_laeuft" || c.counts.docsLaufend > 0) {
