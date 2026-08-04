@@ -21,6 +21,7 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
+import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { isAiCheckStale } from "@/lib/cases/ai-check-status";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import type {
@@ -466,7 +467,7 @@ export async function setDocumentReview(
   const doc = await prisma.document.update({
     where: { id: documentId },
     data: { reviewStatus },
-    select: { caseId: true },
+    select: { caseId: true, documentType: true },
   });
   await audit({
     organizationId: ctx.organizationId,
@@ -484,6 +485,15 @@ export async function setDocumentReview(
       await applyExtractedFieldsToApplicant(documentId, owner!.caseId, owner!.applicantId, ctx);
     } catch (e) {
       console.error("[setDocumentReview] Stammdaten-Übernahme fehlgeschlagen:", e);
+    }
+    // Objekt-Dokumente (Exposé, Kaufvertrag, Grundbuch …): erkannte Objekt-/
+    // Finanzierungsdaten in Property/FinancingRequest übernehmen (nur leere Felder).
+    if (doc.documentType && isObjectDocumentType(doc.documentType)) {
+      try {
+        await applyExtractedFieldsToObject(documentId, owner!.caseId, ctx);
+      } catch (e) {
+        console.error("[setDocumentReview] Objektdaten-Übernahme fehlgeschlagen:", e);
+      }
     }
   }
 
@@ -550,6 +560,73 @@ async function applyExtractedFieldsToApplicant(
     action: "case.updated",
     entityType: "applicant",
     entityId: target.id,
+    metadata: { source: "document_extraction", documentId, fields: appliedLabels },
+  });
+}
+
+/**
+ * Überträgt die (ggf. korrigierten) extrahierten Felder eines akzeptierten
+ * Objekt-Dokuments in die Objektdaten (Property) und den Finanzierungswunsch
+ * (FinancingRequest) des Falls – nur leere Felder.
+ */
+async function applyExtractedFieldsToObject(
+  documentId: string,
+  caseId: string,
+  ctx: { organizationId: string; userId: string }
+): Promise<void> {
+  const fields = await prisma.extractedFieldRecord.findMany({
+    where: { documentId },
+    select: { key: true, label: true, value: true, correctedValue: true },
+  });
+  if (fields.length === 0) return;
+
+  const caseRow = await prisma.case.findUnique({
+    where: { id: caseId },
+    select: {
+      property: {
+        select: {
+          objektart: true,
+          street: true,
+          zip: true,
+          city: true,
+          wohnflaeche: true,
+          grundstuecksflaeche: true,
+          baujahr: true,
+          anzahlZimmer: true,
+          heizungsart: true,
+        },
+      },
+      financingRequest: { select: { kaufpreis: true, baukosten: true } },
+    },
+  });
+
+  const effective = fields.map((f) => ({ key: f.key, label: f.label, value: f.correctedValue ?? f.value }));
+  const { propertyData, financingData, appliedLabels } = computeObjectUpdate(effective, {
+    property: caseRow?.property ?? null,
+    financing: caseRow?.financingRequest ?? null,
+  });
+  if (appliedLabels.length === 0) return;
+
+  if (Object.keys(propertyData).length > 0) {
+    await prisma.property.upsert({
+      where: { caseId },
+      create: { caseId, ...propertyData },
+      update: propertyData,
+    });
+  }
+  if (Object.keys(financingData).length > 0) {
+    await prisma.financingRequest.upsert({
+      where: { caseId },
+      create: { caseId, ...financingData },
+      update: financingData,
+    });
+  }
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: caseId,
     metadata: { source: "document_extraction", documentId, fields: appliedLabels },
   });
 }
