@@ -64,16 +64,12 @@ export default async function DashboardPage() {
           subtitle="Unterlagen prüfen, Lücken schließen und Fälle einreichungsfertig machen."
           actions={
             <>
-              {/* Primäraktion ist der Weg, der wirklich funktioniert. Der
-                  FinLink-Import ist bislang ein Stub – als Hauptbutton führte er
-                  den Nutzer in eine Sackgasse. */}
               <Button asChild>
                 <Link href="/cases/new"><Plus />Neuen Fall anlegen</Link>
               </Button>
               <Button asChild variant="outline">
                 <Link href="/cases/import">
                   <Download />Aus FinLink importieren
-                  <Badge variant="neutral" className="ml-1">bald</Badge>
                 </Link>
               </Button>
               {demoCase && (

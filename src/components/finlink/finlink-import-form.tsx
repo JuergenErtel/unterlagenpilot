@@ -11,8 +11,8 @@ export function FinLinkImportForm() {
   return (
     <form action={action} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="finlinkId">FinLink-Vorgangs-ID</Label>
-        <Input id="finlinkId" name="finlinkId" placeholder="z. B. FL-2026-04821" required />
+        <Label htmlFor="finlinkId">FinLink-Lead-ID (UUID)</Label>
+        <Input id="finlinkId" name="finlinkId" placeholder="z. B. 2fffefa7-d105-4750-b50f-4615fa8c3b9b" required />
       </div>
       {state.error ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">

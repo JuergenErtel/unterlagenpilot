@@ -4,6 +4,7 @@ import {
   KeyRound,
   PlugZap,
   FileDown,
+  Download,
   ShieldCheck,
   MonitorSmartphone,
 } from "lucide-react";
@@ -28,25 +29,31 @@ type ConnectorKey = "europace" | "finlink" | "ehyp_home";
 /** Statische Beschreibungstexte je Verbindung (Mikrocopy, menschlich). */
 const CONNECTOR_META: Record<
   ConnectorKey,
-  { name: string; benefit: string; credentials: string[] }
+  { name: string; benefit: string; credentials: string[]; works: string; prepared: string }
 > = {
   europace: {
     name: "Europace",
     benefit:
       "Vorgänge samt Kundenangaben und Anforderungen werden übernommen – du startest nicht bei null.",
     credentials: ["Client-ID", "Client-Secret", "Base-URL"],
+    works: "PDF- und JSON-Export sowie die Kopiermaske – sicher und sofort nutzbar.",
+    prepared: "Der API-Adapter ist angelegt. Die Übergabe erfolgt bis zur Anbindung über Export und Kopiermaske.",
   },
   finlink: {
     name: "FinLink",
     benefit:
       "Bestehende Fälle und Kundenstammdaten landen direkt in BaufiDesk – der schnellste Einstieg.",
-    credentials: ["API-Key", "Base-URL"],
+    credentials: ["API-Key"],
+    works: "Live: Import einzelner Vorgänge per Lead-ID (UUID) über die FinLink-Partner-API.",
+    prepared: "Sammel-Import und Rück-Übergabe (BaufiDesk → FinLink) folgen als nächste Ausbaustufe.",
   },
   ehyp_home: {
     name: "eHyp home",
     benefit:
       "Objekt- und Grundbuchnachweise aus dem Developer Studio werden für die Einreichung vorbereitet.",
     credentials: ["API-Key", "Client-ID", "Client-Secret", "Firmen-ID"],
+    works: "PDF- und JSON-Export sowie die Kopiermaske – sicher und sofort nutzbar.",
+    prepared: "Der API-Adapter ist angelegt. Die Übergabe erfolgt bis zur Anbindung über Export und Kopiermaske.",
   },
 };
 
@@ -87,8 +94,8 @@ export default async function ConnectionsPage() {
               </div>
               <CardDescription className="max-w-2xl">
                 Wenn du bereits mit FinLink arbeitest, ist der Import der
-                schnellste Weg zu einer vollständigen Akte. Trag einmalig deine
-                Zugangsdaten ein – wir holen die offenen Fälle für dich.
+                schnellste Weg zu einer vollständigen Akte. Die Partner-API ist
+                verbunden – importiere Vorgänge direkt per Lead-ID.
               </CardDescription>
             </div>
             <Badge variant="ai" className="shrink-0">
@@ -97,9 +104,11 @@ export default async function ConnectionsPage() {
           </div>
         </CardHeader>
         <CardFooter className="gap-2">
-          <Button variant="ai" disabled className="cursor-not-allowed opacity-90">
-            <KeyRound className="mr-2 h-4 w-4" />
-            Zugangsdaten eintragen
+          <Button variant="ai" asChild>
+            <Link href="/cases/import">
+              <Download className="mr-2 h-4 w-4" />
+              Vorgang aus FinLink importieren
+            </Link>
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/cases">Demo-Export öffnen</Link>
@@ -152,17 +161,11 @@ export default async function ConnectionsPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <SectionLabel>Was funktioniert aktuell?</SectionLabel>
-                    <p className="text-muted-foreground">
-                      PDF- und JSON-Export sowie die Kopiermaske – sicher und
-                      sofort nutzbar.
-                    </p>
+                    <p className="text-muted-foreground">{meta.works}</p>
                   </div>
                   <div className="space-y-1">
                     <SectionLabel>Was ist vorbereitet?</SectionLabel>
-                    <p className="text-muted-foreground">
-                      Der API-Adapter ist angelegt. Im MVP erfolgt die Übergabe
-                      sicher über Export und Kopiermaske.
-                    </p>
+                    <p className="text-muted-foreground">{meta.prepared}</p>
                   </div>
                 </div>
 

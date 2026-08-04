@@ -106,21 +106,25 @@ export class FinLinkConnector extends BaseConnector {
     return "finlink" as const;
   }
   async isConfigured() {
-    return Boolean(process.env.FINLINK_BASE_URL && process.env.FINLINK_API_KEY);
+    // Base-URL ist optional – der Client fällt auf die Partner-API-URL zurück.
+    return Boolean(process.env.FINLINK_API_KEY);
   }
   async testConnection(): Promise<ConnectionStatus> {
     const ok = await this.isConfigured();
     return {
       ok,
       message: ok
-        ? "FinLink-Konfiguration vorhanden (API-Key/Base URL). TODO: Health-Check."
-        : "FinLink nicht konfiguriert. FINLINK_BASE_URL/FINLINK_API_KEY setzen.",
+        ? "FinLink-Partner-API verbunden (API-Key gesetzt). Einzelne Vorgänge per Lead-UUID importierbar."
+        : "FinLink nicht konfiguriert. FINLINK_API_KEY setzen (FINLINK_BASE_URL optional).",
     };
   }
-  // Import von Fällen/Kunden vorbereiten.
+  // Sammel-Import (alle offenen Fälle) ist bewusst noch nicht gebaut.
   async importCases(): Promise<ImportResult> {
-    // TODO(prod): FinLink-Fälle abrufen und übernehmen.
-    return { ok: false, importedCaseIds: [], message: "FinLink-Import-Stub (TODO: API-Key + Endpunkt)." };
+    return {
+      ok: false,
+      importedCaseIds: [],
+      message: "Sammel-Import noch nicht verfügbar – bitte einzelne Vorgänge per Lead-UUID importieren.",
+    };
   }
   async importCaseById(
     externalId: string,

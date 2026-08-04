@@ -28,7 +28,12 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
     where: { organizationId },
     select: { platform: true, configured: true },
   });
-  const isConfigured = (p: Platform) => connections.find((c) => c.platform === p)?.configured ?? false;
+  const isConfigured = (p: Platform) => {
+    // FinLink: Pull-Import läuft live über die Partner-API, sobald der API-Key
+    // gesetzt ist – das DB-Flag stammt noch aus der Stub-Zeit.
+    if (p === "finlink" && process.env.FINLINK_API_KEY) return true;
+    return connections.find((c) => c.platform === p)?.configured ?? false;
+  };
 
   const items: SystemStatusItem[] = [
     {

@@ -18,8 +18,8 @@ export default function FinLinkImportPage() {
         <CardContent className="flex items-start gap-3 p-4 text-sm">
           <Download className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <p className="text-muted-foreground">
-            Die API-Anbindung an FinLink ist vorbereitet (API-Key &amp; Base-URL konfigurierbar). Im MVP startest du am schnellsten,
-            indem du den Fall hier anlegst und den Kunden per Upload-Link um die Unterlagen bittest.
+            Der Import läuft live über die FinLink-Partner-API. Trage die Lead-ID (UUID) aus FinLink ein – Kundendaten,
+            Beschäftigung, Einkommen und Objektangaben werden direkt als neuer Fall übernommen.
           </p>
         </CardContent>
       </Card>
@@ -31,7 +31,8 @@ export default function FinLinkImportPage() {
         <CardContent className="space-y-4">
           <FinLinkImportForm />
           <p className="text-xs text-muted-foreground">
-            Sobald die FinLink-Zugangsdaten hinterlegt sind, lädt BaufiDesk den Vorgang und legt den Fall an.
+            BaufiDesk lädt den Vorgang über die Partner-API und legt den Fall an. Bereits importierte Vorgänge werden
+            erkannt und nicht doppelt angelegt.
           </p>
         </CardContent>
       </Card>
