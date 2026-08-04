@@ -60,3 +60,19 @@ keine zusätzlichen API-Calls): filtert live über Name, Ort, Objektort,
 Finanzierungsart (deutsches Label) und Fallnummer; mehrere Suchwörter wirken
 als UND. Trefferzähler bei aktiver Suche, klare Leermeldung ohne Treffer.
 Filterlogik als exportierte Funktion `filterLeads` mit eigenen Tests.
+
+## Nachtrag 2026-08-04 (abends): Aktiv-Filter + echte Gesamtliste + Einzelabruf
+
+Befund aus dem Praxistest: Die Liste zeigte nur die neuesten 100 Leads
+(/leads paginiert; Konto hat 905 Leads bis 02/2024) und enthielt Karteileichen.
+
+- Import nutzt jetzt GET /leads/{id} (Einzelabruf existiert entgegen der
+  ursprünglichen Annahme) – damit ist jeder Lead importierbar, egal wie alt.
+- Liste holt alle Seiten: /leads (limit=500) + /loan_applications (limit=100,
+  Parallel-Wellen à 10 Seiten; limit=1000 läuft dort in einen Server-Timeout).
+- Vertriebsstatus (sales_state: active/lost/won/on_hold) wird über die
+  loan_application→lead-Beziehung gejoint; bei mehreren Anträgen gewinnt active.
+- Standardfilter: nur aktive Leads (357 von 905); Checkbox blendet inaktive ein
+  (mit Status-Badge). Leads ohne Antrag gelten als inaktiv.
+- Next-Datencache 120 s auf den Listenabrufen; loading.tsx erklärt den ersten
+  Abruf (~10–15 s). financing_wish kommt in Altdaten als Objekt → Schema tolerant.

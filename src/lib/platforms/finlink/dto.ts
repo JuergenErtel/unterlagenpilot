@@ -208,7 +208,11 @@ const apiLeadSchema = z.object({
     loan_application_meta: z
       .object({
         finance_type: z.string().optional().nullable(),
-        financing_wish: z.array(z.object({ amount: numOrStr })).optional().nullable(),
+        // In Echtdaten mal Array, mal Objekt (ältere Leads) – Nicht-Arrays zählen als leer.
+        financing_wish: z
+          .preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ amount: numOrStr })))
+          .optional()
+          .nullable(),
       })
       .optional()
       .nullable(),
@@ -232,6 +236,39 @@ export interface FinLinkLeadSummary {
   finanzierungsart?: string;
   kaufpreis?: number;
   createdAt?: string; // ISO
+  /** Vertriebsstatus aus /loan_applications: active | lost | won | on_hold */
+  salesState?: string;
+}
+
+/** Vertriebsstatus eines Antrags samt zugehöriger Lead-ID (aus /loan_applications). */
+export interface FinLinkSalesStateEntry {
+  leadId: string;
+  salesState: string;
+}
+
+const apiLoanApplicationsSchema = z.object({
+  data: z.array(
+    z.object({
+      attributes: z.object({ sales_state: z.string().optional().nullable() }).passthrough(),
+      relationships: z
+        .object({ lead: z.object({ data: z.object({ id: z.string() }).optional().nullable() }).optional().nullable() })
+        .passthrough()
+        .optional()
+        .nullable(),
+    })
+  ),
+});
+
+/** Zieht aus der /loan_applications-Antwort die Vertriebsstatus-Einträge je Lead. */
+export function parseFinLinkSalesStates(body: unknown): FinLinkSalesStateEntry[] {
+  const parsed = apiLoanApplicationsSchema.parse(body);
+  const entries: FinLinkSalesStateEntry[] = [];
+  for (const la of parsed.data) {
+    const leadId = la.relationships?.lead?.data?.id;
+    const state = la.attributes.sales_state ?? undefined;
+    if (leadId && state) entries.push({ leadId, salesState: state });
+  }
+  return entries;
 }
 
 /** Übersetzt die komplette /leads-Antwort in Anzeige-Zusammenfassungen. */
@@ -263,7 +300,16 @@ export function parseFinLinkLeadsResponse(body: unknown, externalId: string): Fi
   const parsed = apiLeadsResponseSchema.parse(body);
   const lead = parsed.data.find((l) => l.id === externalId);
   if (!lead) return null;
+  return mapApiLead(lead);
+}
 
+/** Übersetzt die /leads/{id}-Einzelantwort in das interne Vorgangs-DTO. */
+export function parseFinLinkSingleLeadResponse(body: unknown): FinLinkVorgangDTO {
+  const parsed = z.object({ data: apiLeadSchema }).parse(body);
+  return mapApiLead(parsed.data);
+}
+
+function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
   const am = lead.attributes.applicant_meta;
   const pm = lead.attributes.property_meta;
   const lm = lead.attributes.loan_application_meta;

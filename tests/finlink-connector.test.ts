@@ -41,29 +41,38 @@ function apiLeadBody(id: string) {
   };
 }
 
+/** Einzel-Lead-Antwort von GET /leads/{id}. */
+function apiSingleLeadBody(id: string) {
+  return { data: apiLeadBody(id).data[0] };
+}
+
+/** fetch-Mock, der je nach URL unterschiedliche Antworten liefert. */
+function mockFetchRouting(routes: Array<[RegExp, { status: number; body: unknown }]>) {
+  return vi.fn().mockImplementation(async (url: string) => {
+    const hit = routes.find(([re]) => re.test(String(url)));
+    const { status, body } = hit ? hit[1] : { status: 404, body: {} };
+    return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+  });
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("HttpFinLinkClient.fetchVorgang", () => {
-  it("ruft /leads mit X-API-Key auf und findet den Vorgang per ID", async () => {
-    const fetchMock = mockFetch(200, apiLeadBody("FL-1"));
+  it("ruft /leads/{id} mit X-API-Key auf", async () => {
+    const fetchMock = mockFetch(200, apiSingleLeadBody("FL-1"));
     const client = new HttpFinLinkClient({ baseUrl: "https://api.finlink.test/partner-api", apiKey: "secret" }, fetchMock);
     const dto = await client.fetchVorgang("FL-1");
     expect(dto.id).toBe("FL-1");
     expect(dto.antragsteller[0]?.vorname).toBe("Anna");
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.finlink.test/partner-api/leads");
+    expect(String(url)).toBe("https://api.finlink.test/partner-api/leads/FL-1");
     expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("secret");
     expect((init.headers as Record<string, string>)["Authorization"]).toBeUndefined();
   });
 
-  it("wirft FinLinkNotFoundError bei 404", async () => {
+  it("wirft FinLinkNotFoundError bei 404 (unbekannte ID)", async () => {
     const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(404, {}));
     await expect(client.fetchVorgang("nope")).rejects.toBeInstanceOf(FinLinkNotFoundError);
-  });
-
-  it("wirft FinLinkNotFoundError, wenn die ID nicht in der Lead-Liste ist", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, apiLeadBody("ANDERE-ID")));
-    await expect(client.fetchVorgang("FL-1")).rejects.toBeInstanceOf(FinLinkNotFoundError);
   });
 
   it("wirft FinLinkAuthError bei 401/403", async () => {
@@ -83,11 +92,11 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
     process.env.FINLINK_API_KEY = "k";
     delete process.env.FINLINK_BASE_URL;
     try {
-      const fetchMock = mockFetch(200, apiLeadBody("FL-9"));
+      const fetchMock = mockFetch(200, apiSingleLeadBody("FL-9"));
       const client = getFinLinkClient(fetchMock);
       expect(client).not.toBeNull();
       await client!.fetchVorgang("FL-9");
-      expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.finlink.de/partner-api/leads");
+      expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.finlink.de/partner-api/leads/FL-9");
     } finally {
       if (prevKey === undefined) delete process.env.FINLINK_API_KEY;
       else process.env.FINLINK_API_KEY = prevKey;
@@ -103,11 +112,20 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
 });
 
 describe("HttpFinLinkClient.listLeads", () => {
-  it("liefert Anzeige-Zusammenfassungen aller Leads", async () => {
+  it("liefert Anzeige-Zusammenfassungen inkl. Vertriebsstatus aus /loan_applications", async () => {
     const body = apiLeadBody("FL-1");
     (body.data[0]!.attributes as any).property_meta = { city_name: "Wörth", listed_price: "850000.0" };
     (body.data[0]!.attributes as any).loan_application_meta = { finance_type: "buy_existing" };
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, body));
+    const loanApps = {
+      data: [
+        { attributes: { sales_state: "active" }, relationships: { lead: { data: { id: "FL-1" } } } },
+      ],
+    };
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\?/, { status: 200, body: loanApps }],
+      [/\/leads\?/, { status: 200, body }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
     const leads = await client.listLeads();
     expect(leads).toHaveLength(1);
     expect(leads[0]).toMatchObject({
@@ -118,7 +136,35 @@ describe("HttpFinLinkClient.listLeads", () => {
       kaufpreis: 850000,
       finanzierungsart: "kauf",
       createdAt: "2026-07-01T10:00:00Z",
+      salesState: "active",
     });
+  });
+
+  it("bei mehreren Anträgen eines Leads gewinnt „active“", async () => {
+    const loanApps = {
+      data: [
+        { attributes: { sales_state: "lost" }, relationships: { lead: { data: { id: "FL-1" } } } },
+        { attributes: { sales_state: "active" }, relationships: { lead: { data: { id: "FL-1" } } } },
+        { attributes: { sales_state: "lost" }, relationships: { lead: { data: { id: "FL-1" } } } },
+      ],
+    };
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\?/, { status: 200, body: loanApps }],
+      [/\/leads\?/, { status: 200, body: apiLeadBody("FL-1") }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const leads = await client.listLeads();
+    expect(leads[0]?.salesState).toBe("active");
+  });
+
+  it("Leads ohne Antrag bekommen keinen Vertriebsstatus", async () => {
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\?/, { status: 200, body: { data: [] } }],
+      [/\/leads\?/, { status: 200, body: apiLeadBody("FL-2") }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const leads = await client.listLeads();
+    expect(leads[0]?.salesState).toBeUndefined();
   });
 
   it("mappt 401 auf FinLinkAuthError", async () => {

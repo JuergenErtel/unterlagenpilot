@@ -35,6 +35,7 @@ export default async function FinLinkImportPage() {
           finanzierungsart: s.finanzierungsart,
           kaufpreis: s.kaufpreis,
           createdAt: s.createdAt,
+          salesState: s.salesState,
           importedCase: existing ? { id: existing.id, caseNumber: existing.caseNumber } : undefined,
         };
       });

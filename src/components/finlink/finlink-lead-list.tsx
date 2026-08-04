@@ -16,8 +16,17 @@ export interface LeadRowData {
   finanzierungsart?: string;
   kaufpreis?: number;
   createdAt?: string;
+  /** Vertriebsstatus aus FinLink: active | lost | won | on_hold */
+  salesState?: string;
   importedCase?: { id: string; caseNumber: string };
 }
+
+const SALES_STATE_LABEL: Record<string, string> = {
+  active: "Aktiv",
+  lost: "Verloren",
+  won: "Gewonnen",
+  on_hold: "Pausiert",
+};
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const datum = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -63,6 +72,9 @@ function LeadRow({ lead }: { lead: LeadRowData }) {
           {lead.finanzierungsart && (
             <Badge variant="outline">{FINANZIERUNG_LABEL[lead.finanzierungsart] ?? lead.finanzierungsart}</Badge>
           )}
+          {lead.salesState && lead.salesState !== "active" && (
+            <Badge variant="neutral">{SALES_STATE_LABEL[lead.salesState] ?? lead.salesState}</Badge>
+          )}
         </div>
         <div className="mt-0.5 text-sm text-muted-foreground">
           {[
@@ -103,15 +115,22 @@ function LeadRow({ lead }: { lead: LeadRowData }) {
   );
 }
 
+/** Nur Leads mit aktivem Antrag – Karteileichen (verloren/gewonnen/pausiert/ohne Antrag) bleiben draußen. */
+export function activeLeads(leads: LeadRowData[]): LeadRowData[] {
+  return leads.filter((l) => l.salesState === "active");
+}
+
 export function FinLinkLeadList({ leads }: { leads: LeadRowData[] }) {
   const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
   if (leads.length === 0) {
     return <p className="px-4 py-6 text-sm text-muted-foreground">Keine Leads im FinLink-Konto gefunden.</p>;
   }
-  const filtered = filterLeads(leads, query);
+  const base = showAll ? leads : activeLeads(leads);
+  const filtered = filterLeads(base, query);
   return (
     <div>
-      <div className="border-b px-4 py-3">
+      <div className="space-y-2 border-b px-4 py-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -123,14 +142,25 @@ export function FinLinkLeadList({ leads }: { leads: LeadRowData[] }) {
             className="pl-9"
           />
         </div>
-        {query && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {filtered.length} von {leads.length} Leads
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+              className="h-3.5 w-3.5 accent-primary"
+            />
+            Auch inaktive Leads zeigen (verloren, gewonnen, pausiert)
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {filtered.length} von {base.length} {showAll ? "Leads" : "aktiven Leads"}
           </p>
-        )}
+        </div>
       </div>
       {filtered.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">Keine Treffer für „{query}“.</p>
+        <p className="px-4 py-6 text-sm text-muted-foreground">
+          {query ? <>Keine Treffer für „{query}“.</> : "Keine aktiven Leads gefunden."}
+        </p>
       ) : (
         <ul className="divide-y">
           {filtered.map((lead) => (

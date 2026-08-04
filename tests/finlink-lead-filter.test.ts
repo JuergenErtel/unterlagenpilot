@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterLeads, type LeadRowData } from "@/components/finlink/finlink-lead-list";
+import { activeLeads, filterLeads, type LeadRowData } from "@/components/finlink/finlink-lead-list";
 
 const leads: LeadRowData[] = [
   { id: "a", name: "Lahwani Mohammad", ort: "Karlsruhe", objektOrt: "Wörth am Rhein", finanzierungsart: "kauf" },
@@ -45,5 +45,18 @@ describe("filterLeads", () => {
 
   it("ohne Treffer kommt eine leere Liste", () => {
     expect(filterLeads(leads, "gibtsnicht")).toHaveLength(0);
+  });
+});
+
+describe("activeLeads", () => {
+  it("behält nur Leads mit sales_state active – ohne Status gilt als inaktiv", () => {
+    const mix: LeadRowData[] = [
+      { id: "a", name: "A", salesState: "active" },
+      { id: "b", name: "B", salesState: "lost" },
+      { id: "c", name: "C", salesState: "won" },
+      { id: "d", name: "D", salesState: "on_hold" },
+      { id: "e", name: "E" },
+    ];
+    expect(activeLeads(mix).map((l) => l.id)).toEqual(["a"]);
   });
 });
