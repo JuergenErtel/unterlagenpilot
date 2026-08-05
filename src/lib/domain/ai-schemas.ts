@@ -48,8 +48,10 @@ export const classificationSchema = z.object({
   detectedPropertyRef: z.string().nullable().optional(),
   period: z.string().nullable().optional(),
   issuer: z.string().nullable().optional(),
-  pageCount: z.number().int().nonnegative().optional(),
-  reasoning: z.string().optional(),
+  // null-tolerant: das LLM liefert für unbekannte Werte explizit null (05.08.:
+  // "pageCount": null kippte sonst die gesamte Klassifikation auf "fehler").
+  pageCount: z.number().int().nonnegative().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
 });
 export type ClassificationResult = z.infer<typeof classificationSchema>;
 

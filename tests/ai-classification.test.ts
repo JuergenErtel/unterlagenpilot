@@ -33,3 +33,25 @@ describe("Dokumentklassifizierung & Extraktion (Mock-Provider)", () => {
     });
   });
 });
+
+describe("classificationSchema – null-Toleranz", () => {
+  // 05.08., Fall Colell: Mistral lieferte für eine Baubeschreibung
+  // "pageCount": null – das Schema verlangte eine Zahl, der Repair-Retry
+  // lieferte wieder null, das Dokument blieb dauerhaft auf "fehler".
+  // Alle optionalen Klassifikationsfelder müssen null akzeptieren.
+  it("akzeptiert null in allen optionalen Feldern (pageCount, reasoning)", async () => {
+    const { classificationSchema } = await import("@/lib/domain/ai-schemas");
+    const raw = {
+      documentType: "baubeschreibung",
+      confidence: 0.98,
+      detectedApplicant: null,
+      detectedPropertyRef: null,
+      period: null,
+      issuer: null,
+      pageCount: null,
+      reasoning: null,
+    };
+    const parsed = classificationSchema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+  });
+});

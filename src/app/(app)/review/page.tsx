@@ -81,20 +81,40 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
 
       {completion ? (
         <div className="space-y-4">
-          <Card className="border-success/30 bg-success/5">
-            <CardContent className="flex items-center gap-3 p-6">
-              <CheckCircle2 className="h-8 w-8 shrink-0 text-success" />
-              <div>
-                <p className="font-medium">Alles freigegeben – gut gemacht!</p>
-                <p className="text-sm text-muted-foreground">
-                  Die übernommenen Daten stehen jetzt in der Fallakte
-                  {completion.cockpit.counts.docsFehler > 0
-                    ? ` – ${completion.cockpit.counts.docsFehler} Dokument${completion.cockpit.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis wartet${completion.cockpit.counts.docsFehler === 1 ? "" : "en"} noch auf eine wiederholte KI-Prüfung.`
-                    : "."}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Läuft gerade eine KI-Prüfung, sind die Dokumente nur vorübergehend
+              aus der Liste verschwunden ("laeuft" statt "fertig") – dann wäre
+              "Alles freigegeben" irreführend. */}
+          {completion.cockpit.counts.docsLaufend > 0 ? (
+            <Card className="border-ai/30 bg-ai/5">
+              <CardContent className="flex items-center gap-3 p-6">
+                <Sparkles className="h-8 w-8 shrink-0 text-ai" />
+                <div>
+                  <p className="font-medium">KI-Prüfung läuft gerade</p>
+                  <p className="text-sm text-muted-foreground">
+                    {completion.cockpit.counts.docsLaufend} Dokument
+                    {completion.cockpit.counts.docsLaufend === 1 ? " wird" : "e werden"} gerade neu
+                    ausgewertet – sie erscheinen danach wieder hier zur Freigabe. Bereits erteilte
+                    Freigaben bleiben erhalten.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-success/30 bg-success/5">
+              <CardContent className="flex items-center gap-3 p-6">
+                <CheckCircle2 className="h-8 w-8 shrink-0 text-success" />
+                <div>
+                  <p className="font-medium">Alles freigegeben – gut gemacht!</p>
+                  <p className="text-sm text-muted-foreground">
+                    Die übernommenen Daten stehen jetzt in der Fallakte
+                    {completion.cockpit.counts.docsFehler > 0
+                      ? ` – ${completion.cockpit.counts.docsFehler} Dokument${completion.cockpit.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis wartet${completion.cockpit.counts.docsFehler === 1 ? "" : "en"} noch auf eine wiederholte KI-Prüfung.`
+                      : "."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <NextStepCard step={completion.step} />
         </div>
       ) : documents.length === 0 ? (

@@ -48,7 +48,8 @@ export function computeNextStep(c: NextStepInput): NextStep {
     return {
       key: "ki_laeuft",
       title: "KI-Auswertung läuft",
-      reason: "Die Dokumente werden gerade gelesen und ausgewertet – das dauert meist unter einer Minute.",
+      reason:
+        "Die Dokumente werden gerade gelesen und ausgewertet – bei vielen Dokumenten kann das einige Minuten dauern, weil der KI-Anbieter die Anfragen pro Minute begrenzt.",
       tone: "ai",
     };
   }
