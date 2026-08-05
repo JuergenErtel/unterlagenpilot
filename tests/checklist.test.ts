@@ -32,13 +32,18 @@ describe("Checklisten-Logik", () => {
     expect(grundbuch?.status).toBe("offen");
   });
 
-  it("erkennt unvollständige Anzahl (Ausweis 1 von 2)", () => {
+  it("ein Personalausweis-Dokument pro Person erfüllt die Position", () => {
+    // 05.08., Fall Colell: Der Perso kommt praktisch immer als EIN PDF mit
+    // Vorder- UND Rückseite. requiredCount 2 verlangte zwei Dateien pro Person
+    // und meldete "unvollständig", obwohl der Ausweis vollständig vorlag. Ob
+    // beide Seiten enthalten sind, prüft der Vermittler im Review – nicht die
+    // Dateizählung.
     const list = buildChecklistForCase(
       { employmentType: "angestellter", financingType: "kauf" },
       [{ documentType: "personalausweis", reviewStatus: "akzeptiert", readable: true }]
     );
     const ausweis = list.find((i) => i.key === "personalausweis");
-    expect(ausweis?.status).toBe("unvollstaendig");
+    expect(ausweis?.status).toBe("vorhanden");
   });
 
   it("ein unlesbarer Alt-Upload blockiert nicht eine mit lesbaren Dokumenten erfüllte Position", () => {
@@ -121,6 +126,17 @@ describe("Checkliste bei mehreren Antragstellern", () => {
     ]);
     const ausweis = list.find((i) => i.key === "personalausweis");
     expect(ausweis?.status).toBe("unvollstaendig");
+  });
+
+  it("je ein zugeordneter Personalausweis pro Antragsteller erfüllt die Position", () => {
+    // Colell-Konstellation: beide Ausweise vorhanden und korrekt zugeordnet.
+    const list = buildChecklistForCase(zweiAntragsteller, [
+      { documentType: "personalausweis", reviewStatus: "offen", readable: true, applicantId: "app-1" },
+      { documentType: "personalausweis", reviewStatus: "offen", readable: true, applicantId: "app-2" },
+    ]);
+    const ausweis = list.find((i) => i.key === "personalausweis");
+    expect(ausweis?.status).toBe("vorhanden");
+    expect(ausweis?.effectiveRequiredCount).toBe(2); // 1 je Person
   });
 
   it("verlangt bei einem Antragsteller unverändert nur das einfache Soll", () => {

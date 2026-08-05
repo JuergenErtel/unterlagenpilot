@@ -59,10 +59,15 @@ const I = {
   ausweis: item({
     key: "personalausweis",
     name: "Personalausweis (Vorder- und Rückseite)",
-    customerDescription: "Bitte laden Sie Vorder- und Rückseite Ihres gültigen Personalausweises hoch.",
-    internalDescription: "Legitimation, Adressabgleich, Gültigkeit prüfen.",
+    customerDescription:
+      "Bitte laden Sie Vorder- und Rückseite Ihres gültigen Personalausweises hoch – eine Datei mit beiden Seiten reicht.",
+    // Bewusst 1 Datei je Person: der Perso kommt praktisch immer als EIN
+    // PDF/Foto-Scan mit beiden Seiten. Ob beide Seiten enthalten sind, prüft
+    // der Vermittler im Review – zwei Pflicht-Dateien meldeten "unvollständig",
+    // obwohl der Ausweis vollständig vorlag (05.08., Fall Colell).
+    internalDescription: "Legitimation, Adressabgleich, Gültigkeit prüfen (beide Seiten enthalten?).",
     documentType: "personalausweis",
-    requiredCount: 2,
+    requiredCount: 1,
     perApplicant: true,
     example: "Personalausweis_Max_Mustermann.pdf",
   }),
