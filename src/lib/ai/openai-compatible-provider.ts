@@ -2,7 +2,7 @@ import type { AICompletionRequest, AIProvider } from "./types";
 import { getEnv } from "@/lib/env";
 import { extractJson } from "./json-extract";
 import { buildSystemPrompt } from "./azure-provider";
-import { fetchWithTimeout, AI_TIMEOUT_MS } from "./http";
+import { fetchWithRateLimitRetry, AI_TIMEOUT_MS } from "./http";
 
 /**
  * Baut den User-Inhalt: reiner Text, oder multimodal (Text + Bilder + Dokumente).
@@ -58,7 +58,10 @@ export class OpenAICompatibleProvider implements AIProvider {
     const base = env.OPENAI_COMPATIBLE_BASE_URL!.replace(/\/$/, "");
     const url = `${base}/chat/completions`;
 
-    const res = await fetchWithTimeout(
+    // Mit 429-Backoff: Die Minuten-Limits des Anbieters (Requests/Tokens pro
+    // Minute) sind bei der parallelen KI-Prüfung schnell erschöpft; ohne
+    // Wartezeit liefe jeder Retry ins selbe Fenster.
+    const res = await fetchWithRateLimitRetry(
       url,
       {
         method: "POST",

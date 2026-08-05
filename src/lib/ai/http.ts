@@ -27,3 +27,41 @@ export async function fetchWithTimeout(
 /** Standard-Timeouts (ms) für externe KI-Aufrufe. */
 export const AI_TIMEOUT_MS = 60_000; // Chat-Completion (kurzer, getruncateter Prompt)
 export const OCR_TIMEOUT_MS = 120_000; // OCR ganzer PDFs kann länger dauern
+
+/**
+ * Wartezeiten (ms) vor erneutem Versuch nach HTTP 429. Die Mistral-Limits sind
+ * Minutenfenster (Requests/min, Tokens/min) – die Wartezeiten müssen also einen
+ * Fensterwechsel überbrücken können, sonst läuft der Retry ins selbe Limit
+ * (genau das ließ am 05.08. alle 19 Colell-Dokumente auf "fehler" laufen).
+ */
+const RATE_LIMIT_BACKOFF_MS = [5_000, 20_000, 35_000];
+/** Obergrenze für Retry-After des Anbieters, damit ein Ausreißer-Header den Lauf nicht blockiert. */
+const RATE_LIMIT_MAX_WAIT_MS = 60_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Wie fetchWithTimeout, wartet aber bei HTTP 429 (Rate Limit) und versucht es
+ * erneut – bevorzugt gemäß Retry-After-Header, sonst mit festem Backoff plus
+ * Jitter (damit parallel prüfende Dokumente nicht erneut gleichzeitig anfragen).
+ * Nach erschöpften Versuchen wird die letzte 429-Antwort zurückgegeben, damit
+ * der Aufrufer seinen regulären Fehlerpfad (Status + Body loggen) behält.
+ */
+export async function fetchWithRateLimitRetry(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  let res = await fetchWithTimeout(url, init, timeoutMs);
+  for (const backoffMs of RATE_LIMIT_BACKOFF_MS) {
+    if (res.status !== 429) return res;
+    const retryAfterSeconds = Number(res.headers?.get?.("retry-after"));
+    const waitMs =
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.min(retryAfterSeconds * 1000, RATE_LIMIT_MAX_WAIT_MS)
+        : backoffMs;
+    await sleep(waitMs + Math.random() * 2_000);
+    res = await fetchWithTimeout(url, init, timeoutMs);
+  }
+  return res;
+}

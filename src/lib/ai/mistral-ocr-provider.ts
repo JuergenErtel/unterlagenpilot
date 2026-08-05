@@ -1,6 +1,6 @@
 import type { OCRProvider, OcrInput, OcrResult } from "./types";
 import { getEnv } from "@/lib/env";
-import { fetchWithTimeout, OCR_TIMEOUT_MS } from "./http";
+import { fetchWithRateLimitRetry, OCR_TIMEOUT_MS } from "./http";
 
 /**
  * EU-/DSGVO-konforme OCR via Mistral OCR (mistral-ocr-latest).
@@ -39,7 +39,7 @@ export class MistralOCRProvider implements OCRProvider {
       ? { type: "image_url" as const, image_url: dataUri }
       : { type: "document_url" as const, document_url: dataUri };
 
-    const res = await fetchWithTimeout(
+    const res = await fetchWithRateLimitRetry(
       `${env.MISTRAL_API_BASE_URL.replace(/\/$/, "")}/ocr`,
       {
         method: "POST",
