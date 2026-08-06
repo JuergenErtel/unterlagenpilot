@@ -725,10 +725,12 @@ Expected: PASS (die Regel stammt aus Task 1; der Test sichert sie für diesen Ei
 
 - [ ] **Schritt 3: Antragsteller einmal je Prüflauf laden**
 
-In `src/lib/actions/cases.ts` den Import ergänzen:
+In `src/lib/actions/cases.ts` den Import ergänzen — bewusst `planRematch`, nicht
+`matchApplicant`: Die Zuständigkeitsregel („nur unzugeordnet oder auto") existiert
+damit an genau einer Stelle und wird von den Tests aus Task 1 mit abgedeckt:
 
 ```ts
-import { matchApplicant } from "@/lib/documents/applicant-match";
+import { planRematch } from "@/lib/documents/applicant-match";
 ```
 
 In `processAiCheckInBackground` direkt nach dem `const docs = await prisma.document.findMany({…})`:
@@ -748,19 +750,27 @@ In `processAiCheckInBackground` direkt nach dem `const docs = await prisma.docum
 In `processAiCheckInBackground`, innerhalb von `mapLimit`, direkt nach `const ext = await ai.extractFields(cls.documentType, text);`:
 
 ```ts
-        // Nur unzugeordnete oder automatisch zugeordnete Dokumente anfassen –
-        // eine Auswahl des Vermittlers bleibt bestehen.
-        const editable = doc.applicantId === null || doc.applicantSource === "auto";
-        const matched = editable ? matchApplicant(cls.detectedApplicant, applicants) : null;
+        // Dieselbe Regel wie beim nachträglichen Abgleich: nur unzugeordnete
+        // oder automatisch zugeordnete Dokumente anfassen, eine Auswahl des
+        // Vermittlers bleibt bestehen. planRematch liefert nur echte Änderungen.
+        const [change] = planRematch(
+          [
+            {
+              id: doc.id,
+              applicantId: doc.applicantId,
+              applicantSource: doc.applicantSource,
+              detectedApplicant: cls.detectedApplicant ?? null,
+            },
+          ],
+          applicants
+        );
 ```
 
 Und im folgenden `prisma.document.update` nach `detectedApplicant`:
 
 ```ts
             detectedApplicant: cls.detectedApplicant ?? null,
-            ...(matched && matched !== doc.applicantId
-              ? { applicantId: matched, applicantSource: "auto" }
-              : {}),
+            ...(change ? { applicantId: change.applicantId, applicantSource: "auto" } : {}),
 ```
 
 - [ ] **Schritt 5: Tests laufen lassen**
