@@ -9,6 +9,7 @@ import { generateFileName } from "@/lib/documents/filename";
 import { validateUpload } from "@/lib/security/file-validation";
 import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
+import { matchApplicant } from "@/lib/documents/applicant-match";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
 /**
@@ -181,6 +182,7 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
     data: {
       caseId,
       applicantId: input.applicantId ?? undefined,
+      applicantSource: input.applicantId ? "manuell" : undefined,
       originalName,
       generatedName: generateFileName({
         documentType: null,
@@ -277,6 +279,8 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
   after(() =>
     processOcrAndAi({
       documentId: doc.id,
+      caseId,
+      applicantId: input.applicantId ?? null,
       buffer,
       stored,
       originalName,
@@ -289,6 +293,9 @@ async function runPipelineAfterStore(input: AfterStoreInput): Promise<ProcessUpl
 
 interface OcrAndAiInput {
   documentId: string;
+  caseId: string;
+  /** Bereits bewusst gesetzte Zuordnung – dann findet kein Abgleich statt. */
+  applicantId: string | null;
   buffer: Buffer;
   stored: StoredObject;
   originalName: string;
@@ -302,7 +309,7 @@ interface OcrAndAiInput {
  * kann per "KI-Prüfung starten" erneut verarbeitet werden.
  */
 async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
-  const { documentId, buffer, stored, originalName, applicantName } = input;
+  const { documentId, caseId, buffer, stored, originalName, applicantName } = input;
   const ocr = getOCRProvider();
   let ocrResult: Awaited<ReturnType<typeof ocr.extractText>> | null = null;
   let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
@@ -320,9 +327,30 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     // KI/OCR nicht verfügbar – ohne Klartext loggen.
   }
 
+  // Antragsteller automatisch zuordnen, sofern der Vermittler nicht selbst
+  // gewählt hat. Bei genau einem Antragsteller ist die Zuordnung trivial, bei
+  // mehreren entscheidet der im Dokument erkannte Name (Vor- UND Nachname).
+  // Best-effort: ein Fehler hier darf die Analyse nicht kippen.
+  let autoApplicantId: string | null = null;
+  let autoApplicantName: string | null = null;
+  if (!input.applicantId) {
+    try {
+      const applicants = await prisma.applicant.findMany({
+        where: { caseId },
+        orderBy: { position: "asc" },
+        select: { id: true, position: true, vorname: true, nachname: true },
+      });
+      autoApplicantId = matchApplicant(cls?.detectedApplicant, applicants);
+      const hit = applicants.find((a) => a.id === autoApplicantId);
+      autoApplicantName = hit ? [hit.vorname, hit.nachname].filter(Boolean).join(" ") || null : null;
+    } catch (e) {
+      console.error(`[pipeline] Antragsteller-Zuordnung für Dokument ${documentId} fehlgeschlagen:`, e);
+    }
+  }
+
   const generatedName = generateFileName({
     documentType: cls?.documentType ?? null,
-    applicantName: cls?.detectedApplicant ?? applicantName ?? null,
+    applicantName: autoApplicantName ?? cls?.detectedApplicant ?? applicantName ?? null,
     propertyRef: cls?.detectedPropertyRef,
     period: cls?.period,
     originalName,
@@ -336,6 +364,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         pageCount: ocrResult?.pageCount,
         documentType: cls?.documentType ?? null,
         detectedApplicant: cls?.detectedApplicant ?? null,
+        ...(autoApplicantId ? { applicantId: autoApplicantId, applicantSource: "auto" } : {}),
         ocrStatus: ocrResult ? "fertig" : "fehler",
         classificationStatus: cls ? "fertig" : "fehler",
         extractionStatus: ext ? "fertig" : "fehler",

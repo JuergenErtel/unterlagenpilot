@@ -89,4 +89,12 @@ describe("Persistenz des erkannten Antragstellers", () => {
       expect(lastUpdateData().detectedApplicant).toBe("Thomas Colell");
     });
   });
+
+  it("ordnet den erkannten Antragsteller automatisch zu und markiert die Herkunft", async () => {
+    await upload();
+    await vi.waitFor(() => {
+      expect(lastUpdateData().applicantId).toBe("a2");
+      expect(lastUpdateData().applicantSource).toBe("auto");
+    });
+  });
 });

@@ -33,11 +33,9 @@ vi.mock("@/lib/email/resend", () => ({
 }));
 
 const caseFindUnique = vi.fn();
-const applicantFindMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     case: { findUnique: (...a: unknown[]) => caseFindUnique(...a) },
-    applicant: { findMany: (...a: unknown[]) => applicantFindMany(...a) },
   },
 }));
 
@@ -80,8 +78,6 @@ beforeEach(() => {
   sendEmail.mockResolvedValue({ id: "mail-1" });
   caseFindUnique.mockReset();
   caseFindUnique.mockResolvedValue(caseWithBroker);
-  applicantFindMany.mockReset();
-  applicantFindMany.mockResolvedValue([{ id: "app-1", vorname: "Max", nachname: "Mustermann" }]);
 });
 
 describe("Upload-Benachrichtigung an den Vermittler", () => {
@@ -131,15 +127,15 @@ describe("Upload-Benachrichtigung an den Vermittler", () => {
     expect(releaseUploadSlot).toHaveBeenCalledWith("link-1");
   });
 
-  it("ordnet Kunden-Uploads bei mehreren Antragstellern keinem Antragsteller fest zu", async () => {
-    applicantFindMany.mockResolvedValue([
-      { id: "app-1", vorname: "Max", nachname: "Mustermann" },
-      { id: "app-2", vorname: "Erika", nachname: "Mustermann" },
-    ]);
+  it("übergibt aus dem Kundenlink keine Antragsteller-Zuordnung – das übernimmt der Namensabgleich in der Pipeline", async () => {
+    // Über den gemeinsamen Link lädt jeder Beteiligte hoch, die Quelle verrät
+    // nicht wessen Datei es ist. customerUploadOne löst deshalb keine
+    // Zuordnung mehr selbst auf (siehe applicant-source-persistenz.test.ts
+    // für den tatsächlichen Namensabgleich in der Hintergrund-Analyse).
     await customerUploadOne("tok", form(pdf()));
-    expect(processUpload).toHaveBeenCalledWith(
-      expect.objectContaining({ applicantId: null, applicantName: null })
-    );
+    const callArg = processUpload.mock.calls[0]![0] as Record<string, unknown>;
+    expect(callArg).not.toHaveProperty("applicantId");
+    expect(callArg).not.toHaveProperty("applicantName");
   });
 
   it("sendet keine E-Mail, wenn kein Vermittler zugeordnet ist", async () => {

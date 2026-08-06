@@ -47,31 +47,6 @@ async function clientIp(): Promise<string> {
 }
 
 /**
- * Antragsteller-Zuordnung für Kunden-Uploads.
- *
- * Über den Kundenlink lädt bei Paar-Finanzierungen JEDER Beteiligte hoch – die
- * Quelle sagt nicht, wessen Ausweis das ist. Nur bei genau einem Antragsteller
- * ist die Zuordnung eindeutig. Sonst bleibt sie offen (`null`), damit der
- * Vermittler sie im Review-Center setzt und `applyExtractedFieldsToApplicant`
- * keine fremden Stammdaten in Antragsteller 1 schreibt.
- */
-async function resolveCustomerApplicant(
-  caseId: string
-): Promise<{ applicantId: string | null; applicantName: string | null }> {
-  const applicants = await prisma.applicant.findMany({
-    where: { caseId },
-    orderBy: { position: "asc" },
-    select: { id: true, vorname: true, nachname: true },
-  });
-  if (applicants.length !== 1) return { applicantId: null, applicantName: null };
-  const only = applicants[0]!;
-  return {
-    applicantId: only.id,
-    applicantName: [only.vorname, only.nachname].filter(Boolean).join(" ") || null,
-  };
-}
-
-/**
  * Kunden-Upload über sicheren Token-Link – EINE Datei pro Aufruf.
  *
  * Der Client lädt die Dateien einzeln nacheinander hoch (statt alle in einem
@@ -105,15 +80,15 @@ export async function customerUploadOne(token: string, formData: FormData): Prom
   // der Pipeline) muss ihn zurückgeben, sonst verfällt Kontingent unbemerkt.
   let result: Awaited<ReturnType<typeof processUpload>>;
   try {
-    const { applicantId, applicantName } = await resolveCustomerApplicant(access.caseId);
+    // Keine Zuordnung aus dem Kundenlink: Über den gemeinsamen Link lädt jeder
+    // Beteiligte hoch, die Quelle verrät nicht wessen Datei es ist. Die
+    // Zuordnung übernimmt der Namensabgleich in der Pipeline.
     const buffer = Buffer.from(await file.arrayBuffer());
     result = await processUpload({
       organizationId: access.organizationId,
       caseId: access.caseId,
       file: { name: file.name, type: file.type, size: file.size, buffer },
       uploadSource: "kunde",
-      applicantName,
-      applicantId,
     });
   } catch (e) {
     await releaseUploadSlot(access.linkId);
@@ -315,9 +290,10 @@ export async function processCustomerStoredUpload(token: string, meta: StoredUpl
   }
 
   // Reservierter Slot: jeder Fehlerpfad gibt ihn zurück (siehe customerUploadOne).
+  // Auch hier keine Zuordnung aus dem Kundenlink (siehe customerUploadOne) –
+  // die Pipeline gleicht den erkannten Namen selbst ab.
   let result: Awaited<ReturnType<typeof processStoredUpload>>;
   try {
-    const { applicantId, applicantName } = await resolveCustomerApplicant(access.caseId);
     result = await processStoredUpload({
       organizationId: access.organizationId,
       caseId: access.caseId,
@@ -325,8 +301,6 @@ export async function processCustomerStoredUpload(token: string, meta: StoredUpl
       originalName: meta.originalName,
       mimeType: meta.mimeType,
       uploadSource: "kunde",
-      applicantName,
-      applicantId,
     });
   } catch (e) {
     await releaseUploadSlot(access.linkId);
