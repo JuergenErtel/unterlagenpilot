@@ -47,6 +47,15 @@ describe("matchApplicant", () => {
     expect(matchApplicant("Jürgen Groß", paare)).toBe("b1");
   });
 
+  it("entfernt Akzente, damit José auch als Jose gefunden wird", () => {
+    const paare = [
+      { id: "f1", position: 1, vorname: "José", nachname: "García" },
+      { id: "f2", position: 2, vorname: "Ana", nachname: "García" },
+    ];
+    expect(matchApplicant("Jose Garcia", paare)).toBe("f1");
+    expect(matchApplicant("José García", paare)).toBe("f1");
+  });
+
   it("behandelt Bindestrich-Doppelnamen als eigene Wörter", () => {
     const paare = [
       { id: "c1", position: 1, vorname: "Anna-Lena", nachname: "Meier-Schmidt" },

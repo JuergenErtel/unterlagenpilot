@@ -29,7 +29,7 @@ function fold(value: string): string {
     .normalize("NFD")
     // Kombinierende Akzente (é, ñ, …) entfernen. Bewusst als Escape-Bereich
     // notiert – literale Kombinationszeichen im Quelltext sind unlesbar.
-    .replace(/[̀-ͯ]/g, "");
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
