@@ -77,6 +77,18 @@ describe("assignDocumentApplicant", () => {
     expect(documentUpdate).not.toHaveBeenCalled();
   });
 
+  it("markiert eine Zuordnung von Hand als manuell, damit die Automatik sie nicht überschreibt", async () => {
+    await assignDocumentApplicant("d1", "app-2");
+    const arg = documentUpdate.mock.calls[0]![0] as { data: { applicantSource: string } };
+    expect(arg.data.applicantSource).toBe("manuell");
+  });
+
+  it("markiert auch das Aufheben der Zuordnung als manuell", async () => {
+    await assignDocumentApplicant("d1", null);
+    const arg = documentUpdate.mock.calls[0]![0] as { data: { applicantSource: string } };
+    expect(arg.data.applicantSource).toBe("manuell");
+  });
+
   it("sucht den Antragsteller immer fallbezogen", async () => {
     await assignDocumentApplicant("d1", "app-2");
     expect(applicantFindFirst).toHaveBeenCalledWith(

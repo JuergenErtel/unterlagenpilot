@@ -64,9 +64,13 @@ export async function reviewExtractedField(
  * Ordnet ein Dokument einem Antragsteller zu (oder hebt die Zuordnung auf).
  *
  * Nötig bei mehreren Antragstellern: Über den gemeinsamen Kunden-Upload-Link ist
- * nicht erkennbar, WESSEN Ausweis oder Gehaltsabrechnung hochgeladen wurde. Die
- * Dokumente kommen daher ohne Zuordnung an, und die Checkliste wertet sie erst
- * als erfüllt, wenn jede Person ihr Soll nachweislich geliefert hat.
+ * nicht erkennbar, WESSEN Ausweis oder Gehaltsabrechnung hochgeladen wurde. Der
+ * automatische Abgleich über den erkannten Namen trifft nur eindeutige Fälle –
+ * alles andere kommt ohne Zuordnung an und wird hier von Hand entschieden. Die
+ * Checkliste wertet ein Soll erst als erfüllt, wenn jede Person geliefert hat.
+ *
+ * Die Auswahl von Hand gewinnt immer: sie wird als `manuell` festgehalten und
+ * vom automatischen Abgleich danach nie wieder angefasst.
  *
  * @param applicantId ID des Antragstellers oder null zum Aufheben der Zuordnung.
  */
@@ -118,7 +122,9 @@ export async function assignDocumentApplicant(
 
   await prisma.document.update({
     where: { id: documentId },
-    data: { applicantId, ...(generatedName ? { generatedName } : {}) },
+    // Eine Auswahl von Hand ist eine Entscheidung des Vermittlers: als
+    // "manuell" markieren, damit der automatische Abgleich sie nie überschreibt.
+    data: { applicantId, applicantSource: "manuell", ...(generatedName ? { generatedName } : {}) },
   });
 
   await audit({

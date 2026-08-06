@@ -150,7 +150,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   <CardTitle className="text-base">{d.generatedName ?? d.originalName}</CardTitle>
                   <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
                   {applicantOptions.length > 1 && (
-                    <ApplicantSelect documentId={d.id} value={d.applicantId} applicants={applicantOptions} />
+                    <ApplicantSelect documentId={d.id} value={d.applicantId} source={d.applicantSource} applicants={applicantOptions} />
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">

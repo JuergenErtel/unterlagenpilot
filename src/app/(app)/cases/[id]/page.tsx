@@ -239,7 +239,7 @@ export default async function CaseCockpitPage({
                             <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
                             {mehrereAntragsteller && (
                               <TableCell>
-                                <ApplicantSelect documentId={d.id} value={d.applicantId} applicants={applicantSelectOptions} />
+                                <ApplicantSelect documentId={d.id} value={d.applicantId} source={d.applicantSource} applicants={applicantSelectOptions} />
                               </TableCell>
                             )}
                             <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
