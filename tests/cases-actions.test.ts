@@ -40,6 +40,7 @@ const caseCreate = vi.fn();
 const caseUpdate = vi.fn();
 const documentFindMany = vi.fn();
 const documentUpdateMany = vi.fn();
+const applicantFindMany = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -55,13 +56,16 @@ vi.mock("@/lib/db", () => ({
       findMany: (...a: unknown[]) => documentFindMany(...a),
       updateMany: (...a: unknown[]) => documentUpdateMany(...a),
     },
+    applicant: {
+      findMany: (...a: unknown[]) => applicantFindMany(...a),
+    },
   },
 }));
 
 import { runAiCheck, createCase } from "@/lib/actions/cases";
 
 beforeEach(() => {
-  [caseFindUnique, caseFindUniqueOrThrow, caseFindFirst, caseFindMany, caseCreate, caseUpdate, documentFindMany, documentUpdateMany].forEach((m) => m.mockReset());
+  [caseFindUnique, caseFindUniqueOrThrow, caseFindFirst, caseFindMany, caseCreate, caseUpdate, documentFindMany, documentUpdateMany, applicantFindMany].forEach((m) => m.mockReset());
   afterCallbacks.length = 0;
 });
 
@@ -94,6 +98,7 @@ describe("runAiCheck – Status-Guard, Hintergrundlauf & Revert", () => {
     caseUpdate.mockResolvedValue({});
     documentUpdateMany.mockResolvedValue({});
     documentFindMany.mockResolvedValue([]);
+    applicantFindMany.mockResolvedValue([]);
 
     await runAiCheck("case-A");
 
@@ -116,6 +121,7 @@ describe("runAiCheck – Status-Guard, Hintergrundlauf & Revert", () => {
     caseUpdate.mockResolvedValue({});
     documentUpdateMany.mockResolvedValue({});
     documentFindMany.mockRejectedValue(new Error("DB weg"));
+    applicantFindMany.mockResolvedValue([]);
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     await runAiCheck("case-A");

@@ -22,6 +22,7 @@ import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
+import { planRematch } from "@/lib/documents/applicant-match";
 import { isAiCheckStale } from "@/lib/cases/ai-check-status";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import type {
@@ -258,6 +259,14 @@ async function processAiCheckInBackground(params: {
       include: { pages: true, extractedFields: true },
     });
 
+    // Einmal je Prüflauf laden statt je Dokument – der Abgleich ist reine
+    // Textlogik und braucht keinen weiteren KI-Aufruf.
+    const applicants = await prisma.applicant.findMany({
+      where: { caseId },
+      orderBy: { position: "asc" },
+      select: { id: true, position: true, vorname: true, nachname: true },
+    });
+
     // Dokumente begrenzt parallel prüfen statt streng nacheinander: das war die
     // Hauptursache, dass die KI-Prüfung bei mehreren Dokumenten über das
     // Function-Timeout lief und mit "Etwas ist schiefgelaufen" abbrach.
@@ -268,11 +277,27 @@ async function processAiCheckInBackground(params: {
         const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
         const ext = await ai.extractFields(cls.documentType, text);
 
+        // Dieselbe Regel wie beim nachträglichen Abgleich: nur unzugeordnete
+        // oder automatisch zugeordnete Dokumente anfassen, eine Auswahl des
+        // Vermittlers bleibt bestehen. planRematch liefert nur echte Änderungen.
+        const [change] = planRematch(
+          [
+            {
+              id: doc.id,
+              applicantId: doc.applicantId,
+              applicantSource: doc.applicantSource,
+              detectedApplicant: cls.detectedApplicant ?? null,
+            },
+          ],
+          applicants
+        );
+
         await prisma.document.update({
           where: { id: doc.id },
           data: {
             documentType: cls.documentType,
             detectedApplicant: cls.detectedApplicant ?? null,
+            ...(change ? { applicantId: change.applicantId, applicantSource: "auto" } : {}),
             confidence: cls.confidence,
             classificationStatus: "fertig",
             extractionStatus: "fertig",
