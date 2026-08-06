@@ -3189,7 +3189,7 @@ export function SelfDisclosureManager({
   aktiverLinkId,
 }: {
   caseId: string;
-  /** Fertig formulierter Stand, z. B. "begonnen, Schritt 7 von 38". */
+  /** Fertig formulierter Stand, z. B. "begonnen, Schritt 7 von 36". */
   status: string;
   aktiverLinkId: string | null;
 }) {

@@ -23,6 +23,19 @@ const istKauf = (a: Antworten): boolean => {
   return art === "" || KAUFZWEIG.includes(art);
 };
 
+const ANGESTELLT = ["angestellter", "arbeiter", "beamter"];
+const SELBSTSTAENDIG = ["selbststaendiger", "handwerker", "freiberufler"];
+
+/**
+ * Prüft die Berufsart der GERADE gefragten Person – Person 1 kann angestellt
+ * und Person 2 selbstständig sein. Ist die Art übersprungen, bleiben beide
+ * Zweige zu: Wir fragen lieber weniger als nach dem Falschen.
+ */
+const hatBerufsart = (a: Antworten, arten: string[], person: 1 | 2 = 1): boolean =>
+  arten.includes(wert(a, `p${person}.beruf_art.art`));
+
+const istGefunden = (a: Antworten): boolean => wert(a, "objektstand.stand") === "gefunden";
+
 export const KATALOG: Schritt[] = [
   {
     id: "finanzierungsart",
@@ -236,6 +249,348 @@ export const KATALOG: Schritt[] = [
           { wert: "1", label: "Alleine" },
           { wert: "2", label: "Mit einer weiteren Person" },
         ],
+      },
+    ],
+  },
+
+  // ------------------------------------------------------ B · Zur Person
+  {
+    id: "person_name",
+    abschnitt: "person",
+    jeAntragsteller: true,
+    frage: "Wie heißen Sie?",
+    felder: [
+      {
+        id: "anrede",
+        label: "Anrede",
+        typ: "auswahl",
+        ziel: { entitaet: "applicant", feld: "anrede" },
+        optionen: [
+          { wert: "herr", label: "Herr" },
+          { wert: "frau", label: "Frau" },
+        ],
+      },
+      { id: "vorname", label: "Vorname", typ: "text", ziel: { entitaet: "applicant", feld: "vorname" } },
+      { id: "nachname", label: "Nachname", typ: "text", ziel: { entitaet: "applicant", feld: "nachname" } },
+    ],
+  },
+  {
+    id: "person_geburt",
+    abschnitt: "person",
+    jeAntragsteller: true,
+    frage: "Wann und wo sind Sie geboren?",
+    felder: [
+      {
+        id: "geburtsdatum",
+        label: "Geburtsdatum",
+        typ: "datum",
+        ziel: { entitaet: "applicant", feld: "geburtsdatum" },
+      },
+      { id: "geburtsort", label: "Geburtsort", typ: "text", ziel: { entitaet: "applicant", feld: "geburtsort" } },
+      {
+        id: "staatsangehoerigkeit",
+        label: "Staatsangehörigkeit",
+        typ: "text",
+        ziel: { entitaet: "applicant", feld: "staatsangehoerigkeit" },
+      },
+    ],
+  },
+  {
+    id: "person_familienstand",
+    abschnitt: "person",
+    jeAntragsteller: true,
+    frage: "Wie ist Ihr Familienstand?",
+    felder: [
+      {
+        id: "stand",
+        label: "Familienstand",
+        typ: "auswahl",
+        ziel: { entitaet: "applicant", feld: "familienstand" },
+        optionen: [
+          { wert: "ledig", label: "Ledig" },
+          { wert: "verheiratet", label: "Verheiratet" },
+          { wert: "geschieden", label: "Geschieden" },
+          { wert: "verwitwet", label: "Verwitwet" },
+          { wert: "eingetragene_partnerschaft", label: "Eingetragene Partnerschaft" },
+          { wert: "getrennt_lebend", label: "Getrennt lebend" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "person_anschrift",
+    abschnitt: "person",
+    jeAntragsteller: true,
+    frage: "Wo wohnen Sie derzeit?",
+    felder: [
+      { id: "strasse", label: "Straße und Hausnummer", typ: "text", ziel: { entitaet: "applicant", feld: "street" } },
+      { id: "plz", label: "PLZ", typ: "text", ziel: { entitaet: "applicant", feld: "zip" } },
+      { id: "ort", label: "Ort", typ: "text", ziel: { entitaet: "applicant", feld: "city" } },
+    ],
+  },
+  {
+    id: "person_kontakt",
+    abschnitt: "person",
+    jeAntragsteller: true,
+    frage: "Wie erreichen wir Sie?",
+    felder: [
+      { id: "email", label: "E-Mail", typ: "text", ziel: { entitaet: "applicant", feld: "email" } },
+      { id: "telefon", label: "Telefon", typ: "text", ziel: { entitaet: "applicant", feld: "phone" } },
+    ],
+  },
+
+  // ------------------------------------------------ C · Beruf und Einkommen
+  {
+    id: "beruf_art",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "In welchem Arbeitsverhältnis sind Sie beschäftigt?",
+    felder: [
+      {
+        id: "art",
+        label: "Arbeitsverhältnis",
+        typ: "auswahl",
+        ziel: { entitaet: "employment", feld: "beschaeftigungsart" },
+        // Die neun FinLink-Optionen; die Abbildung auf EmploymentType passiert
+        // erst bei der Übernahme, damit der Bogen die vertraute Auswahl zeigt.
+        optionen: [
+          { wert: "angestellter", label: "Angestellte/r" },
+          { wert: "arbeiter", label: "Arbeiter/in" },
+          { wert: "selbststaendiger", label: "Selbstständige/r" },
+          { wert: "handwerker", label: "Selbstständige/r Handwerker/in" },
+          { wert: "freiberufler", label: "Freiberufler/in" },
+          { wert: "beamter", label: "Beamter/in" },
+          { wert: "privatier", label: "Privatier/Privatière" },
+          { wert: "rentner", label: "Rentner/in" },
+          { wert: "sonstiges", label: "Anderes" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "beruf_arbeitgeber",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "Bei wem sind Sie beschäftigt?",
+    sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+    felder: [
+      { id: "beruf", label: "Beruf", typ: "text", ziel: { entitaet: "employment", feld: "beruf" } },
+      { id: "arbeitgeber", label: "Arbeitgeber", typ: "text", ziel: { entitaet: "employment", feld: "arbeitgeber" } },
+      {
+        id: "arbeitgeber_adresse",
+        label: "Anschrift des Arbeitgebers",
+        typ: "text",
+        ziel: { entitaet: "employment", feld: "arbeitgeberAdresse" },
+      },
+    ],
+  },
+  {
+    id: "beruf_dauer",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "Seit wann sind Sie dort beschäftigt?",
+    sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+    felder: [
+      { id: "seit", label: "Beschäftigt seit", typ: "datum", ziel: { entitaet: "employment", feld: "eintrittsdatum" } },
+      {
+        id: "befristet_bis",
+        label: "Befristet bis (falls befristet)",
+        typ: "datum",
+        ziel: { entitaet: "employment", feld: "befristetBis" },
+      },
+      {
+        id: "probezeit",
+        label: "Noch in der Probezeit",
+        typ: "ja_nein",
+        ziel: { entitaet: "employment", feld: "inProbezeit" },
+      },
+    ],
+  },
+  {
+    id: "beruf_selbststaendig",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "Erzählen Sie uns von Ihrer Tätigkeit",
+    sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
+    felder: [
+      { id: "firma", label: "Firma", typ: "text", ziel: { entitaet: "selfEmployment", feld: "firma" } },
+      { id: "rechtsform", label: "Rechtsform", typ: "text", ziel: { entitaet: "selfEmployment", feld: "rechtsform" } },
+      {
+        id: "beteiligung",
+        label: "Beteiligung in Prozent",
+        typ: "zahl",
+        ziel: { entitaet: "selfEmployment", feld: "beteiligungProzent" },
+      },
+      {
+        id: "gruendung",
+        label: "Gegründet am",
+        typ: "datum",
+        ziel: { entitaet: "selfEmployment", feld: "gruendungsdatum" },
+      },
+    ],
+  },
+  {
+    id: "einkommen",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "Wie hoch ist Ihr Einkommen?",
+    hinweis: "Bitte Ihr eigenes Einkommen, nicht das des Haushalts.",
+    felder: [
+      { id: "netto", label: "Netto monatlich", typ: "betrag", ziel: { entitaet: "income", feld: "nettoMonatlich" } },
+      { id: "brutto", label: "Brutto monatlich", typ: "betrag", ziel: { entitaet: "income", feld: "bruttoMonatlich" } },
+      {
+        id: "sonderzahlungen",
+        label: "Sonderzahlungen im Jahr",
+        typ: "betrag",
+        ziel: { entitaet: "income", feld: "einmalzahlungenJaehrlich" },
+      },
+    ],
+  },
+  {
+    id: "weitere_einnahmen",
+    abschnitt: "beruf",
+    jeAntragsteller: true,
+    frage: "Haben Sie weitere Einnahmen?",
+    felder: [
+      {
+        id: "miete",
+        label: "Mieteinnahmen monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "income", feld: "mieteinnahmen" },
+      },
+      {
+        id: "sonstige",
+        label: "Sonstige Einnahmen monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "income", feld: "sonstigeEinnahmen" },
+      },
+    ],
+  },
+
+  // -------------------------------------- D · Haushalt und Verpflichtungen
+  {
+    id: "haushalt_kinder",
+    abschnitt: "haushalt",
+    frage: "Wie viele Kinder leben in Ihrem Haushalt?",
+    hinweis: "Einmal für den ganzen Haushalt – nicht je Person.",
+    felder: [
+      { id: "anzahl", label: "Anzahl Kinder", typ: "zahl", ziel: { entitaet: "applicant", feld: "anzahlKinder" } },
+    ],
+  },
+  {
+    id: "haushalt_ausgaben",
+    abschnitt: "haushalt",
+    frage: "Welche festen Ausgaben haben Sie?",
+    // Kein Ziel: Das Schema kennt weder Warmmiete noch Unterhalt. Die Werte
+    // bleiben im Bogen und erscheinen im Eingang zur Kenntnis.
+    felder: [
+      { id: "warmmiete", label: "Derzeitige Warmmiete monatlich", typ: "betrag" },
+      { id: "unterhalt", label: "Unterhaltszahlungen monatlich", typ: "betrag" },
+    ],
+  },
+  {
+    id: "verpflichtungen",
+    abschnitt: "haushalt",
+    frage: "Haben Sie laufende Kredite oder Leasingverträge?",
+    felder: [
+      {
+        id: "liste",
+        label: "Verpflichtungen",
+        typ: "text",
+        hinweis: "Art, Gläubiger, Restschuld, Monatsrate, Ablösung geplant",
+        ziel: { entitaet: "liability", liste: true },
+      },
+    ],
+  },
+
+  // ------------------------------------------ E · Eigenkapital im Einzelnen
+  {
+    id: "eigenkapital_positionen",
+    abschnitt: "eigenkapital",
+    frage: "Woraus besteht Ihr Eigenkapital?",
+    felder: [
+      {
+        id: "liste",
+        label: "Eigenkapital",
+        typ: "text",
+        hinweis: "Bankguthaben, Bausparvertrag, Wertpapiere, Schenkung, Verkaufserlös, Eigenleistung",
+        ziel: { entitaet: "asset", liste: true },
+      },
+    ],
+  },
+
+  // ------------------------------------------------------- F · Das Objekt
+  {
+    id: "objekt_art",
+    abschnitt: "objekt",
+    frage: "Um welche Art von Immobilie handelt es sich?",
+    sichtbar: istGefunden,
+    felder: [
+      {
+        id: "art",
+        label: "Objektart",
+        typ: "auswahl",
+        ziel: { entitaet: "property", feld: "objektart" },
+        optionen: [
+          { wert: "eigentumswohnung", label: "Eigentumswohnung" },
+          { wert: "einfamilienhaus", label: "Einfamilienhaus" },
+          { wert: "doppelhaushaelfte", label: "Doppelhaushälfte" },
+          { wert: "reihenhaus", label: "Reihenhaus" },
+          { wert: "mehrfamilienhaus", label: "Mehrfamilienhaus" },
+          { wert: "grundstueck", label: "Grundstück" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "objekt_adresse",
+    abschnitt: "objekt",
+    frage: "Wie lautet die Adresse der Immobilie?",
+    sichtbar: istGefunden,
+    felder: [
+      {
+        id: "strasse",
+        label: "Straße und Hausnummer",
+        typ: "text",
+        ziel: { entitaet: "property", feld: "street" },
+      },
+    ],
+  },
+  {
+    id: "objekt_masse",
+    abschnitt: "objekt",
+    frage: "Wie groß ist die Immobilie?",
+    sichtbar: istGefunden,
+    felder: [
+      { id: "wohnflaeche", label: "Wohnfläche in m²", typ: "zahl", ziel: { entitaet: "property", feld: "wohnflaeche" } },
+      {
+        id: "grundstueck",
+        label: "Grundstücksfläche in m²",
+        typ: "zahl",
+        ziel: { entitaet: "property", feld: "grundstuecksflaeche" },
+      },
+      { id: "baujahr", label: "Baujahr", typ: "zahl", ziel: { entitaet: "property", feld: "baujahr" } },
+      { id: "zimmer", label: "Zimmer", typ: "zahl", ziel: { entitaet: "property", feld: "anzahlZimmer" } },
+      { id: "stellplaetze", label: "Stellplätze", typ: "zahl", ziel: { entitaet: "property", feld: "stellplaetze" } },
+    ],
+  },
+  {
+    id: "objekt_kosten",
+    abschnitt: "objekt",
+    frage: "Fallen laufende Kosten oder Einnahmen an?",
+    sichtbar: istGefunden,
+    felder: [
+      {
+        id: "hausgeld",
+        label: "Hausgeld monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "property", feld: "hausgeldMonatlich" },
+      },
+      {
+        id: "mieteinnahmen",
+        label: "Mieteinnahmen monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "property", feld: "mieteinnahmenMonatlich" },
       },
     ],
   },

@@ -102,7 +102,8 @@ Ein Schritt ist ein Bildschirm mit **einem oder mehreren** Feldern. Teil A bleib
 bei einer Frage pro Bildschirm wie bei FinLink; im Selbstauskunftsteil fasst ein
 Schritt Zusammengehöriges (etwa die Anschrift). Bei strikt einer Frage pro
 Bildschirm käme der Bogen auf über 70 Bildschirme — das hält niemand durch. So
-sind es **28 Schritte für einen Antragsteller, 38 für zwei** (Kaufzweig mit
+sind es **26 Schritte für einen Antragsteller, 36 für zwei** (am gebauten
+Katalog nachgezählt; Kaufzweig mit
 gefundener Immobilie; andere Zweige liegen darunter).
 
 ```ts
@@ -307,7 +308,7 @@ kopieren, widerrufen. Der Stand in Klartext:
 
 - „noch nicht erstellt"
 - „erstellt am 06.08., noch nicht begonnen"
-- „begonnen, Schritt 7 von 38" (die Gesamtzahl richtet sich nach den Zweigen,
+- „begonnen, Schritt 7 von 36" (die Gesamtzahl richtet sich nach den Zweigen,
   die die bisherigen Antworten öffnen)
 - „eingegangen am 08.08."
 - „übernommen am 08.08."
