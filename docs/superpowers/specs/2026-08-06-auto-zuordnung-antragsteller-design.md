@@ -112,9 +112,15 @@ Prod-Supabase (es gibt kein getrenntes Staging, siehe
   Wird **nie** automatisch überschrieben.
 - `auto`: Von der Match-Logik gesetzt. Wird bei jedem erneuten Abgleich neu
   bewertet.
-- `null` (Bestandsdaten): wird wie `manuell` behandelt, also nicht angefasst.
-  Konservativ — die Altfälle sind wenige und der Colell-Fall ist bereits von Hand
-  bereinigt.
+- `null` (Bestandsdaten): Trägt das Dokument bereits eine Zuordnung, wird es wie
+  `manuell` behandelt und nicht angefasst — konservativ, denn die Altfälle sind
+  wenige und der Colell-Fall ist bereits von Hand bereinigt. Ist es dagegen
+  **unzugeordnet**, darf die Automatik zugreifen: Eine Zuordnung zu setzen, wo
+  keine war, kann keine Information zerstören.
+
+Daraus folgt die eine Regel, nach der alle Einstiegspunkte entscheiden:
+**bearbeitbar ist ein Dokument genau dann, wenn `applicantId === null` oder
+`applicantSource === "auto"`.**
 
 ### 4. Einstiegspunkte
 
