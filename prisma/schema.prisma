@@ -649,6 +649,10 @@ model Document {
   confidence     Float?
 
   detectedApplicant String?
+  /// Herkunft der Antragsteller-Zuordnung: "auto" (Namensabgleich) oder
+  /// "manuell" (Vermittler). null = Bestandsdaten unbekannter Herkunft; diese
+  /// werden wie "manuell" behandelt, solange sie eine Zuordnung tragen.
+  applicantSource   String?
   propertyRef    String?
   period         String?       // Zeitraum, z.B. 2026-05
   issuer         String?       // Aussteller

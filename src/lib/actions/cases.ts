@@ -272,6 +272,7 @@ async function processAiCheckInBackground(params: {
           where: { id: doc.id },
           data: {
             documentType: cls.documentType,
+            detectedApplicant: cls.detectedApplicant ?? null,
             confidence: cls.confidence,
             classificationStatus: "fertig",
             extractionStatus: "fertig",

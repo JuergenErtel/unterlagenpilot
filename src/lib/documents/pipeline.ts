@@ -335,6 +335,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         generatedName,
         pageCount: ocrResult?.pageCount,
         documentType: cls?.documentType ?? null,
+        detectedApplicant: cls?.detectedApplicant ?? null,
         ocrStatus: ocrResult ? "fertig" : "fehler",
         classificationStatus: cls ? "fertig" : "fehler",
         extractionStatus: ext ? "fertig" : "fehler",
