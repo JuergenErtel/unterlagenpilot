@@ -60,6 +60,14 @@ nicht je Person — damit kann keine Bank rechnen.
 | Bestehendes Mini-Formular | Wird durch einen Verweis auf die Selbstauskunft ersetzt |
 | Einkommen | Je Person statt Haushaltssumme (bewusste Abweichung von FinLink) |
 | Kontaktdaten | Im Personenabschnitt, nicht als Schranke am Ende |
+| Pflichtfelder | **Keine.** Jedes Feld darf leer bleiben, „Weiter" ist immer möglich |
+
+Begründung gegen Pflichtfelder: Ein Bogen mit 38 Schritten trifft zwangsläufig
+auf Angaben, die der Kunde gerade nicht zur Hand hat — die Anschrift des
+Arbeitgebers, das Gründungsdatum der Firma. Wer dort nicht weiterkommt, bricht
+ab, und dann fehlt alles statt nur einer Zeile. Eine Lücke ist außerdem ein
+brauchbares Ergebnis: Sie zeigt Jürgen genau, wonach er fragen muss. Der Bogen
+sammelt, was da ist, und meldet, was fehlt — er erzwingt nichts.
 
 Begründung zur Freigabe: Das heutige Mini-Formular schreibt Kundenangaben sofort
 in Antragsteller 1, und die Kundenangabe gewinnt gegen den Bestand. Bei Einkommen
@@ -103,9 +111,10 @@ export interface Feld {
   label: string;
   typ: "auswahl" | "betrag" | "prozent_oder_betrag" | "text" | "datum" | "plz_ort" | "ja_nein" | "zahl";
   optionen?: { wert: string; label: string }[];
-  pflicht?: boolean;
   ziel?: Ziel;                       // wohin im Fall
 }
+// Kein "pflicht": Jedes Feld darf leer bleiben. Geprüft wird nur die Form eines
+// eingegebenen Werts, nie seine Anwesenheit.
 
 export interface Schritt {
   id: string;                        // zugleich URL-Segment
@@ -124,6 +133,18 @@ export type Ziel =
 ```
 
 Bei `jeAntragsteller` trägt die Antwort-ID das Präfix `p1.` bzw. `p2.`.
+
+**Unbeantwortete Steuerfragen.** Weil jede Frage übersprungen werden darf, kann
+auch die Frage leer bleiben, an der ein Zweig hängt. Regel: Eine
+Sichtbarkeitsregel prüft nur ausdrücklich gegebene Antworten — fehlt die
+Steuerantwort, bleibt der abhängige Zweig zu. Zwei Ausnahmen, weil sonst der
+halbe Bogen verschwände:
+
+- `anzahl_antragsteller` leer → nur Antragsteller 1 (der häufigere Fall).
+- `finanzierungsart` leer → der Kaufzweig, weil er den Rest trägt.
+
+Springt der Kunde zurück und beantwortet die Steuerfrage doch, erscheinen die
+Schritte; bereits gegebene Antworten aus einem anderen Zweig bleiben gespeichert.
 
 ### Datenmodell (additiv)
 
@@ -220,7 +241,7 @@ entsteht kein neues Feld.
 
 | Schritt | Felder → Ziel |
 | --- | --- |
-| `haushalt_kinder` | Anzahl Kinder → `Applicant.anzahlKinder` **beider** Antragsteller (gemeinsamer Haushalt; sonst würden die Kinder doppelt gezählt) |
+| `haushalt_kinder` | Anzahl Kinder — **einmal gefragt, nie je Person**, weil beide im selben Haushalt leben und die Zahl sonst doppelt zählte. Beim Übernehmen wird sie auf `Applicant.anzahlKinder` beider Antragsteller geschrieben |
 | `haushalt_ausgaben` | Unterhaltsverpflichtungen, derzeitige Warmmiete → **kein Zielfeld**: das Schema kennt beides noch nicht. Die Werte bleiben in den Antworten und werden in der Prüfansicht angezeigt; ein Zielfeld bekommen sie mit der Haushaltsrechnung |
 | `verpflichtungen` | Liste: Art, Gläubiger, Restschuld, Monatsrate, „soll abgelöst werden" → je Eintrag ein `Liability` |
 
@@ -246,7 +267,7 @@ sie ab, fragt der Bogen freundlich nach — er blockiert aber nicht.
 
 | Schritt | Inhalt |
 | --- | --- |
-| `zusammenfassung` | Alle Antworten untereinander, jede mit Sprung zurück zur Frage; danach „Absenden" |
+| `zusammenfassung` | Alle Antworten untereinander, jede mit Sprung zurück zur Frage. Offen Gebliebenes steht als „noch offen" dabei — sichtbar, aber ohne Zwang. Absenden ist auch mit Lücken möglich |
 
 ## Die Kundenstrecke
 
@@ -258,6 +279,14 @@ Jeder Schritt speichert beim Weitergehen. Der Wert wird serverseitig gegen
 `schrittSchema` geprüft; ungeprüfte Rohdaten werden nie gespeichert — dasselbe
 Muster wie `saveCustomerForm`. Bei einem Fehler sieht der Kunde, welches Feld
 nicht stimmt.
+
+**„Weiter" ist immer möglich, auch mit leeren Feldern.** Geprüft wird nur die
+Form eines eingegebenen Werts — „dreitausend" ist kein Betrag, ein leeres Feld
+dagegen eine gültige Antwort. Der Knopf heißt deshalb „Weiter", wenn etwas
+eingetragen ist, und „Überspringen", wenn der Schritt leer ist: Der Kunde soll
+sehen, dass er etwas offen lässt, aber nicht daran hängenbleiben. Ein
+übersprungener Schritt speichert nichts und zählt in der Zusammenfassung als
+offen.
 
 Wiederaufnahme: Wer den Link später erneut öffnet, landet auf `currentStep`.
 
@@ -290,6 +319,11 @@ Sorten:
   den Großteil in einem Klick.
 - **Abweichung** — Kundenangabe und Fallwert nebeneinander, Entscheidung je
   Zeile. Nie vorausgewählt.
+
+Darunter, gleichrangig wichtig: **„Vom Kunden offen gelassen"** — die Liste der
+übersprungenen Angaben, nach Abschnitten sortiert. Weil kein Feld erzwungen wird,
+ist das die eigentliche Nachfassliste: Sie sagt Jürgen genau, wonach er beim
+nächsten Telefonat fragen muss, statt ihn den Bogen absuchen zu lassen.
 
 Verpflichtungen und Vermögenswerte werden als Block angeboten („3 Verpflichtungen
 übernehmen"), nicht Zeile für Zeile.
@@ -328,6 +362,9 @@ Bestandsfälle lesbar.
 | Kunde gibt „zu zweit" an, Fall hat eine Person | Person 2 wird **beim Übernehmen** angelegt, nicht beim Ausfüllen — ein halb ausgefüllter Bogen verändert den Fall nicht |
 | Kunde stellt zurück auf „alleine" | Antworten zu Person 2 bleiben gespeichert, zählen aber nicht; beim Zurückstellen sind sie wieder da |
 | Eigenkapitalsumme weicht ab | Freundlicher Hinweis, keine Blockade |
+| Steuerfrage übersprungen | Abhängiger Zweig bleibt zu; Ausnahmen: ohne `anzahl_antragsteller` nur Person 1, ohne `finanzierungsart` der Kaufzweig |
+| Bogen fast leer abgesendet | Zulässig. Der Eingang zeigt die wenigen Angaben und darunter alles, was offen blieb |
+| Kunde überspringt seinen Namen | Der Fall behält den bisherigen Namen; die Zuordnung hängt am Link, nie an der Angabe |
 | Fall gesperrt (exportiert/archiviert) | Übernahme abgelehnt, Bogen bleibt lesbar |
 | Zweiter Bogen nach Freigabe | Neuer Durchgang; der erste bleibt mit Datum erhalten |
 | Link abgelaufen, Bogen halb fertig | Beim Erzeugen des neuen Links werden die Antworten des letzten **nicht abgesendeten** Durchgangs mitgenommen, samt erreichtem Schritt. Ein abgesendeter Durchgang wird nie fortgeschrieben — er ist der belegte Stand |
@@ -338,9 +375,13 @@ In der Reihenfolge, in der sie sich lohnen:
 
 1. **Katalog, rein** — Verzweigungen (selbstständig, zweite Person,
    Anschlussfinanzierung), nächster Schritt, sichtbare Schritte, Fortschritt,
-   Pflichtfelder, Zod-Schema je Schritt.
+   Zod-Schema je Schritt. Ausdrücklich: ein leerer Schritt ist gültig und führt
+   weiter; eine übersprungene Steuerfrage hält den Zweig zu, außer bei den zwei
+   festgelegten Ausnahmen.
 2. **Übernahme, rein** — Lücke gegen Abweichung, Listenblöcke, Anlegen von
-   Person 2, Prozentumrechnung der Maklergebühr.
+   Person 2, Prozentumrechnung der Maklergebühr, Kinderzahl auf beide
+   Antragsteller. Und: übersprungene Felder erzeugen **keinen** Vorschlag und
+   überschreiben nie einen vorhandenen Wert mit Leere.
 3. **Aktionen gegen Mocks** — abgelaufener Token, widerrufener Token, fremder
    Fall, zweimal absenden, Validierungsfehler.
 4. **PGlite gegen echtes Schema** — ein vollständiger Durchlauf: Link erzeugen,
