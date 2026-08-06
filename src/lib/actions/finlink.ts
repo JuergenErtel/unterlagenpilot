@@ -9,6 +9,7 @@ import { FinLinkConnector } from "@/lib/platforms/connectors";
 import { getFinLinkClient, FinLinkNotFoundError, FinLinkAuthError } from "@/lib/platforms/finlink/client";
 import { finlinkToCanonical } from "@/lib/platforms/finlink/mapping";
 import { fillCaseFromCanonical } from "@/lib/platforms/case-writer";
+import { rematchCaseDocuments } from "@/lib/documents/rematch";
 
 export interface FinLinkImportState {
   error?: string;
@@ -61,6 +62,14 @@ export async function refreshFromFinLink(
     const dto = await client.fetchVorgang(caseRow.finlinkId);
     const canonical = finlinkToCanonical(dto);
     const result = await fillCaseFromCanonical(caseRow.id, canonical);
+
+    // Der Abgleich kann Antragsteller angelegt haben – bereits hochgeladene
+    // Dokumente jetzt neu zuordnen. Best-effort.
+    try {
+      await rematchCaseDocuments(caseRow.id, { organizationId: ctx.organizationId, userId: ctx.userId });
+    } catch (e) {
+      console.error("[finlink] Automatische Dokumentzuordnung fehlgeschlagen:", e);
+    }
 
     await audit({
       organizationId: ctx.organizationId,

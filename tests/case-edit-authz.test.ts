@@ -21,8 +21,18 @@ vi.mock("@/lib/auth/context", () => ({
 
 const findUnique = vi.fn();
 const update = vi.fn();
+// editApplicant stößt nach dem Speichern den Dokument-Abgleich an.
+const applicantFindMany = vi.fn();
+const documentFindMany = vi.fn();
 vi.mock("@/lib/db", () => ({
-  prisma: { applicant: { findUnique: (...a: unknown[]) => findUnique(...a), update: (...a: unknown[]) => update(...a) } },
+  prisma: {
+    applicant: {
+      findUnique: (...a: unknown[]) => findUnique(...a),
+      update: (...a: unknown[]) => update(...a),
+      findMany: (...a: unknown[]) => applicantFindMany(...a),
+    },
+    document: { findMany: (...a: unknown[]) => documentFindMany(...a) },
+  },
 }));
 
 import { editApplicant } from "@/lib/actions/case-edit";
@@ -36,6 +46,8 @@ function form(entries: Record<string, string>): FormData {
 beforeEach(() => {
   findUnique.mockReset();
   update.mockReset();
+  applicantFindMany.mockReset().mockResolvedValue([]);
+  documentFindMany.mockReset().mockResolvedValue([]);
 });
 
 describe("editApplicant – Tenant-Isolation", () => {

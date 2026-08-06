@@ -17,6 +17,9 @@ const findMany = vi.fn();
 const create = vi.fn();
 const del = vi.fn();
 const update = vi.fn();
+// addApplicant stößt den Dokument-Abgleich an – die Tabelle muss im Mock existieren.
+const documentFindMany = vi.fn();
+const documentUpdate = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     applicant: {
@@ -28,13 +31,22 @@ vi.mock("@/lib/db", () => ({
       delete: (...a: unknown[]) => del(...a),
       update: (...a: unknown[]) => update(...a),
     },
+    document: {
+      findMany: (...a: unknown[]) => documentFindMany(...a),
+      update: (...a: unknown[]) => documentUpdate(...a),
+    },
   },
 }));
 
 import { addApplicant, removeApplicant } from "@/lib/actions/case-edit";
 
 beforeEach(() => {
-  [count, findFirst, findUnique, findMany, create, del, update].forEach((m) => m.mockReset());
+  [count, findFirst, findUnique, findMany, create, del, update, documentFindMany, documentUpdate].forEach(
+    (m) => m.mockReset()
+  );
+  findMany.mockResolvedValue([]);
+  documentFindMany.mockResolvedValue([]);
+  documentUpdate.mockResolvedValue({});
 });
 
 describe("addApplicant", () => {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext, requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
+import { rematchCaseDocuments } from "@/lib/documents/rematch";
 import { MARITAL_STATUSES, MAX_APPLICANTS, type MaritalStatus } from "@/lib/domain/enums";
 
 /** Liest einen Trim-Wert aus FormData; gibt undefined zurück, wenn leer. */
@@ -72,6 +73,20 @@ export async function editApplicant(
     select: { caseId: true },
   });
 
+  // Ein neu gesetzter Name macht die Zuordnung erst möglich: addApplicant legt
+  // eine namenlose Person an, erst hier kommt der Name dazu. Best-effort – das
+  // Speichern der Stammdaten darf daran nie scheitern.
+  if (data.vorname !== undefined || data.nachname !== undefined) {
+    try {
+      await rematchCaseDocuments(updated.caseId, {
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+      });
+    } catch (e) {
+      console.error("[editApplicant] Automatische Dokumentzuordnung fehlgeschlagen:", e);
+    }
+  }
+
   await audit({
     organizationId: ctx.organizationId,
     userId: ctx.userId,
@@ -103,6 +118,14 @@ export async function addApplicant(caseId: string): Promise<void> {
   const position = (highest?.position ?? 0) + 1;
 
   await prisma.applicant.create({ data: { caseId, position } });
+
+  // Meist wirkungslos (die neue Person ist noch namenlos), aber vollständig:
+  // beim Import kann sie bereits mit Namen angelegt worden sein.
+  try {
+    await rematchCaseDocuments(caseId, { organizationId: ctx.organizationId, userId: ctx.userId });
+  } catch (e) {
+    console.error("[addApplicant] Automatische Dokumentzuordnung fehlgeschlagen:", e);
+  }
 
   await audit({
     organizationId: ctx.organizationId,
