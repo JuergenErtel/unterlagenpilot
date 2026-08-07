@@ -82,6 +82,29 @@ export const LEAD_PHASE_LABELS: Record<LeadPhase, string> = {
 };
 
 /**
+ * Herkunft eines Falls. "unbekannt" ist Alltag, kein Fehler: In den echten
+ * FinLink-Daten (200 Leads, 07.08.2026) fehlt die Quelle bei 48 von 200.
+ */
+export const LEAD_SOURCES = [
+  "immoscout24",
+  "baufi24",
+  "europace",
+  "vergleich_de",
+  "manuell",
+  "unbekannt",
+] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+  immoscout24: "ImmoScout24",
+  baufi24: "Baufi24",
+  europace: "Europace",
+  vergleich_de: "vergleich.de",
+  manuell: "Manuell angelegt",
+  unbekannt: "Unbekannt",
+};
+
+/**
  * Verlustgründe als feste Liste – Freitext lässt sich nicht auswerten. Das
  * Freitextfeld daneben bleibt trotzdem, weil keine Liste vollständig ist.
  */

@@ -43,6 +43,16 @@ enum CaseStatus {
   archiviert
 }
 
+/** Woher ein Fall stammt. */
+enum LeadSource {
+  immoscout24
+  baufi24
+  europace
+  vergleich_de
+  manuell
+  unbekannt
+}
+
 /** Vertriebsphase eines Leads – zweite Dimension neben CaseStatus. */
 enum LeadPhase {
   neu
@@ -293,6 +303,7 @@ model Organization {
   whiteLabelSettings  WhiteLabelSettings?
   bankRequirements    BankRequirement[]
   auditLogs           AuditLog[]
+  leadSyncStates      LeadSyncState[]
 
   @@map("organizations")
 }
@@ -402,6 +413,15 @@ model Case {
   leadPhaseSeit  DateTime  @default(now())
   verlorenAm     DateTime?
   verlorenGrund  String?
+
+  // Herkunft des Falls. Der Rohwert bleibt erhalten, damit nachvollziehbar
+  // ist, woraus die Zuordnung entstand – kommt morgen ein neuer Wert, steht
+  // hier "unbekannt", aber das Original ist noch da.
+  quelle                LeadSource @default(unbekannt)
+  quelleDetail          String?
+  // Dreiwertig: null heißt "keine Angabe" und ist NICHT "nein".
+  einwilligungKontakt   Boolean?
+  einwilligungMarketing Boolean?
   financingType  FinancingType?
   primaryEmploymentType EmploymentType?
   kapitalanlage  Boolean       @default(false)
@@ -461,6 +481,8 @@ model Case {
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
+  // Die Dublettenprüfung des Lead-Abgleichs läuft je Lead über dieses Feld.
+  @@index([finlinkId])
   @@map("cases")
 }
 
@@ -1225,4 +1247,28 @@ model SelfDisclosure {
 
   @@index([caseId])
   @@map("self_disclosures")
+}
+
+// ============================ LEAD-EINGANG ============================
+
+/**
+ * Wasserstandsmarke und Zustand des Lead-Abgleichs, je Organisation und Quelle.
+ * Eigenes Modell statt PlatformConnection: Dort gibt es keinen Platz für
+ * Zeitstempel und Fehler, und die Tabelle wird heute nur gelesen.
+ */
+model LeadSyncState {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /** Heute nur "finlink"; der Mail-Weg bekommt später einen eigenen Eintrag. */
+  quelle         String
+  /** Eingangszeitpunkt des zuletzt verarbeiteten Leads. */
+  syncedUntil    DateTime?
+  lastRunAt      DateTime?
+  lastCreated    Int      @default(0)
+  lastError      String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, quelle])
+  @@map("lead_sync_states")
 }
