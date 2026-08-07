@@ -7,6 +7,11 @@ function cockpit(over: {
   status?: string;
   counts?: Partial<CockpitData["counts"]>;
   missingCustomerFields?: string[];
+  selbstauskunft?: {
+    eingegangen: boolean;
+    begonnen: boolean;
+    erstelltVorTagen: number | null;
+  };
 }): CockpitData {
   return {
     caseId: "c1",
@@ -32,6 +37,7 @@ function cockpit(over: {
       ...over.counts,
     },
     missingCustomerFields: over.missingCustomerFields ?? [],
+    selbstauskunft: over.selbstauskunft,
   };
 }
 
@@ -47,6 +53,48 @@ describe("computeNextStep – Prioritätsleiter", () => {
   it("KI-Fehler vor Dokument-Freigabe", () => {
     const s = computeNextStep(cockpit({ counts: { docsFehler: 2, pruefbereit: 3 } }));
     expect(s.key).toBe("ki_fehler");
+  });
+
+  it("eine eingegangene Selbstauskunft steht vor der Dokumentfreigabe", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 3 },
+        selbstauskunft: { eingegangen: true, begonnen: true, erstelltVorTagen: 2 },
+      })
+    );
+    expect(s.key).toBe("selbstauskunft_eingegangen");
+    expect(s.cta?.href).toContain("selbstauskunft");
+  });
+
+  it("eine laufende KI-Prüfung schlägt auch die Selbstauskunft", () => {
+    const s = computeNextStep(
+      cockpit({
+        status: "ki_pruefung_laeuft",
+        selbstauskunft: { eingegangen: true, begonnen: true, erstelltVorTagen: 2 },
+      })
+    );
+    expect(s.key).toBe("ki_laeuft");
+  });
+
+  it("erinnert an eine verschickte, nicht begonnene Selbstauskunft", () => {
+    const s = computeNextStep(
+      cockpit({ selbstauskunft: { eingegangen: false, begonnen: false, erstelltVorTagen: 5 } })
+    );
+    expect(s.key).toBe("selbstauskunft_wartet");
+  });
+
+  it("erinnert nicht, solange der Link frisch ist", () => {
+    const s = computeNextStep(
+      cockpit({ selbstauskunft: { eingegangen: false, begonnen: false, erstelltVorTagen: 1 } })
+    );
+    expect(s.key).not.toBe("selbstauskunft_wartet");
+  });
+
+  it("erinnert nicht, wenn der Kunde bereits begonnen hat", () => {
+    const s = computeNextStep(
+      cockpit({ selbstauskunft: { eingegangen: false, begonnen: true, erstelltVorTagen: 9 } })
+    );
+    expect(s.key).not.toBe("selbstauskunft_wartet");
   });
 
   it("prüfbereite Dokumente führen ins fallbezogene Review", () => {

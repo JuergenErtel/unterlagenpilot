@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, ClipboardList, PackageCheck } from "lucide-react";
+import { ArrowRight, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, ClipboardList, ClipboardCheck, PackageCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import type { NextStep } from "@/lib/cases/next-step";
 const ICON: Record<NextStep["key"], typeof Sparkles> = {
   ki_laeuft: Sparkles,
   ki_fehler: AlertTriangle,
+  selbstauskunft_eingegangen: ClipboardCheck,
+  selbstauskunft_wartet: ClipboardList,
   dokumente_freigeben: ScanSearch,
   kundendaten: UserRound,
   kritische_hinweise: AlertTriangle,

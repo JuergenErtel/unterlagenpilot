@@ -1,0 +1,61 @@
+- generic [ref=e2]:
+  - banner:
+    - link "Zum Inhalt springen" [ref=e4] [cursor=pointer]:
+      - /url: /juergen-ertel/start/down_payment#mainContent
+    - navigation [ref=e5]:
+      - generic [ref=e6]:
+        - link "Zurück zur Übersicht" [ref=e7] [cursor=pointer]:
+          - /url: /login?advisor=juergen-ertel&primaryColor=
+          - img "Zurück zur Übersicht" [ref=e8]
+        - generic [ref=e9]:
+          - button "Support Telefon" [ref=e10] [cursor=pointer]:
+            - generic [ref=e12]:
+              - generic [ref=e13]: Support
+              - img "Telefon" [ref=e14]
+          - button "de" [ref=e20] [cursor=pointer]
+          - link "Anmeldung" [ref=e23] [cursor=pointer]:
+            - /url: /login?advisor=juergen-ertel&primaryColor=
+  - main [ref=e24]:
+    - generic [ref=e29]:
+      - generic [ref=e33]:
+        - img "Rating stars" [ref=e38]
+        - generic [ref=e39]:
+          - generic [ref=e40]: "Kontakt jederzeit möglich:"
+          - generic [ref=e41]:
+            - link "je@insurehyp.de" [ref=e42] [cursor=pointer]:
+              - /url: mailto:je@insurehyp.de
+            - text: • 0160/93858311
+      - group "Hauptinhalt" [ref=e43]:
+        - generic [ref=e45]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - heading "Wie viel Eigenkapital möchten Sie für die Finanzierung einsetzen?" [level=1] [ref=e260]
+              - paragraph [ref=e233]: Falls Sie sich noch nicht entschieden haben, geben Sie bitte den maximalen Betrag an, den Sie einbringen könnten.
+            - generic [ref=e254]:
+              - generic [ref=e255]:
+                - textbox "Wie viel Eigenkapital möchten Sie für die Finanzierung einsetzen?" [active] [ref=e261]: "80.000"
+                - generic [ref=e257]: €
+              - alert
+          - button "Weiter" [ref=e251] [cursor=pointer]
+        - generic [ref=e154]:
+          - generic [ref=e155]:
+            - progressbar "Schritt 6" [ref=e262]
+            - generic [ref=e157]:
+              - button [ref=e208] [cursor=pointer]:
+                - img "Zurück" [ref=e209]
+                - text: zurück
+              - generic [ref=e159]:
+                - img "Uhr" [ref=e161]
+                - generic [ref=e164]: 2 Minuten
+                - generic [ref=e165]: bis zu Ihren persönlichen Finanzierungsangeboten
+          - generic [ref=e166]:
+            - link "Erklärung zur Barrierefreiheit" [ref=e167] [cursor=pointer]:
+              - /url: ./accessibility-explanation
+            - link "Meldung zur Barrierefreiheit" [ref=e168] [cursor=pointer]:
+              - /url: "'javascript:void(0)'"
+  - contentinfo [ref=e169]:
+    - generic [ref=e170]:
+      - link "Erklärung zur Barrierefreiheit" [ref=e171] [cursor=pointer]:
+        - /url: ./accessibility-explanation
+      - link "Meldung zur Barrierefreiheit" [ref=e172] [cursor=pointer]:
+        - /url: "'javascript:void(0)'"

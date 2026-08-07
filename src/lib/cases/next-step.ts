@@ -10,10 +10,12 @@ export interface NextStep {
   key:
     | "ki_laeuft"
     | "ki_fehler"
+    | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
     | "kundendaten"
     | "kritische_hinweise"
     | "unterlagen_anfordern"
+    | "selbstauskunft_wartet"
     | "fristen"
     | "einreichung";
   title: string;
@@ -39,6 +41,13 @@ export interface NextStepInput {
     docsLaufend: number;
   };
   missingCustomerFields: string[];
+  /** Stand der Selbstauskunft; fehlt bei Fällen ohne Link. */
+  selbstauskunft?: {
+    eingegangen: boolean;
+    begonnen: boolean;
+    /** Tage seit Erstellung des Links; null, wenn kein Link existiert. */
+    erstelltVorTagen: number | null;
+  };
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
@@ -60,6 +69,19 @@ export function computeNextStep(c: NextStepInput): NextStep {
       title: `${c.counts.docsFehler} Dokument${c.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis`,
       reason: "Bei der letzten Auswertung ist etwas schiefgelaufen. Ein erneuter Lauf behebt das in der Regel.",
       tone: "review",
+    };
+  }
+
+  // Vor der Dokumentfreigabe: Aus der Selbstauskunft entstehen die Stammdaten,
+  // auf denen Haushaltsrechnung und Einreichung aufbauen.
+  if (c.selbstauskunft?.eingegangen) {
+    return {
+      key: "selbstauskunft_eingegangen",
+      title: "Selbstauskunft prüfen & übernehmen",
+      reason:
+        "Der Kunde hat seine Angaben geschickt. Nach deiner Freigabe stehen sie in der Fallakte.",
+      tone: "review",
+      cta: { label: "Angaben ansehen", href: `/cases/${id}#selbstauskunft-eingang` },
     };
   }
 
@@ -104,6 +126,23 @@ export function computeNextStep(c: NextStepInput): NextStep {
         { label: "Selbst hochladen", href: `/cases/${id}?tab=dokumente#broker-upload` },
         { label: "Upload-Link erstellen", href: `/cases/${id}#upload-link` },
       ],
+    };
+  }
+
+  // Weiter unten: nachfassen, wenn der Link liegen bleibt. Wer schon begonnen
+  // hat, wird nicht behelligt – er ist ja dran.
+  if (
+    c.selbstauskunft &&
+    !c.selbstauskunft.begonnen &&
+    c.selbstauskunft.erstelltVorTagen !== null &&
+    c.selbstauskunft.erstelltVorTagen >= 3
+  ) {
+    return {
+      key: "selbstauskunft_wartet",
+      title: "Selbstauskunft nachfassen",
+      reason: `Der Link liegt seit ${c.selbstauskunft.erstelltVorTagen} Tagen beim Kunden, ohne dass er begonnen hat.`,
+      tone: "review",
+      cta: { label: "Kunden erinnern", href: `/cases/${id}/messages` },
     };
   }
 

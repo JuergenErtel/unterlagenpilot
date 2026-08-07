@@ -32,18 +32,46 @@ export interface CockpitData {
     docsLaufend: number;
   };
   missingCustomerFields: string[];
+  /** Stand der Selbstauskunft; fehlt, solange kein Link erstellt wurde. */
+  selbstauskunft?: {
+    eingegangen: boolean;
+    begonnen: boolean;
+    erstelltVorTagen: number | null;
+  };
 }
 
 export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   const agg = await getCaseAggregate(caseId);
-  const [caseRow, docs, missingRequests] = await Promise.all([
+  const [caseRow, docs, missingRequests, bogen] = await Promise.all([
     prisma.case.findUniqueOrThrow({ where: { id: caseId }, include: { applicants: { orderBy: { position: "asc" } } } }),
     prisma.document.findMany({
       where: { caseId },
       select: { reviewStatus: true, classificationStatus: true, extractionStatus: true, documentType: true },
     }),
     prisma.missingDocumentRequest.findMany({ where: { caseId, resolved: false } }),
+    prisma.selfDisclosure.findFirst({
+      where: { caseId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        currentStep: true,
+        submittedAt: true,
+        takenOverAt: true,
+        link: { select: { createdAt: true, active: true } },
+      },
+    }),
   ]);
+
+  // Nur ein noch nicht übernommener, eingegangener Bogen ist ein nächster
+  // Schritt; ein übernommener ist erledigt.
+  const selbstauskunft = bogen?.link
+    ? {
+        eingegangen: Boolean(bogen.submittedAt) && !bogen.takenOverAt,
+        begonnen: Boolean(bogen.currentStep) || Boolean(bogen.submittedAt),
+        erstelltVorTagen: Math.floor(
+          (Date.now() - bogen.link.createdAt.getTime()) / 86400_000
+        ),
+      }
+    : undefined;
 
   const applicantNames =
     caseRow.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ") || "Ohne Namen";
@@ -152,6 +180,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       docsLaufend,
     },
     missingCustomerFields,
+    selbstauskunft,
   };
 }
 

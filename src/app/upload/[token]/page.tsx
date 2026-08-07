@@ -14,7 +14,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CustomerUploadProgress } from "@/components/customer/customer-upload-progress";
 import { CustomerUploadForm } from "@/components/customer/customer-upload-form";
-import { CustomerDataForm } from "@/components/customer/customer-data-form";
 import { type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
@@ -95,7 +94,6 @@ export default async function PublicUploadPage({
   const kunde = applicant
     ? [applicant.vorname, applicant.nachname].filter(Boolean).join(" ")
     : "";
-  const form = (c.customerForm?.data ?? {}) as Record<string, string>;
   const beraterName = c.organization?.name || "Ihr Finanzierungsberater";
 
   // Ist das Upload-Kontingent erschöpft, bleibt die Seite lesbar – nur der
@@ -215,32 +213,20 @@ export default async function PublicUploadPage({
           </Card>
         )}
 
+        {/*
+          Persönliche Angaben macht der Kunde in der Selbstauskunft. Zwei Wege
+          auf dieselben Felder – hier sofort, dort mit Freigabe – wären eine
+          Fehlerquelle: Angaben von hier haben die Korrekturen des Vermittlers
+          überschrieben.
+        */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Ihre Angaben (optional, hilft uns weiter)
-            </CardTitle>
+            <CardTitle className="text-base">Ihre Angaben</CardTitle>
             <CardDescription>
-              Je vollständiger, desto schneller geht es voran.
+              Ihre persönlichen Angaben machen Sie in der Selbstauskunft – Ihr Berater hat Ihnen
+              dafür einen eigenen Link geschickt. Hier laden Sie nur Ihre Unterlagen hoch.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <CustomerDataForm
-              token={token}
-              defaults={{
-                vorname: form.vorname ?? applicant?.vorname ?? "",
-                nachname: form.nachname ?? applicant?.nachname ?? "",
-                geburtsdatum: form.geburtsdatum ?? "",
-                telefon: form.telefon ?? applicant?.phone ?? "",
-                email: form.email ?? applicant?.email ?? "",
-                familienstand: form.familienstand ?? applicant?.familienstand ?? "",
-                beruf: form.beruf ?? "",
-                arbeitgeber: form.arbeitgeber ?? "",
-                nettoEinkommen: form.nettoEinkommen != null ? String(form.nettoEinkommen) : "",
-                eigenkapital: form.eigenkapital != null ? String(form.eigenkapital) : "",
-              }}
-            />
-          </CardContent>
         </Card>
 
         <p className="px-2 pt-2 text-center text-[11px] leading-relaxed text-muted-foreground">

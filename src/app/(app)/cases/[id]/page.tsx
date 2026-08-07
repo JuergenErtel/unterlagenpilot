@@ -10,6 +10,11 @@ import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { listUploadLinks } from "@/lib/security/upload-link";
 import { runAiCheck } from "@/lib/actions/cases";
 import { UploadLinkManager } from "@/components/case/upload-link-manager";
+import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
+import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
+import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
+import { fortschritt } from "@/lib/self-disclosure/navigation";
+import type { Antworten } from "@/lib/self-disclosure/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,10 +71,22 @@ export default async function CaseCockpitPage({
   if (!caseRow) notFound();
 
   const cockpit = await getCaseCockpit(id);
-  const [documents, plausibility, uploadLinks] = await Promise.all([
+  const [documents, plausibility, uploadLinks, selbstauskunftBogen, uebernahme] = await Promise.all([
     prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
     listUploadLinks(id, ctx.organizationId),
+    prisma.selfDisclosure.findFirst({
+      where: { caseId: id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        currentStep: true,
+        answers: true,
+        submittedAt: true,
+        takenOverAt: true,
+        link: { select: { id: true, active: true } },
+      },
+    }),
+    ladeUebernahmeplan(id),
   ]);
   const applicantOptions = caseRow.applicants.map((a) => ({
     position: a.position,
@@ -83,6 +100,25 @@ export default async function CaseCockpitPage({
     maxUploads: l.maxUploads,
     usedCount: l.usedCount,
   }));
+
+  // Stand der Selbstauskunft in Klartext – man soll auf einen Blick sehen, ob
+  // der Kunde noch gar nicht angefangen hat oder mittendrin steckt.
+  const sdAntworten = ((selbstauskunftBogen?.answers as Antworten | null) ?? {}) as Antworten;
+  const sdFortschritt = selbstauskunftBogen?.currentStep
+    ? fortschritt(selbstauskunftBogen.currentStep, sdAntworten)
+    : null;
+  const selbstauskunftStatus = !selbstauskunftBogen?.link
+    ? "noch nicht erstellt"
+    : selbstauskunftBogen.takenOverAt
+      ? "übernommen"
+      : selbstauskunftBogen.submittedAt
+        ? "eingegangen"
+        : sdFortschritt && sdFortschritt.position > 0
+          ? `begonnen, Schritt ${sdFortschritt.position} von ${sdFortschritt.gesamt}`
+          : "erstellt, noch nicht begonnen";
+  const aktiverSelbstauskunftLink = selbstauskunftBogen?.link?.active
+    ? selbstauskunftBogen.link.id
+    : null;
 
   // Die KI-Prüfung verweigert bei diesen Status still den Dienst – das sagen wir
   // dem Nutzer, statt einen Button anzubieten, auf dessen Klick nichts passiert.
@@ -334,6 +370,27 @@ export default async function CaseCockpitPage({
               <UploadLinkManager caseId={id} links={uploadLinkRows} />
             </CardContent>
           </Card>
+          <SelfDisclosureManager
+            caseId={id}
+            status={selbstauskunftStatus}
+            aktiverLinkId={aktiverSelbstauskunftLink}
+          />
+          {uebernahme && (
+            <SelfDisclosureInbox
+              caseId={id}
+              vorschlaege={uebernahme.plan.vorschlaege.map((v) => ({
+                schluessel: v.schluessel,
+                label: v.label,
+                abschnitt: v.abschnitt,
+                kundenwert: v.kundenwert,
+                fallwert: v.fallwert,
+                art: v.art,
+              }))}
+              offen={uebernahme.plan.offen}
+              ohneZiel={uebernahme.plan.ohneZiel}
+              submittedAt={uebernahme.submittedAt.toLocaleDateString("de-DE")}
+            />
+          )}
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">Aktionen</CardTitle></CardHeader>
             <CardContent className="grid gap-2">

@@ -98,6 +98,22 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     select: { caseId: true, reviewStatus: true, classificationStatus: true, extractionStatus: true },
   });
 
+  // Selbstauskunft je Kandidat – ebenfalls in EINER Query, damit das Dashboard
+  // dieselbe Prioritätsleiter sieht wie die Fallseite.
+  const todoBoegen = await prisma.selfDisclosure.findMany({
+    where: { caseId: { in: todoCandidates.map((c) => c.id) } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      caseId: true,
+      currentStep: true,
+      submittedAt: true,
+      takenOverAt: true,
+      link: { select: { createdAt: true } },
+    },
+  });
+  const bogenJeFall = new Map<string, (typeof todoBoegen)[number]>();
+  for (const b of todoBoegen) if (!bogenJeFall.has(b.caseId)) bogenJeFall.set(b.caseId, b);
+
   const enriched = await Promise.all(
     todoCandidates.map(async (c) => {
       const agg = await getCaseAggregate(c.id);
@@ -119,6 +135,15 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
         missingCustomerFields: c.applicants
           .filter((a) => !a.geburtsdatum)
           .map((a) => `Geburtsdatum ${a.vorname ?? `Antragsteller ${a.position}`}`),
+        selbstauskunft: (() => {
+          const b = bogenJeFall.get(c.id);
+          if (!b?.link) return undefined;
+          return {
+            eingegangen: Boolean(b.submittedAt) && !b.takenOverAt,
+            begonnen: Boolean(b.currentStep) || Boolean(b.submittedAt),
+            erstelltVorTagen: Math.floor((Date.now() - b.link.createdAt.getTime()) / 86400_000),
+          };
+        })(),
       });
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
       return { c, agg, name, step, blockers };

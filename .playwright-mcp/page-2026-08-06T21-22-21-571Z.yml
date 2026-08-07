@@ -1,0 +1,36 @@
+- generic [ref=e2]:
+  - banner:
+    - link "Zum Inhalt springen" [ref=e4] [cursor=pointer]:
+      - /url: /juergen-ertel/start/contact#mainContent
+    - navigation [ref=e5]:
+      - generic [ref=e6]:
+        - link "Zurück zur Übersicht" [ref=e7] [cursor=pointer]:
+          - /url: /login?advisor=juergen-ertel&primaryColor=
+          - img "Zurück zur Übersicht" [ref=e8]
+        - generic [ref=e9]:
+          - button "Support Telefon" [ref=e10] [cursor=pointer]:
+            - generic [ref=e12]:
+              - generic [ref=e13]: Support
+              - img "Telefon" [ref=e14]
+          - button "de" [ref=e20] [cursor=pointer]
+          - link "Anmeldung" [ref=e23] [cursor=pointer]:
+            - /url: /login?advisor=juergen-ertel&primaryColor=
+  - main [ref=e24]:
+    - group "Hauptinhalt" [active] [ref=e43]:
+      - generic [ref=e386]:
+        - heading "Ihre Finanzierungsangebote werden erstellt..." [level=1] [ref=e387]
+        - paragraph [ref=e388]:
+          - status "siehe" [ref=e389]
+          - text: Prüfung der Machbarkeit
+        - img "radar-arrow" [ref=e402]
+      - generic [ref=e166]:
+        - link "Erklärung zur Barrierefreiheit" [ref=e167] [cursor=pointer]:
+          - /url: ./accessibility-explanation
+        - link "Meldung zur Barrierefreiheit" [ref=e168] [cursor=pointer]:
+          - /url: "'javascript:void(0)'"
+  - contentinfo [ref=e169]:
+    - generic [ref=e170]:
+      - link "Erklärung zur Barrierefreiheit" [ref=e171] [cursor=pointer]:
+        - /url: ./accessibility-explanation
+      - link "Meldung zur Barrierefreiheit" [ref=e172] [cursor=pointer]:
+        - /url: "'javascript:void(0)'"
