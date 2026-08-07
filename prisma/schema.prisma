@@ -342,6 +342,7 @@ model Applicant {
   caseId       String
   case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   position     Int      // 1 = Antragsteller 1, 2 = Antragsteller 2 ...
+  anrede       String?  // "herr" | "frau" – aus der Selbstauskunft, für Anschreiben
   vorname      String?
   nachname     String?
   geburtsdatum DateTime?
@@ -427,6 +428,7 @@ model Case {
   missingRequests    MissingDocumentRequest[]
   generatedMessages  GeneratedMessage[]
   uploadLinks        UploadLink[]
+  selfDisclosureLinks SelfDisclosureLink[]
   customerForm       CustomerForm?
   platformMappings   PlatformMapping[]
   platformSyncLogs   PlatformSyncLog[]
@@ -1161,4 +1163,45 @@ model WohnflaechenBerechnung {
 
   @@index([caseId])
   @@map("wohnflaechen_berechnungen")
+}
+
+// ============================ SELBSTAUSKUNFT ============================
+
+/**
+ * Magic Link für die Selbstauskunft – bewusst getrennt vom Upload-Link, damit
+ * ein Token nie versehentlich für den jeweils anderen Weg gilt.
+ */
+model SelfDisclosureLink {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  disclosure SelfDisclosure?
+
+  @@index([caseId])
+  @@map("self_disclosure_links")
+}
+
+/**
+ * Ein Durchgang des Bogens. Hängt am Link, nicht am Fall: Ein zweiter Bogen
+ * erzeugt einen neuen Durchgang, der erste bleibt als belegter Stand erhalten.
+ */
+model SelfDisclosure {
+  id          String   @id @default(cuid())
+  linkId      String   @unique
+  link        SelfDisclosureLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  caseId      String
+  answers     Json     @default("{}")
+  currentStep String?
+  submittedAt DateTime?
+  takenOverAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([caseId])
+  @@map("self_disclosures")
 }
