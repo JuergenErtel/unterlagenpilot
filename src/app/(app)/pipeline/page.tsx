@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
+import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
+import { schlagePhaseVor } from "@/lib/cases/lead-phase";
+import { LeadBoard } from "@/components/pipeline/lead-board";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -58,13 +61,93 @@ export default async function PipelinePage() {
   }));
   const pipeline = buildPipeline(input);
 
+  // Kanban: eigene Abfrage, weil die Courtage-Liste bewusst nur bepreiste Fälle
+  // zeigt – im Board sollen aber ALLE nicht archivierten Fälle stehen.
+  const boardRows = await prisma.case.findMany({
+    where: { organizationId: ctx.organizationId, status: { not: "archiviert" } },
+    select: {
+      id: true,
+      caseNumber: true,
+      status: true,
+      leadPhase: true,
+      leadPhaseSeit: true,
+      wiedervorlage: true,
+      verlorenAm: true,
+      verlorenGrund: true,
+      abschlussdatum: true,
+      darlehensbetrag: true,
+      applicants: { orderBy: { position: "asc" }, select: { vorname: true, nachname: true } },
+      financingRequest: { select: { darlehenswunsch: true, kaufpreis: true } },
+      _count: { select: { documents: true, uploadLinks: true, selfDisclosureLinks: true } },
+      generatedMessages: { where: { sent: true }, select: { id: true }, take: 1 },
+      selfDisclosures: { select: { currentStep: true }, take: 1, orderBy: { createdAt: "desc" } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 500,
+  });
+
+  const jetzt = new Date();
+  const boardKarten: BoardKarte[] = boardRows.map((c) => ({
+    caseId: c.id,
+    caseNumber: c.caseNumber,
+    kundenName:
+      c.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ") ||
+      "Ohne Namen",
+    volumen:
+      c.darlehensbetrag ?? c.financingRequest?.darlehenswunsch ?? c.financingRequest?.kaufpreis ?? null,
+    leadPhase: c.leadPhase,
+    leadPhaseSeit: c.leadPhaseSeit,
+    wiedervorlage: c.wiedervorlage,
+    verlorenAm: c.verlorenAm,
+    verlorenGrund: c.verlorenGrund,
+    vorschlag: schlagePhaseVor({
+      leadPhase: c.leadPhase,
+      verlorenAm: c.verlorenAm,
+      status: c.status,
+      abschlussdatum: c.abschlussdatum,
+      hatLink: c._count.uploadLinks > 0 || c._count.selfDisclosureLinks > 0,
+      hatGesendeteNachricht: c.generatedMessages.length > 0,
+      selbstauskunftBegonnen: Boolean(c.selfDisclosures[0]?.currentStep),
+      dokumenteVorhanden: c._count.documents > 0,
+    }),
+  }));
+
+  const board = buildBoard(boardKarten, jetzt);
+  const alsView = (s: (typeof board.spalten)[number]) => ({
+    phase: s.phase,
+    titel: s.titel,
+    anzahl: s.anzahl,
+    summe: s.summe,
+    weitere: s.weitere,
+    karten: s.karten.map((k) => ({
+      caseId: k.caseId,
+      caseNumber: k.caseNumber,
+      kundenName: k.kundenName,
+      volumen: k.volumen,
+      leadPhase: k.leadPhase,
+      liegezeit: liegezeitTage(k.leadPhaseSeit, jetzt),
+      wiedervorlage: k.wiedervorlage ? k.wiedervorlage.toLocaleDateString("de-DE") : null,
+      verlorenGrund: k.verlorenGrund,
+      vorschlag: k.vorschlag,
+    })),
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Geschäft"
-        title="Abschlüsse & Provision"
-        subtitle="Erwartete und erzielte Courtage. Abschlussdaten je Fall unter „Verwaltung“."
+        eyebrow="Vertrieb"
+        title="Pipeline"
+        subtitle="Wo deine Leads stehen – und was sie erwartungsgemäß einbringen."
       />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Leads nach Phase</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <LeadBoard spalten={board.spalten.map(alsView)} verloren={alsView(board.verloren)} />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard label="Abgeschlossen" value={pipeline.abgeschlossen.length} icon={BadgeEuro} />
