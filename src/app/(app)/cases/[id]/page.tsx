@@ -13,6 +13,7 @@ import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
 import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
+import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
 import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
 import { fortschritt } from "@/lib/self-disclosure/navigation";
@@ -196,6 +197,17 @@ export default async function CaseCockpitPage({
                   WV {caseRow.wiedervorlage.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                 </Badge>
               )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="neutral">{LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
+              <Badge variant={caseRow.einwilligungKontakt === true ? "success" : "neutral"}>
+                Telefon:{" "}
+                {caseRow.einwilligungKontakt === true
+                  ? "erlaubt"
+                  : caseRow.einwilligungKontakt === false
+                    ? "nicht erlaubt"
+                    : "keine Angabe"}
+              </Badge>
             </div>
             <div className="mt-2">
               <LeadPhaseSelect

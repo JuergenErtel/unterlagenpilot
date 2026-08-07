@@ -10,6 +10,7 @@ function karte(over: Partial<BoardKarte> = {}): BoardKarte {
     caseNumber: "UP-2026-0001",
     kundenName: "Muster",
     volumen: 300000,
+    quelle: "ImmoScout24",
     leadPhase: "neu",
     leadPhaseSeit: tageVorher(1),
     wiedervorlage: null,

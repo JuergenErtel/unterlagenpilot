@@ -18,6 +18,8 @@ export interface BoardKarteView {
   wiedervorlage: string | null;
   verlorenGrund: string | null;
   vorschlag: string | null;
+  /** Anzeigename der Quelle, z. B. "ImmoScout24". */
+  quelle: string;
 }
 
 export interface BoardSpalteView {
@@ -141,6 +143,7 @@ export function LeadBoard({
                     {k.volumen != null ? eur(k.volumen) : "—"} · seit {k.liegezeit}{" "}
                     {k.liegezeit === 1 ? "Tag" : "Tagen"}
                   </p>
+                  <p className="text-xs text-muted-foreground">{k.quelle}</p>
 
                   {k.wiedervorlage && (
                     <Badge variant="neutral" className="mt-1 gap-1">

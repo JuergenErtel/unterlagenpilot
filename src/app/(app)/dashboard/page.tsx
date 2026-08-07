@@ -10,6 +10,7 @@ import {
   Building2,
   Timer,
   CalendarClock,
+  UserPlus,
 } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { getDashboardData } from "@/lib/cases/dashboard";
@@ -177,6 +178,7 @@ export default async function DashboardPage() {
 
       {/* 3) KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCard label="Neue Leads (7 Tage)" value={data.kpis.neueLeads} tone="ai" icon={UserPlus} href="/pipeline" />
         <MetricCard label="Offene Fälle" value={data.kpis.offen} icon={Inbox} href="/cases" />
         <MetricCard label="Neue Uploads" value={data.kpis.neueUploads} tone="ai" icon={UploadCloud} href="/review" />
         <MetricCard label="Prüfbereite KI-Auswertungen" value={data.kpis.pruefbereit} tone="ai" icon={ScanSearch} href="/review" />

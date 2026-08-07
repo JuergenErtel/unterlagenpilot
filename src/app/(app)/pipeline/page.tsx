@@ -5,6 +5,8 @@ import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { LeadBoard } from "@/components/pipeline/lead-board";
+import { SyncStatus } from "@/components/pipeline/sync-status";
+import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -76,6 +78,7 @@ export default async function PipelinePage() {
       verlorenGrund: true,
       abschlussdatum: true,
       darlehensbetrag: true,
+      quelle: true,
       applicants: { orderBy: { position: "asc" }, select: { vorname: true, nachname: true } },
       financingRequest: { select: { darlehenswunsch: true, kaufpreis: true } },
       _count: { select: { documents: true, uploadLinks: true, selfDisclosureLinks: true } },
@@ -95,6 +98,7 @@ export default async function PipelinePage() {
       "Ohne Namen",
     volumen:
       c.darlehensbetrag ?? c.financingRequest?.darlehenswunsch ?? c.financingRequest?.kaufpreis ?? null,
+    quelle: LEAD_SOURCE_LABELS[c.quelle as LeadSource],
     leadPhase: c.leadPhase,
     leadPhaseSeit: c.leadPhaseSeit,
     wiedervorlage: c.wiedervorlage,
@@ -112,6 +116,21 @@ export default async function PipelinePage() {
     }),
   }));
 
+  const syncState = await prisma.leadSyncState.findUnique({
+    where: { organizationId_quelle: { organizationId: ctx.organizationId, quelle: "finlink" } },
+    select: { lastRunAt: true, lastCreated: true, lastError: true },
+  });
+  const zuletzt = syncState?.lastRunAt
+    ? `vor ${Math.max(0, Math.round((jetzt.getTime() - syncState.lastRunAt.getTime()) / 60000))} Minuten`
+    : "noch nie";
+
+  // Quellen-Zähler über alle nicht verlorenen Karten.
+  const quellenZaehler = new Map<string, number>();
+  for (const k of boardKarten) {
+    if (k.verlorenAm) continue;
+    quellenZaehler.set(k.quelle, (quellenZaehler.get(k.quelle) ?? 0) + 1);
+  }
+
   const board = buildBoard(boardKarten, jetzt);
   const alsView = (s: (typeof board.spalten)[number]) => ({
     phase: s.phase,
@@ -124,6 +143,7 @@ export default async function PipelinePage() {
       caseNumber: k.caseNumber,
       kundenName: k.kundenName,
       volumen: k.volumen,
+      quelle: k.quelle,
       leadPhase: k.leadPhase,
       liegezeit: liegezeitTage(k.leadPhaseSeit, jetzt),
       wiedervorlage: k.wiedervorlage ? k.wiedervorlage.toLocaleDateString("de-DE") : null,
@@ -145,7 +165,21 @@ export default async function PipelinePage() {
           <CardTitle className="text-base">Leads nach Phase</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {[...quellenZaehler.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .map(([quelle, anzahl]) => (
+                <span key={quelle} className="rounded-full border px-2 py-0.5">
+                  {quelle} {anzahl}
+                </span>
+              ))}
+          </div>
           <LeadBoard spalten={board.spalten.map(alsView)} verloren={alsView(board.verloren)} />
+          <SyncStatus
+            zuletzt={zuletzt}
+            angelegt={syncState?.lastCreated ?? 0}
+            fehler={syncState?.lastError ?? null}
+          />
         </CardContent>
       </Card>
 

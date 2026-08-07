@@ -17,6 +17,8 @@ export interface DashboardData {
     bereitFinlink: number;
     bereitEhyp: number;
     zeitersparnisMin: number;
+    /** Fälle der letzten 7 Tage, die nicht von Hand angelegt wurden. */
+    neueLeads: number;
   };
   pipeline: Array<{ key: string; label: string; count: number }>;
   todos: TodoCase[];
@@ -61,6 +63,14 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     for (const p of Object.keys(ready) as Platform[]) if (ready[p]) readyCount[p] += 1;
   }
 
+  const neueLeads = await prisma.case.count({
+    where: {
+      organizationId,
+      createdAt: { gte: new Date(Date.now() - 7 * 86400_000) },
+      quelle: { not: "manuell" },
+    },
+  });
+
   const kpis: DashboardData["kpis"] = {
     offen,
     neueUploads,
@@ -71,6 +81,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     bereitEhyp: readyCount.ehyp_home,
     // grobe Schätzung: 8 Min je KI-verarbeitetem Dokument
     zeitersparnisMin: docsProcessed * 8,
+    neueLeads,
   };
 
   const pipeline = [

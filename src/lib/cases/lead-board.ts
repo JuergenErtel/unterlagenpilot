@@ -10,6 +10,8 @@ export interface BoardKarte {
   kundenName: string;
   /** Darlehensbetrag, sonst Darlehenswunsch, sonst Kaufpreis. */
   volumen: number | null;
+  /** Anzeigename der Herkunft, z. B. "ImmoScout24" oder "Unbekannt". */
+  quelle: string;
   leadPhase: string;
   leadPhaseSeit: Date;
   wiedervorlage: Date | null;
