@@ -4,12 +4,16 @@ const h = vi.hoisted(() => ({
   getEnv: vi.fn(),
   sync: vi.fn(),
   organizationFindMany: vi.fn(),
+  userFindFirst: vi.fn(),
 }));
 
 vi.mock("@/lib/env", () => ({ getEnv: () => h.getEnv() }));
 vi.mock("@/lib/platforms/finlink/sync", () => ({ syncFinLinkLeads: h.sync }));
 vi.mock("@/lib/db", () => ({
-  prisma: { organization: { findMany: h.organizationFindMany } },
+  prisma: {
+    organization: { findMany: h.organizationFindMany },
+    user: { findFirst: h.userFindFirst },
+  },
 }));
 
 import { GET } from "@/app/api/cron/finlink-leads/route";
@@ -24,6 +28,7 @@ beforeEach(() => {
   Object.values(h).forEach((m) => m.mockReset());
   h.getEnv.mockReturnValue({ CRON_SECRET: "geheim" });
   h.organizationFindMany.mockResolvedValue([{ id: "org-A" }]);
+  h.userFindFirst.mockResolvedValue({ id: "user-1" });
   h.sync.mockResolvedValue({ status: "ok", angelegt: 2, uebersprungen: [] });
 });
 
@@ -47,6 +52,22 @@ describe("Cron /api/cron/finlink-leads", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await GET(anfrage("Bearer geheim") as any);
     expect(res.status).toBe(503);
+  });
+
+  it("übergibt den ersten aktiven Nutzer als Betreuer", async () => {
+    // brokerId ist ein Fremdschlüssel – ein leerer String würde die Anlage
+    // kippen, und ohne Betreuer taucht der Fall in keiner Liste auf.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await GET(anfrage("Bearer geheim") as any);
+    expect(h.sync).toHaveBeenCalledWith({ organizationId: "org-A", userId: "user-1" });
+  });
+
+  it("läuft auch ohne Nutzer in der Organisation", async () => {
+    h.userFindFirst.mockResolvedValue(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await GET(anfrage("Bearer geheim") as any);
+    expect(res.status).toBe(200);
+    expect(h.sync).toHaveBeenCalledWith({ organizationId: "org-A", userId: "" });
   });
 
   it("gleicht jede Organisation ab und meldet die Summe", async () => {

@@ -87,7 +87,9 @@ export async function createCaseFromCanonical(
 
   const buildData = (caseNumber: string) => ({
     organizationId: ctx.organizationId,
-    brokerId: ctx.userId,
+    // Leerer userId kommt vom Cron-Lauf, der keinem Menschen gehört. brokerId
+    // ist ein Fremdschlüssel – ein leerer String würde die Anlage kippen.
+    brokerId: ctx.userId || null,
     caseNumber,
     status: "neu" as const,
     financingType: canonical.financingType ?? null,

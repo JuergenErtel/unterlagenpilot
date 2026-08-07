@@ -80,6 +80,9 @@ export async function createCase(formData: FormData): Promise<void> {
     property: propertyType ? { create: { objektart: propertyType } } : undefined,
     financingRequest: { create: {} },
     sources: { create: { type: "manuell" as const } },
+    // Damit "manuell" kein toter Buchstabe bleibt. Bestandsfälle behalten
+    // "unbekannt" – sie ohne Beleg umzuschreiben wäre geraten.
+    quelle: "manuell" as const,
   });
 
   // Race-Schutz: parallele Anlage kann dieselbe Nummer berechnen -> P2002 auf

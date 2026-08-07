@@ -28,8 +28,15 @@ export async function GET(req: NextRequest) {
 
   for (const org of orgs) {
     try {
-      // userId leer: Der Lauf gehört keinem Menschen; das Audit hält das fest.
-      const r = await syncFinLinkLeads({ organizationId: org.id, userId: "" });
+      // Der Lauf gehört keinem Menschen – der Fall aber schon: Ohne Betreuer
+      // taucht er in keiner persönlichen Liste auf. Deshalb der erste aktive
+      // Vermittler der Organisation; gibt es keinen, bleibt das Feld leer.
+      const betreuer = await prisma.user.findFirst({
+        where: { organizationId: org.id, active: true },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      const r = await syncFinLinkLeads({ organizationId: org.id, userId: betreuer?.id ?? "" });
       angelegt += r.angelegt;
       if (r.status === "fehler") fehler += 1;
     } catch (e) {
