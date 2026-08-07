@@ -484,3 +484,52 @@ function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
     },
   });
 }
+
+/**
+ * Die Felder, die der Lead-Abgleich braucht – bewusst getrennt von
+ * `FinLinkLeadSummary` (Anzeige) und `FinLinkVorgangDTO` (Fallinhalt).
+ * `extras_meta` ist in echten Daten mal Objekt, mal null.
+ */
+export interface FinLinkLeadRoh {
+  id: string;
+  /** ISO-Zeitstempel des Eingangs; null, wenn FinLink keinen liefert. */
+  createdAt: string | null;
+  sourceType: string | null;
+  source: string | null;
+  einwilligungKontakt: boolean | null;
+  einwilligungMarketing: boolean | null;
+}
+
+const rohLeadSchema = z.object({
+  id: z.string().min(1),
+  attributes: z
+    .object({
+      created_at: z.string().optional().nullable(),
+      extras_meta: z
+        .object({
+          source: z.string().optional().nullable(),
+          source_type: z.string().optional().nullable(),
+          consent_to_contact: z.boolean().optional().nullable(),
+          consent_marketing: z.boolean().optional().nullable(),
+        })
+        .passthrough()
+        .optional()
+        .nullable(),
+    })
+    .passthrough(),
+});
+
+export function parseFinLinkLeadsRoh(body: unknown): FinLinkLeadRoh[] {
+  const parsed = z.object({ data: z.array(rohLeadSchema) }).parse(body);
+  return parsed.data.map((l) => {
+    const e = l.attributes.extras_meta ?? {};
+    return {
+      id: l.id,
+      createdAt: l.attributes.created_at ?? null,
+      sourceType: e.source_type ?? null,
+      source: e.source ?? null,
+      einwilligungKontakt: e.consent_to_contact ?? null,
+      einwilligungMarketing: e.consent_marketing ?? null,
+    };
+  });
+}

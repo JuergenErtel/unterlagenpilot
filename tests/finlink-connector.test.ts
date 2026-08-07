@@ -222,7 +222,11 @@ vi.mock("@/lib/platforms/case-writer", () => ({
 const ctx = { organizationId: "org-1", userId: "user-1" };
 
 function clientReturning(dto: any): FinLinkClient {
-  return { fetchVorgang: vi.fn().mockResolvedValue(dto), listLeads: vi.fn().mockResolvedValue([]) };
+  return {
+    fetchVorgang: vi.fn().mockResolvedValue(dto),
+    listLeads: vi.fn().mockResolvedValue([]),
+    fetchLeadsPage: vi.fn().mockResolvedValue([]),
+  };
 }
 
 describe("FinLinkConnector.importCaseById", () => {
@@ -247,6 +251,7 @@ describe("FinLinkConnector.importCaseById", () => {
     const client: FinLinkClient = {
       fetchVorgang: vi.fn().mockRejectedValue(new FinLinkNotFoundError("x")),
       listLeads: vi.fn().mockResolvedValue([]),
+      fetchLeadsPage: vi.fn().mockResolvedValue([]),
     };
     const res = await connector.importCaseById("nope", ctx, { client });
     expect(res.ok).toBe(false);

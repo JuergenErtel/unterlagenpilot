@@ -2,9 +2,11 @@ import {
   mergeAntragstellerDetails,
   parseFinLinkApplicantsResponse,
   parseFinLinkLeadLoanApplicationIds,
+  parseFinLinkLeadsRoh,
   parseFinLinkLeadsSummaries,
   parseFinLinkSalesStates,
   parseFinLinkSingleLeadResponse,
+  type FinLinkLeadRoh,
   type FinLinkLeadSummary,
   type FinLinkVorgangDTO,
 } from "./dto";
@@ -17,6 +19,8 @@ export class FinLinkApiError extends Error {}
 export interface FinLinkClient {
   fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO>;
   listLeads(): Promise<FinLinkLeadSummary[]>;
+  /** Nur die neueste Seite – der Abgleich braucht nicht alle Seiten. */
+  fetchLeadsPage(limit: number): Promise<FinLinkLeadRoh[]>;
 }
 
 interface FinLinkConfig {
@@ -132,6 +136,13 @@ export class HttpFinLinkClient implements FinLinkClient {
       salesStates.set(leadId, salesState);
     }
     return summaries.map((s) => ({ ...s, salesState: salesStates.get(s.id) }));
+  }
+
+  async fetchLeadsPage(limit: number): Promise<FinLinkLeadRoh[]> {
+    // Eine Seite genügt: Die Liste kommt absteigend nach Eingang, und der
+    // Abgleich interessiert sich nur für das Neue.
+    const body = await this.fetchJson(`${LEADS_PATH}?limit=${limit}&page=1`);
+    return parseFinLinkLeadsRoh(body);
   }
 
   async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
