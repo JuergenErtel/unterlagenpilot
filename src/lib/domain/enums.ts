@@ -54,6 +54,58 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   archiviert: "Archiviert",
 };
 
+/**
+ * Vertriebsphasen in ihrer natürlichen Reihenfolge. Die Bezeichnungen sind an
+ * FinLink angelehnt, weil Jürgen sie von dort kennt. Zweite Dimension neben
+ * CaseStatus – die Phase sagt, wo der Lead im Vertrieb steht, der Status, wie
+ * weit die Akte ist.
+ */
+export const LEAD_PHASES = [
+  "neu",
+  "anfrage_erstellt",
+  "selbstauskunft_laeuft",
+  "finanzierungsvorschlag",
+  "kreditpruefung_eingereicht",
+  "zusage",
+  "abgeschlossen",
+] as const;
+export type LeadPhase = (typeof LEAD_PHASES)[number];
+
+export const LEAD_PHASE_LABELS: Record<LeadPhase, string> = {
+  neu: "Neu",
+  anfrage_erstellt: "Anfrage erstellt",
+  selbstauskunft_laeuft: "Selbstauskunft läuft",
+  finanzierungsvorschlag: "Finanzierungsvorschlag",
+  kreditpruefung_eingereicht: "Kreditprüfung eingereicht",
+  zusage: "Zusage",
+  abgeschlossen: "Finanzierung abgeschlossen",
+};
+
+/**
+ * Verlustgründe als feste Liste – Freitext lässt sich nicht auswerten. Das
+ * Freitextfeld daneben bleibt trotzdem, weil keine Liste vollständig ist.
+ */
+export const LOSS_REASONS = [
+  "kondition",
+  "objekt_weg",
+  "bank_abgelehnt",
+  "nicht_erreichbar",
+  "anderer_vermittler",
+  "verschoben",
+  "sonstiges",
+] as const;
+export type LossReason = (typeof LOSS_REASONS)[number];
+
+export const LOSS_REASON_LABELS: Record<LossReason, string> = {
+  kondition: "Kondition zu teuer",
+  objekt_weg: "Objekt anderweitig vergeben",
+  bank_abgelehnt: "Bank hat abgelehnt",
+  nicht_erreichbar: "Kunde nicht erreichbar",
+  anderer_vermittler: "Anderer Vermittler",
+  verschoben: "Vorhaben verschoben",
+  sonstiges: "Sonstiges",
+};
+
 /** Art eines Fall-Vermerks (Kontakthistorie). */
 export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "wiedervorlage"] as const;
 export type CaseNoteKind = (typeof CASE_NOTE_KINDS)[number];

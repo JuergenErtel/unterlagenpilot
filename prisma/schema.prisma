@@ -43,6 +43,17 @@ enum CaseStatus {
   archiviert
 }
 
+/** Vertriebsphase eines Leads – zweite Dimension neben CaseStatus. */
+enum LeadPhase {
+  neu
+  anfrage_erstellt
+  selbstauskunft_laeuft
+  finanzierungsvorschlag
+  kreditpruefung_eingereicht
+  zusage
+  abgeschlossen
+}
+
 enum CaseNoteKind {
   notiz
   telefon
@@ -383,6 +394,14 @@ model Case {
   // Status vor dem Archivieren – beim Entarchivieren wiederhergestellt, damit ein
   // abgeschlossener Fall nicht als "Unterlagen fehlen" zurückkommt.
   statusBeforeArchive CaseStatus?
+
+  // Vertriebsphase – unabhängig vom Bearbeitungsstatus. "Verloren" ist KEIN
+  // Phasenwert: verlorenAm gesetzt heißt verloren, die zuletzt erreichte Phase
+  // bleibt erhalten (damit auswertbar ist, WO verloren wird).
+  leadPhase      LeadPhase @default(neu)
+  leadPhaseSeit  DateTime  @default(now())
+  verlorenAm     DateTime?
+  verlorenGrund  String?
   financingType  FinancingType?
   primaryEmploymentType EmploymentType?
   kapitalanlage  Boolean       @default(false)
@@ -429,6 +448,7 @@ model Case {
   generatedMessages  GeneratedMessage[]
   uploadLinks        UploadLink[]
   selfDisclosureLinks SelfDisclosureLink[]
+  selfDisclosures     SelfDisclosure[]
   customerForm       CustomerForm?
   platformMappings   PlatformMapping[]
   platformSyncLogs   PlatformSyncLog[]
@@ -1195,6 +1215,7 @@ model SelfDisclosure {
   linkId      String   @unique
   link        SelfDisclosureLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
   caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   answers     Json     @default("{}")
   currentStep String?
   submittedAt DateTime?
