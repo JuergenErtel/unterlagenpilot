@@ -11,6 +11,8 @@ import { listUploadLinks } from "@/lib/security/upload-link";
 import { runAiCheck } from "@/lib/actions/cases";
 import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
+import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
+import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
 import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
 import { fortschritt } from "@/lib/self-disclosure/navigation";
@@ -71,7 +73,14 @@ export default async function CaseCockpitPage({
   if (!caseRow) notFound();
 
   const cockpit = await getCaseCockpit(id);
-  const [documents, plausibility, uploadLinks, selbstauskunftBogen, uebernahme] = await Promise.all([
+  const [
+    documents,
+    plausibility,
+    uploadLinks,
+    selbstauskunftBogen,
+    uebernahme,
+    gesendeteNachrichten,
+  ] = await Promise.all([
     prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
     listUploadLinks(id, ctx.organizationId),
@@ -87,6 +96,9 @@ export default async function CaseCockpitPage({
       },
     }),
     ladeUebernahmeplan(id),
+    // Signal für den Phasenvorschlag – muss geladen werden, sonst schlüge die
+    // Fallseite eine andere Phase vor als das Board.
+    prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
   ]);
   const applicantOptions = caseRow.applicants.map((a) => ({
     position: a.position,
@@ -119,6 +131,17 @@ export default async function CaseCockpitPage({
   const aktiverSelbstauskunftLink = selbstauskunftBogen?.link?.active
     ? selbstauskunftBogen.link.id
     : null;
+
+  const phasenVorschlag = schlagePhaseVor({
+    leadPhase: caseRow.leadPhase,
+    verlorenAm: caseRow.verlorenAm,
+    status: caseRow.status,
+    abschlussdatum: caseRow.abschlussdatum,
+    hatLink: uploadLinks.length > 0 || Boolean(selbstauskunftBogen?.link),
+    hatGesendeteNachricht: gesendeteNachrichten > 0,
+    selbstauskunftBegonnen: Boolean(selbstauskunftBogen?.currentStep),
+    dokumenteVorhanden: documents.length > 0,
+  });
 
   // Die KI-Prüfung verweigert bei diesen Status still den Dienst – das sagen wir
   // dem Nutzer, statt einen Button anzubieten, auf dessen Klick nichts passiert.
@@ -173,6 +196,14 @@ export default async function CaseCockpitPage({
                   WV {caseRow.wiedervorlage.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                 </Badge>
               )}
+            </div>
+            <div className="mt-2">
+              <LeadPhaseSelect
+                caseId={id}
+                phase={caseRow.leadPhase}
+                vorschlag={phasenVorschlag}
+                verlorenGrund={caseRow.verlorenAm ? caseRow.verlorenGrund : null}
+              />
             </div>
             {cockpit.blockers.length > 0 && (
               <div className="mt-2 space-y-1">
