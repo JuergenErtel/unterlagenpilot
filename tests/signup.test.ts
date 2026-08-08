@@ -6,7 +6,7 @@ vi.mock("@/lib/env", () => ({
   getEnv: () => ({ UPLOAD_TOKEN_SECRET: "test-secret-fuer-tests-1234567890" }),
 }));
 
-const db = { users: [] as Array<{ email: string }>, requests: [] as Array<Record<string, unknown>> };
+const db = { users: [] as Array<Record<string, unknown>>, requests: [] as Array<Record<string, unknown>> };
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -14,6 +14,11 @@ vi.mock("@/lib/db", () => ({
       findUnique: vi.fn(async ({ where }: { where: { email: string } }) =>
         db.users.find((u) => u.email === where.email) ?? null
       ),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const row = db.users.find((u) => u.id === where.id)!;
+        Object.assign(row, data);
+        return row;
+      }),
     },
     signupRequest: {
       findUnique: vi.fn(async ({ where }: { where: { email?: string; id?: string } }) =>
@@ -116,6 +121,19 @@ describe("Antrag anlegen", () => {
     const zweiter = await erstelleAntrag(gueltig, { ip: null });
     expect(zweiter.status).toBe("zu_haeufig");
     expect(db.requests).toHaveLength(1);
+  });
+
+  it("bremst schnelle Wiederholungen auch fuer bestehende User ohne Antrag", async () => {
+    const { erstelleAntrag } = await import("@/lib/auth/signup");
+    // Direkt angelegter User (z.B. Betreiber, Seed-Daten) hat keinen SignupRequest
+    db.users.push({ id: "u1", email: "anna@beispiel.de", letzteHinweisMailAm: null });
+    const res1 = await erstelleAntrag(gueltig, { ip: null });
+    expect(res1.status).toBe("bereits_vergeben");
+    // letzteHinweisMailAm wurde gesetzt
+    expect(db.users[0]!.letzteHinweisMailAm).toBeInstanceOf(Date);
+    // Zweiter Anlauf unmittelbar danach: Sperre greift
+    const res2 = await erstelleAntrag(gueltig, { ip: null });
+    expect(res2.status).toBe("zu_haeufig");
   });
 });
 

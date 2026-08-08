@@ -57,6 +57,11 @@ export async function erstelleAntrag(
 ): Promise<AntragErgebnis> {
   const email = eingabe.email.trim().toLowerCase();
 
+  // Hash BEVOR Existenzabfragen – alle Pfade zahlen gleiche Kosten,
+  // sonst ist Timing-Angriff möglich (ob Adresse existiert, verrät sich durch Antwortzeit).
+  // Vgl. getDummyPasswordHash in session.ts – gleiches Muster.
+  const passwordHash = hashPassword(eingabe.passwort);
+
   const [nutzer, vorhanden] = await Promise.all([
     prisma.user.findUnique({ where: { email } }),
     prisma.signupRequest.findUnique({ where: { email } }),
@@ -71,10 +76,19 @@ export async function erstelleAntrag(
     if (vorhanden?.letzteMailAm && Date.now() - vorhanden.letzteMailAm.getTime() < MAIL_ABSTAND_MS) {
       return { status: "zu_haeufig" };
     }
+    if (nutzer?.letzteHinweisMailAm && Date.now() - nutzer.letzteHinweisMailAm.getTime() < MAIL_ABSTAND_MS) {
+      return { status: "zu_haeufig" };
+    }
     if (vorhanden) {
       await prisma.signupRequest.update({
         where: { id: vorhanden.id },
         data: { letzteMailAm: new Date() },
+      });
+    }
+    if (nutzer) {
+      await prisma.user.update({
+        where: { id: nutzer.id },
+        data: { letzteHinweisMailAm: new Date() },
       });
     }
     return { status: "bereits_vergeben" };
@@ -82,7 +96,7 @@ export async function erstelleAntrag(
 
   const daten = {
     email,
-    passwordHash: hashPassword(eingabe.passwort),
+    passwordHash,
     name: eingabe.name.trim(),
     firmenname: eingabe.firmenname.trim(),
     telefon: eingabe.telefon?.trim() || null,
