@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken } from "@/lib/auth/session";
 import { validateUpload } from "@/lib/security/file-validation";
 import { MockVirusScanner } from "@/lib/security/virus-scan";
@@ -201,9 +200,9 @@ describe("Rate-Limiting", () => {
   });
 });
 
-describe("Demo-Modus", () => {
-  it("ist in Produktion nicht erreichbar", async () => {
-    const quelle = readFileSync("src/lib/auth/context.ts", "utf-8");
-    expect(quelle).toMatch(/AUTH_MODE === "demo" && process\.env\.NODE_ENV !== "production"/);
-  });
-});
+// Der Verhaltenstest fuer die Demo-Modus-Sperre in Produktion lebt in
+// tests/kontext-aktiv.test.ts ("Demo-Modus in Produktion") – dort wird
+// tatsaechlich geprueft, was getCurrentContext() zurueckgibt, statt nur den
+// Quelltext nach einer Zeichenkette zu durchsuchen (Nachbesserung nach
+// Task-Pruefung: ein reiner Quelltext-Regex haette eine Bedingung wie
+// `... || hintertuer` faelschlich als sicher durchgehen lassen).

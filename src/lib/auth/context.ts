@@ -46,27 +46,30 @@ export async function getCurrentContext(): Promise<AppContext | null> {
     // Rolle, Organisation und Aktiv-Kennzeichen kommen aus der DATENBANK, nicht
     // aus dem Cookie: sonst behielte ein gesperrter oder herabgestufter Nutzer
     // seine Rechte bis zum Ablauf des Tokens (bis zu SESSION_TTL_HOURS).
+    // Organisation wird verschachtelt mitgeladen (eine Abfrage statt zwei).
     const nutzer = await prisma.user.findUnique({
       where: { id: session.sub },
-      select: { id: true, active: true, organizationId: true, name: true, role: true },
+      select: {
+        id: true,
+        active: true,
+        organizationId: true,
+        name: true,
+        role: true,
+        organization: { select: { name: true } },
+      },
     });
-    if (nutzer?.active) {
-      const org = await prisma.organization.findUnique({
-        where: { id: nutzer.organizationId },
-        select: { name: true },
-      });
-      if (org) {
-        return {
-          organizationId: nutzer.organizationId,
-          organizationName: org.name,
-          userId: nutzer.id,
-          userName: nutzer.name,
-          role: nutzer.role as UserRole,
-          isDemo: false,
-        };
-      }
+    if (nutzer?.active && nutzer.organization) {
+      return {
+        organizationId: nutzer.organizationId,
+        organizationName: nutzer.organization.name,
+        userId: nutzer.id,
+        userName: nutzer.name,
+        role: nutzer.role as UserRole,
+        isDemo: false,
+      };
     }
-    // Ungueltig gewordene Session: nicht in den Demo-Zweig durchfallen lassen.
+    // Ungueltig gewordene Session (Nutzer inaktiv/geloescht oder Organisation weg):
+    // nicht in den Demo-Zweig durchfallen lassen.
     return null;
   }
 
