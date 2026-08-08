@@ -194,9 +194,9 @@ const I = {
     key: "restschuldnachweis",
     name: "Restschuldnachweis bestehendes Darlehen",
     customerDescription:
-      "Bitte laden Sie einen aktuellen Nachweis über die Restschuld Ihres bestehenden Darlehens hoch. Den bekommen Sie bei Ihrer aktuellen Bank, meist als Restschuldbescheinigung oder Kontoauszug des Darlehenskontos.",
+      "Bitte laden Sie einen aktuellen Nachweis über die Restschuld Ihres bestehenden Darlehens hoch – z. B. ein aktueller Kontoauszug des Darlehenskontos, den Sie bei Ihrer Bank bekommen.",
     documentType: "restschuldnachweis",
-    example: "Restschuldbescheinigung_Musterbank_2026.pdf",
+    example: "Kontoauszug_Darlehenskonto_Musterbank_2026.pdf",
   }),
   darlehensvertrag: item({
     key: "darlehensvertrag",
