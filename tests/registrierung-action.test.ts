@@ -10,8 +10,9 @@ vi.mock("@/lib/env", () => ({
     PLATFORM_ADMIN_EMAIL: "juergen.ertel@gmx.de",
   }),
 }));
+const isEmailConfiguredMock = vi.fn(() => true);
 vi.mock("@/lib/email/resend", () => ({
-  isEmailConfigured: () => true,
+  isEmailConfigured: () => isEmailConfiguredMock(),
   sendEmail: vi.fn(async (input: { to: string; subject: string }) => {
     gesendet.push(input);
     return { id: "m1" };
@@ -48,6 +49,8 @@ const eingabe = {
 beforeEach(() => {
   gesendet.length = 0;
   erstelleAntrag.mockReset();
+  isEmailConfiguredMock.mockReset();
+  isEmailConfiguredMock.mockReturnValue(true);
 });
 
 describe("Registrierungs-Action", () => {
@@ -83,5 +86,22 @@ describe("Registrierungs-Action", () => {
     const antwort = await registriere({}, form(ohneHaken));
     expect(antwort.feldFehler?.agb).toBeTruthy();
     expect(erstelleAntrag).not.toHaveBeenCalled();
+  });
+
+  it("antwortet bei zu haeufigen Versuchen genauso wie bei Erfolg, aber ohne Mail", async () => {
+    erstelleAntrag.mockResolvedValue({ status: "zu_haeufig" });
+    const { registriere } = await import("@/lib/actions/registrierung");
+    const antwort = await registriere({}, form(eingabe));
+    expect(antwort).toMatchObject({ ok: true });
+    expect(gesendet).toHaveLength(0);
+  });
+
+  it("lehnt ohne konfigurierten Mailversand ab, bevor ein Antrag entsteht", async () => {
+    isEmailConfiguredMock.mockReturnValue(false);
+    const { registriere } = await import("@/lib/actions/registrierung");
+    const antwort = await registriere({}, form(eingabe));
+    expect(antwort.error).toBeTruthy();
+    expect(erstelleAntrag).not.toHaveBeenCalled();
+    expect(gesendet).toHaveLength(0);
   });
 });
