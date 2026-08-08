@@ -156,9 +156,9 @@ export default function DatenschutzPage() {
         Modellen.
       </p>
       <p>
-        Der Abschluss eines Auftragsverarbeitungsvertrags einschließlich der technischen und
-        organisatorischen Maßnahmen ist Voraussetzung für die Nutzung mit echten Kundendaten.
-        Folgende Unterauftragsverarbeiter kommen dabei zum Einsatz:
+        Der Abschluss eines <a href="/avv">Auftragsverarbeitungsvertrags</a> einschließlich
+        der technischen und organisatorischen Maßnahmen ist Voraussetzung für die Nutzung
+        mit echten Kundendaten. Folgende Unterauftragsverarbeiter kommen dabei zum Einsatz:
       </p>
       <table>
         <thead>

@@ -51,28 +51,111 @@ export class MockVirusScanner implements VirusScanner {
   }
 }
 
+/** Blockgröße beim Streamen an clamd. Unter dem üblichen StreamMaxLength-Rahmen. */
+const CLAMAV_CHUNK = 64 * 1024;
+/** Zeitlimit für Verbindung und Antwort. Lieber Quarantäne als hängender Upload. */
+const CLAMAV_TIMEOUT_MS = 30_000;
+
 /**
- * ClamAV-Adapter (vorbereiteter Stub).
- * Produktiv: TCP-INSTREAM gegen clamd (CLAMAV_HOST/CLAMAV_PORT) oder clamdscan.
- * Wir erraten/implementieren das Protokoll hier bewusst noch nicht vollständig –
- * solange nicht konfiguriert, schlägt der Scan kontrolliert fehl (kein Bypass).
+ * Antwort von clamd auswerten.
+ *
+ * clamd antwortet auf zINSTREAM mit einer nullterminierten Zeile:
+ *   "stream: OK"                          → sauber
+ *   "stream: Eicar-Test-Signature FOUND"  → Fund, Signatur davor
+ *   "INSTREAM size limit exceeded. ERROR" → Fehler (Datei größer als StreamMaxLength)
+ *
+ * Exportiert, damit die Auswertung ohne Netzwerk prüfbar ist.
+ */
+export function parseClamAvAntwort(antwort: string): {
+  verdict: VirusVerdict;
+  signature?: string;
+} {
+  const zeile = antwort.replace(/\0/g, "").trim();
+  if (/\bERROR\b/i.test(zeile)) return { verdict: "error" };
+  if (/\bFOUND\b/.test(zeile)) {
+    // "stream: <Signatur> FOUND" – Signatur ist alles zwischen Doppelpunkt und FOUND.
+    const treffer = zeile.match(/:\s*(.+?)\s+FOUND\s*$/);
+    return { verdict: "infected", signature: treffer?.[1] ?? "unbekannt" };
+  }
+  if (/\bOK\s*$/.test(zeile)) return { verdict: "clean" };
+  // Unbekannte Antwortform → fail-closed.
+  return { verdict: "error" };
+}
+
+/**
+ * ClamAV über das INSTREAM-Protokoll (TCP zu clamd, CLAMAV_HOST/CLAMAV_PORT).
+ *
+ * Auf Vercel läuft kein clamd im selben Prozess – der Dienst muss erreichbar
+ * betrieben werden. Vorteil gegenüber einem HTTP-AV-Dienst: die Dateien
+ * verlassen die eigene Infrastruktur nicht, es kommt kein
+ * Unterauftragsverarbeiter hinzu.
+ *
+ * Jeder Fehlerfall ist bewusst `error` = fail-closed → die Datei bleibt in
+ * Quarantäne, nie ein stiller Durchgang.
  */
 export class ClamAVScanner implements VirusScanner {
   readonly name = "clamav";
 
-  async scan(_input: VirusScanInput): Promise<VirusScanResult> {
+  async scan(input: VirusScanInput): Promise<VirusScanResult> {
     const env = getEnv();
     if (!env.CLAMAV_HOST || !env.CLAMAV_PORT) {
       // Kein heimlicher Pass-Through: ohne Konfiguration ist das Ergebnis „error",
       // d. h. die Datei bleibt in Quarantäne (virus_scan_failed).
       return { verdict: "error", engine: this.name, demo: false };
     }
-    // TODO(prod): clamd INSTREAM-Protokoll implementieren:
-    //   1) "zINSTREAM\0" senden
-    //   2) Chunks als <4-Byte-Länge><Daten> streamen, mit <0000> abschließen
-    //   3) Antwort lesen ("stream: OK" | "stream: <Signatur> FOUND")
-    throw new Error("ClamAVScanner: INSTREAM-Protokoll noch nicht implementiert (Stub).");
+
+    try {
+      const antwort = await instream(env.CLAMAV_HOST, env.CLAMAV_PORT, input.buffer);
+      const { verdict, signature } = parseClamAvAntwort(antwort);
+      return { verdict, engine: this.name, signature, demo: false };
+    } catch (e) {
+      // Kein Dateiinhalt und kein Dateiname ins Log – nur der technische Grund.
+      console.error("[virus-scan] clamd nicht erreichbar oder Protokollfehler:", e);
+      return { verdict: "error", engine: this.name, demo: false };
+    }
   }
+}
+
+/** Sendet den Puffer per zINSTREAM an clamd und liefert die rohe Antwort. */
+async function instream(host: string, port: number, buffer: Buffer): Promise<string> {
+  const net = await import("node:net");
+
+  return new Promise<string>((resolve, reject) => {
+    const socket = net.createConnection({ host, port });
+    const teile: Buffer[] = [];
+    let erledigt = false;
+
+    const beenden = (fehler?: Error) => {
+      if (erledigt) return;
+      erledigt = true;
+      socket.destroy();
+      if (fehler) reject(fehler);
+      else resolve(Buffer.concat(teile).toString("utf-8"));
+    };
+
+    socket.setTimeout(CLAMAV_TIMEOUT_MS);
+    socket.on("timeout", () => beenden(new Error("Zeitlimit überschritten")));
+    socket.on("error", (e) => beenden(e));
+    socket.on("data", (d: Buffer) => {
+      teile.push(d);
+      // clamd schliesst nach der Antwort selbst; die Null beendet die Zeile.
+      if (d.includes(0)) beenden();
+    });
+    socket.on("close", () => beenden());
+
+    socket.on("connect", () => {
+      socket.write("zINSTREAM\0");
+      for (let pos = 0; pos < buffer.length; pos += CLAMAV_CHUNK) {
+        const stueck = buffer.subarray(pos, pos + CLAMAV_CHUNK);
+        const laenge = Buffer.alloc(4);
+        laenge.writeUInt32BE(stueck.length, 0);
+        socket.write(laenge);
+        socket.write(stueck);
+      }
+      // Nulllänge schliesst den Strom ab.
+      socket.write(Buffer.alloc(4));
+    });
+  });
 }
 
 /**

@@ -11,6 +11,14 @@ import type { PlanTier } from "@/lib/domain/enums";
  * Sie laeuft in EINER Transaktion – bricht ein Schritt ab, entsteht nichts:
  * ein halber Kunde (Organisation ohne Nutzer, Nutzer ohne Abo) waere im
  * restlichen Code ein Zustand, den keine Abfrage kennt.
+ *
+ * ZWISCHENSTAND: Die Freigabe VON HAND ist bewusst nur der jetzige Weg. Ziel
+ * ist ein automatisches Abosystem, bei dem der Zugang mit der bezahlten
+ * Bestellung entsteht. Wer das umbaut, aendert nur den AUSLOESER – der
+ * transaktionale Kern hier bleibt und sollte wiederverwendet werden, damit die
+ * Zusicherung "ganz oder gar nicht" erhalten bleibt. Mitzuziehen sind dann:
+ * AGB § 3 (Vertragsschluss) und § 7 (Testzeitraum geht heute ausdruecklich
+ * NICHT automatisch in ein bezahltes Abo ueber).
  */
 export function slugAusFirmenname(firmenname: string): string {
   const basis = firmenname

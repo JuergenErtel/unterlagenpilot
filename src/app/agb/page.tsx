@@ -109,7 +109,8 @@ export default function AgbPage() {
         Der Abschluss eines Auftragsverarbeitungsvertrags (AVV) einschließlich der
         technischen und organisatorischen Maßnahmen ist{" "}
         <strong>Voraussetzung für die Nutzung der Plattform mit echten Kundendaten</strong>.
-        Der Anbieter stellt dem Nutzer den AVV bei Vertragsschluss zur Verfügung. Die
+        Der Anbieter stellt dem Nutzer den <a href="/avv">AVV</a> bei Vertragsschluss zur
+        Verfügung. Die
         eingesetzten Unterauftragsverarbeiter sind in der{" "}
         <a href="/datenschutz">Datenschutzerklärung</a> benannt; der Nutzer stimmt ihrem
         Einsatz mit Abschluss des AVV zu.
