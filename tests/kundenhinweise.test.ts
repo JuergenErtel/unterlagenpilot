@@ -16,6 +16,21 @@ describe("Kundenhinweise je Unterlage", () => {
     expect(ohne).toEqual([]);
   });
 
+  it("formuliert jede Bitte mit einem Verb", () => {
+    // "Bitte das vollständige Dokument, gut lesbar." stand kundensichtbar in
+    // der Flurkarten-Position – ein Satz ohne Verb liest sich wie eine Notiz
+    // an sich selbst, nicht wie eine Anleitung.
+    const verben =
+      /(laden|reichen|schicken|senden|achten|beachten|geben|nennen|ergänzen|mitschicken|denken|nutzen|verwenden|fotografieren|scannen)/i;
+    const ohneVerb: string[] = [];
+    for (const i of alle) {
+      for (const satz of i.customerDescription.split(/(?<=[.!?])\s+/)) {
+        if (/^bitte /i.test(satz.trim()) && !verben.test(satz)) ohneVerb.push(`${i.key}: ${satz}`);
+      }
+    }
+    expect(ohneVerb).toEqual([]);
+  });
+
   it("sagt zu jeder Position auch, worauf zu achten ist", () => {
     // Der Grund der ganzen Task: "was gebraucht wird" allein reicht nicht –
     // ohne einen Hinweis auf Vollstaendigkeit/Aktualitaet/Lesbarkeit laedt der

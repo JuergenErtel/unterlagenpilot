@@ -4,7 +4,11 @@ import { prisma } from "@/lib/db";
 import { resolveUploadToken } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
 import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
-import { baueKundenfortschritt, type KundenPosition } from "@/lib/upload/kundenansicht";
+import {
+  baueKundenfortschritt,
+  fehlmengeHinweis,
+  type KundenPosition,
+} from "@/lib/upload/kundenansicht";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { cn } from "@/lib/utils";
 import {
@@ -191,8 +195,7 @@ export default async function PublicUploadPage({
                 )}
                 {p.zustand === "teilweise" && (
                   <p className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-[hsl(var(--warning))]">
-                    Bitte reichen Sie die restlichen {p.verlangt - p.akzeptiert} Unterlage
-                    {p.verlangt - p.akzeptiert === 1 ? "" : "n"} noch nach.
+                    {fehlmengeHinweis(p.verlangt, p.akzeptiert)}
                   </p>
                 )}
               </div>

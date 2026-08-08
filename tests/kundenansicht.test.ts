@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { baueKundenfortschritt, fortschrittHinweis } from "@/lib/upload/kundenansicht";
+import {
+  baueKundenfortschritt,
+  fehlmengeHinweis,
+  fortschrittHinweis,
+} from "@/lib/upload/kundenansicht";
 
 function pos(key: string, extra: Record<string, unknown> = {}) {
   return {
@@ -279,6 +283,16 @@ describe("Kundensicht auf den Unterlagenstand", () => {
       applicantIds: ["anna", "bernd"],
     });
     expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", akzeptiert: 2 });
+  });
+
+  it("schickt bei einer teilweise erfuellten Position nicht den Falschen los", () => {
+    // Bei einer Position je Antragsteller fehlt die Unterlage beim
+    // MITantragsteller – "Bitte reichen Sie die restliche Unterlage nach" las
+    // sich fuer den Leser wie sein eigenes Versaeumnis.
+    const text = fehlmengeHinweis(2, 1);
+    expect(text).toContain("1 von 2");
+    expect(text).toContain("Mitantragstellers");
+    expect(text).not.toMatch(/reichen Sie/i);
   });
 
   it("verhaelt sich bei effectiveRequiredCount 1 wie bisher (Regressionsschutz)", () => {

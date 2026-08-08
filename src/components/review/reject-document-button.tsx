@@ -26,7 +26,7 @@ export function RejectDocumentButton({ documentId }: { documentId: string }) {
         className="w-full"
         onClick={() => setOpen(true)}
       >
-        Unlesbar
+        Ablehnen
       </Button>
     );
   }

@@ -124,6 +124,21 @@ export function baueKundenfortschritt(input: {
 }
 
 /**
+ * Der Hinweis unter einer nur teilweise erfuellten Position.
+ *
+ * Bewusst ohne "reichen Sie nach": Bei einer Position, die pro Antragsteller
+ * verlangt wird, fehlt die Unterlage beim MITantragsteller, nicht beim Leser –
+ * die alte Formulierung schickte den Falschen los.
+ */
+export function fehlmengeHinweis(verlangt: number, akzeptiert: number): string {
+  const offen = Math.max(verlangt - akzeptiert, 0);
+  return (
+    `Für diese Position fehlen noch ${offen} von ${verlangt} Unterlagen – etwa die eines` +
+    ` Mitantragstellers oder für einen weiteren Zeitraum.`
+  );
+}
+
+/**
  * Zaehlt angenommene Dokumente einer Position, die pro Antragsteller verlangt
  * wird: je Person hoechstens ihr eigenes Soll.
  *

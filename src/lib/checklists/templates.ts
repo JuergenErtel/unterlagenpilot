@@ -151,7 +151,7 @@ const I = {
     key: "flurkarte_lageplan",
     name: "Flurkarte / Lageplan",
     customerDescription:
-      "Bitte laden Sie die Flurkarte oder den Lageplan des Grundstücks hoch, falls vorhanden – die bekommen Sie beim Katasteramt oder von Ihrem Notar. Bitte das vollständige Dokument, gut lesbar.",
+      "Bitte laden Sie die Flurkarte oder den Lageplan des Grundstücks hoch, falls vorhanden – die bekommen Sie beim Katasteramt oder von Ihrem Notar. Bitte laden Sie das vollständige Dokument gut lesbar hoch.",
     documentType: "flurkarte_lageplan",
     level: "optional",
     example: "Flurkarte_Musterstrasse_12.pdf",
