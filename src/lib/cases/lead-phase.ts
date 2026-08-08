@@ -18,9 +18,16 @@ export interface PhasenSignale {
   verlorenAm: Date | null;
   status: string;
   abschlussdatum: Date | null;
-  /** Ein Upload- oder Selbstauskunftslink wurde erzeugt. */
-  hatLink: boolean;
-  /** Eine GeneratedMessage mit sent = true liegt vor. */
+  /**
+   * Eine GeneratedMessage mit sent = true liegt vor – der Kunde wurde also
+   * tatsaechlich angesprochen.
+   *
+   * Frueher zaehlte hier auch "ein Link wurde erzeugt". Das war gleichbedeutend,
+   * solange Links nur von Hand fuer eine Nachricht entstanden. Seit der
+   * Erstkontakt Upload- und Selbstauskunftslink schon beim Lead-Eingang anlegt,
+   * haette das JEDEM frisch importierten Lead sofort "Anfrage erstellt"
+   * vorgeschlagen, obwohl nichts hinausgegangen ist.
+   */
   hatGesendeteNachricht: boolean;
   /** Der Kunde hat den Selbstauskunftsbogen begonnen. */
   selbstauskunftBegonnen: boolean;
@@ -43,7 +50,7 @@ export function schlagePhaseVor(s: PhasenSignale): LeadPhase | null {
     erkannt = "kreditpruefung_eingereicht";
   } else if (s.selbstauskunftBegonnen || s.dokumenteVorhanden) {
     erkannt = "selbstauskunft_laeuft";
-  } else if (s.hatLink || s.hatGesendeteNachricht) {
+  } else if (s.hatGesendeteNachricht) {
     erkannt = "anfrage_erstellt";
   }
 

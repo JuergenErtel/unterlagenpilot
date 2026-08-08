@@ -142,7 +142,6 @@ export default async function CaseCockpitPage({
     verlorenAm: caseRow.verlorenAm,
     status: caseRow.status,
     abschlussdatum: caseRow.abschlussdatum,
-    hatLink: uploadLinks.length > 0 || Boolean(selbstauskunftBogen?.link),
     hatGesendeteNachricht: gesendeteNachrichten > 0,
     selbstauskunftBegonnen: Boolean(selbstauskunftBogen?.currentStep),
     dokumenteVorhanden: documents.length > 0,
