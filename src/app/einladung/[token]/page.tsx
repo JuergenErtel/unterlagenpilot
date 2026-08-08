@@ -2,11 +2,16 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { EinladungForm } from "@/components/auth/einladung-form";
+import { liesEinladung } from "@/lib/auth/invite";
 
 export const dynamic = "force-dynamic";
 
 export default async function EinladungPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // Nur lesend – eingeloest wird die Einladung erst mit dem Passwort.
+  // Ohne Organisation und Einladenden haette die Seite die Form einer
+  // Phishing-Seite: sie fragt sonst voellig zusammenhanglos nach einem Passwort.
+  const kontext = await liesEinladung(token);
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
@@ -20,13 +25,25 @@ export default async function EinladungPage({ params }: { params: Promise<{ toke
           <CardHeader>
             <CardTitle>Einladung annehmen</CardTitle>
             <CardDescription>
-              Sie wurden eingeladen, einem Team auf BaufiDesk beizutreten. Vergeben Sie hier Ihr
-              Passwort, um die Einrichtung abzuschließen.
+              {kontext ? (
+                <>
+                  {kontext.einladenderName
+                    ? `${kontext.einladenderName} hat Sie eingeladen, `
+                    : "Sie wurden eingeladen, "}
+                  der Organisation <strong>{kontext.organisation}</strong> auf BaufiDesk
+                  beizutreten. Vergeben Sie hier Ihr Passwort, um die Einrichtung abzuschließen.
+                </>
+              ) : (
+                "Diese Einladung ist abgelaufen oder wurde bereits verwendet. Bitte lassen Sie sich " +
+                "von Ihrer Organisation eine neue schicken."
+              )}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <EinladungForm token={token} />
-          </CardContent>
+          {kontext ? (
+            <CardContent>
+              <EinladungForm token={token} />
+            </CardContent>
+          ) : null}
           <CardFooter>
             <p className="text-center text-xs text-muted-foreground">
               <Link href="/login" className="underline">Zurück zur Anmeldung</Link>

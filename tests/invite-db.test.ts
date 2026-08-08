@@ -149,4 +149,159 @@ describe.runIf(RUN)("Einladung (PGlite)", () => {
       })
     ).resolves.toMatchObject({ ok: false, grund: "adresse_vergeben" });
   }, 60_000);
+
+  // ---- Offene Einladungen: erneut senden, zurueckziehen, lesend aufloesen ----
+  // Ausgangslage hier: chef + "neu@beispiel.de" (beide mit Passwort), Tarif pro
+  // mit drei Plaetzen.
+
+  /** Macht Platz im Tarif, indem noch offene (passwortlose) Einladungen fallen. */
+  async function platzSchaffen() {
+    await prisma.user.deleteMany({ where: { organizationId: orgId, passwordHash: null } });
+  }
+
+  it("verschickt eine offene Einladung erneut und entwertet den alten Link", async () => {
+    const { ladeEin, sendeEinladungErneut, loeseEinladungEin } = await import("@/lib/auth/invite");
+    const res = await ladeEin({
+      organizationId: orgId,
+      email: "zweit@beispiel.de",
+      name: "Zweit",
+      rolle: "vermittler",
+      einladenderUserId: chefId,
+    });
+    if (!res.ok) throw new Error("unerwartet");
+
+    const erneut = await sendeEinladungErneut({
+      userId: res.userId,
+      organizationId: orgId,
+      handelnderUserId: chefId,
+    });
+    expect(erneut.ok).toBe(true);
+    if (!erneut.ok) throw new Error("unerwartet");
+    expect(erneut.token).not.toBe(res.token);
+
+    // Der Link aus der ersten Mail ist tot, nur der neue zieht.
+    await expect(loeseEinladungEin(res.token, "einLangesGeheimwortAlt")).resolves.toMatchObject({
+      ok: false,
+      grund: "ungueltig",
+    });
+    await expect(loeseEinladungEin(erneut.token, "einLangesGeheimwortNeu")).resolves.toMatchObject({
+      ok: true,
+    });
+  }, 60_000);
+
+  it("ruehrt ein bereits angenommenes Konto nicht an", async () => {
+    const { sendeEinladungErneut, zieheEinladungZurueck } = await import("@/lib/auth/invite");
+    // "zweit@beispiel.de" hat im Test davor ein Passwort gesetzt – ab da ist es
+    // ein arbeitender Mensch und keine offene Einladung mehr.
+    const angenommen = await prisma.user.findUnique({ where: { email: "zweit@beispiel.de" } });
+    await expect(
+      sendeEinladungErneut({ userId: angenommen.id, organizationId: orgId, handelnderUserId: chefId })
+    ).resolves.toMatchObject({ ok: false, grund: "nicht_offen" });
+    await expect(
+      zieheEinladungZurueck({ userId: angenommen.id, organizationId: orgId, handelnderUserId: chefId })
+    ).resolves.toMatchObject({ ok: false, grund: "nicht_offen" });
+    expect(await prisma.user.findUnique({ where: { id: angenommen.id } })).not.toBeNull();
+  }, 60_000);
+
+  it("gibt beim Zurueckziehen den Tarifplatz wieder frei", async () => {
+    const { ladeEin, zieheEinladungZurueck } = await import("@/lib/auth/invite");
+    const { checkLimit } = await import("@/lib/saas/plans");
+    // Alle drei Plaetze sind belegt (chef, neu, zweit) – genau die Lage, in der
+    // eine misslungene Einladung die Organisation frueher handlungsunfaehig
+    // gemacht hat.
+    await expect(
+      ladeEin({
+        organizationId: orgId,
+        email: "vierte@beispiel.de",
+        name: "Vierte",
+        rolle: "vermittler",
+        einladenderUserId: chefId,
+      })
+    ).resolves.toMatchObject({ ok: false, grund: "limit_erreicht" });
+
+    // "neu@beispiel.de" wieder zur offenen Einladung machen (Konto ohne
+    // Passwort, invitedAt gesetzt) – so sieht ein Fehlschlag beim Mailversand aus.
+    const offen = await prisma.user.findUnique({ where: { email: "neu@beispiel.de" } });
+    await prisma.user.update({ where: { id: offen.id }, data: { passwordHash: null } });
+
+    const vorher = await checkLimit(orgId, "usersPerOrg");
+    await expect(
+      zieheEinladungZurueck({ userId: offen.id, organizationId: orgId, handelnderUserId: chefId })
+    ).resolves.toMatchObject({ ok: true });
+    expect(await prisma.user.findUnique({ where: { id: offen.id } })).toBeNull();
+
+    const nachher = await checkLimit(orgId, "usersPerOrg");
+    expect(nachher.used).toBe(vorher.used - 1);
+    // Der freie Platz ist sofort wieder nutzbar.
+    await expect(
+      ladeEin({
+        organizationId: orgId,
+        email: "vierte@beispiel.de",
+        name: "Vierte",
+        rolle: "vermittler",
+        einladenderUserId: chefId,
+      })
+    ).resolves.toMatchObject({ ok: true });
+  }, 60_000);
+
+  it("laesst eine fremde Organisation nicht an die Einladung", async () => {
+    const { ladeEin, sendeEinladungErneut, zieheEinladungZurueck } = await import(
+      "@/lib/auth/invite"
+    );
+    await platzSchaffen();
+    const fremdeOrg = await prisma.organization.create({
+      data: { name: "Fremd Finanz", slug: "fremd-finanz" },
+    });
+    const res = await ladeEin({
+      organizationId: orgId,
+      email: "opfer@beispiel.de",
+      name: "Opfer",
+      rolle: "vermittler",
+      einladenderUserId: chefId,
+    });
+    if (!res.ok) throw new Error("unerwartet");
+
+    // Mit der userId einer FREMDEN Organisation darf nichts passieren – die
+    // Pruefung darf nicht allein an der Rolle haengen.
+    await expect(
+      sendeEinladungErneut({
+        userId: res.userId,
+        organizationId: fremdeOrg.id,
+        handelnderUserId: chefId,
+      })
+    ).resolves.toMatchObject({ ok: false, grund: "nicht_offen" });
+    await expect(
+      zieheEinladungZurueck({
+        userId: res.userId,
+        organizationId: fremdeOrg.id,
+        handelnderUserId: chefId,
+      })
+    ).resolves.toMatchObject({ ok: false, grund: "nicht_offen" });
+    expect(await prisma.user.findUnique({ where: { id: res.userId } })).not.toBeNull();
+  }, 60_000);
+
+  it("nennt beim lesenden Aufloesen Organisation und Einladenden", async () => {
+    const { ladeEin, liesEinladung } = await import("@/lib/auth/invite");
+    await platzSchaffen();
+    const res = await ladeEin({
+      organizationId: orgId,
+      email: "kontext@beispiel.de",
+      name: "Kontext",
+      rolle: "vermittler",
+      einladenderUserId: chefId,
+    });
+    if (!res.ok) throw new Error("unerwartet");
+
+    await expect(liesEinladung(res.token)).resolves.toMatchObject({
+      organisation: "Beispiel Finanz",
+      einladenderName: "Chefin",
+      name: "Kontext",
+    });
+    // Das Nachschlagen darf den Link nicht verbrauchen.
+    const zeile = await prisma.authToken.findFirst({
+      where: { userId: res.userId, zweck: "einladung", usedAt: null },
+    });
+    expect(zeile).not.toBeNull();
+    await expect(liesEinladung("unbekannt")).resolves.toBeNull();
+  }, 60_000);
 });

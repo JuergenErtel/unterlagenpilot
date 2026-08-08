@@ -1,12 +1,15 @@
-"use server";
-
 import { getEnv } from "@/lib/env";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
 import { mailAntragWartet } from "@/lib/email/auth-mails";
 import { PLAN_DEFINITIONS } from "@/lib/saas/plans";
 import { prisma } from "@/lib/db";
 
-/** Meldet dem Betreiber, dass eine bestaetigte Anmeldung wartet. Scheitert
+/** Bewusst OHNE "use server": Die Funktion wird nur serverseitig aufgerufen
+ *  (Server Action bzw. Server-Komponente). Mit der Direktive waere daraus ein
+ *  oeffentlicher POST-Endpunkt geworden, der ohne Anmeldung und ohne
+ *  Rate-Limit Mail an den Betreiber verschickt.
+ *
+ *  Meldet dem Betreiber, dass eine bestaetigte Anmeldung wartet. Scheitert
  *  irgendein Schritt (DB-Abfrage, Tarif-Auflösung, Versand), bleibt der Antrag
  *  trotzdem in /admin/anmeldungen sichtbar – die E-Mail-Bestaetigung des
  *  Antragstellers ist zu diesem Zeitpunkt bereits abgeschlossen und darf durch

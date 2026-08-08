@@ -553,6 +553,8 @@ export const AUDIT_ACTIONS = [
   "signup.rejected",
   "user.invited",
   "user.invite_accepted",
+  "user.invite_resent",
+  "user.invite_revoked",
   "user.password_reset",
   "customer.data_exported",
   "customer.deleted",

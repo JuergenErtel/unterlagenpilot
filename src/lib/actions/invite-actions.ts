@@ -7,7 +7,12 @@ import { requireRole } from "@/lib/auth/context";
 import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
 import { mailEinladung } from "@/lib/email/auth-mails";
-import { ladeEin, loeseEinladungEin } from "@/lib/auth/invite";
+import {
+  ladeEin,
+  loeseEinladungEin,
+  sendeEinladungErneut,
+  zieheEinladungZurueck,
+} from "@/lib/auth/invite";
 import { checkLimit } from "@/lib/saas/plans";
 import { USER_ROLES, type UserRole } from "@/lib/domain/enums";
 
@@ -66,6 +71,68 @@ export async function einladenAction(
       return { error: "Konto angelegt, aber die Einladungsmail konnte nicht zugestellt werden." };
     }
   }
+
+  revalidatePath("/organization");
+  return { ok: true };
+}
+
+/**
+ * Verschickt eine noch nicht angenommene Einladung erneut.
+ *
+ * Rolle und Mandantengrenze werden HIER geprueft (requireRole gibt den Kontext
+ * aus der Datenbank) und noch einmal in sendeEinladungErneut – eine Server
+ * Action ist ein oeffentlicher Endpunkt.
+ */
+export async function einladungErneutSendenAction(
+  _prev: EinladungState,
+  formData: FormData
+): Promise<EinladungState> {
+  const ctx = await requireRole("org_admin");
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Keine Einladung angegeben." };
+
+  const res = await sendeEinladungErneut({
+    userId,
+    organizationId: ctx.organizationId,
+    handelnderUserId: ctx.userId,
+  });
+  if (!res.ok) {
+    return { error: "Diese Einladung ist nicht mehr offen." };
+  }
+
+  if (isEmailConfigured()) {
+    const mail = mailEinladung({
+      einladenderName: ctx.userName,
+      organisation: ctx.organizationName,
+      url: `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/einladung/${res.token}`,
+    });
+    try {
+      await sendEmail({ to: res.email, subject: mail.subject, text: mail.text });
+    } catch (e) {
+      console.error("[einladung] erneuter Mailversand fehlgeschlagen:", e);
+      return { error: "Neuer Link erstellt, aber die Einladungsmail konnte nicht zugestellt werden." };
+    }
+  }
+
+  revalidatePath("/organization");
+  return { ok: true };
+}
+
+/** Zieht eine noch nicht angenommene Einladung zurueck und gibt den Tarifplatz frei. */
+export async function einladungZurueckziehenAction(
+  _prev: EinladungState,
+  formData: FormData
+): Promise<EinladungState> {
+  const ctx = await requireRole("org_admin");
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Keine Einladung angegeben." };
+
+  const res = await zieheEinladungZurueck({
+    userId,
+    organizationId: ctx.organizationId,
+    handelnderUserId: ctx.userId,
+  });
+  if (!res.ok) return { error: "Diese Einladung ist nicht mehr offen." };
 
   revalidatePath("/organization");
   return { ok: true };

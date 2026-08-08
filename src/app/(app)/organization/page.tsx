@@ -1,4 +1,4 @@
-import { Building2, Users, Globe, ShieldCheck, UserPlus } from "lucide-react";
+import { Building2, Users, Globe, ShieldCheck, UserPlus, MailCheck } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { type UserRole } from "@/lib/domain/enums";
@@ -20,6 +20,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { EinladenForm } from "@/components/organization/einladen-form";
+import { OffeneEinladungen } from "@/components/organization/offene-einladungen";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   white_label_admin: "White-Label-Admin",
@@ -59,6 +60,19 @@ export default async function OrganizationPage() {
     getOrgPlan(ctx.organizationId),
     checkLimit(ctx.organizationId, "usersPerOrg"),
   ]);
+
+  // Noch nicht angenommene Einladungen: eingeladen, aber ohne Passwort. Sie
+  // belegen einen Tarifplatz, koennen aber nirgends deaktiviert werden – ohne
+  // "erneut senden"/"zurueckziehen" waere der Platz nach einem Fehlschlag weg.
+  // Der Hash verlaesst den Server NICHT; die Liste traegt nur Anzeigedaten.
+  const offeneEinladungen = users
+    .filter((u) => u.invitedAt && u.passwordHash === null)
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      eingeladenAm: u.invitedAt!.toISOString(),
+    }));
 
   return (
     <div className="space-y-6">
@@ -216,6 +230,24 @@ export default async function OrganizationPage() {
           </CardHeader>
           <CardContent>
             <EinladenForm rollen={PLAN_ROLES[plan.tier]} />
+          </CardContent>
+        </Card>
+      )}
+
+      {ctx.role === "org_admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MailCheck className="h-5 w-5 text-muted-foreground" />
+              Offene Einladungen
+            </CardTitle>
+            <CardDescription>
+              Noch nicht angenommen. Jede belegt einen Platz im Tarif – schicken Sie den Link erneut
+              oder ziehen Sie die Einladung zurück, um den Platz freizugeben.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OffeneEinladungen einladungen={offeneEinladungen} />
           </CardContent>
         </Card>
       )}
