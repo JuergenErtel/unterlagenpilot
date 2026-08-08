@@ -45,6 +45,12 @@ export async function gibFrei(
   if (!antrag) return { ok: false, grund: "nicht_gefunden" };
   if (antrag.status !== "bestaetigt") return { ok: false, grund: "falscher_status" };
 
+  // Der Hash steht nur bis zur Freigabe am Antrag. Fehlt er, waere der neue
+  // Zugang passwortlos – lieber gar keine Organisation als eine, in die sich
+  // niemand anmelden kann.
+  const passwordHash = antrag.passwordHash;
+  if (!passwordHash) return { ok: false, grund: "fehlgeschlagen" };
+
   const vergeben = await prisma.user.findUnique({ where: { email: antrag.email } });
   if (vergeben) return { ok: false, grund: "adresse_vergeben" };
 
@@ -77,7 +83,7 @@ export async function gibFrei(
           email: antrag.email,
           name: antrag.name,
           role: "org_admin",
-          passwordHash: antrag.passwordHash,
+          passwordHash,
           platformAdmin: false,
         },
       });
@@ -88,6 +94,9 @@ export async function gibFrei(
           organizationId: org.id,
           entschiedenAm: new Date(),
           entschiedenVon: entscheidung.adminUserId,
+          // Der Hash liegt jetzt am Nutzer – die Kopie am Antrag hat keinen
+          // Zweck mehr und wuerde jeden spaeteren Passwortwechsel ueberdauern.
+          passwordHash: null,
         },
       });
       return { organizationId: org.id, userId: nutzer.id };

@@ -1311,9 +1311,12 @@ model LeadSyncState {
  * keine abgebrochenen Anmeldungen, die jede Auswertung verfaelschen wuerden.
  */
 model SignupRequest {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  passwordHash String
+  id    String @id @default(cuid())
+  email String @unique
+  // Nur bis zur Freigabe belegt: dort wandert der Hash an den neuen User und
+  // wird hier auf null gesetzt. Sonst laege er doppelt vor, und die Kopie am
+  // Antrag ueberlebte jeden spaeteren Passwortwechsel des Nutzers.
+  passwordHash String?
   name         String
   firmenname   String
   telefon      String?

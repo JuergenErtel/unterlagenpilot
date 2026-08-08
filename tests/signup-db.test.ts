@@ -102,6 +102,38 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     const antrag = await prisma.signupRequest.findUnique({ where: { id: angelegt.requestId } });
     expect(antrag.status).toBe("freigegeben");
     expect(antrag.organizationId).toBe(res.organizationId);
+    // Der Hash liegt ab jetzt nur noch am Nutzer. Eine Kopie am Antrag wuerde
+    // jeden spaeteren Passwortwechsel ueberdauern.
+    expect(antrag.passwordHash).toBeNull();
+    expect(nutzer.passwordHash).not.toBeNull();
+  }, 60_000);
+
+  it("gibt einen Antrag ohne Passwort-Hash nicht frei", async () => {
+    const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
+    const { gibFrei } = await import("@/lib/auth/freigabe");
+    const hans = await erstelleAntrag(
+      {
+        name: "Hans Beispiel",
+        firmenname: "Hans Finanz",
+        email: "hans@beispiel.de",
+        passwort: "einLangesGeheimwortHans",
+        agb: true,
+      },
+      { ip: null }
+    );
+    if (hans.status !== "neu_angelegt") throw new Error("unerwartet");
+    await bestaetigeEmail(hans.token);
+    // Zweite Freigabe desselben Antrags waere der Fall: Hash schon geleert.
+    await prisma.signupRequest.update({
+      where: { id: hans.requestId },
+      data: { passwordHash: null },
+    });
+
+    const vorher = await prisma.organization.count();
+    await expect(
+      gibFrei(hans.requestId, { tier: "pro", testEndeAm: null, adminUserId })
+    ).resolves.toMatchObject({ ok: false, grund: "fehlgeschlagen" });
+    expect(await prisma.organization.count()).toBe(vorher);
   }, 60_000);
 
   it("uebernimmt das bei der Anmeldung gesetzte Passwort", async () => {
