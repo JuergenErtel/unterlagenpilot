@@ -31,6 +31,8 @@ import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { ErstkontaktKarte } from "@/components/case/erstkontakt-karte";
+import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
@@ -81,6 +83,7 @@ export default async function CaseCockpitPage({
     selbstauskunftBogen,
     uebernahme,
     gesendeteNachrichten,
+    erstkontaktStand,
   ] = await Promise.all([
     prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
@@ -100,6 +103,7 @@ export default async function CaseCockpitPage({
     // Signal für den Phasenvorschlag – muss geladen werden, sonst schlüge die
     // Fallseite eine andere Phase vor als das Board.
     prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
+    ladeErstkontaktStand(id),
   ]);
   const applicantOptions = caseRow.applicants.map((a) => ({
     position: a.position,
@@ -178,6 +182,10 @@ export default async function CaseCockpitPage({
         <ArrowLeft className="h-4 w-4" />
         Alle Fälle
       </Link>
+
+      {/* Erstkontakt-Freigabe: nur solange noch nichts raus ist, sonst verstellt
+          ein abgeschlossener Erstkontakt dauerhaft die Fallseite. */}
+      {!erstkontaktStand.versendetAm && <ErstkontaktKarte caseId={id} stand={erstkontaktStand} />}
 
       {/* Hero / Case-Kopf */}
       <Card>
