@@ -95,7 +95,8 @@ const I = {
   eigenkapital: item({
     key: "eigenkapitalnachweis",
     name: "Eigenkapitalnachweis",
-    customerDescription: "Nachweis über Ihr Eigenkapital (z. B. Kontoauszug, Depotauszug, Bausparvertrag).",
+    customerDescription:
+      "Nachweis über Ihr Eigenkapital (z. B. Kontoauszug, Depotauszug, Bausparvertrag) – bitte nicht älter als 3 Monate und mit gut lesbarem Kontostand.",
     internalDescription: "Herkunft/Verfügbarkeit des Eigenkapitals belegen.",
     documentType: "eigenkapitalnachweis",
     recencyDays: 90,
@@ -123,7 +124,8 @@ const I = {
   expose: item({
     key: "expose",
     name: "Exposé / Objektunterlagen",
-    customerDescription: "Exposé oder Objektbeschreibung mit Kaufpreis, Wohnfläche und Baujahr.",
+    customerDescription:
+      "Exposé oder Objektbeschreibung mit Kaufpreis, Wohnfläche und Baujahr. Bitte das vollständige Dokument hochladen, gut lesbar.",
     documentType: "expose",
     example: "Expose_Musterstrasse_12.pdf",
   }),
@@ -140,7 +142,7 @@ const I = {
     key: "wohnflaechenberechnung",
     name: "Wohnflächenberechnung",
     customerDescription:
-      "Bitte laden Sie die Wohnflächenberechnung hoch, falls vorhanden – damit lässt sich die Wohnfläche der Immobilie genau nachvollziehen.",
+      "Bitte laden Sie die Wohnflächenberechnung hoch, falls vorhanden – damit lässt sich die Wohnfläche der Immobilie genau nachvollziehen. Bitte die vollständige Berechnung hochladen, gut lesbar.",
     documentType: "wohnflaechenberechnung",
     level: "optional",
     example: "Wohnflaechenberechnung_Musterstrasse_12.pdf",
@@ -149,7 +151,7 @@ const I = {
     key: "flurkarte_lageplan",
     name: "Flurkarte / Lageplan",
     customerDescription:
-      "Bitte laden Sie die Flurkarte oder den Lageplan des Grundstücks hoch, falls vorhanden – die bekommen Sie beim Katasteramt oder von Ihrem Notar.",
+      "Bitte laden Sie die Flurkarte oder den Lageplan des Grundstücks hoch, falls vorhanden – die bekommen Sie beim Katasteramt oder von Ihrem Notar. Bitte das vollständige Dokument, gut lesbar.",
     documentType: "flurkarte_lageplan",
     level: "optional",
     example: "Flurkarte_Musterstrasse_12.pdf",
@@ -158,7 +160,7 @@ const I = {
     key: "teilungserklaerung",
     name: "Teilungserklärung",
     customerDescription:
-      "Bitte laden Sie die Teilungserklärung der Eigentumswohnung hoch – das Dokument, das die Aufteilung des Gebäudes in einzelne Wohnungseinheiten regelt.",
+      "Bitte laden Sie die Teilungserklärung der Eigentumswohnung hoch – das Dokument, das die Aufteilung des Gebäudes in einzelne Wohnungseinheiten regelt. Sie ist meist mehrseitig, bitte alle Seiten und Anlagen mit hochladen.",
     documentType: "teilungserklaerung",
     level: "zwingend",
     example: "Teilungserklaerung_Musterstrasse_12.pdf",
@@ -167,7 +169,7 @@ const I = {
     key: "baubeschreibung",
     name: "Baubeschreibung",
     customerDescription:
-      "Bitte laden Sie die Baubeschreibung hoch, die Sie von Ihrem Bauunternehmen oder Architekten erhalten haben – darin stehen die geplanten Baumaterialien und die Ausstattung.",
+      "Bitte laden Sie die Baubeschreibung hoch, die Sie von Ihrem Bauunternehmen oder Architekten erhalten haben – darin stehen die geplanten Baumaterialien und die Ausstattung. Bitte das vollständige Dokument mit allen Seiten hochladen.",
     documentType: "baubeschreibung",
     example: "Baubeschreibung_Neubau_Musterstrasse.pdf",
   }),
@@ -175,7 +177,7 @@ const I = {
     key: "baukostenaufstellung",
     name: "Baukostenaufstellung",
     customerDescription:
-      "Bitte laden Sie die Aufstellung der geplanten Baukosten hoch – zum Beispiel den Kostenvoranschlag Ihres Bauunternehmens oder der beteiligten Handwerker.",
+      "Bitte laden Sie die Aufstellung der geplanten Baukosten hoch – zum Beispiel den Kostenvoranschlag Ihres Bauunternehmens oder der beteiligten Handwerker. Bitte die vollständige Aufstellung hochladen, nicht nur einzelne Positionen.",
     documentType: "baukostenaufstellung",
     example: "Baukostenaufstellung_Musterstrasse.pdf",
   }),
@@ -183,7 +185,7 @@ const I = {
     key: "baugenehmigung",
     name: "Baugenehmigung",
     customerDescription:
-      "Bitte laden Sie Ihre Baugenehmigung hoch, sobald sie Ihnen von der Bauaufsichtsbehörde vorliegt.",
+      "Bitte laden Sie Ihre Baugenehmigung hoch, sobald sie Ihnen von der Bauaufsichtsbehörde vorliegt. Bitte den vollständigen Bescheid mit allen Anlagen hochladen.",
     documentType: "baugenehmigung",
     level: "spaeter",
     example: "Baugenehmigung_Musterstrasse.pdf",
@@ -200,7 +202,7 @@ const I = {
     key: "darlehensvertrag",
     name: "Bestehender Darlehensvertrag",
     customerDescription:
-      "Bitte laden Sie Ihren bestehenden Darlehensvertrag hoch – die Vertragsunterlagen, die Sie beim Abschluss Ihres aktuellen Darlehens erhalten haben.",
+      "Bitte laden Sie Ihren bestehenden Darlehensvertrag hoch – die Vertragsunterlagen, die Sie beim Abschluss Ihres aktuellen Darlehens erhalten haben. Bitte alle Seiten hochladen, auch die Darlehensbedingungen im Anhang.",
     documentType: "darlehensvertrag",
     example: "Darlehensvertrag_Musterbank.pdf",
   }),
@@ -216,7 +218,7 @@ const I = {
     key: "mietaufstellung",
     name: "Mietaufstellung",
     customerDescription:
-      "Bitte laden Sie eine Aufstellung der Mieteinnahmen hoch – zum Beispiel eine Übersicht aller vermieteten Einheiten mit der jeweiligen Kaltmiete.",
+      "Bitte laden Sie eine Aufstellung der Mieteinnahmen hoch – zum Beispiel eine Übersicht aller vermieteten Einheiten mit der jeweiligen Kaltmiete. Bitte die Aufstellung vollständig und möglichst aktuell hochladen.",
     documentType: "mietaufstellung",
     example: "Mietaufstellung_Musterstrasse_12.pdf",
   }),
@@ -233,7 +235,7 @@ const I = {
     key: "susa",
     name: "Summen- und Saldenliste (SuSa)",
     customerDescription:
-      "Bitte laden Sie Ihre aktuelle Summen- und Saldenliste (SuSa) hoch. Die bekommen Sie wie die BWA von Ihrem Steuerberater oder aus Ihrer Buchhaltungssoftware.",
+      "Bitte laden Sie Ihre aktuelle Summen- und Saldenliste (SuSa) hoch. Die bekommen Sie wie die BWA von Ihrem Steuerberater oder aus Ihrer Buchhaltungssoftware. Bitte das vollständige Dokument mit allen Seiten hochladen.",
     documentType: "susa",
     example: "Summen_und_Saldenliste_2026.pdf",
   }),
@@ -241,7 +243,7 @@ const I = {
     key: "jahresabschluss",
     name: "Jahresabschlüsse (letzte 2 Jahre)",
     customerDescription:
-      "Bitte laden Sie Ihre Jahresabschlüsse der letzten zwei Geschäftsjahre hoch – jeweils Bilanz und Gewinn- und Verlustrechnung, so wie Sie sie von Ihrem Steuerberater erhalten haben.",
+      "Bitte laden Sie Ihre Jahresabschlüsse der letzten zwei Geschäftsjahre hoch – jeweils Bilanz und Gewinn- und Verlustrechnung, so wie Sie sie von Ihrem Steuerberater erhalten haben. Bitte pro Jahr das vollständige Dokument mit allen Seiten hochladen.",
     documentType: "jahresabschluss",
     requiredCount: 2,
     example: "Jahresabschluss_2024.pdf",
@@ -250,7 +252,7 @@ const I = {
     key: "euer",
     name: "EÜR (letzte 2 Jahre)",
     customerDescription:
-      "Bitte laden Sie Ihre Einnahmenüberschussrechnung (EÜR) der letzten zwei Jahre hoch. Die erstellt in der Regel Ihr Steuerberater.",
+      "Bitte laden Sie Ihre Einnahmenüberschussrechnung (EÜR) der letzten zwei Jahre hoch. Die erstellt in der Regel Ihr Steuerberater. Bitte jeweils die vollständige Berechnung mit allen Seiten hochladen.",
     documentType: "euer",
     requiredCount: 2,
     example: "Einnahmenueberschussrechnung_2024.pdf",
@@ -268,7 +270,7 @@ const I = {
     key: "rentenbescheid",
     name: "Rentenbescheid",
     customerDescription:
-      "Bitte laden Sie Ihren aktuellen Rentenbescheid hoch – das Schreiben Ihres Rentenversicherungsträgers mit der Höhe Ihrer monatlichen Rente.",
+      "Bitte laden Sie Ihren aktuellen Rentenbescheid hoch – das Schreiben Ihres Rentenversicherungsträgers mit der Höhe Ihrer monatlichen Rente. Bitte alle Seiten hochladen, auch eventuelle Anlagen zu Rentenanpassungen.",
     documentType: "rentenbescheid",
     example: "Rentenbescheid_2026.pdf",
   }),

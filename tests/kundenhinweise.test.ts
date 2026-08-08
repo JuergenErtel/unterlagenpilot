@@ -16,16 +16,20 @@ describe("Kundenhinweise je Unterlage", () => {
     expect(ohne).toEqual([]);
   });
 
-  it("verwendet keine Fachbegriffe ohne Erklaerung", () => {
-    // Woerter, die ein Kunde nicht kennen muss. Kommen sie vor, muss im selben
-    // Satz eine Erklaerung stehen – geprueft ueber die Mindestlaenge.
-    const fachbegriffe = ["SCHUFA-Selbstauskunft", "Grundschuldbestellung", "Annuität"];
-    for (const i of alle) {
-      for (const wort of fachbegriffe) {
-        if (i.customerDescription.includes(wort)) {
-          expect(i.customerDescription.length).toBeGreaterThan(80);
-        }
-      }
-    }
+  it("sagt zu jeder Position auch, worauf zu achten ist", () => {
+    // Der Grund der ganzen Task: "was gebraucht wird" allein reicht nicht –
+    // ohne einen Hinweis auf Vollstaendigkeit/Aktualitaet/Lesbarkeit laedt der
+    // Kunde z. B. nur eine Seite hoch und der Vermittler muss nachfassen.
+    // Diese Marker kommen tatsaechlich in den formulierten Hinweisen vor
+    // (nicht als exakte Phrasen, sondern als Wortstaemme, damit "beiden
+    // Seiten", "alle Seiten" und "allen Anlagen" gleichermassen erkannt
+    // werden) – anders als der vorherige Fachbegriffe-Test (der keinen der
+    // gesuchten Begriffe je in einem Text findet und daher nie rot werden
+    // konnte), faengt dieser Test echte Regressionen ab.
+    const marker = ["seite", "vollständig", "aktuell", "lesbar", "anlage", "unterschrieben", "älter"];
+    const ohneHinweis = alle
+      .filter((i) => !marker.some((wort) => i.customerDescription.toLowerCase().includes(wort)))
+      .map((i) => i.key);
+    expect(ohneHinweis).toEqual([]);
   });
 });
