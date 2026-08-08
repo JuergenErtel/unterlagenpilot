@@ -5,14 +5,21 @@ const notFound = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ notFound, redirect: vi.fn() }));
 
-let aktuellerNutzer: { id: string; platformAdmin: boolean } | null = null;
+let aktuellerNutzer: { id: string; platformAdmin: boolean; isDemo?: boolean } | null = null;
 
 vi.mock("@/lib/auth/context", async (orig) => {
   const echt = (await orig()) as Record<string, unknown>;
   return {
     ...echt,
     getCurrentContext: vi.fn(async () =>
-      aktuellerNutzer ? { organizationId: "o1", userId: aktuellerNutzer.id, role: "org_admin", isDemo: false } : null
+      aktuellerNutzer
+        ? {
+            organizationId: "o1",
+            userId: aktuellerNutzer.id,
+            role: "org_admin",
+            isDemo: aktuellerNutzer.isDemo ?? false,
+          }
+        : null
     ),
   };
 });
@@ -49,5 +56,15 @@ describe("Plattform-Freigabe: Zugriff", () => {
     aktuellerNutzer = null;
     const { requirePlatformAdmin } = await import("@/lib/auth/platform-admin");
     await expect(requirePlatformAdmin()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("antwortet auch im Demo-Kontext mit 404 – selbst wenn der zufaellige Demo-Nutzer platformAdmin ist", async () => {
+    // Im Demo-Modus nimmt getCurrentContext den erstbesten aktiven Nutzer der
+    // Seed-Organisation, ohne echten Login. Ist der zufaellig der Betreiber,
+    // darf das den Zugriffsschutz trotzdem nicht aushebeln.
+    aktuellerNutzer = { id: "u3", platformAdmin: true, isDemo: true };
+    const { requirePlatformAdmin } = await import("@/lib/auth/platform-admin");
+    await expect(requirePlatformAdmin()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFound).toHaveBeenCalled();
   });
 });

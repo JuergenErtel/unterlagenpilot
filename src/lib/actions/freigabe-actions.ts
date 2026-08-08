@@ -32,6 +32,14 @@ export async function freigebenAction(formData: FormData): Promise<void> {
     return;
   }
 
+  // Freigabe ist geglueckt: ein Vermerk aus einem frueheren, gescheiterten
+  // Versuch gilt nicht mehr. Ohne diesen Reset wuerde die Liste "Zuletzt
+  // entschieden" dauerhaft vor einem Problem warnen, das laengst behoben ist.
+  await prisma.signupRequest.update({
+    where: { id: requestId },
+    data: { ablehnungsgrund: null },
+  });
+
   // NACH der Transaktion: scheitert der Versand, bleibt der Zugang gueltig.
   const antrag = await prisma.signupRequest.findUnique({ where: { id: requestId } });
   if (antrag && isEmailConfigured()) {
@@ -46,6 +54,10 @@ export async function freigebenAction(formData: FormData): Promise<void> {
       await sendEmail({ to: antrag.email, subject: mail.subject, text: mail.text });
     } catch (e) {
       console.error("[freigabe] Willkommensmail fehlgeschlagen:", e);
+      // `ablehnungsgrund` ist hier zweckentfremdet: Nach einer geglueckten
+      // Freigabe ist es kein Ablehnungsgrund mehr, sondern der einzige Ort,
+      // an dem die Liste "Zuletzt entschieden" einen Betreiber-Hinweis
+      // anzeigen kann (siehe page.tsx).
       await prisma.signupRequest.update({
         where: { id: requestId },
         data: { ablehnungsgrund: "Zugang aktiv, aber Willkommensmail nicht zustellbar." },
