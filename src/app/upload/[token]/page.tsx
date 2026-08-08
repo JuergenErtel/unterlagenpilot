@@ -93,6 +93,7 @@ export default async function PublicUploadPage({
       documentType: d.documentType,
       reviewStatus: d.reviewStatus,
       reviewNote: d.reviewNote,
+      createdAt: d.createdAt,
     })),
   });
 

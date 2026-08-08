@@ -34,6 +34,12 @@ export interface KundenDokument {
   documentType: string | null;
   reviewStatus: string;
   reviewNote: string | null;
+  /**
+   * Wann die Datei hochgeladen wurde. Noetig, weil je Position der JUENGSTE
+   * Stand gilt: laedt der Kunde nach einer Ablehnung dieselbe Unterlage neu
+   * hoch, darf nicht weiter der alte, abgelehnte Datensatz gewinnen.
+   */
+  createdAt: Date;
 }
 
 export function baueKundenfortschritt(input: {
@@ -43,7 +49,11 @@ export function baueKundenfortschritt(input: {
   const sichtbar = input.positionen.filter((p) => p.customerVisible);
 
   const positionen: KundenPosition[] = sichtbar.map((p) => {
-    const passende = input.dokumente.filter((d) => d.documentType && d.documentType === p.documentType);
+    // Zeitlich aufsteigend: der letzte Eintrag ist der juengste Stand.
+    const passende = input.dokumente
+      .filter((d) => d.documentType && d.documentType === p.documentType)
+      .slice()
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     // Manche Positionen verlangen mehr als ein Dokument (z. B. `perApplicant`
     // bei zwei Antragstellern, oder mehrere Jahre EÜR) – effectiveRequiredCount
@@ -52,7 +62,7 @@ export function baueKundenfortschritt(input: {
     // z. B. der zweite Antragsteller noch gar nichts eingereicht hat.
     const verlangt = Math.max(p.effectiveRequiredCount, 1);
     const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert");
-    const abgelehnt = passende.find((d) => d.reviewStatus === "abgelehnt");
+    const abgelehnt = wirksameAblehnung(passende);
     const eingegangen = passende.length > 0;
 
     // Reihenfolge der Zustaende: eine vollstaendige Annahme schlaegt alles,
@@ -78,6 +88,27 @@ export function baueKundenfortschritt(input: {
   const prozent = gesamt === 0 ? 100 : Math.round((erledigt / gesamt) * 100);
 
   return { positionen, erledigt, gesamt, prozent };
+}
+
+/**
+ * Die Ablehnung, die der Kunde noch sehen soll – oder keine.
+ *
+ * Eine Ablehnung gilt nur so lange, bis der Kunde zu derselben Position etwas
+ * Neues hochgeladen hat. Ohne diese Regel bliebe er nach seinem zweiten
+ * Versuch in "Bitte erneut hochladen" haengen: das alte, abgelehnte Dokument
+ * gewann weiter, samt altem Grund – eine Quittung fuer seinen Upload bekam er
+ * nie.
+ *
+ * `dokumente` muss zeitlich aufsteigend sortiert sein.
+ */
+function wirksameAblehnung(dokumente: KundenDokument[]): KundenDokument | undefined {
+  let letzte: KundenDokument | undefined;
+  for (const d of dokumente) {
+    // Ein neuerer Eintrag mit anderem Stand (frisch hochgeladen oder
+    // angenommen) hebt die vorherige Ablehnung auf.
+    letzte = d.reviewStatus === "abgelehnt" ? d : undefined;
+  }
+  return letzte;
 }
 
 function basis(

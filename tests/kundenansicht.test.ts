@@ -19,6 +19,23 @@ function pos(key: string, extra: Record<string, unknown> = {}) {
   } as never;
 }
 
+/**
+ * Dokument mit Zeitstempel. `minute` legt die Reihenfolge fest – massgeblich
+ * ist je Position der juengste Stand.
+ */
+function dok(
+  documentType: string,
+  reviewStatus: string,
+  extra: { reviewNote?: string | null; minute?: number } = {}
+) {
+  return {
+    documentType,
+    reviewStatus,
+    reviewNote: extra.reviewNote ?? null,
+    createdAt: new Date(2026, 7, 8, 10, extra.minute ?? 0),
+  };
+}
+
 describe("Kundensicht auf den Unterlagenstand", () => {
   it("zeigt offene Positionen mit Beschreibung und Beispiel", () => {
     const f = baueKundenfortschritt({ positionen: [pos("personalausweis")], dokumente: [] });
@@ -33,7 +50,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
   it("zeigt ein hochgeladenes, noch ungeprueftes Dokument als eingegangen", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis")],
-      dokumente: [{ documentType: "personalausweis", reviewStatus: "offen", reviewNote: null }],
+      dokumente: [dok("personalausweis", "offen")],
     });
     expect(f.positionen[0]!.zustand).toBe("eingegangen");
   });
@@ -41,10 +58,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
   it("zaehlt nur angenommene Unterlagen als erledigt", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("a"), pos("b")],
-      dokumente: [
-        { documentType: "a", reviewStatus: "akzeptiert", reviewNote: null },
-        { documentType: "b", reviewStatus: "offen", reviewNote: null },
-      ],
+      dokumente: [dok("a", "akzeptiert"), dok("b", "offen")],
     });
     expect(f.erledigt).toBe(1);
     expect(f.gesamt).toBe(2);
@@ -54,13 +68,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
   it("nennt bei einer Ablehnung den Grund", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("gehaltsabrechnung")],
-      dokumente: [
-        {
-          documentType: "gehaltsabrechnung",
-          reviewStatus: "abgelehnt",
-          reviewNote: "Seite 2 fehlt.",
-        },
-      ],
+      dokumente: [dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt." })],
     });
     expect(f.positionen[0]).toMatchObject({ zustand: "abgelehnt", grund: "Seite 2 fehlt." });
   });
@@ -68,9 +76,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
   it("bleibt ohne Ablehnungsgrund verstaendlich", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("gehaltsabrechnung")],
-      dokumente: [
-        { documentType: "gehaltsabrechnung", reviewStatus: "abgelehnt", reviewNote: null },
-      ],
+      dokumente: [dok("gehaltsabrechnung", "abgelehnt")],
     });
     expect(f.positionen[0]!.zustand).toBe("abgelehnt");
     expect(f.positionen[0]!.grund).toBeUndefined();
@@ -96,12 +102,65 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("gehaltsabrechnung")],
       dokumente: [
-        { documentType: "gehaltsabrechnung", reviewStatus: "abgelehnt", reviewNote: "Seite 2 fehlt." },
-        { documentType: "gehaltsabrechnung", reviewStatus: "akzeptiert", reviewNote: null },
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+        dok("gehaltsabrechnung", "akzeptiert", { minute: 2 }),
       ],
     });
     expect(f.positionen[0]!.zustand).toBe("angenommen");
     expect(f.positionen[0]!.grund).toBeUndefined();
+  });
+
+  it("quittiert einen neuen Upload nach einer Ablehnung als eingegangen", () => {
+    // Der Kunde hat die Ablehnung gelesen und dieselbe Unterlage neu
+    // hochgeladen. Vorher gewann weiter der alte, abgelehnte Datensatz – rot,
+    // mit altem Grund. Fuer seinen zweiten Versuch bekam er keine Quittung.
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+        dok("gehaltsabrechnung", "offen", { minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("eingegangen");
+    expect(f.positionen[0]!.grund).toBeUndefined();
+  });
+
+  it("bleibt ohne neuen Upload bei der Ablehnung, samt Grund", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "offen", { minute: 1 }),
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "abgelehnt", grund: "Seite 2 fehlt." });
+  });
+
+  it("zeigt nach einer zweiten Ablehnung den neuen Grund, nicht den alten", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Unscharf fotografiert.", minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]).toMatchObject({
+      zustand: "abgelehnt",
+      grund: "Unscharf fotografiert.",
+    });
+  });
+
+  it("wertet unabhaengig von der Reihenfolge der Eingabe aus", () => {
+    // Die Datenbankabfrage garantiert keine Sortierung – massgeblich ist der
+    // Zeitstempel, nicht die Position im Array.
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "offen", { minute: 2 }),
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("eingegangen");
   });
 
   it("meldet eine Position mit mehreren verlangten Dokumenten erst als teilweise, nicht als angenommen", () => {
@@ -110,7 +169,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     // solange der zweite Antragsteller noch nichts eingereicht hat.
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis", { effectiveRequiredCount: 2 })],
-      dokumente: [{ documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null }],
+      dokumente: [dok("personalausweis", "akzeptiert")],
     });
     expect(f.positionen[0]).toMatchObject({ zustand: "teilweise", verlangt: 2, akzeptiert: 1 });
     expect(f.erledigt).toBe(0);
@@ -121,8 +180,8 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis", { effectiveRequiredCount: 2 })],
       dokumente: [
-        { documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null },
-        { documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null },
+        dok("personalausweis", "akzeptiert", { minute: 1 }),
+        dok("personalausweis", "akzeptiert", { minute: 2 }),
       ],
     });
     expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", verlangt: 2, akzeptiert: 2 });
@@ -133,7 +192,7 @@ describe("Kundensicht auf den Unterlagenstand", () => {
   it("verhaelt sich bei effectiveRequiredCount 1 wie bisher (Regressionsschutz)", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis")],
-      dokumente: [{ documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null }],
+      dokumente: [dok("personalausweis", "akzeptiert")],
     });
     expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", verlangt: 1, akzeptiert: 1 });
     expect(f.erledigt).toBe(1);
