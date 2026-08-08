@@ -16,6 +16,18 @@ vi.mock("@/lib/db", () => ({
         Object.assign(faelle[where.id], data);
         return faelle[where.id];
       }),
+      // Simuliert die atomare Reservierung: schlaegt fehl (count 0), wenn die
+      // Bedingung im "where" (z.B. erstkontaktVorbereitetAm: null) nicht mehr
+      // zutrifft – etwa weil ein anderer Aufruf bereits reserviert hat.
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const f = faelle[where.id];
+        if (!f) return { count: 0 };
+        if ("erstkontaktVorbereitetAm" in where && f.erstkontaktVorbereitetAm !== where.erstkontaktVorbereitetAm) {
+          return { count: 0 };
+        }
+        Object.assign(f, data);
+        return { count: 1 };
+      }),
     },
     document: { findMany: vi.fn(async () => []) },
     generatedMessage: {

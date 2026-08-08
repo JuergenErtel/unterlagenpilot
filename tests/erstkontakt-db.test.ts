@@ -103,4 +103,53 @@ describe.runIf(RUN)("Erstkontakt vorbereiten (PGlite)", () => {
     const fall = await prisma.case.findUnique({ where: { id: c.id } });
     expect(fall.erstkontaktVorbereitetAm).toBeNull();
   }, 60_000);
+
+  it("laesst bei echter Nebenlaeufigkeit (Cron + Knopf) nur einen Lauf gewinnen", async () => {
+    const c = await prisma.case.create({
+      data: { organizationId: orgId, caseNumber: "UP-2026-9203", status: "neu" },
+    });
+    await prisma.applicant.create({
+      data: {
+        caseId: c.id,
+        position: 1,
+        vorname: "Gleichzeitig",
+        nachname: "Zwei",
+        email: "gleichzeitig@example.de",
+      },
+    });
+
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    // Nicht nacheinander, sondern wirklich gleichzeitig gestartet – genau das
+    // Szenario aus Cron (alle 15 Min) und manuellem Abgleichsknopf.
+    const [a, b] = await Promise.all([bereiteErstkontaktVor(c.id), bereiteErstkontaktVor(c.id)]);
+    expect([a.status, b.status].sort()).toEqual(["schon_vorbereitet", "vorbereitet"]);
+
+    expect(await prisma.generatedMessage.count({ where: { caseId: c.id } })).toBe(1);
+    expect(await prisma.uploadLink.count({ where: { caseId: c.id } })).toBe(1);
+    expect(await prisma.selfDisclosureLink.count({ where: { caseId: c.id } })).toBe(1);
+  }, 60_000);
+
+  it("nimmt die Reservierung zurueck, wenn die Entwurfsanlage scheitert", async () => {
+    const c = await prisma.case.create({
+      data: { organizationId: orgId, caseNumber: "UP-2026-9204", status: "neu" },
+    });
+    await prisma.applicant.create({
+      data: { caseId: c.id, position: 1, vorname: "Kaputt", nachname: "Fall", email: "kaputt@example.de" },
+    });
+
+    const uploadLinkModul = await import("@/lib/security/upload-link");
+    const spy = vi
+      .spyOn(uploadLinkModul, "createSecureUploadLink")
+      .mockRejectedValueOnce(new Error("kaputt"));
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await expect(bereiteErstkontaktVor(c.id)).rejects.toThrow("kaputt");
+    spy.mockRestore();
+
+    const fall = await prisma.case.findUnique({ where: { id: c.id } });
+    expect(fall.erstkontaktVorbereitetAm).toBeNull();
+
+    // Ein spaeterer Lauf kann es dank der Ruecknahme erneut versuchen.
+    const nochmal = await bereiteErstkontaktVor(c.id);
+    expect(nochmal.status).toBe("vorbereitet");
+  }, 60_000);
 });

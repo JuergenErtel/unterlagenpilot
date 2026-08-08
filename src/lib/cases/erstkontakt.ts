@@ -41,61 +41,77 @@ export async function bereiteErstkontaktVor(
   );
   if (!empfaenger) return { status: "kein_empfaenger" };
 
-  // Ohne Dokumente liefert die Checkliste genau das, was zu Beginn fehlt.
-  const positionen = buildChecklistForCase(
-    {
-      financingType: (fall.financingType as FinancingType) ?? undefined,
-      employmentType: (fall.primaryEmploymentType as EmploymentType) ?? undefined,
-      kapitalanlage: fall.kapitalanlage ?? undefined,
-      applicantCount: fall.applicants.length,
-      applicantIds: fall.applicants.map((a) => a.id),
-    },
-    []
-  );
-  const fehlende = positionen
-    .filter((p) => p.customerVisible && p.status === "offen")
-    .map((p) => ({ title: p.name }));
-
-  const ablauf = new Date(Date.now() + GUELTIG_TAGE * 86_400_000);
-  const upload = await createSecureUploadLink(fall.id, ablauf, {
-    organizationId: fall.organizationId,
-    actorUserId: opts.actorUserId ?? null,
-  });
-  const selbstauskunft = await createSelfDisclosureLink(fall.id, ablauf, {
-    organizationId: fall.organizationId,
-    actorUserId: opts.actorUserId ?? null,
-  });
-
-  const name = [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim();
-  const mail = buildEmail(fehlende, { kundeName: name || undefined, uploadLink: upload.url });
-
-  // Selbstauskunft ergaenzen: der Generator kennt nur den Upload-Link.
-  const body =
-    mail.body +
-    `\n\nDamit ich gleich mit den richtigen Zahlen rechnen kann, füllen Sie bitte außerdem` +
-    ` einmal kurz Ihre Angaben aus – das dauert wenige Minuten:\n${selbstauskunft.url}`;
-
-  const entwurf = await prisma.generatedMessage.create({
-    data: {
-      caseId: fall.id,
-      channel: "email",
-      templateType: "erstnachforderung",
-      subject: mail.subject ?? null,
-      body,
-      // Ausdruecklich unversendet. Der Versand ist ein menschlicher Klick.
-      sent: false,
-    },
-  });
-
-  await prisma.case.update({
-    where: { id: fall.id },
+  // Platz atomar reservieren: nur wer die Zeile tatsaechlich umschreibt, darf
+  // anlegen. Ein einfaches "lesen -> pruefen -> anlegen" liesse zwei parallele
+  // Laeufe (Cron und Knopf) beide durch – Cron laeuft alle 15 Minuten und
+  // kann sich mit einem manuellen Abgleich ueberlappen.
+  const { count } = await prisma.case.updateMany({
+    where: { id: fall.id, erstkontaktVorbereitetAm: null },
     data: { erstkontaktVorbereitetAm: new Date() },
   });
+  if (count !== 1) return { status: "schon_vorbereitet" };
 
-  return {
-    status: "vorbereitet",
-    messageId: entwurf.id,
-    uploadUrl: upload.url,
-    selbstauskunftUrl: selbstauskunft.url,
-  };
+  try {
+    // Ohne Dokumente liefert die Checkliste genau das, was zu Beginn fehlt.
+    const positionen = buildChecklistForCase(
+      {
+        financingType: (fall.financingType as FinancingType) ?? undefined,
+        employmentType: (fall.primaryEmploymentType as EmploymentType) ?? undefined,
+        kapitalanlage: fall.kapitalanlage ?? undefined,
+        applicantCount: fall.applicants.length,
+        applicantIds: fall.applicants.map((a) => a.id),
+      },
+      []
+    );
+    const fehlende = positionen
+      .filter((p) => p.customerVisible && p.status === "offen")
+      .map((p) => ({ title: p.name }));
+
+    const ablauf = new Date(Date.now() + GUELTIG_TAGE * 86_400_000);
+    const upload = await createSecureUploadLink(fall.id, ablauf, {
+      organizationId: fall.organizationId,
+      actorUserId: opts.actorUserId ?? null,
+    });
+    const selbstauskunft = await createSelfDisclosureLink(fall.id, ablauf, {
+      organizationId: fall.organizationId,
+      actorUserId: opts.actorUserId ?? null,
+    });
+
+    const name = [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim();
+    const mail = buildEmail(fehlende, { kundeName: name || undefined, uploadLink: upload.url });
+
+    // Selbstauskunft ergaenzen: der Generator kennt nur den Upload-Link.
+    const body =
+      mail.body +
+      `\n\nDamit ich gleich mit den richtigen Zahlen rechnen kann, füllen Sie bitte außerdem` +
+      ` einmal kurz Ihre Angaben aus – das dauert wenige Minuten:\n${selbstauskunft.url}`;
+
+    const entwurf = await prisma.generatedMessage.create({
+      data: {
+        caseId: fall.id,
+        channel: "email",
+        templateType: "erstnachforderung",
+        subject: mail.subject ?? null,
+        body,
+        // Ausdruecklich unversendet. Der Versand ist ein menschlicher Klick.
+        sent: false,
+      },
+    });
+
+    return {
+      status: "vorbereitet",
+      messageId: entwurf.id,
+      uploadUrl: upload.url,
+      selbstauskunftUrl: selbstauskunft.url,
+    };
+  } catch (e) {
+    // Reservierung zurücknehmen: sonst bliebe der Fall nach einem Fehler
+    // dauerhaft ohne Erstkontakt, ohne dass ein spaeterer Lauf es nachholen
+    // kann. Der Aufrufer im FinLink-Import faengt diesen throw bereits ab.
+    await prisma.case.updateMany({
+      where: { id: fall.id },
+      data: { erstkontaktVorbereitetAm: null },
+    });
+    throw e;
+  }
 }
