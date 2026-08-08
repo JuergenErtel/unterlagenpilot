@@ -295,6 +295,109 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     expect(text).not.toMatch(/reichen Sie/i);
   });
 
+  it("laesst Annas Ablehnung stehen, wenn danach BERND etwas hochlaedt", () => {
+    // Die zeitliche Auswertung lief vorher ueber die ganze Position: Bernds
+    // Upload war der juengste Eintrag und loeschte damit Annas Ablehnung. Die
+    // Position galt dann sogar als eingereicht – der Hinweistext sagte "Alles
+    // eingegangen, Sie muessen nichts weiter tun", und Anna erfuhr nie, dass
+    // sie nachliefern muss.
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        {
+          ...dok("personalausweis", "abgelehnt", { reviewNote: "Unscharf.", minute: 1 }),
+          applicantId: "anna",
+        },
+        { ...dok("personalausweis", "offen", { minute: 2 }), applicantId: "bernd" },
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]!.zustand).toBe("abgelehnt");
+    expect(f.positionen[0]!.grund).toBe("Unscharf.");
+    // Und sie darf nicht als erledigt genug durchgehen.
+    expect(f.eingereicht).toBe(0);
+  });
+
+  it("hebt Annas Ablehnung auf, sobald ANNA selbst neu hochlaedt", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        {
+          ...dok("personalausweis", "abgelehnt", { reviewNote: "Unscharf.", minute: 1 }),
+          applicantId: "anna",
+        },
+        { ...dok("personalausweis", "offen", { minute: 2 }), applicantId: "anna" },
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]!.zustand).toBe("eingegangen");
+    expect(f.positionen[0]!.grund).toBeUndefined();
+  });
+
+  it("haelt bei zwei verlangten Jahren die Ablehnung des ersten Jahres fest", () => {
+    // EUeR ueber zwei Jahre, ohne Antragstellerbezug: Jahr 1 abgelehnt, Jahr 2
+    // hochgeladen. "Der letzte gewinnt" loeschte hier die Ablehnung, obwohl
+    // Jahr 1 weiterhin fehlt.
+    const f = baueKundenfortschritt({
+      positionen: [pos("euer", { effectiveRequiredCount: 2 })],
+      dokumente: [
+        dok("euer", "abgelehnt", { reviewNote: "Jahr 2024 unvollstaendig.", minute: 1 }),
+        dok("euer", "offen", { minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("abgelehnt");
+    expect(f.positionen[0]!.grund).toBe("Jahr 2024 unvollstaendig.");
+  });
+
+  it("hebt die Ablehnung auf, sobald beide verlangten Jahre brauchbar vorliegen", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("euer", { effectiveRequiredCount: 2 })],
+      dokumente: [
+        dok("euer", "abgelehnt", { reviewNote: "Jahr 2024 unvollstaendig.", minute: 1 }),
+        dok("euer", "offen", { minute: 2 }),
+        dok("euer", "offen", { minute: 3 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("eingegangen");
+    expect(f.positionen[0]!.grund).toBeUndefined();
+  });
+
+  it("laesst ein Duplikat die Ablehnung NICHT aufheben", () => {
+    // Der Kunde laedt nach der Ablehnung dieselbe Datei erneut hoch, sie wird
+    // als `duplikat` markiert. Vorher las er dauerhaft "Bei uns eingegangen,
+    // wird geprueft" – und erfuhr nie, dass er etwas anderes liefern muss.
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+        dok("gehaltsabrechnung", "duplikat", { minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("abgelehnt");
+    expect(f.positionen[0]!.grund).toBe("Seite 2 fehlt.");
+  });
+
+  it("laesst ein ersetztes Dokument die Ablehnung NICHT aufheben", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [
+        dok("gehaltsabrechnung", "abgelehnt", { reviewNote: "Seite 2 fehlt.", minute: 1 }),
+        dok("gehaltsabrechnung", "ersetzt", { minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("abgelehnt");
+    expect(f.positionen[0]!.grund).toBe("Seite 2 fehlt.");
+  });
+
+  it("zaehlt ein Duplikat auch nicht als Eingang", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("gehaltsabrechnung")],
+      dokumente: [dok("gehaltsabrechnung", "duplikat")],
+    });
+    expect(f.positionen[0]!.zustand).toBe("offen");
+    expect(f.eingereicht).toBe(0);
+  });
+
   it("verhaelt sich bei effectiveRequiredCount 1 wie bisher (Regressionsschutz)", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis")],

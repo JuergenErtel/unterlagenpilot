@@ -70,8 +70,21 @@ export function baueKundenfortschritt(input: {
 
   const positionen: KundenPosition[] = sichtbar.map((p) => {
     // Zeitlich aufsteigend: der letzte Eintrag ist der juengste Stand.
+    //
+    // `duplikat` und `ersetzt` fliegen raus – genau wie in der Vermittlersicht
+    // (checklists/engine, resolveStatus). Sonst hob ausgerechnet die erneute
+    // Ablage DERSELBEN Datei eine Ablehnung auf: der Kunde laedt nach der
+    // Ablehnung dasselbe noch einmal hoch, es wird als `duplikat` markiert –
+    // und er las dauerhaft "Bei uns eingegangen, wird geprueft", ohne je zu
+    // erfahren, dass er etwas anderes liefern muss.
     const passende = input.dokumente
-      .filter((d) => d.documentType && d.documentType === p.documentType)
+      .filter(
+        (d) =>
+          d.documentType &&
+          d.documentType === p.documentType &&
+          d.reviewStatus !== "duplikat" &&
+          d.reviewStatus !== "ersetzt"
+      )
       .slice()
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
@@ -84,12 +97,22 @@ export function baueKundenfortschritt(input: {
     const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert");
     // Bei Positionen je Antragsteller zaehlt jede Person nur ihr eigenes Soll:
     // zwei Ausweise desselben Antragstellers ergeben keine zwei erfuellten
-    // Plaetze. Genau so rechnet auch die Vermittlersicht (checklists/engine).
-    const akzeptiert =
-      p.perApplicant === true && applicantIds.length > 1
-        ? zaehleJeAntragsteller(angenommen, applicantIds, Math.max(p.requiredCount ?? 1, 1))
-        : angenommen.length;
-    const abgelehnt = wirksameAblehnung(passende);
+    // Plaetze.
+    //
+    // Achtung, hier weicht die Kundensicht bewusst von der Vermittlersicht ab:
+    // `engine.ts` schreibt ein noch nicht zugeordnetes Dokument NIEMANDEM gut
+    // (der Vermittler soll es im Review-Center zuordnen), wir dagegen fuellen
+    // damit die offenen Plaetze auf. Grund: ueber den gemeinsamen Upload-Link
+    // verraet die Datei nicht, wer sie hochgeladen hat – der Kunde saehe sonst
+    // seine gerade angenommene Unterlage gar nicht.
+    const perPerson = Math.max(p.requiredCount ?? 1, 1);
+    const jeAntragsteller = p.perApplicant === true && applicantIds.length > 1;
+    const akzeptiert = jeAntragsteller
+      ? zaehleJeAntragsteller(angenommen, applicantIds, perPerson)
+      : angenommen.length;
+    const abgelehnt = jeAntragsteller
+      ? ablehnungJeAntragsteller(passende, applicantIds, perPerson)
+      : offeneAblehnung(passende, verlangt);
     const eingegangen = passende.length > 0;
 
     // Reihenfolge der Zustaende: eine vollstaendige Annahme schlaegt alles,
@@ -168,24 +191,80 @@ function zaehleJeAntragsteller(
 }
 
 /**
- * Die Ablehnung, die der Kunde noch sehen soll – oder keine.
+ * Die Ablehnung, die der Kunde zu EINEM Platz noch sehen soll – oder keine.
  *
- * Eine Ablehnung gilt nur so lange, bis der Kunde zu derselben Position etwas
- * Neues hochgeladen hat. Ohne diese Regel bliebe er nach seinem zweiten
- * Versuch in "Bitte erneut hochladen" haengen: das alte, abgelehnte Dokument
- * gewann weiter, samt altem Grund – eine Quittung fuer seinen Upload bekam er
- * nie.
+ * Eine Ablehnung gilt nur so lange, bis der Kunde den Platz wieder gefuellt
+ * hat. Ohne diese Regel bliebe er nach seinem zweiten Versuch in "Bitte erneut
+ * hochladen" haengen: das alte, abgelehnte Dokument gewaenne weiter, samt altem
+ * Grund – eine Quittung fuer seinen Upload bekaeme er nie.
+ *
+ * Massgeblich ist die MENGE der brauchbaren Dokumente, nicht bloss der zeitlich
+ * letzte Eintrag. Bei einer Position ueber mehrere Dokumente (z. B. EUeR ueber
+ * zwei Jahre) loeschte "der letzte gewinnt" sonst die Ablehnung von Jahr 1,
+ * sobald Jahr 2 hochgeladen wurde – der Kunde erfuhr nie, dass Jahr 1 noch
+ * fehlt.
  *
  * `dokumente` muss zeitlich aufsteigend sortiert sein.
  */
-function wirksameAblehnung(dokumente: KundenDokument[]): KundenDokument | undefined {
-  let letzte: KundenDokument | undefined;
-  for (const d of dokumente) {
-    // Ein neuerer Eintrag mit anderem Stand (frisch hochgeladen oder
-    // angenommen) hebt die vorherige Ablehnung auf.
-    letzte = d.reviewStatus === "abgelehnt" ? d : undefined;
+function offeneAblehnung(
+  dokumente: KundenDokument[],
+  soll: number
+): KundenDokument | undefined {
+  // Die juengste Ablehnung – bei zwei Ablehnungen zaehlt der neue Grund.
+  let letzteIdx = -1;
+  dokumente.forEach((d, i) => {
+    if (d.reviewStatus === "abgelehnt") letzteIdx = i;
+  });
+  if (letzteIdx === -1) return undefined;
+
+  // Zwei Bedingungen muessen zusammenkommen, damit die Ablehnung erledigt ist:
+  //
+  // 1. Es liegt ueberhaupt genug Brauchbares vor, um alle verlangten Plaetze zu
+  //    fuellen. Sonst loeschte bei einer Position ueber mehrere Dokumente (EUeR
+  //    ueber zwei Jahre) schon Jahr 2 die Ablehnung von Jahr 1.
+  // 2. Mindestens ein brauchbares Dokument ist JUENGER als die Ablehnung – nur
+  //    das ist eine Antwort darauf. Ein Dokument, das schon vorher zur Pruefung
+  //    lag, beantwortet die spaetere Ablehnung nicht.
+  const genug = dokumente.filter((d) => d.reviewStatus !== "abgelehnt").length >= soll;
+  const antwort = dokumente.slice(letzteIdx + 1).some((d) => d.reviewStatus !== "abgelehnt");
+  if (genug && antwort) return undefined;
+
+  return dokumente[letzteIdx];
+}
+
+/**
+ * Dieselbe Frage bei einer Position, die PRO ANTRAGSTELLER verlangt wird.
+ *
+ * Hier hat jeder Antragsteller seinen eigenen Platz, und eine Ablehnung darf
+ * nur durch ein neueres Dokument DESSELBEN Platzes aufgehoben werden. Vorher
+ * lief die zeitliche Auswertung ueber die ganze Position: Annas Ausweis wurde
+ * abgelehnt, danach lud BERND seinen hoch – und Annas Ablehnung samt Grund war
+ * verschwunden. Die Position galt dann sogar als eingereicht, der Hinweistext
+ * sagte "Alles eingegangen, Sie muessen nichts weiter tun", und Anna erfuhr
+ * nie, dass sie nachliefern muss.
+ *
+ * Noch nicht zugeordnete Dokumente bilden einen eigenen Platz und heben die
+ * Ablehnung einer bestimmten Person NICHT auf. Das ist die vorsichtige
+ * Richtung: eine Ablehnung faelschlich zu zeigen kostet den Kunden einen
+ * ueberfluessigen Blick, sie faelschlich zu verbergen kostet ihn die
+ * Finanzierung.
+ */
+function ablehnungJeAntragsteller(
+  dokumente: KundenDokument[],
+  applicantIds: string[],
+  proPerson: number
+): KundenDokument | undefined {
+  for (const id of applicantIds) {
+    const treffer = offeneAblehnung(
+      dokumente.filter((d) => d.applicantId === id),
+      proPerson
+    );
+    if (treffer) return treffer;
   }
-  return letzte;
+  return offeneAblehnung(
+    dokumente.filter((d) => !d.applicantId || !applicantIds.includes(d.applicantId)),
+    proPerson
+  );
 }
 
 /**
