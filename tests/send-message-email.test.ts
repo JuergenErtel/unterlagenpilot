@@ -146,4 +146,24 @@ describe("sendMessageByEmail", () => {
     expect(messageUpdate).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
+
+  it("meldet eine verständliche Meldung, wenn der Mailversand ausgeschaltet ist (statt eines generischen Fehlers)", async () => {
+    // Regression: eine ausgeschaltete Versandstufe ist kein zufälliger
+    // Netzwerkfehler - der Vermittler soll wissen, dass er den Text kopieren
+    // und manuell senden muss, statt es "später erneut" zu versuchen.
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    messageFindUnique.mockResolvedValue(msg());
+    sendEmail.mockRejectedValue(new Error("Der Mailversand ist derzeit ausgeschaltet."));
+    const res = await sendMessageByEmail("m1");
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Mailversand ist derzeit ausgeschaltet/);
+    // Auch hier muss die Reservierung zurückgenommen werden - die Nachricht
+    // bleibt unversendet, nicht fälschlich als versendet markiert.
+    expect(messageUpdateMany).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: { sent: false, sentAt: null },
+    });
+    expect(messageUpdate).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
 });

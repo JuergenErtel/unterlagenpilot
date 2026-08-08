@@ -3,6 +3,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 // Muss vor dem ersten getEnv()-Aufruf gesetzt werden.
 process.env.RESEND_API_KEY = "re_test_key";
 process.env.EMAIL_FROM = "BaufiDesk <noreply@example.de>";
+// Dieser Test prüft den rohen Resend-Client (Payload, HTTP-Fehlerweitergabe) -
+// nicht die Versandstufen (siehe tests/mailversand.test.ts). Stufe "kunden",
+// damit die Mail unumgeleitet bei der adressierten Person ankommt.
+process.env.MAILVERSAND = "kunden";
 
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
 

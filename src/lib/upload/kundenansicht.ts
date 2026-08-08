@@ -71,12 +71,15 @@ export function baueKundenfortschritt(input: {
   const positionen: KundenPosition[] = sichtbar.map((p) => {
     // Zeitlich aufsteigend: der letzte Eintrag ist der juengste Stand.
     //
-    // `duplikat` und `ersetzt` fliegen raus – genau wie in der Vermittlersicht
+    // `duplikat` fliegt raus – genau wie in der Vermittlersicht
     // (checklists/engine, resolveStatus). Sonst hob ausgerechnet die erneute
     // Ablage DERSELBEN Datei eine Ablehnung auf: der Kunde laedt nach der
     // Ablehnung dasselbe noch einmal hoch, es wird als `duplikat` markiert –
     // und er las dauerhaft "Bei uns eingegangen, wird geprueft", ohne je zu
     // erfahren, dass er etwas anderes liefern muss.
+    // `ersetzt` fliegt hier zusaetzlich raus – anders als in der
+    // Vermittlersicht, die `ersetzt` bewusst mitzaehlt (siehe engine.ts). Ein
+    // ersetztes Dokument ist fuer den Kunden kein aktueller Stand mehr.
     const passende = input.dokumente
       .filter(
         (d) =>

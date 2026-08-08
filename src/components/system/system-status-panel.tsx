@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import type { SystemStatus, StatusMode } from "@/lib/system/status";
 
-const MODE_BADGE: Record<StatusMode, { variant: "success" | "warning" | "neutral" | "ai"; label: string }> = {
+const MODE_BADGE: Record<StatusMode, { variant: "success" | "warning" | "neutral" | "ai" | "destructive"; label: string }> = {
   active: { variant: "success", label: "aktiv" },
   configured: { variant: "success", label: "konfiguriert" },
   demo: { variant: "ai", label: "Demo" },
   stub: { variant: "neutral", label: "Stub" },
   warn: { variant: "warning", label: "Achtung" },
+  off: { variant: "destructive", label: "Aus" },
 };
 
 export function SystemStatusPanel({ status }: { status: SystemStatus }) {

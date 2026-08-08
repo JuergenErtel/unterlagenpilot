@@ -84,11 +84,11 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
     // sentAt gehoert dazu, auch wenn es an dieser Stelle noch nie gesetzt wurde -
     // sonst bliebe im Fehlerfall ein inkonsistenter Zwischenzustand denkbar.
     await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false, sentAt: null } });
-    const gesperrt = e instanceof Error && e.message.includes("Kundenversand gesperrt");
+    const ausgeschaltet = e instanceof Error && e.message.includes("Mailversand ist derzeit ausgeschaltet");
     return {
       ok: false,
-      error: gesperrt
-        ? "Der Versand an Kunden ist in dieser Umgebung gesperrt. Bitte den Text kopieren und manuell senden."
+      error: ausgeschaltet
+        ? "Der Mailversand ist derzeit ausgeschaltet. Bitte den Text kopieren und manuell senden."
         : "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen.",
     };
   }

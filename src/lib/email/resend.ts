@@ -17,6 +17,11 @@ export function isEmailConfigured(): boolean {
  *
  * Bewusst ein PFLICHTFELD ohne Vorgabewert: Ein Vorgabewert "intern" wuerde
  * jeden kuenftigen Versandweg stillschweigend als unkritisch einstufen.
+ *
+ * In der Stufe "nur_intern" (siehe MAILVERSAND) entscheidet dieses Feld nicht
+ * darueber, OB umgeleitet wird (das passiert fuer beide Klassen, damit dort
+ * niemals eine echte externe Adresse angeschrieben wird) – wohl aber ist es
+ * die Grundlage dafuer, den urspruenglichen Empfaenger im Betreff auszuweisen.
  */
 export type Empfaengerklasse = "intern" | "kunde";
 
@@ -28,37 +33,46 @@ export interface SendEmailInput {
   empfaenger: Empfaengerklasse;
 }
 
-/** Darf an diese Adresse eine Kundenmail hinausgehen? */
-export function kundenversandErlaubt(to: string): boolean {
-  const env = getEnv();
-  if (env.KUNDENVERSAND !== "an") return false;
-  // Nicht gesetzt heisst "keine Einschraenkung". GESETZT heisst dagegen immer
-  // "nur diese Adressen" – auch wenn nichts Brauchbares drinsteht. Vorher fiel
-  // eine gesetzte, aber leere Variable auf "alle erlaubt" durch: ausgerechnet
-  // die Variable, deren Zweck das gefahrlose Durchspielen ist, haette dann den
-  // Versand an echte Kunden freigegeben.
-  const roh = env.KUNDENVERSAND_NUR_AN;
-  if (roh == null) return true;
-  const liste = roh
-    .split(",")
-    .map((a) => a.trim().toLowerCase())
-    .filter(Boolean);
-  return liste.includes(to.trim().toLowerCase());
-}
-
 export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {
   const env = getEnv();
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
     throw new Error("E-Mail-Versand ist nicht eingerichtet (RESEND_API_KEY / EMAIL_FROM fehlen).");
   }
 
-  // Sperre VOR dem Netzwerkaufruf. Lieber ein lauter Fehler als eine Mail an
-  // einen echten Antragsteller. Der Fehler nennt bewusst weder Betreff noch
-  // Inhalt noch die Adresse.
-  if (input.empfaenger === "kunde" && !kundenversandErlaubt(input.to)) {
-    throw new Error(
-      "Kundenversand gesperrt. Ohne KUNDENVERSAND=an (und ggf. Eintrag in KUNDENVERSAND_NUR_AN) geht nichts an Kunden hinaus."
-    );
+  // "aus": nichts verlaesst das System, auch keine internen Mails. Ein lauter
+  // Fehler statt eines stillen Erfolgs, sonst markiert der Aufrufer (z.B.
+  // sendMessageByEmail) eine nie versendete Nachricht als versendet.
+  if (env.MAILVERSAND === "aus") {
+    throw new Error("Der Mailversand ist derzeit ausgeschaltet.");
+  }
+
+  let ziel = input.to;
+  let betreff = input.subject;
+  let text = input.text;
+
+  // Alles ausser dem ausdruecklichen "kunden" gilt als "nur_intern" - auch
+  // ein unbekannter/fehlender Wert. So bleibt die sichere Vorgabe verlaesslich,
+  // selbst wenn getEnv() (z.B. in einem Test) nicht ueber das Zod-Schema mit
+  // seinem eigenen Fallback gelaufen ist.
+  if (env.MAILVERSAND !== "kunden") {
+    // Ohne Betreiberadresse gibt es keinen sicheren Umleitungsort - dann
+    // verhaelt sich diese Stufe wie "aus" (fail-closed), statt ungeprueft an
+    // die echte Adresse zu senden.
+    if (!env.PLATFORM_ADMIN_EMAIL) {
+      console.error(
+        "[email] MAILVERSAND=nur_intern, aber PLATFORM_ADMIN_EMAIL fehlt - Versand faellt fail-closed aus wie bei 'aus'."
+      );
+      throw new Error("Der Mailversand ist derzeit ausgeschaltet.");
+    }
+    const gehtOhnehinAnBetreiber =
+      input.to.trim().toLowerCase() === env.PLATFORM_ADMIN_EMAIL.trim().toLowerCase();
+    // Ohne diese Ausnahme wuerde eine Mail, die schon an die Betreiberadresse
+    // geht (z.B. "neue Anmeldung wartet"), sinnlos auf sich selbst verweisen.
+    if (!gehtOhnehinAnBetreiber) {
+      ziel = env.PLATFORM_ADMIN_EMAIL;
+      betreff = `[Testbetrieb → ${input.to}] ${input.subject}`;
+      text = `Testbetrieb: Diese Mail ging eigentlich an ${input.to}.\n\n${input.text}`;
+    }
   }
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -69,9 +83,9 @@ export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> 
     },
     body: JSON.stringify({
       from: env.EMAIL_FROM,
-      to: input.to,
-      subject: input.subject,
-      text: input.text,
+      to: ziel,
+      subject: betreff,
+      text,
       ...(input.replyTo ? { reply_to: input.replyTo } : {}),
     }),
   });
