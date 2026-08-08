@@ -132,7 +132,12 @@ export async function einladungZurueckziehenAction(
     organizationId: ctx.organizationId,
     handelnderUserId: ctx.userId,
   });
-  if (!res.ok) return { error: "Diese Einladung ist nicht mehr offen." };
+  if (!res.ok) {
+    return {
+      error:
+        "Diese Einladung ist nicht mehr offen – sie wurde inzwischen angenommen oder zurückgezogen.",
+    };
+  }
 
   revalidatePath("/organization");
   return { ok: true };

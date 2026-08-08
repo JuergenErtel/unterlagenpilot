@@ -150,6 +150,55 @@ describe("Antrag anlegen", () => {
     });
   });
 
+  it("laesst einen Dritten den offenen Antrag nicht mit seinen Daten ueberschreiben", async () => {
+    const { erstelleAntrag } = await import("@/lib/auth/signup");
+    const { verifyPassword } = await import("@/lib/auth/session");
+    await erstelleAntrag(gueltig, { ip: "1.1.1.1" });
+    db.requests[0]!.letzteMailAm = new Date(Date.now() - 6 * 60 * 1000);
+
+    // Angreifer: dieselbe Adresse, SEIN Passwort, SEIN Name/Firma.
+    const angriff = await erstelleAntrag(
+      {
+        ...gueltig,
+        name: "Mallory",
+        firmenname: "Mallory GmbH",
+        passwort: "malloryEigenesGeheimwort",
+      },
+      { ip: "9.9.9.9" }
+    );
+    // Nach aussen unveraendert – sonst waere das Formular ein Kontopruefer.
+    expect(angriff.status).toBe("neu_angelegt");
+
+    // Aber der Antrag gehoert weiterhin dem Opfer: Ein bei der Freigabe
+    // entstehendes Konto traegt dessen Passwort, nicht das des Angreifers.
+    const gespeichert = db.requests[0]!;
+    expect(gespeichert.name).toBe("Anna Beispiel");
+    expect(gespeichert.firmenname).toBe("Beispiel Finanz GmbH");
+    expect(gespeichert.agbIp).toBe("1.1.1.1");
+    expect(verifyPassword("einLangesGeheimwort2026", String(gespeichert.passwordHash))).toBe(true);
+    expect(verifyPassword("malloryEigenesGeheimwort", String(gespeichert.passwordHash))).toBe(false);
+  });
+
+  it("ueberschreibt einen abgelehnten Antrag weiterhin mit den neuen Daten", async () => {
+    const { erstelleAntrag } = await import("@/lib/auth/signup");
+    const { verifyPassword } = await import("@/lib/auth/session");
+    await erstelleAntrag(gueltig, { ip: null });
+    db.requests[0]!.status = "abgelehnt";
+    db.requests[0]!.letzteMailAm = new Date(Date.now() - 6 * 60 * 1000);
+
+    const neu = await erstelleAntrag(
+      { ...gueltig, firmenname: "Neue Firma GmbH", passwort: "einAnderesLangesGeheimwort" },
+      { ip: null }
+    );
+    expect(neu.status).toBe("neu_angelegt");
+    expect(db.requests).toHaveLength(1);
+    expect(db.requests[0]!.status).toBe("neu");
+    expect(db.requests[0]!.firmenname).toBe("Neue Firma GmbH");
+    expect(verifyPassword("einAnderesLangesGeheimwort", String(db.requests[0]!.passwordHash))).toBe(
+      true
+    );
+  });
+
   it("sperrt die Adresse, sobald der Antrag bestaetigt ist", async () => {
     const { erstelleAntrag } = await import("@/lib/auth/signup");
     await erstelleAntrag(gueltig, { ip: null });

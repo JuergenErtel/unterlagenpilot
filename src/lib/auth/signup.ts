@@ -58,8 +58,9 @@ const MAIL_ABSTAND_MS = 5 * 60 * 1000;
  * das Formular zum Kontopruefer.
  *
  * Ein noch unbestaetigter Antrag (Status "neu") ist wiederholbar: der Aufruf
- * ueberschreibt ihn, entwertet die alten Bestaetigungslinks und liefert ein
- * frisches Token – nach aussen ununterscheidbar von einer Erstanmeldung.
+ * entwertet die alten Bestaetigungslinks und liefert ein frisches Token –
+ * die gespeicherten Daten des offenen Antrags bleiben dabei unangetastet.
+ * Nach aussen ununterscheidbar von einer Erstanmeldung.
  */
 export async function erstelleAntrag(
   eingabe: SignupEingabe,
@@ -111,6 +112,32 @@ export async function erstelleAntrag(
     return { status: "bereits_vergeben" };
   }
 
+  // Wiederholung auf einen noch OFFENEN Antrag: der vorhandene Datensatz wird
+  // ausdruecklich NICHT angefasst – kein neuer passwordHash, kein neuer Name,
+  // keine neue Firma. Sonst koennte ein Dritter einen fremden offenen Antrag
+  // mit SEINEM Passwort ueberschreiben; das Opfer bekaeme die
+  // Bestaetigungsmail, klickte sie (es hat sich ja selbst angemeldet), und das
+  // bei der Freigabe entstehende Konto truege das Passwort des Angreifers.
+  // Ausgeloest wird deshalb nur: alte Links entwerten, neuen erzeugen, Mail
+  // erneut verschicken. Nach aussen ist das von einer Erstanmeldung nicht zu
+  // unterscheiden (gleiche Antwort, gleiche Weiterleitung).
+  if (vorhanden && vorhanden.status === "neu") {
+    await prisma.signupRequest.update({
+      where: { id: vorhanden.id },
+      data: { letzteMailAm: new Date() },
+    });
+    await entwerteOffeneToken("email_bestaetigung", { signupRequestId: vorhanden.id });
+    const { token } = await erstelleToken({
+      zweck: "email_bestaetigung",
+      signupRequestId: vorhanden.id,
+      gueltigSekunden: TOKEN_GUELTIGKEIT.email_bestaetigung,
+    });
+    return { status: "neu_angelegt", requestId: vorhanden.id, token };
+  }
+
+  // Ab hier: es gibt gar keinen Antrag oder nur einen abgelehnten. Der
+  // abgelehnte wird mit den neuen Daten ueberschrieben – dort ist niemandes
+  // offener Vorgang zu schuetzen, der Interessent meldet sich neu an.
   const daten = {
     email,
     passwordHash,
@@ -129,9 +156,9 @@ export async function erstelleAntrag(
     ? await prisma.signupRequest.update({ where: { id: vorhanden.id }, data: daten })
     : await prisma.signupRequest.create({ data: daten });
 
-  // Ein neuer Anlauf entwertet die Bestaetigungslinks der frueheren Mails.
-  // Sonst blieben mehrere gueltige Links zu derselben Adresse im Umlauf – und
-  // ein alter Link wuerde einen inzwischen ueberschriebenen Antrag bestaetigen.
+  // Der Wiederanlauf nach einer Ablehnung entwertet die Links der frueheren
+  // Mails. Sonst blieben mehrere gueltige Links zu derselben Adresse im Umlauf –
+  // und ein alter Link wuerde einen inzwischen ueberschriebenen Antrag bestaetigen.
   if (vorhanden) {
     await entwerteOffeneToken("email_bestaetigung", { signupRequestId: antrag.id });
   }

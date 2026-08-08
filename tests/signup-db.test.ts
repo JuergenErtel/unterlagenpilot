@@ -317,11 +317,19 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
       data: { letzteMailAm: new Date(Date.now() - 6 * 60 * 1000) },
     });
 
-    const zweiter = await erstelleAntrag(eingabe, { ip: null });
+    // Der zweite Anlauf kommt bewusst mit ANDEREN Daten (so saehe der Versuch
+    // eines Dritten aus, den offenen Antrag zu uebernehmen).
+    const zweiter = await erstelleAntrag(
+      { ...eingabe, firmenname: "Mallory GmbH", passwort: "malloryEigenesGeheimwort" },
+      { ip: null }
+    );
     expect(zweiter.status).toBe("neu_angelegt"); // NICHT "bereits_vergeben"
     if (zweiter.status !== "neu_angelegt") throw new Error("unerwartet");
     expect(zweiter.requestId).toBe(erster.requestId);
     expect(await prisma.signupRequest.count({ where: { email: "frida@beispiel.de" } })).toBe(1);
+    // Die Daten des offenen Antrags bleiben unangetastet.
+    const unveraendert = await prisma.signupRequest.findUnique({ where: { id: erster.requestId } });
+    expect(unveraendert.firmenname).toBe("Frida Finanz");
 
     // Der Link aus der ersten Mail ist entwertet, nur der neue zieht.
     await expect(bestaetigeEmail(erster.token)).resolves.toMatchObject({

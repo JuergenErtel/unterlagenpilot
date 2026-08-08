@@ -141,7 +141,20 @@ export async function zieheEinladungZurueck(input: {
   const nutzer = await ladeOffeneEinladung(input.userId, input.organizationId);
   if (!nutzer) return { ok: false, grund: "nicht_offen" };
 
-  await prisma.user.delete({ where: { id: nutzer.id } });
+  // Bedingtes Loeschen statt lesen-dann-loeschen: zwischen Pruefung und
+  // Loeschen kann der Eingeladene sein Passwort setzen (TOCTOU) – dann waere
+  // ein arbeitendes Konto verschwunden. Nur wer die Zeile tatsaechlich in
+  // ihrem offenen Zustand trifft, loescht sie. Gleiches Muster wie
+  // verbraucheToken in lib/auth/tokens.ts.
+  const { count } = await prisma.user.deleteMany({
+    where: {
+      id: nutzer.id,
+      organizationId: input.organizationId,
+      passwordHash: null,
+      invitedAt: { not: null },
+    },
+  });
+  if (count !== 1) return { ok: false, grund: "nicht_offen" };
 
   // Nach dem Loeschen: entityId zeigt bewusst auf das entfernte Konto, damit im
   // Protokoll nachvollziehbar bleibt, welcher Platz freigegeben wurde.

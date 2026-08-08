@@ -304,4 +304,42 @@ describe.runIf(RUN)("Einladung (PGlite)", () => {
     expect(zeile).not.toBeNull();
     await expect(liesEinladung("unbekannt")).resolves.toBeNull();
   }, 60_000);
+
+  it("loescht kein Konto, das zwischen Pruefung und Loeschen angenommen wurde", async () => {
+    const { zieheEinladungZurueck } = await import("@/lib/auth/invite");
+    const offen = await prisma.user.findUnique({ where: { email: "kontext@beispiel.de" } });
+
+    // Der Eingeladene setzt sein Passwort, nachdem die Vorpruefung gelesen hat.
+    await prisma.user.update({
+      where: { id: offen.id },
+      data: { passwordHash: "scrypt$16384$abc$def" },
+    });
+    // Manuelles Monkeypatch statt vi.spyOn – siehe Anmerkung in
+    // tests/signup-db.test.ts: vi.spyOn beschaedigt den Prisma-Delegate.
+    const echtesFindUnique = prisma.user.findUnique.bind(prisma.user);
+    let ersterAufruf = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prisma.user.findUnique = ((...args: any[]) => {
+      if (ersterAufruf) {
+        ersterAufruf = false;
+        // Der veraltete Stand, den die Vorpruefung gesehen haette.
+        return Promise.resolve({ ...offen, passwordHash: null });
+      }
+      return echtesFindUnique(...args);
+    }) as typeof prisma.user.findUnique;
+
+    try {
+      await expect(
+        zieheEinladungZurueck({
+          userId: offen.id,
+          organizationId: orgId,
+          handelnderUserId: chefId,
+        })
+      ).resolves.toMatchObject({ ok: false, grund: "nicht_offen" });
+      // Das arbeitende Konto steht noch.
+      expect(await echtesFindUnique({ where: { id: offen.id } })).not.toBeNull();
+    } finally {
+      prisma.user.findUnique = echtesFindUnique;
+    }
+  }, 60_000);
 });
