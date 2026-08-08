@@ -16,8 +16,7 @@ import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
 import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
-import { fortschritt } from "@/lib/self-disclosure/navigation";
-import type { Antworten } from "@/lib/self-disclosure/types";
+import { ladeSelbstauskunftStand } from "@/lib/cases/selbstauskunft-stand";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +79,7 @@ export default async function CaseCockpitPage({
     documents,
     plausibility,
     uploadLinks,
-    selbstauskunftBogen,
+    selbstauskunftStand,
     uebernahme,
     gesendeteNachrichten,
     erstkontaktStand,
@@ -88,17 +87,12 @@ export default async function CaseCockpitPage({
     prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
     listUploadLinks(id, ctx.organizationId),
-    prisma.selfDisclosure.findFirst({
-      where: { caseId: id },
-      orderBy: { createdAt: "desc" },
-      select: {
-        currentStep: true,
-        answers: true,
-        submittedAt: true,
-        takenOverAt: true,
-        link: { select: { id: true, active: true } },
-      },
-    }),
+    // EINE Quelle für den Selbstauskunft-Stand (siehe selbstauskunft-stand.ts):
+    // erkennt auch einen beim Erstkontakt erzeugten, vom Kunden noch nicht
+    // geöffneten Link – sonst zeigt die Karte "noch nicht erstellt", obwohl
+    // ein gültiger Link seit Tagen beim Kunden liegt, und ein Klick auf
+    // "Link erstellen" legt einen zweiten, konkurrierenden Link an.
+    ladeSelbstauskunftStand(id),
     ladeUebernahmeplan(id),
     // Signal für den Phasenvorschlag – muss geladen werden, sonst schlüge die
     // Fallseite eine andere Phase vor als das Board.
@@ -118,24 +112,10 @@ export default async function CaseCockpitPage({
     usedCount: l.usedCount,
   }));
 
-  // Stand der Selbstauskunft in Klartext – man soll auf einen Blick sehen, ob
-  // der Kunde noch gar nicht angefangen hat oder mittendrin steckt.
-  const sdAntworten = ((selbstauskunftBogen?.answers as Antworten | null) ?? {}) as Antworten;
-  const sdFortschritt = selbstauskunftBogen?.currentStep
-    ? fortschritt(selbstauskunftBogen.currentStep, sdAntworten)
-    : null;
-  const selbstauskunftStatus = !selbstauskunftBogen?.link
-    ? "noch nicht erstellt"
-    : selbstauskunftBogen.takenOverAt
-      ? "übernommen"
-      : selbstauskunftBogen.submittedAt
-        ? "eingegangen"
-        : sdFortschritt && sdFortschritt.position > 0
-          ? `begonnen, Schritt ${sdFortschritt.position} von ${sdFortschritt.gesamt}`
-          : "erstellt, noch nicht begonnen";
-  const aktiverSelbstauskunftLink = selbstauskunftBogen?.link?.active
-    ? selbstauskunftBogen.link.id
-    : null;
+  // Nur ein noch gültiger Link darf als "aktiv" gelten – sonst böte die
+  // Oberfläche an, einen widerrufenen oder abgelaufenen Link zu widerrufen,
+  // während ein tatsächlich gültiger zweiter unbemerkt bliebe.
+  const aktiverSelbstauskunftLink = selbstauskunftStand.gueltig ? selbstauskunftStand.linkId : null;
 
   const phasenVorschlag = schlagePhaseVor({
     leadPhase: caseRow.leadPhase,
@@ -143,7 +123,7 @@ export default async function CaseCockpitPage({
     status: caseRow.status,
     abschlussdatum: caseRow.abschlussdatum,
     hatGesendeteNachricht: gesendeteNachrichten > 0,
-    selbstauskunftBegonnen: Boolean(selbstauskunftBogen?.currentStep),
+    selbstauskunftBegonnen: selbstauskunftStand.begonnen,
     dokumenteVorhanden: documents.length > 0,
   });
 
@@ -429,7 +409,7 @@ export default async function CaseCockpitPage({
           </Card>
           <SelfDisclosureManager
             caseId={id}
-            status={selbstauskunftStatus}
+            status={selbstauskunftStand.label}
             aktiverLinkId={aktiverSelbstauskunftLink}
           />
           {uebernahme && (
