@@ -37,7 +37,20 @@ vi.mock("@/lib/db", () => ({
       findFirst: vi.fn(async ({ where }: any) => vorlagen[where.organizationId] ?? null),
     },
     case: {
-      findUnique: vi.fn(async ({ where }: any) => faelle[where.id] ?? null),
+      // Simuliert Prisma nur so weit, wie es hier noetig ist: NUR mit
+      // `orderBy: { position: "asc" }` kommen die Antragsteller sortiert
+      // zurueck – ohne den Zusatz die rohe Reihenfolge.
+      findUnique: vi.fn(async ({ where, include }: any) => {
+        const f = faelle[where.id];
+        if (!f) return null;
+        const sortiert = include?.applicants?.orderBy?.position === "asc";
+        return {
+          ...f,
+          applicants: sortiert
+            ? [...f.applicants].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+            : f.applicants,
+        };
+      }),
       update: vi.fn(async ({ where, data }: any) => {
         Object.assign(faelle[where.id], data);
         return faelle[where.id];
@@ -94,7 +107,9 @@ function fall(extra: Record<string, unknown> = {}) {
     primaryEmploymentType: "angestellter",
     kapitalanlage: false,
     erstkontaktVorbereitetAm: null,
-    applicants: [{ id: "a1", vorname: "Anna", nachname: "Beispiel", email: "anna@example.de" }],
+    applicants: [
+      { id: "a1", position: 1, vorname: "Anna", nachname: "Beispiel", email: "anna@example.de" },
+    ],
     ...extra,
   };
 }
@@ -144,6 +159,38 @@ describe("Erstkontakt vorbereiten", () => {
     const { prisma } = await import("@/lib/db");
     const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
     expect(body).toContain("Anna");
+  });
+
+  it("gruesst den Antragsteller, an den die Mail spaeter tatsaechlich geht", async () => {
+    // `sendMessageByEmail` und die Erstkontakt-Karte sortieren nach position.
+    // Ohne dieselbe Sortierung hier stuende im schlechten Fall "Hallo Bernd
+    // Beispiel," in einer Mail an anna@…
+    faelle.c1 = fall({
+      applicants: [
+        { id: "a2", position: 2, vorname: "Bernd", nachname: "Beispiel", email: "bernd@example.de" },
+        { id: "a1", position: 1, vorname: "Anna", nachname: "Beispiel", email: "anna@example.de" },
+      ],
+    });
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await bereiteErstkontaktVor("c1");
+    const { prisma } = await import("@/lib/db");
+    const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
+    expect(body).toContain("Hallo Anna Beispiel,");
+    expect(body).not.toContain("Bernd");
+  });
+
+  it("gruesst den Mitantragsteller, wenn der erste keine Adresse hat", async () => {
+    faelle.c1 = fall({
+      applicants: [
+        { id: "a2", position: 2, vorname: "Bernd", nachname: "Beispiel", email: "bernd@example.de" },
+        { id: "a1", position: 1, vorname: "Anna", nachname: "Beispiel", email: null },
+      ],
+    });
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await bereiteErstkontaktVor("c1");
+    const { prisma } = await import("@/lib/db");
+    const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
+    expect(body).toContain("Hallo Bernd Beispiel,");
   });
 
   it("verlangt genau die Unterlagen, die der Kunde spaeter auf der Upload-Seite sieht", async () => {
@@ -235,7 +282,7 @@ describe("Erstkontakt vorbereiten", () => {
   });
 
   it("bereitet nichts vor, wenn keine E-Mail-Adresse hinterlegt ist", async () => {
-    faelle.c1 = fall({ applicants: [{ id: "a1", vorname: "Anna", email: null }] });
+    faelle.c1 = fall({ applicants: [{ id: "a1", position: 1, vorname: "Anna", email: null }] });
     const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
     await expect(bereiteErstkontaktVor("c1")).resolves.toEqual({ status: "kein_empfaenger" });
     const { prisma } = await import("@/lib/db");

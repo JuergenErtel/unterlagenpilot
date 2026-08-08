@@ -40,7 +40,12 @@ export async function bereiteErstkontaktVor(
     where: { id: caseId },
     // `property` gehoert dazu: Objektart und Nutzung steuern die Checkliste.
     // Ohne sie verlangte die Mail eine andere Liste als die Upload-Seite.
-    include: { applicants: true, property: true },
+    //
+    // `orderBy: position` ist Pflicht: `sendMessageByEmail` und die
+    // Erstkontakt-Karte sortieren ebenso. Ohne dieselbe Reihenfolge kann im
+    // Entwurf "Hallo Bernd Beispiel," stehen, waehrend die Mail an anna@…
+    // hinausgeht.
+    include: { applicants: { orderBy: { position: "asc" } }, property: true },
   });
   if (!fall) return { status: "kein_empfaenger" };
   if (fall.erstkontaktVorbereitetAm) return { status: "schon_vorbereitet" };
