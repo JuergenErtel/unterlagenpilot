@@ -4,6 +4,7 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
 import type { Platform, CaseStatus } from "@/lib/domain/enums";
 import type { TodoCase } from "@/components/dashboard/todo-case-card";
 
@@ -109,21 +110,13 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     select: { caseId: true, reviewStatus: true, classificationStatus: true, extractionStatus: true },
   });
 
-  // Selbstauskunft je Kandidat – ebenfalls in EINER Query, damit das Dashboard
-  // dieselbe Prioritätsleiter sieht wie die Fallseite.
-  const todoBoegen = await prisma.selfDisclosure.findMany({
-    where: { caseId: { in: todoCandidates.map((c) => c.id) } },
-    orderBy: { createdAt: "desc" },
-    select: {
-      caseId: true,
-      currentStep: true,
-      submittedAt: true,
-      takenOverAt: true,
-      link: { select: { createdAt: true } },
-    },
-  });
-  const bogenJeFall = new Map<string, (typeof todoBoegen)[number]>();
-  for (const b of todoBoegen) if (!bogenJeFall.has(b.caseId)) bogenJeFall.set(b.caseId, b);
+  // Selbstauskunft je Kandidat – EINE Batch-Query (dieselbe Quelle wie die
+  // Fallseite, siehe selbstauskunft-stand.ts), damit das Dashboard denselben
+  // Stand sieht: Der Erstkontakt legt schon einen `SelfDisclosureLink` an,
+  // bevor der Kunde den Bogen je öffnet – ein `SelfDisclosure`-Datensatz
+  // entsteht erst danach. Wer nur nach Letzterem sucht, übersieht genau die
+  // Fälle, bei denen ein gültiger Link unbearbeitet beim Kunden liegt.
+  const selbstauskunftJeFall = await ladeSelbstauskunftStandBatch(todoCandidates.map((c) => c.id));
 
   // Erstkontakt-Stand je Kandidat – ebenfalls in EINER Query, damit das
   // Dashboard dieselbe Prioritätsleiter sieht wie die Fallseite (next-step.ts).
@@ -155,13 +148,9 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           .filter((a) => !a.geburtsdatum)
           .map((a) => `Geburtsdatum ${a.vorname ?? `Antragsteller ${a.position}`}`),
         selbstauskunft: (() => {
-          const b = bogenJeFall.get(c.id);
-          if (!b?.link) return undefined;
-          return {
-            eingegangen: Boolean(b.submittedAt) && !b.takenOverAt,
-            begonnen: Boolean(b.currentStep) || Boolean(b.submittedAt),
-            erstelltVorTagen: Math.floor((Date.now() - b.link.createdAt.getTime()) / 86400_000),
-          };
+          const s = selbstauskunftJeFall.get(c.id);
+          if (!s?.linkId) return undefined;
+          return { eingegangen: s.eingegangen, begonnen: s.begonnen, erstelltVorTagen: s.erstelltVorTagen };
         })(),
         erstkontakt: {
           empfaenger: c.applicants.map((a) => a.email).find((e): e is string => !!e && e.includes("@")) ?? null,
