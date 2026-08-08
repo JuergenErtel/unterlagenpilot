@@ -15,6 +15,7 @@ import {
   BadgeEuro,
   KanbanSquare,
   Settings,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,11 +45,28 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
   },
 ];
 
-export function SidebarNav({ onNavigate }: { onNavigate?: () => void } = {}) {
+/** Nur fuer den Plattformbetreiber (User.platformAdmin). Die Sichtbarkeit hier
+ *  ist reine Auffindbarkeit – den Zugang selbst regelt requirePlatformAdmin auf
+ *  der Seite und in jeder Server Action (404 statt 403). */
+export const PLATTFORM_GRUPPE: (typeof NAV_GROUPS)[number] = {
+  label: "Plattform",
+  items: [{ href: "/admin/anmeldungen", label: "Anmeldungen", icon: UserCheck }],
+};
+
+/** Welche Gruppen ein Nutzer sieht. Reine Funktion, damit ohne DOM pruefbar. */
+export function navGruppen(platformAdmin: boolean): typeof NAV_GROUPS {
+  return platformAdmin ? [...NAV_GROUPS, PLATTFORM_GRUPPE] : NAV_GROUPS;
+}
+
+export function SidebarNav({
+  onNavigate,
+  platformAdmin = false,
+}: { onNavigate?: () => void; platformAdmin?: boolean } = {}) {
   const pathname = usePathname();
+  const gruppen = navGruppen(platformAdmin);
   return (
     <nav className="flex-1 space-y-5 overflow-y-auto p-3">
-      {NAV_GROUPS.map((g) => (
+      {gruppen.map((g) => (
         <div key={g.label}>
           <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
             {g.label}

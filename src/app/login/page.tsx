@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import {
   Card,
@@ -11,6 +12,7 @@ import {
 import { LoginForm } from "@/components/auth/login-form";
 import { getEnv } from "@/lib/env";
 import { getCurrentContext } from "@/lib/auth/context";
+import { safeRedirect } from "@/lib/auth/redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +24,11 @@ export default async function LoginPage({
   const { next } = await searchParams;
   const env = getEnv();
 
-  // Bereits angemeldet (echte Session) → direkt weiter.
+  // Bereits angemeldet (echte Session) → direkt weiter. safeRedirect statt
+  // eigener Pruefung: "//evil.com" beginnt ebenfalls mit "/" und waere eine
+  // offene Weiterleitung.
   const ctx = await getCurrentContext();
-  if (ctx && !ctx.isDemo) redirect(next && next.startsWith("/") ? next : "/dashboard");
+  if (ctx && !ctx.isDemo) redirect(safeRedirect(next));
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
@@ -49,6 +53,11 @@ export default async function LoginPage({
               {env.AUTH_MODE === "demo"
                 ? "Demo-Modus aktiv: Der Bereich ist auch ohne Anmeldung erreichbar. Für echte Kundendaten AUTH_MODE=session setzen."
                 : "Mandantenfähige Anmeldung mit Rollen und Organisationstrennung."}
+            </p>
+            <p className="text-center text-xs text-muted-foreground">
+              <Link href="/passwort-vergessen" className="underline">Passwort vergessen?</Link>
+              {" · "}
+              <Link href="/registrieren" className="underline">Zugang anfragen</Link>
             </p>
           </CardFooter>
         </Card>

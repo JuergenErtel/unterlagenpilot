@@ -25,3 +25,32 @@ describe("SaaS-Tarife & Limits", () => {
     expect(PLAN_ROLES.pro).not.toContain("white_label_admin");
   });
 });
+
+describe("Wunschtarif-Auswahl der Registrierung", () => {
+  it("leitet die Preise aus PLAN_DEFINITIONS ab", async () => {
+    const { waehlbareTarife, monatspreisText } = await import("@/lib/saas/plans");
+    const tarife = waehlbareTarife();
+    expect(tarife.map((t) => t.wert)).toEqual(["starter", "pro", "team"]);
+    for (const t of tarife) {
+      const def = PLAN_DEFINITIONS[t.wert];
+      expect(t.label).toContain(def.name);
+      // Die Zahl stammt aus der Definition – im Formular steht sie nirgends.
+      expect(t.label).toContain(monatspreisText(def.priceMonthlyCents!));
+    }
+  });
+
+  it("laesst Tarife ohne ausgewiesenen Preis weg", async () => {
+    const { waehlbareTarife } = await import("@/lib/saas/plans");
+    const werte = waehlbareTarife().map((t) => t.wert);
+    expect(werte).not.toContain("enterprise");
+    expect(werte).not.toContain("white_label");
+  });
+
+  it("nennt 29, 79 und 199 Euro – so lange die Definition das sagt", async () => {
+    const { waehlbareTarife } = await import("@/lib/saas/plans");
+    const labels = waehlbareTarife().map((t) => t.label);
+    expect(labels[0]).toMatch(/29/);
+    expect(labels[1]).toMatch(/79/);
+    expect(labels[2]).toMatch(/199/);
+  });
+});

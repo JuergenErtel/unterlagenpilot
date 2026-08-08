@@ -16,7 +16,13 @@ import { USER_ROLE_LABELS } from "@/lib/domain/enums";
 export function MobileNav({
   context,
 }: {
-  context: { organizationName: string; userName: string; role: string; isDemo?: boolean };
+  context: {
+    organizationName: string;
+    userName: string;
+    role: string;
+    isDemo?: boolean;
+    platformAdmin?: boolean;
+  };
 }) {
   const [open, setOpen] = useState(false);
   const initials = context.userName
@@ -59,7 +65,7 @@ export function MobileNav({
             </Dialog.Close>
           </div>
 
-          <SidebarNav onNavigate={() => setOpen(false)} />
+          <SidebarNav onNavigate={() => setOpen(false)} platformAdmin={context.platformAdmin} />
 
           <div className="space-y-2 border-t p-3">
             <div className="flex items-center gap-3 rounded-md px-2 py-1.5">

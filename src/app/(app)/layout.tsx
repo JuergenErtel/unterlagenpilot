@@ -38,6 +38,7 @@ export default async function AppLayout({
         organizationName: ctx.organizationName,
         userName: ctx.userName,
         role: ctx.role,
+        platformAdmin: ctx.platformAdmin,
         isDemo: ctx.isDemo,
       }}
     >

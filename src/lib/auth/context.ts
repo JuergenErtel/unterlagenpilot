@@ -21,6 +21,11 @@ export interface AppContext {
   userId: string;
   userName: string;
   role: UserRole;
+  /** Plattform-Ebene (Freigabe von Registrierungsantraegen). Kommt aus derselben
+   *  Abfrage wie Rolle und Organisation – die Navigation kostet dadurch keine
+   *  zusaetzliche Datenbankrunde. Massgeblich fuer den Zugang bleibt
+   *  requirePlatformAdmin. */
+  platformAdmin: boolean;
   /** true, wenn der Kontext aus dem Demo-Fallback stammt (kein echter Login). */
   isDemo: boolean;
 }
@@ -43,25 +48,43 @@ export async function getCurrentContext(): Promise<AppContext | null> {
   // 1) Echte Session aus dem Cookie
   const session = verifySessionToken(await readSessionToken());
   if (session) {
-    // Org-Name nachladen (klein, ungecached – Korrektheit vor Mikro-Optimierung).
-    const org = await prisma.organization.findUnique({
-      where: { id: session.org },
-      select: { name: true },
+    // Rolle, Organisation und Aktiv-Kennzeichen kommen aus der DATENBANK, nicht
+    // aus dem Cookie: sonst behielte ein gesperrter oder herabgestufter Nutzer
+    // seine Rechte bis zum Ablauf des Tokens (bis zu SESSION_TTL_HOURS).
+    // Organisation wird verschachtelt mitgeladen (eine Abfrage statt zwei).
+    const nutzer = await prisma.user.findUnique({
+      where: { id: session.sub },
+      select: {
+        id: true,
+        active: true,
+        organizationId: true,
+        name: true,
+        role: true,
+        platformAdmin: true,
+        organization: { select: { name: true } },
+      },
     });
-    if (org) {
+    if (nutzer?.active && nutzer.organization) {
       return {
-        organizationId: session.org,
-        organizationName: org.name,
-        userId: session.sub,
-        userName: session.name,
-        role: session.role,
+        organizationId: nutzer.organizationId,
+        organizationName: nutzer.organization.name,
+        userId: nutzer.id,
+        userName: nutzer.name,
+        role: nutzer.role as UserRole,
+        platformAdmin: nutzer.platformAdmin,
         isDemo: false,
       };
     }
+    // Ungueltig gewordene Session (Nutzer inaktiv/geloescht oder Organisation weg):
+    // nicht in den Demo-Zweig durchfallen lassen.
+    return null;
   }
 
-  // 2) Demo-Fallback (nur wenn ausdrücklich erlaubt)
-  if (env.AUTH_MODE === "demo") {
+  // 2) Demo-Fallback (nur ausserhalb der Produktion). Der Fallback nimmt den
+  // ersten aktiven Nutzer ALLER Organisationen – mit mehreren Mandanten waere
+  // das ein Fremdzugriff per Konfigurationsfehler. Deshalb hart gesperrt,
+  // unabhaengig davon, was AUTH_MODE sagt.
+  if (env.AUTH_MODE === "demo" && process.env.NODE_ENV !== "production") {
     const user = await prisma.user.findFirst({
       where: { active: true },
       include: { organization: true },
@@ -74,6 +97,9 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         userId: user.id,
         userName: user.name,
         role: user.role as UserRole,
+        // Der Demo-Kontext haengt an keinem echten Login – Plattformrechte
+        // gibt es dort grundsaetzlich nicht (vgl. requirePlatformAdmin).
+        platformAdmin: false,
         isDemo: true,
       };
     }
@@ -89,7 +115,10 @@ export async function getCurrentContext(): Promise<AppContext | null> {
 export async function requireContext(): Promise<AppContext> {
   const ctx = await getCurrentContext();
   if (!ctx) {
-    if (getEnv().AUTH_MODE === "demo") {
+    // Die Entwicklermeldung gibt es nur ausserhalb der Produktion. Stuende
+    // AUTH_MODE dort versehentlich auf "demo", saehe ein Kunde sonst
+    // "Bitte npm run db:seed ausfuehren" statt der Anmeldeseite.
+    if (getEnv().AUTH_MODE === "demo" && process.env.NODE_ENV !== "production") {
       throw new Error("Kein Vermittler-Kontext gefunden. Bitte `npm run db:seed` ausführen.");
     }
     redirect("/login");

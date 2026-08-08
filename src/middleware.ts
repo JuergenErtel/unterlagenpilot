@@ -14,6 +14,9 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  *  - `/api/cron/*`    Vercel-Cron (per CRON_SECRET geschützt)
  *  - `/monitoring`    Sentry-Tunnel (Fehler-Reports)
  *  - `/gate`, `/api/gate`  das Gate selbst
+ *  - `/registrieren/bestaetigen/*`, `/passwort-neu/*`, `/einladung/*`
+ *    Magic-Link-Strecken (tragen ihr eigenes Geheimnis im Pfad). Das
+ *    Formular `/registrieren` selbst bleibt bewusst HINTER dem Gate.
  */
 
 const PUBLIC_PREFIXES = [
@@ -23,6 +26,12 @@ const PUBLIC_PREFIXES = [
   "/monitoring",
   "/gate",
   "/api/gate",
+  // Magic-Link-Strecken: tragen ihr eigenes Geheimnis im Pfad. Ohne diese
+  // Ausnahme scheitert jeder, der die Mail auf einem anderen Geraet oeffnet,
+  // am Gate. Das Formular /registrieren bleibt bewusst HINTER dem Gate.
+  "/registrieren/bestaetigen",
+  "/passwort-neu",
+  "/einladung",
 ];
 
 function isPublicPath(pathname: string): boolean {

@@ -549,8 +549,24 @@ export const AUDIT_ACTIONS = [
   "auth.login",
   "auth.login_failed",
   "auth.logout",
+  "signup.approved",
+  "signup.rejected",
+  "user.invited",
+  "user.invite_accepted",
+  "user.invite_resent",
+  "user.invite_revoked",
+  "user.password_reset",
   "customer.data_exported",
   "customer.deleted",
   "access.viewed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** Zustaende eines Registrierungsantrags. */
+export const SIGNUP_STATUSES = ["neu", "bestaetigt", "freigegeben", "abgelehnt"] as const;
+export type SignupStatus = (typeof SIGNUP_STATUSES)[number];
+
+/** Zweck eines AuthToken. Die Zweckbindung verhindert, dass z. B. ein
+ *  Einladungslink als Passwort-Reset eingeloest wird. */
+export const AUTH_TOKEN_ZWECKE = ["email_bestaetigung", "passwort_reset", "einladung"] as const;
+export type AuthTokenZweck = (typeof AUTH_TOKEN_ZWECKE)[number];

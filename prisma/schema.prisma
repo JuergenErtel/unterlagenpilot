@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Supabase: gepoolte Verbindung (PgBouncer, Port 6543) für die App,
   // direkte Verbindung (Port 5432) für Migrationen/Introspektion.
   url       = env("DATABASE_URL")
@@ -43,7 +43,9 @@ enum CaseStatus {
   archiviert
 }
 
-/** Woher ein Fall stammt. */
+/**
+ * Woher ein Fall stammt.
+ */
 enum LeadSource {
   immoscout24
   baufi24
@@ -53,7 +55,9 @@ enum LeadSource {
   unbekannt
 }
 
-/** Vertriebsphase eines Leads – zweite Dimension neben CaseStatus. */
+/**
+ * Vertriebsphase eines Leads – zweite Dimension neben CaseStatus.
+ */
 enum LeadPhase {
   neu
   anfrage_erstellt
@@ -249,6 +253,19 @@ enum PlanTier {
   white_label
 }
 
+enum SignupStatus {
+  neu
+  bestaetigt
+  freigegeben
+  abgelehnt
+}
+
+enum AuthTokenZweck {
+  email_bestaetigung
+  passwort_reset
+  einladung
+}
+
 enum JobStatus {
   queued
   running
@@ -279,18 +296,18 @@ enum AiJobType {
 // ============================ MANDANT / NUTZER ============================
 
 model Organization {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String   @unique
-  street          String?
-  zip             String?
-  city            String?
-  website         String?
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  street        String?
+  zip           String?
+  city          String?
+  website       String?
   // Datenschutz: Aufbewahrungsfrist (0 = bis manuelle Loeschung)
-  retentionDays   Int      @default(0)
-  isWhiteLabel    Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  retentionDays Int      @default(0)
+  isWhiteLabel  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   users               User[]
   customers           Customer[]
@@ -309,21 +326,30 @@ model Organization {
 }
 
 model User {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String   @unique
+  email          String       @unique
   name           String
   // Passwort-Hash – niemals Klartext. Auth via Provider moeglich.
   passwordHash   String?
-  role           UserRole @default(vermittler)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  role           UserRole     @default(vermittler)
+  active         Boolean      @default(true)
+  // Plattform-Ebene: darf Registrierungsantraege freigeben. Bewusst KEIN Wert im
+  // UserRole-Enum – die Rollen beschreiben die Stellung innerhalb einer
+  // Organisation, nicht ueber ihnen.
+  platformAdmin  Boolean      @default(false)
+  invitedAt      DateTime?
+  // Sperre gegen wiederholte "Adresse bereits vergeben"-Mails. Liegt am User,
+  // weil es zu direkt angelegten Konten keinen SignupRequest gibt.
+  letzteHinweisMailAm DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  casesAsBroker Case[]       @relation("CaseBroker")
+  casesAsBroker Case[]      @relation("CaseBroker")
   auditLogs     AuditLog[]
   caseNotes     CaseNote[]
+  authTokens    AuthToken[]
 
   @@index([organizationId])
   @@map("users")
@@ -335,7 +361,7 @@ model Role {
   organizationId String?
   key            String
   label          String
-  permissions    Json     // string[] der erlaubten Aktionen
+  permissions    Json // string[] der erlaubten Aktionen
   createdAt      DateTime @default(now())
 
   @@unique([organizationId, key])
@@ -345,13 +371,13 @@ model Role {
 // ============================ KUNDE / ANTRAGSTELLER ============================
 
 model Customer {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String?
   phone          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   cases Case[]
 
@@ -360,25 +386,25 @@ model Customer {
 }
 
 model Applicant {
-  id           String   @id @default(cuid())
-  caseId       String
-  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  position     Int      // 1 = Antragsteller 1, 2 = Antragsteller 2 ...
-  anrede       String?  // "herr" | "frau" – aus der Selbstauskunft, für Anschreiben
-  vorname      String?
-  nachname     String?
-  geburtsdatum DateTime?
-  geburtsort   String?
+  id                   String         @id @default(cuid())
+  caseId               String
+  case                 Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  position             Int // 1 = Antragsteller 1, 2 = Antragsteller 2 ...
+  anrede               String? // "herr" | "frau" – aus der Selbstauskunft, für Anschreiben
+  vorname              String?
+  nachname             String?
+  geburtsdatum         DateTime?
+  geburtsort           String?
   staatsangehoerigkeit String?
-  familienstand MaritalStatus?
-  anzahlKinder Int?
-  street       String?
-  zip          String?
-  city         String?
-  email        String?
-  phone        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  familienstand        MaritalStatus?
+  anzahlKinder         Int?
+  street               String?
+  zip                  String?
+  city                 String?
+  email                String?
+  phone                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   employment     EmploymentRecord[]
   selfEmployment SelfEmploymentRecord[]
@@ -392,16 +418,16 @@ model Applicant {
 // ============================ FALL ============================
 
 model Case {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   caseNumber     String
   customerId     String?
-  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   brokerId       String?
-  broker         User?    @relation("CaseBroker", fields: [brokerId], references: [id], onDelete: SetNull)
+  broker         User?        @relation("CaseBroker", fields: [brokerId], references: [id], onDelete: SetNull)
 
-  status         CaseStatus    @default(neu)
+  status              CaseStatus  @default(neu)
   // Status vor dem Archivieren – beim Entarchivieren wiederhergestellt, damit ein
   // abgeschlossener Fall nicht als "Unterlagen fehlen" zurückkommt.
   statusBeforeArchive CaseStatus?
@@ -409,75 +435,75 @@ model Case {
   // Vertriebsphase – unabhängig vom Bearbeitungsstatus. "Verloren" ist KEIN
   // Phasenwert: verlorenAm gesetzt heißt verloren, die zuletzt erreichte Phase
   // bleibt erhalten (damit auswertbar ist, WO verloren wird).
-  leadPhase      LeadPhase @default(neu)
-  leadPhaseSeit  DateTime  @default(now())
-  verlorenAm     DateTime?
-  verlorenGrund  String?
+  leadPhase     LeadPhase @default(neu)
+  leadPhaseSeit DateTime  @default(now())
+  verlorenAm    DateTime?
+  verlorenGrund String?
 
   // Herkunft des Falls. Der Rohwert bleibt erhalten, damit nachvollziehbar
   // ist, woraus die Zuordnung entstand – kommt morgen ein neuer Wert, steht
   // hier "unbekannt", aber das Original ist noch da.
-  quelle                LeadSource @default(unbekannt)
+  quelle                LeadSource      @default(unbekannt)
   quelleDetail          String?
   // Dreiwertig: null heißt "keine Angabe" und ist NICHT "nein".
   einwilligungKontakt   Boolean?
   einwilligungMarketing Boolean?
-  financingType  FinancingType?
+  financingType         FinancingType?
   primaryEmploymentType EmploymentType?
-  kapitalanlage  Boolean       @default(false)
-  selbstnutzung  Boolean       @default(true)
-  vermieteterAnteil Int?
+  kapitalanlage         Boolean         @default(false)
+  selbstnutzung         Boolean         @default(true)
+  vermieteterAnteil     Int?
 
   // Ziel-/einreichende Bank (steuert bankindividuelle Anforderungen & Aufbereitung)
-  bankName       String?
+  bankName      String?
   // Manuelle Wiedervorlage (Vermittler legt einen Termin fest)
-  wiedervorlage  DateTime?
+  wiedervorlage DateTime?
 
   // Abschlussdaten (Provisions-/Pipeline-Tracking) – erst nach Zusage relevant
-  abschlussBank    String?
-  darlehensbetrag  Float?
-  sollzinsProzent  Float?
-  courtageProzent  Float?
-  abschlussdatum   DateTime?
+  abschlussBank   String?
+  darlehensbetrag Float?
+  sollzinsProzent Float?
+  courtageProzent Float?
+  abschlussdatum  DateTime?
 
   // Plattform-IDs
-  finlinkId          String?
-  europaceVorgangId  String?
-  ehypHomeId         String?
+  finlinkId         String?
+  europaceVorgangId String?
+  ehypHomeId        String?
 
   // Einreichungsstatus 0..100 (berechnet)
   readinessScore Int @default(0)
 
   // Datenschutz / Aufbewahrung pro Vorgang
-  retentionDays  Int?
-  deleteAfter    DateTime?
+  retentionDays Int?
+  deleteAfter   DateTime?
 
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  applicants         Applicant[]
-  sources            CaseSource[]
-  property           Property?
-  financingRequest   FinancingRequest?
-  liabilities        Liability[]
-  assets             Asset[]
-  documents          Document[]
-  caseChecklistItems CaseChecklistItem[]
-  missingRequests    MissingDocumentRequest[]
-  generatedMessages  GeneratedMessage[]
-  uploadLinks        UploadLink[]
+  applicants          Applicant[]
+  sources             CaseSource[]
+  property            Property?
+  financingRequest    FinancingRequest?
+  liabilities         Liability[]
+  assets              Asset[]
+  documents           Document[]
+  caseChecklistItems  CaseChecklistItem[]
+  missingRequests     MissingDocumentRequest[]
+  generatedMessages   GeneratedMessage[]
+  uploadLinks         UploadLink[]
   selfDisclosureLinks SelfDisclosureLink[]
   selfDisclosures     SelfDisclosure[]
-  customerForm       CustomerForm?
-  platformMappings   PlatformMapping[]
-  platformSyncLogs   PlatformSyncLog[]
-  exportJobs         ExportJob[]
-  aiJobs             AiJob[]
-  plausibilityChecks PlausibilityCheck[]
-  wohnflaechen       WohnflaechenBerechnung[]
-  caseNotes          CaseNote[]
-  deadlines          CaseDeadline[]
+  customerForm        CustomerForm?
+  platformMappings    PlatformMapping[]
+  platformSyncLogs    PlatformSyncLog[]
+  exportJobs          ExportJob[]
+  aiJobs              AiJob[]
+  plausibilityChecks  PlausibilityCheck[]
+  wohnflaechen        WohnflaechenBerechnung[]
+  caseNotes           CaseNote[]
+  deadlines           CaseDeadline[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -521,8 +547,8 @@ model CaseSource {
   caseId     String
   case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
   type       CaseSourceType
-  externalId String?        // z.B. FinLink-/Europace-ID
-  payload    Json?          // Rohdaten der Quelle (ohne sensible Logs)
+  externalId String? // z.B. FinLink-/Europace-ID
+  payload    Json? // Rohdaten der Quelle (ohne sensible Logs)
   createdAt  DateTime       @default(now())
 
   @@index([caseId])
@@ -534,7 +560,7 @@ model CustomerForm {
   id        String   @id @default(cuid())
   caseId    String   @unique
   case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  data      Json     // validierte Formularfelder (siehe Zod customerFormSchema)
+  data      Json // validierte Formularfelder (siehe Zod customerFormSchema)
   submitted Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -545,59 +571,59 @@ model CustomerForm {
 // ============================ OBJEKT / FINANZIERUNG ============================
 
 model Property {
-  id            String   @id @default(cuid())
-  caseId        String   @unique
-  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  objektart     PropertyType?
-  street        String?
-  zip           String?
-  city          String?
-  wohnflaeche   Float?
-  nutzflaeche   Float?
-  grundstuecksflaeche Float?
-  baujahr       Int?
-  zustand       String?
-  anzahlZimmer  Float?
-  anzahlWohneinheiten Int?
-  heizungsart   String?
-  energieausweis String?
-  stellplaetze  Int?
-  hausgeldMonatlich Float?
-  mieteinnahmenMonatlich Float?
-  nutzung       UsageType?
+  id                       String        @id @default(cuid())
+  caseId                   String        @unique
+  case                     Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  objektart                PropertyType?
+  street                   String?
+  zip                      String?
+  city                     String?
+  wohnflaeche              Float?
+  nutzflaeche              Float?
+  grundstuecksflaeche      Float?
+  baujahr                  Int?
+  zustand                  String?
+  anzahlZimmer             Float?
+  anzahlWohneinheiten      Int?
+  heizungsart              String?
+  energieausweis           String?
+  stellplaetze             Int?
+  hausgeldMonatlich        Float?
+  mieteinnahmenMonatlich   Float?
+  nutzung                  UsageType?
   vermieteterAnteilProzent Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   @@map("properties")
 }
 
 model FinancingRequest {
-  id                   String   @id @default(cuid())
-  caseId               String   @unique
-  case                 Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  kaufpreis            Float?
-  baukosten            Float?
-  modernisierungskosten Float?
-  nebenkosten          Float?
+  id                     String   @id @default(cuid())
+  caseId                 String   @unique
+  case                   Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kaufpreis              Float?
+  baukosten              Float?
+  modernisierungskosten  Float?
+  nebenkosten            Float?
   maklerprovisionProzent Float?
-  eigenkapital         Float?
-  darlehenswunsch      Float?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  eigenkapital           Float?
+  darlehenswunsch        Float?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   @@map("financing_requests")
 }
 
 model Liability {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   caseId         String
-  case           Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   art            String?
   glaeubiger     String?
   restschuld     Float?
   monatlicheRate Float?
-  abzuloesen     Boolean @default(false)
+  abzuloesen     Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   @@index([caseId])
@@ -605,12 +631,12 @@ model Liability {
 }
 
 model Asset {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   caseId    String
-  case      Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   art       String?
   betrag    Float?
-  belegt    Boolean @default(false)
+  belegt    Boolean  @default(false)
   quelle    String?
   createdAt DateTime @default(now())
 
@@ -619,46 +645,46 @@ model Asset {
 }
 
 model IncomeRecord {
-  id            String  @id @default(cuid())
-  applicantId   String
-  applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
-  nettoMonatlich Float?
-  bruttoMonatlich Float?
-  sonstigeEinnahmen Float?
-  mieteinnahmen Float?
+  id                       String    @id @default(cuid())
+  applicantId              String
+  applicant                Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  nettoMonatlich           Float?
+  bruttoMonatlich          Float?
+  sonstigeEinnahmen        Float?
+  mieteinnahmen            Float?
   einmalzahlungenJaehrlich Float?
-  createdAt     DateTime @default(now())
+  createdAt                DateTime  @default(now())
 
   @@index([applicantId])
   @@map("income_records")
 }
 
 model EmploymentRecord {
-  id               String   @id @default(cuid())
-  applicantId      String
-  applicant        Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  id                 String          @id @default(cuid())
+  applicantId        String
+  applicant          Applicant       @relation(fields: [applicantId], references: [id], onDelete: Cascade)
   beschaeftigungsart EmploymentType?
-  beruf            String?
-  arbeitgeber      String?
+  beruf              String?
+  arbeitgeber        String?
   arbeitgeberAdresse String?
-  eintrittsdatum   DateTime?
-  befristetBis     DateTime?
-  inProbezeit      Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  eintrittsdatum     DateTime?
+  befristetBis       DateTime?
+  inProbezeit        Boolean         @default(false)
+  createdAt          DateTime        @default(now())
 
   @@index([applicantId])
   @@map("employment_records")
 }
 
 model SelfEmploymentRecord {
-  id            String   @id @default(cuid())
-  applicantId   String   @unique
-  applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
-  firma         String?
-  rechtsform    String?
+  id                 String    @id @default(cuid())
+  applicantId        String    @unique
+  applicant          Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  firma              String?
+  rechtsform         String?
   beteiligungProzent Float?
-  gruendungsdatum DateTime?
-  createdAt     DateTime @default(now())
+  gruendungsdatum    DateTime?
+  createdAt          DateTime  @default(now())
 
   @@map("self_employment_records")
 }
@@ -666,61 +692,61 @@ model SelfEmploymentRecord {
 // ============================ DOKUMENTE ============================
 
 model Document {
-  id             String   @id @default(cuid())
-  caseId         String
-  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  applicantId    String?
-  applicant      Applicant? @relation(fields: [applicantId], references: [id], onDelete: SetNull)
+  id          String     @id @default(cuid())
+  caseId      String
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  applicantId String?
+  applicant   Applicant? @relation(fields: [applicantId], references: [id], onDelete: SetNull)
 
-  originalName   String
+  originalName  String
   // Automatisch generierter sinnvoller Dateiname
-  generatedName  String?
-  storageKey     String   // Pfad/Key im Storage (S3/Supabase/local)
-  mimeType       String
-  sizeBytes      Int
-  pageCount      Int?
+  generatedName String?
+  storageKey    String // Pfad/Key im Storage (S3/Supabase/local)
+  mimeType      String
+  sizeBytes     Int
+  pageCount     Int?
 
-  documentType   DocumentType?
-  uploadSource   UploadSource
+  documentType         DocumentType?
+  uploadSource         UploadSource
   // Sicherheits-/Scan-Status. OCR/KI laufen erst nach virus_scan_clean/ready_for_ocr.
-  scanStatus     DocumentScanStatus   @default(virus_scan_pending)
-  scanEngine     String?
-  scannedAt      DateTime?
-  ocrStatus      ProcessingStatus     @default(ausstehend)
-  classificationStatus ProcessingStatus @default(ausstehend)
-  extractionStatus ProcessingStatus   @default(ausstehend)
-  reviewStatus   DocumentReviewStatus @default(offen)
-  confidence     Float?
+  scanStatus           DocumentScanStatus   @default(virus_scan_pending)
+  scanEngine           String?
+  scannedAt            DateTime?
+  ocrStatus            ProcessingStatus     @default(ausstehend)
+  classificationStatus ProcessingStatus     @default(ausstehend)
+  extractionStatus     ProcessingStatus     @default(ausstehend)
+  reviewStatus         DocumentReviewStatus @default(offen)
+  confidence           Float?
 
   detectedApplicant String?
   /// Herkunft der Antragsteller-Zuordnung: "auto" (Namensabgleich) oder
   /// "manuell" (Vermittler). null = Bestandsdaten unbekannter Herkunft; diese
   /// werden wie "manuell" behandelt, solange sie eine Zuordnung tragen.
   applicantSource   String?
-  propertyRef    String?
-  period         String?       // Zeitraum, z.B. 2026-05
-  issuer         String?       // Aussteller
+  propertyRef       String?
+  period            String? // Zeitraum, z.B. 2026-05
+  issuer            String? // Aussteller
 
   // Qualitaet / Duplikat
-  readable       Boolean?
-  missingPages   Boolean?
-  isDuplicate    Boolean  @default(false)
-  duplicateOfId  String?
+  readable      Boolean?
+  missingPages  Boolean?
+  isDuplicate   Boolean  @default(false)
+  duplicateOfId String?
 
   // Plattform- / Bankzuordnung
-  platformRelevance Platform[]
+  platformRelevance  Platform[]
   bankRequirementKey String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  pages           DocumentPage[]
-  classifications DocumentClassification[]
-  extractedFields ExtractedFieldRecord[]
-  warnings        DocumentWarning[]
-  duplicateChecksA DuplicateCheck[] @relation("DupA")
-  duplicateChecksB DuplicateCheck[] @relation("DupB")
-  checklistLinks   CaseChecklistItem[] @relation("ChecklistDocuments")
+  pages            DocumentPage[]
+  classifications  DocumentClassification[]
+  extractedFields  ExtractedFieldRecord[]
+  warnings         DocumentWarning[]
+  duplicateChecksA DuplicateCheck[]         @relation("DupA")
+  duplicateChecksB DuplicateCheck[]         @relation("DupB")
+  checklistLinks   CaseChecklistItem[]      @relation("ChecklistDocuments")
   ocrJobs          OcrJob[]
   aiJobs           AiJob[]
 
@@ -734,7 +760,7 @@ model DocumentPage {
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   pageNumber Int
-  ocrText    String?  // OCR-Text; kann sensible Daten enthalten -> verschluesselt at-rest empfohlen
+  ocrText    String? // OCR-Text; kann sensible Daten enthalten -> verschluesselt at-rest empfohlen
   width      Int?
   height     Int?
   createdAt  DateTime @default(now())
@@ -744,62 +770,62 @@ model DocumentPage {
 }
 
 model DocumentClassification {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
   documentId   String
-  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document     Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
   documentType DocumentType
   confidence   Float
   reasoning    String?
-  model        String?  // verwendetes KI-Modell (zur Nachvollziehbarkeit)
-  createdAt    DateTime @default(now())
+  model        String? // verwendetes KI-Modell (zur Nachvollziehbarkeit)
+  createdAt    DateTime     @default(now())
 
   @@index([documentId])
   @@map("document_classifications")
 }
 
 model ExtractedFieldRecord {
-  id         String   @id @default(cuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  key        String
-  label      String
-  value      String?
-  confidence Float
-  source     String?
+  id             String   @id @default(cuid())
+  documentId     String
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  key            String
+  label          String
+  value          String?
+  confidence     Float
+  source         String?
   // Vom Vermittler korrigierter Wert (Mensch schlaegt KI)
   correctedValue String?
-  reviewed   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  reviewed       Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   @@index([documentId])
   @@map("extracted_fields")
 }
 
 model DocumentWarning {
-  id         String   @id @default(cuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  code       String
-  severity   Severity
-  message    String
-  customerVisible Boolean @default(false)
-  resolved   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id              String   @id @default(cuid())
+  documentId      String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  code            String
+  severity        Severity
+  message         String
+  customerVisible Boolean  @default(false)
+  resolved        Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
   @@index([documentId])
   @@map("document_warnings")
 }
 
 model DuplicateCheck {
-  id          String   @id @default(cuid())
-  documentAId String
-  documentA   Document @relation("DupA", fields: [documentAId], references: [id], onDelete: Cascade)
-  documentBId String
-  documentB   Document @relation("DupB", fields: [documentBId], references: [id], onDelete: Cascade)
-  isDuplicate Boolean
+  id              String   @id @default(cuid())
+  documentAId     String
+  documentA       Document @relation("DupA", fields: [documentAId], references: [id], onDelete: Cascade)
+  documentBId     String
+  documentB       Document @relation("DupB", fields: [documentBId], references: [id], onDelete: Cascade)
+  isDuplicate     Boolean
   isNearDuplicate Boolean
-  similarity  Float
-  createdAt   DateTime @default(now())
+  similarity      Float
+  createdAt       DateTime @default(now())
 
   @@index([documentAId])
   @@map("duplicate_checks")
@@ -808,18 +834,18 @@ model DuplicateCheck {
 // ============================ CHECKLISTEN ============================
 
 model ChecklistTemplate {
-  id             String   @id @default(cuid())
-  organizationId String?  // null = globale Standardvorlage
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  key            String   // z.B. "angestellter_kauf"
+  id             String          @id @default(cuid())
+  organizationId String? // null = globale Standardvorlage
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String // z.B. "angestellter_kauf"
   name           String
   description    String?
   financingType  FinancingType?
   employmentType EmploymentType?
   propertyType   PropertyType?
-  editable       Boolean  @default(false) // MVP: fix; spaeter editierbar
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  editable       Boolean         @default(false) // MVP: fix; spaeter editierbar
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   items ChecklistItem[]
 
@@ -828,23 +854,23 @@ model ChecklistTemplate {
 }
 
 model ChecklistItem {
-  id           String   @id @default(cuid())
-  templateId   String
-  template     ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  key          String
-  name         String
-  customerDescription String  // Beschreibung fuer Kunde
+  id                  String            @id @default(cuid())
+  templateId          String
+  template            ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  key                 String
+  name                String
+  customerDescription String // Beschreibung fuer Kunde
   internalDescription String? // interne Beschreibung fuer Vermittler
-  documentType DocumentType?
-  level        RequirementLevel @default(zwingend)
-  scope        RequirementScope @default(allgemein)
-  platforms    Platform[]
-  bankSpecific Boolean  @default(false)
-  recencyDays  Int?     // Aktualitaetsanforderung (z.B. 90 Tage)
-  acceptedFileTypes String[] @default(["pdf", "jpg", "png"])
-  requiredCount Int     @default(1)
-  example      String?
-  sortOrder    Int      @default(0)
+  documentType        DocumentType?
+  level               RequirementLevel  @default(zwingend)
+  scope               RequirementScope  @default(allgemein)
+  platforms           Platform[]
+  bankSpecific        Boolean           @default(false)
+  recencyDays         Int? // Aktualitaetsanforderung (z.B. 90 Tage)
+  acceptedFileTypes   String[]          @default(["pdf", "jpg", "png"])
+  requiredCount       Int               @default(1)
+  example             String?
+  sortOrder           Int               @default(0)
 
   caseItems CaseChecklistItem[]
 
@@ -854,20 +880,20 @@ model ChecklistItem {
 
 // Fallbezogene Instanz einer Checklisten-Position
 model CaseChecklistItem {
-  id              String   @id @default(cuid())
+  id              String              @id @default(cuid())
   caseId          String
-  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case            Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
   checklistItemId String?
-  checklistItem   ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  checklistItem   ChecklistItem?      @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
   key             String
   name            String
   status          ChecklistItemStatus @default(offen)
   level           RequirementLevel    @default(zwingend)
   platforms       Platform[]
-  customerVisible Boolean  @default(true)
+  customerVisible Boolean             @default(true)
   note            String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   documents Document[] @relation("ChecklistDocuments")
 
@@ -879,14 +905,14 @@ model CaseChecklistItem {
 
 // Plattform-spezifische Pflichtanforderungen (Europace/FinLink/eHyp)
 model PlatformRequirement {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   platform     Platform
   key          String
   title        String
   documentType DocumentType?
   level        RequirementLevel @default(zwingend)
-  condition    Json?    // strukturierte Bedingung (caseType/applicantType/propertyType)
-  createdAt    DateTime @default(now())
+  condition    Json? // strukturierte Bedingung (caseType/applicantType/propertyType)
+  createdAt    DateTime         @default(now())
 
   @@unique([platform, key])
   @@map("platform_requirements")
@@ -894,16 +920,16 @@ model PlatformRequirement {
 
 // Bank-spezifische Zusatzanforderungen
 model BankRequirement {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   bankName       String
   key            String
   title          String
   documentType   DocumentType?
   level          RequirementLevel @default(bankabhaengig)
   condition      Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime         @default(now())
 
   @@map("bank_requirements")
 }
@@ -911,55 +937,55 @@ model BankRequirement {
 // ============================ NACHFORDERUNGEN / NACHRICHTEN ============================
 
 model MissingDocumentRequest {
-  id             String   @id @default(cuid())
-  caseId         String
-  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  requirementKey String
-  documentType   DocumentType?
-  title          String
-  reason         String
-  level          RequirementLevel @default(zwingend)
-  platform       String?  // europace|finlink|ehyp_home|allgemein
-  bank           String?
+  id              String           @id @default(cuid())
+  caseId          String
+  case            Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  requirementKey  String
+  documentType    DocumentType?
+  title           String
+  reason          String
+  level           RequirementLevel @default(zwingend)
+  platform        String? // europace|finlink|ehyp_home|allgemein
+  bank            String?
   // "bank" = von der Bank nachgefordert (nach Einreichung), sonst systemseitig erkannt.
-  requestSource  String   @default("system")
+  requestSource   String           @default("system")
   // Frist, bis wann die Unterlage nachgereicht sein muss (Bank-Nachforderung).
-  dueDate        DateTime?
-  customerVisible Boolean @default(true)
-  resolved       Boolean  @default(false)
-  resolvedAt     DateTime?
-  createdAt      DateTime @default(now())
+  dueDate         DateTime?
+  customerVisible Boolean          @default(true)
+  resolved        Boolean          @default(false)
+  resolvedAt      DateTime?
+  createdAt       DateTime         @default(now())
 
   @@index([caseId])
   @@map("missing_document_requests")
 }
 
 model GeneratedMessage {
-  id         String   @id @default(cuid())
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  channel    MessageChannel
+  id           String              @id @default(cuid())
+  caseId       String
+  case         Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  channel      MessageChannel
   templateType MessageTemplateType
-  subject    String?
-  body       String
+  subject      String?
+  body         String
   // Im MVP nur vorformuliert, nicht automatisch versendet
-  sent       Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  sent         Boolean             @default(false)
+  createdAt    DateTime            @default(now())
 
   @@index([caseId])
   @@map("generated_messages")
 }
 
 model MessageTemplate {
-  id             String   @id @default(cuid())
+  id             String              @id @default(cuid())
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   type           MessageTemplateType
   channel        MessageChannel
   subject        String?
-  body           String   // mit Platzhaltern wie {{kunde}}, {{uploadLink}}
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  body           String // mit Platzhaltern wie {{kunde}}, {{uploadLink}}
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@map("message_templates")
 }
@@ -984,65 +1010,65 @@ model UploadLink {
 // ============================ PLATTFORM-INTEGRATION ============================
 
 model PlatformConnection {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   platform       Platform
   // Verbindungs-/Config-Status. KEINE Klartext-Secrets -> verschluesselt / ENV-Referenz.
-  configured     Boolean  @default(false)
+  configured     Boolean      @default(false)
   baseUrl        String?
-  configRef      String?  // Referenz auf sicher gespeicherte Credentials
+  configRef      String? // Referenz auf sicher gespeicherte Credentials
   lastTestedAt   DateTime?
   lastStatus     String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, platform])
   @@map("platform_connections")
 }
 
 model PlatformMapping {
-  id         String   @id @default(cuid())
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  platform   Platform
-  payload    Json     // gemapptes Payload (kanonisch -> Plattform)
-  missingRequiredFields String[] @default([])
-  released   Boolean  @default(false) // manuelle Freigabe vor Export
-  releasedBy String?
-  releasedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  caseId                String
+  case                  Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform              Platform
+  payload               Json // gemapptes Payload (kanonisch -> Plattform)
+  missingRequiredFields String[]  @default([])
+  released              Boolean   @default(false) // manuelle Freigabe vor Export
+  releasedBy            String?
+  releasedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@unique([caseId, platform])
   @@map("platform_mappings")
 }
 
 model PlatformSyncLog {
-  id         String   @id @default(cuid())
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  platform   Platform
-  direction  String   // import | export
-  status     String
-  message    String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform  Platform
+  direction String // import | export
+  status    String
+  message   String?
+  createdAt DateTime @default(now())
 
   @@index([caseId])
   @@map("platform_sync_logs")
 }
 
 model ExportJob {
-  id         String   @id @default(cuid())
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  platform   Platform?
-  format     String   // pdf | json | csv | clipboard
-  status     JobStatus @default(queued)
-  resultKey  String?  // Storage-Key des Exports
-  error      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String    @id @default(cuid())
+  caseId    String
+  case      Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  platform  Platform?
+  format    String // pdf | json | csv | clipboard
+  status    JobStatus @default(queued)
+  resultKey String? // Storage-Key des Exports
+  error     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([caseId])
   @@map("export_jobs")
@@ -1051,9 +1077,9 @@ model ExportJob {
 // ============================ KI / OCR JOBS ============================
 
 model AiJob {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   caseId     String?
-  case       Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case       Case?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
   type       AiJobType
@@ -1064,9 +1090,9 @@ model AiJob {
   // Eingaben/Ausgaben: KEINE rohen Kundendaten dauerhaft loggen.
   output     Json?
   error      String?
-  attempts   Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([caseId])
   @@index([documentId])
@@ -1074,15 +1100,15 @@ model AiJob {
 }
 
 model OcrJob {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   status     JobStatus @default(queued)
   provider   String?
   pageCount  Int?
   error      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([documentId])
   @@map("ocr_jobs")
@@ -1091,18 +1117,18 @@ model OcrJob {
 // ============================ AUDIT ============================
 
 model AuditLog {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action         String   // siehe AUDIT_ACTIONS
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String // siehe AUDIT_ACTIONS
   entityType     String
   entityId       String?
   // Nur Metadaten / Diff-Keys – keine sensiblen Klartext-Inhalte.
   metadata       Json?
   ipAddress      String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
@@ -1112,13 +1138,13 @@ model AuditLog {
 // ============================ SAAS / BILLING ============================
 
 model Plan {
-  id          String   @id @default(cuid())
-  tier        PlanTier @unique
-  name        String
-  monthlyCasesLimit Int?     // null = unbegrenzt
-  features    Json     // string[] Feature-Keys
-  priceMonthly Int?    // in Cent
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  tier              PlanTier @unique
+  name              String
+  monthlyCasesLimit Int? // null = unbegrenzt
+  features          Json // string[] Feature-Keys
+  priceMonthly      Int? // in Cent
+  createdAt         DateTime @default(now())
 
   subscriptions Subscription[]
 
@@ -1126,42 +1152,42 @@ model Plan {
 }
 
 model Subscription {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  planId         String
-  plan           Plan     @relation(fields: [planId], references: [id])
-  status         String   @default("trialing") // trialing|active|past_due|canceled
+  id               String       @id @default(cuid())
+  organizationId   String       @unique
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             Plan         @relation(fields: [planId], references: [id])
+  status           String       @default("trialing") // trialing|active|past_due|canceled
   currentPeriodEnd DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@map("subscriptions")
 }
 
 model FeatureFlag {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   key            String
-  enabled        Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  enabled        Boolean       @default(false)
+  createdAt      DateTime      @default(now())
 
   @@unique([organizationId, key])
   @@map("feature_flags")
 }
 
 model WhiteLabelSettings {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
+  id             String       @id @default(cuid())
+  organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   brandName      String?
   logoUrl        String?
   primaryColor   String?
   supportEmail   String?
   customDomain   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@map("white_label_settings")
 }
@@ -1169,20 +1195,20 @@ model WhiteLabelSettings {
 // ============================ PLAUSIBILITAET ============================
 
 model PlausibilityCheck {
-  id          String   @id @default(cuid())
-  caseId      String
-  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  key         String
-  category    String
-  status      Severity
-  explanation String
+  id                String   @id @default(cuid())
+  caseId            String
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  key               String
+  category          String
+  status            Severity
+  explanation       String
   recommendedAction String?
-  customerVisible Boolean @default(false)
-  relevantEuropace Boolean @default(false)
-  relevantFinlink  Boolean @default(false)
-  relevantEhyp     Boolean @default(false)
-  resolved    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  customerVisible   Boolean  @default(false)
+  relevantEuropace  Boolean  @default(false)
+  relevantFinlink   Boolean  @default(false)
+  relevantEhyp      Boolean  @default(false)
+  resolved          Boolean  @default(false)
+  createdAt         DateTime @default(now())
 
   @@index([caseId])
   @@map("plausibility_checks")
@@ -1191,17 +1217,17 @@ model PlausibilityCheck {
 // ============================ WOHNFLAECHEN BERECHNUNG ============================
 
 model WohnflaechenBerechnung {
-  id              String   @id @default(cuid())
-  caseId          String
-  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  caseId           String
+  case             Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   // Geprüfte Raumliste (WoflvRoomResult[]) als JSON – editierbar, nachvollziehbar.
-  rooms           Json
-  summeWohnflaeche Float   @default(0)
-  summeZubehoer   Float    @default(0)
-  released        Boolean  @default(false)
-  model           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  rooms            Json
+  summeWohnflaeche Float    @default(0)
+  summeZubehoer    Float    @default(0)
+  released         Boolean  @default(false)
+  model            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([caseId])
   @@map("wohnflaechen_berechnungen")
@@ -1233,17 +1259,17 @@ model SelfDisclosureLink {
  * erzeugt einen neuen Durchgang, der erste bleibt als belegter Stand erhalten.
  */
 model SelfDisclosure {
-  id          String   @id @default(cuid())
-  linkId      String   @unique
+  id          String             @id @default(cuid())
+  linkId      String             @unique
   link        SelfDisclosureLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
   caseId      String
-  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  answers     Json     @default("{}")
+  case        Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  answers     Json               @default("{}")
   currentStep String?
   submittedAt DateTime?
   takenOverAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([caseId])
   @@map("self_disclosures")
@@ -1257,18 +1283,91 @@ model SelfDisclosure {
  * Zeitstempel und Fehler, und die Tabelle wird heute nur gelesen.
  */
 model LeadSyncState {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  /** Heute nur "finlink"; der Mail-Weg bekommt später einen eigenen Eintrag. */
+  /**
+   * Heute nur "finlink"; der Mail-Weg bekommt später einen eigenen Eintrag.
+   */
   quelle         String
-  /** Eingangszeitpunkt des zuletzt verarbeiteten Leads. */
+  /**
+   * Eingangszeitpunkt des zuletzt verarbeiteten Leads.
+   */
   syncedUntil    DateTime?
   lastRunAt      DateTime?
-  lastCreated    Int      @default(0)
+  lastCreated    Int          @default(0)
   lastError      String?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, quelle])
   @@map("lead_sync_states")
+}
+
+// ============================ REGISTRIERUNG / ZUGANG ============================
+
+/**
+ * Ein Registrierungsantrag. Organisation und Nutzer entstehen bewusst ERST bei
+ * der Freigabe – so enthaelt `organizations` ausschliesslich echte Kunden und
+ * keine abgebrochenen Anmeldungen, die jede Auswertung verfaelschen wuerden.
+ */
+model SignupRequest {
+  id    String @id @default(cuid())
+  email String @unique
+  // Nur bis zur Freigabe belegt: dort wandert der Hash an den neuen User und
+  // wird hier auf null gesetzt. Sonst laege er doppelt vor, und die Kopie am
+  // Antrag ueberlebte jeden spaeteren Passwortwechsel des Nutzers.
+  passwordHash String?
+  name         String
+  firmenname   String
+  telefon      String?
+  wunschtarif  PlanTier?
+  status       SignupStatus @default(neu)
+
+  emailBestaetigtAm DateTime?
+
+  agbVersion      String
+  agbAkzeptiertAm DateTime
+  agbIp           String?
+
+  entschiedenAm   DateTime?
+  entschiedenVon  String?
+  ablehnungsgrund String?
+
+  // Gesetzt bei der Freigabe – die Spur vom Antrag zum Kunden.
+  organizationId String?   @unique
+  // Instanzunabhaengige Sperre gegen Mailfluten (In-Memory-Limit greift auf
+  // Vercel nur pro Instanz).
+  letzteMailAm   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tokens AuthToken[]
+
+  @@index([status])
+  @@map("signup_requests")
+}
+
+/**
+ * Magic Link fuer Zugangszwecke. Anders als bei UploadLink/SelfDisclosureLink
+ * steckt die Trennung im Feld `zweck`, nicht in der Tabelle – sie ist deshalb
+ * nur so verlaesslich, wie jede Pruefung den Zweck mitfiltert. Genau dafuer gibt
+ * es exakt eine Einloesefunktion: verbraucheToken(token, zweck).
+ */
+model AuthToken {
+  id              String         @id @default(cuid())
+  tokenHash       String         @unique
+  zweck           AuthTokenZweck
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signupRequestId String?
+  signupRequest   SignupRequest? @relation(fields: [signupRequestId], references: [id], onDelete: Cascade)
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime       @default(now())
+
+  @@index([userId])
+  @@index([signupRequestId])
+  @@index([expiresAt])
+  @@map("auth_tokens")
 }

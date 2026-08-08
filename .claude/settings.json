@@ -3,7 +3,10 @@
   "permissions": {
     "allow": [
       "Bash(npm run db:push)",
-      "Bash(npm run db:push:*)"
+      "Bash(npm run db:push:*)",
+      "Bash(scripts/supabase-sql.sh *)",
+      "Bash(./scripts/supabase-sql.sh *)",
+      "Bash(bash scripts/supabase-sql.sh *)"
     ]
   }
 }

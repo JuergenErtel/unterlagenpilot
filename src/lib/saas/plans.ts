@@ -71,6 +71,31 @@ export const PLAN_DEFINITIONS: Record<PlanTier, PlanDefinition> = {
   },
 };
 
+/** Monatspreis als deutscher Text, z. B. "29 €". */
+export function monatspreisText(priceMonthlyCents: number): string {
+  return (priceMonthlyCents / 100).toLocaleString("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Tarife mit ausgewiesenem Preis – für die Wunschtarif-Auswahl bei der
+ * Registrierung. Die Preise stammen aus PLAN_DEFINITIONS und werden bewusst
+ * NICHT im Formular wiederholt: Sie sind kundenseitig sichtbar, und beim ersten
+ * Preiswechsel nennte eine zweite Liste sonst falsche Zahlen.
+ */
+export function waehlbareTarife(): Array<{ wert: PlanTier; label: string }> {
+  return Object.values(PLAN_DEFINITIONS)
+    .filter((p) => p.priceMonthlyCents != null)
+    .map((p) => ({
+      wert: p.tier,
+      label: `${p.name} – ${monatspreisText(p.priceMonthlyCents!)}/Monat`,
+    }));
+}
+
 /** Rollen, die je Tarif verfügbar sind (für Nutzerverwaltung/Onboarding). */
 export const PLAN_ROLES: Record<PlanTier, UserRole[]> = {
   starter: ["org_admin"],
