@@ -1153,7 +1153,7 @@ const eingabe = {
   name: "Anna Beispiel",
   firmenname: "Beispiel Finanz GmbH",
   email: "anna@beispiel.de",
-  passwort: "einLangesGeheimwort2026",
+  passwort: "einSicheresLangesWort2026",
   wunschtarif: "pro",
   agb: "on",
 };
@@ -1178,7 +1178,7 @@ describe("Registrierungs-Action", () => {
     const antwort = await registriere({}, form(eingabe));
     expect(antwort).toMatchObject({ ok: true });
     // aber eine ANDERE Mail
-    expect(gesendet[0].subject).toContain("bereits");
+    expect(gesendet[0]?.subject).toContain("bereits");
   });
 
   it("meldet Feldfehler ohne Mailversand", async () => {
