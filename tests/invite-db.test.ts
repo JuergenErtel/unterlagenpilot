@@ -95,6 +95,24 @@ describe.runIf(RUN)("Einladung (PGlite)", () => {
     g.__inviteToken = res.token;
   }, 60_000);
 
+  it("weist eine im Tarif nicht erlaubte Rolle ab, obwohl Limit und Adresse frei sind", async () => {
+    // Tarif ist an dieser Stelle bereits "pro" (PLAN_ROLES.pro = ["org_admin", "vermittler"]),
+    // erlaubt also kein "teammitglied". Limit (3) ist mit chef + "neu@beispiel.de" erst zu
+    // zwei Dritteln ausgeschoepft, die Adresse ist frisch – der Test kann den
+    // rolle_nicht_erlaubt-Zweig also nur erreichen, wenn die Rollenpruefung tatsaechlich greift.
+    const { ladeEin } = await import("@/lib/auth/invite");
+    await expect(
+      ladeEin({
+        organizationId: orgId,
+        email: "abgelehnt@beispiel.de",
+        name: "Abgelehnt",
+        rolle: "teammitglied",
+        einladenderUserId: chefId,
+      })
+    ).resolves.toMatchObject({ ok: false, grund: "rolle_nicht_erlaubt" });
+    expect(await prisma.user.findUnique({ where: { email: "abgelehnt@beispiel.de" } })).toBeNull();
+  }, 60_000);
+
   it("laesst ein passwortloses Konto sich NICHT anmelden", async () => {
     const { getAuthProvider } = await import("@/lib/auth/provider");
     await expect(getAuthProvider().authenticate("neu@beispiel.de", "")).resolves.toBeNull();
