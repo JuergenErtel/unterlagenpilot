@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   createCaseFromCanonical: vi.fn(),
   fetchVorgang: vi.fn(),
   fetchLeadsPage: vi.fn(),
+  bereiteErstkontaktVor: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -32,6 +33,10 @@ vi.mock("@/lib/platforms/finlink/client", () => ({
 
 vi.mock("@/lib/platforms/finlink/mapping", () => ({
   finlinkToCanonical: () => ({ platformIds: { finlinkId: "L1" }, applicants: [] }),
+}));
+
+vi.mock("@/lib/cases/erstkontakt", () => ({
+  bereiteErstkontaktVor: h.bereiteErstkontaktVor,
 }));
 
 import { syncFinLinkLeads } from "@/lib/platforms/finlink/sync";
@@ -59,6 +64,7 @@ beforeEach(() => {
   h.createCaseFromCanonical.mockResolvedValue({ caseId: "c1", caseNumber: "UP-1", deduped: false });
   h.fetchVorgang.mockResolvedValue({ id: "L1", antragsteller: [] });
   h.fetchLeadsPage.mockResolvedValue([rohLead("L1", "2026-08-07T11:00:00Z")]);
+  h.bereiteErstkontaktVor.mockResolvedValue({ status: "vorbereitet" });
 });
 
 describe("syncFinLinkLeads", () => {
@@ -72,6 +78,15 @@ describe("syncFinLinkLeads", () => {
     expect(arg.data.quelle).toBe("immoscout24");
     expect(arg.data.quelleDetail).toBe("ImmoscoutLead");
     expect(arg.data.einwilligungKontakt).toBe(true);
+    expect(h.bereiteErstkontaktVor).toHaveBeenCalledWith("c1");
+  });
+
+  it("bricht den Import nicht ab, wenn die Erstkontakt-Vorbereitung scheitert", async () => {
+    h.bereiteErstkontaktVor.mockRejectedValue(new Error("kaputt"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await syncFinLinkLeads(ctx);
+    expect(r.status).toBe("ok");
+    expect(r.angelegt).toBe(1);
   });
 
   it("schiebt die Marke auf den neuesten verarbeiteten Lead", async () => {

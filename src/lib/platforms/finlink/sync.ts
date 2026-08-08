@@ -5,6 +5,7 @@ import { finlinkToCanonical } from "@/lib/platforms/finlink/mapping";
 import { createCaseFromCanonical } from "@/lib/platforms/case-writer";
 import { waehleNeueLeads } from "@/lib/platforms/finlink/select";
 import { leiteQuelleAb } from "@/lib/platforms/finlink/source";
+import { bereiteErstkontaktVor } from "@/lib/cases/erstkontakt";
 
 /**
  * Holt neue Leads aus FinLink und legt daraus Fälle an.
@@ -96,6 +97,15 @@ export async function syncFinLinkLeads(
         },
       });
       angelegt += 1;
+
+      // Erstkontakt vorbereiten (Links + Nachrichtenentwurf, KEIN Versand).
+      // Scheitert das, ist der Lead trotzdem angelegt – der Vermittler kann den
+      // Erstkontakt jederzeit von Hand anstossen.
+      try {
+        await bereiteErstkontaktVor(ergebnis.caseId);
+      } catch (e) {
+        console.error(`[finlink] Erstkontakt für ${ergebnis.caseId} nicht vorbereitet:`, e);
+      }
     } catch (e) {
       console.warn(
         `[finlink-sync] Lead ${roh.id} übersprungen: ${

@@ -326,25 +326,25 @@ model Organization {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String       @unique
-  name           String
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email               String       @unique
+  name                String
   // Passwort-Hash – niemals Klartext. Auth via Provider moeglich.
-  passwordHash   String?
-  role           UserRole     @default(vermittler)
-  active         Boolean      @default(true)
+  passwordHash        String?
+  role                UserRole     @default(vermittler)
+  active              Boolean      @default(true)
   // Plattform-Ebene: darf Registrierungsantraege freigeben. Bewusst KEIN Wert im
   // UserRole-Enum – die Rollen beschreiben die Stellung innerhalb einer
   // Organisation, nicht ueber ihnen.
-  platformAdmin  Boolean      @default(false)
-  invitedAt      DateTime?
+  platformAdmin       Boolean      @default(false)
+  invitedAt           DateTime?
   // Sperre gegen wiederholte "Adresse bereits vergeben"-Mails. Liegt am User,
   // weil es zu direkt angelegten Konten keinen SignupRequest gibt.
   letzteHinweisMailAm DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   casesAsBroker Case[]      @relation("CaseBroker")
   auditLogs     AuditLog[]
@@ -477,6 +477,10 @@ model Case {
   // Datenschutz / Aufbewahrung pro Vorgang
   retentionDays Int?
   deleteAfter   DateTime?
+
+  // Wann der Erstkontakt vorbereitet wurde (Links + Nachrichtenentwurf).
+  // Verhindert, dass ein zweiter Lauf einen zweiten Entwurf erzeugt.
+  erstkontaktVorbereitetAm DateTime?
 
   notes     String?
   createdAt DateTime @default(now())
@@ -1311,8 +1315,8 @@ model LeadSyncState {
  * keine abgebrochenen Anmeldungen, die jede Auswertung verfaelschen wuerden.
  */
 model SignupRequest {
-  id    String @id @default(cuid())
-  email String @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
   // Nur bis zur Freigabe belegt: dort wandert der Hash an den neuen User und
   // wird hier auf null gesetzt. Sonst laege er doppelt vor, und die Kopie am
   // Antrag ueberlebte jeden spaeteren Passwortwechsel des Nutzers.

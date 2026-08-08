@@ -1,0 +1,101 @@
+import { prisma } from "@/lib/db";
+import { buildChecklistForCase } from "@/lib/checklists/engine";
+import { buildEmail } from "@/lib/messages/generators";
+import { createSelfDisclosureLink } from "@/lib/security/self-disclosure-link";
+import { createSecureUploadLink } from "@/lib/security/upload-link";
+import type { EmploymentType, FinancingType } from "@/lib/domain/enums";
+
+/**
+ * Bereitet den Erstkontakt zu einem neuen Fall vor: Upload-Link,
+ * Selbstauskunfts-Link und eine fertig formulierte Nachricht — als ENTWURF.
+ *
+ * Der Wettbewerb verschickt an dieser Stelle automatisch „ab Minute 1". Wir
+ * nicht: In BaufiDesk sind alle Kunden echt, und ein automatischer Versand aus
+ * einem Cron-Lauf heraus waere nicht zurueckholbar. Deshalb entsteht hier nur
+ * die Vorarbeit; den Versand loest ein Mensch mit einem Klick aus.
+ *
+ * Aus demselben Grund importiert dieses Modul `sendEmail` NICHT. Wer das
+ * aendert, hebt die Zusicherung auf.
+ */
+export type ErstkontaktErgebnis =
+  | { status: "vorbereitet"; messageId: string; uploadUrl: string; selbstauskunftUrl: string }
+  | { status: "schon_vorbereitet" }
+  | { status: "kein_empfaenger" };
+
+/** Gueltigkeit der beiden Links beim Erstkontakt. */
+const GUELTIG_TAGE = 21;
+
+export async function bereiteErstkontaktVor(
+  caseId: string,
+  opts: { actorUserId?: string | null } = {}
+): Promise<ErstkontaktErgebnis> {
+  const fall = await prisma.case.findUnique({
+    where: { id: caseId },
+    include: { applicants: true },
+  });
+  if (!fall) return { status: "kein_empfaenger" };
+  if (fall.erstkontaktVorbereitetAm) return { status: "schon_vorbereitet" };
+
+  const empfaenger = fall.applicants.find(
+    (a) => typeof a.email === "string" && a.email.includes("@")
+  );
+  if (!empfaenger) return { status: "kein_empfaenger" };
+
+  // Ohne Dokumente liefert die Checkliste genau das, was zu Beginn fehlt.
+  const positionen = buildChecklistForCase(
+    {
+      financingType: (fall.financingType as FinancingType) ?? undefined,
+      employmentType: (fall.primaryEmploymentType as EmploymentType) ?? undefined,
+      kapitalanlage: fall.kapitalanlage ?? undefined,
+      applicantCount: fall.applicants.length,
+      applicantIds: fall.applicants.map((a) => a.id),
+    },
+    []
+  );
+  const fehlende = positionen
+    .filter((p) => p.customerVisible && p.status === "offen")
+    .map((p) => ({ title: p.name }));
+
+  const ablauf = new Date(Date.now() + GUELTIG_TAGE * 86_400_000);
+  const upload = await createSecureUploadLink(fall.id, ablauf, {
+    organizationId: fall.organizationId,
+    actorUserId: opts.actorUserId ?? null,
+  });
+  const selbstauskunft = await createSelfDisclosureLink(fall.id, ablauf, {
+    organizationId: fall.organizationId,
+    actorUserId: opts.actorUserId ?? null,
+  });
+
+  const name = [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim();
+  const mail = buildEmail(fehlende, { kundeName: name || undefined, uploadLink: upload.url });
+
+  // Selbstauskunft ergaenzen: der Generator kennt nur den Upload-Link.
+  const body =
+    mail.body +
+    `\n\nDamit ich gleich mit den richtigen Zahlen rechnen kann, füllen Sie bitte außerdem` +
+    ` einmal kurz Ihre Angaben aus – das dauert wenige Minuten:\n${selbstauskunft.url}`;
+
+  const entwurf = await prisma.generatedMessage.create({
+    data: {
+      caseId: fall.id,
+      channel: "email",
+      templateType: "erstnachforderung",
+      subject: mail.subject ?? null,
+      body,
+      // Ausdruecklich unversendet. Der Versand ist ein menschlicher Klick.
+      sent: false,
+    },
+  });
+
+  await prisma.case.update({
+    where: { id: fall.id },
+    data: { erstkontaktVorbereitetAm: new Date() },
+  });
+
+  return {
+    status: "vorbereitet",
+    messageId: entwurf.id,
+    uploadUrl: upload.url,
+    selbstauskunftUrl: selbstauskunft.url,
+  };
+}
