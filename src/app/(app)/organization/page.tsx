@@ -1,7 +1,8 @@
-import { Building2, Users, Globe, ShieldCheck } from "lucide-react";
+import { Building2, Users, Globe, ShieldCheck, UserPlus } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { type UserRole } from "@/lib/domain/enums";
+import { checkLimit, getOrgPlan, PLAN_ROLES } from "@/lib/saas/plans";
 import {
   Card,
   CardHeader,
@@ -18,6 +19,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+import { EinladenForm } from "@/components/organization/einladen-form";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   white_label_admin: "White-Label-Admin",
@@ -48,12 +50,14 @@ const ROLE_DESCRIPTIONS: Array<{ role: UserRole; text: string }> = [
 export default async function OrganizationPage() {
   const ctx = await requireContext();
 
-  const [org, users] = await Promise.all([
+  const [org, users, plan, limit] = await Promise.all([
     prisma.organization.findUnique({ where: { id: ctx.organizationId } }),
     prisma.user.findMany({
       where: { organizationId: ctx.organizationId },
       orderBy: [{ active: "desc" }, { name: "asc" }],
     }),
+    getOrgPlan(ctx.organizationId),
+    checkLimit(ctx.organizationId, "usersPerOrg"),
   ]);
 
   return (
@@ -196,6 +200,25 @@ export default async function OrganizationPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {ctx.role === "org_admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-muted-foreground" />
+              Kollegen einladen
+            </CardTitle>
+            <CardDescription>
+              {limit.limit == null
+                ? `Tarif ${plan.name}: unbegrenzt viele Nutzer.`
+                : `Tarif ${plan.name}: ${limit.used} von ${limit.limit} Plätzen belegt.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EinladenForm rollen={PLAN_ROLES[plan.tier]} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
