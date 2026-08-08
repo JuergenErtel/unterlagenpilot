@@ -13,6 +13,12 @@ import { SIGNUP_EINGABE, erstelleAntrag } from "@/lib/auth/signup";
  * Rate-Limit, Mailwahl und Weiterleitung – die Fachlogik steht in
  * lib/auth/signup.ts.
  *
+ * ACHTUNG: Diese Datei traegt "use server" – Next.js laesst hier
+ * ausschliesslich async-Exporte zu (siehe auch lib/auth/redirect.ts). Eine
+ * synchrone Hilfsfunktion bricht den Build, ohne dass typecheck oder Tests
+ * etwas melden. Reine Hilfsfunktionen gehoeren deshalb in ein normales
+ * Servermodul.
+ *
  * Wichtig: Die Antwort ist bei "Adresse frei" und "Adresse vergeben"
  * IDENTISCH. Unterschiedlich ist nur, welche Mail rausgeht. Sonst wird das
  * Formular zum Kontopruefer.
@@ -32,17 +38,15 @@ function basis(): string {
   return getEnv().APP_BASE_URL.replace(/\/$/, "");
 }
 
-export function istRegistrierungMoeglich(): boolean {
-  // Ohne Mailversand kaeme die Bestaetigungsmail nie an – dann lieber gar kein
-  // Formular als Antraege, die niemand einloesen kann.
-  return isEmailConfigured();
-}
-
 export async function registriere(
   _prev: RegistrierungState,
   formData: FormData
 ): Promise<RegistrierungState> {
-  if (!istRegistrierungMoeglich()) {
+  // Ohne Mailversand kaeme die Bestaetigungsmail nie an – dann lieber gar kein
+  // Antrag als einer, den niemand einloesen kann. Die Pruefung steht bewusst
+  // HIER (nicht nur im Rendern der Seite): die Action ist ein oeffentlicher
+  // Endpunkt und muss sich selbst schuetzen.
+  if (!isEmailConfigured()) {
     return { error: "Die Registrierung ist derzeit nicht verfügbar. Bitte melden Sie sich per E-Mail." };
   }
 

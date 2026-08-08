@@ -1090,6 +1090,10 @@ git commit -m "feat(registrierung): Textbausteine fuer die Zugangs-Mails"
 
 ### Task 5: Registrierungsstrecke (Server Action, Seiten, Middleware)
 
+> **Nachtrag nach der Abschlusspruefung (2026-08-08):** Die unten gezeigten Codebloecke enthalten `export function istRegistrierungMoeglich(): boolean` in der `"use server"`-Datei `src/lib/actions/registrierung.ts`. Das bricht den Next.js-Build ("Server Actions must be async functions") — typecheck und Tests melden nichts. Die Funktion ist ersatzlos entfallen: `src/app/registrieren/page.tsx` ruft `isEmailConfigured()` aus `@/lib/email/resend` direkt auf, `registriere` prueft dasselbe weiterhin selbst. Massgeblich ist der Code, nicht dieser Block.
+>
+> Ebenfalls ueberholt: `src/app/registrieren/bestaetigen/[token]/page.tsx` verbraucht das Token nicht mehr beim Rendern (Link-Scanner in Firmen-Mailservern entwerteten es sonst vor dem ersten menschlichen Klick), sondern schlaegt es nur lesend nach (`liesBestaetigung`) und zeigt einen Bestaetigen-Knopf.
+
 **Files:**
 - Create: `src/lib/actions/registrierung.ts`
 - Create: `src/app/registrieren/page.tsx`

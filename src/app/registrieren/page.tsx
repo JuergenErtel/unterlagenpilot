@@ -2,12 +2,15 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { RegistrierungForm } from "@/components/auth/registrierung-form";
-import { istRegistrierungMoeglich } from "@/lib/actions/registrierung";
+import { isEmailConfigured } from "@/lib/email/resend";
 
 export const dynamic = "force-dynamic";
 
 export default function RegistrierenPage() {
-  const moeglich = istRegistrierungMoeglich();
+  // Ohne Mailversand kaeme die Bestaetigungsmail nie an – dann lieber gar kein
+  // Formular als Antraege, die niemand einloesen kann. `registriere` prueft
+  // dasselbe noch einmal selbst; diese Abfrage hier ist nur die Anzeige.
+  const moeglich = isEmailConfigured();
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
