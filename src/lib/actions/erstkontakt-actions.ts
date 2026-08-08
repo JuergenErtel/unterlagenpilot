@@ -67,10 +67,52 @@ export async function ladeErstkontaktStand(caseId: string): Promise<ErstkontaktS
   };
 }
 
-export async function erstkontaktVorbereitenAction(formData: FormData): Promise<void> {
+export interface ErstkontaktVorbereitenState {
+  error?: string;
+  success?: string;
+}
+
+export async function erstkontaktVorbereitenAction(
+  _prev: ErstkontaktVorbereitenState,
+  formData: FormData
+): Promise<ErstkontaktVorbereitenState> {
   const caseId = String(formData.get("caseId") ?? "");
-  if (!caseId) return;
+  if (!caseId) return { error: "Kein Fall angegeben." };
+
+  // Bewusst VOR dem try: `requireCaseAccess` ruft im Zweifel `notFound()`, und
+  // das wirft einen Next.js-Steuerfehler, der nach oben durchlaufen muss. Faenge
+  // ihn ein try/catch ab, wuerde aus einer sauberen 404 eine belanglose
+  // Fehlermeldung an der Karte.
   const { ctx } = await requireCaseAccess(caseId);
-  await bereiteErstkontaktVor(caseId, { actorUserId: ctx.userId });
+
+  // `bereiteErstkontaktVor` wirft, wenn die Linkanlage oder die Vorlage
+  // scheitert. Ungefangen sah der Vermittler dafuer die Next.js-Fehlerseite und
+  // verlor den Fall unter den Fuessen – statt einer Zeile an der Karte, die
+  // sagt, was schiefging und dass er es erneut versuchen kann.
+  let ergebnis;
+  try {
+    ergebnis = await bereiteErstkontaktVor(caseId, { actorUserId: ctx.userId });
+  } catch (e) {
+    console.error("[erstkontakt] Vorbereitung fehlgeschlagen:", e);
+    return {
+      error:
+        "Der Erstkontakt konnte nicht vorbereitet werden. Bitte versuchen Sie es erneut" +
+        " – wenn es wieder scheitert, melden Sie sich bitte.",
+    };
+  }
+
   revalidatePath(`/cases/${caseId}`);
+
+  // Auch die geordneten Ausgaenge bekommen einen Satz: vorher blieb die Karte
+  // stumm, wenn gar nichts passieren konnte.
+  if (ergebnis.status === "kein_empfaenger") {
+    return {
+      error:
+        "Für diesen Fall ist keine E-Mail-Adresse hinterlegt. Bitte in den Kundendaten ergänzen.",
+    };
+  }
+  if (ergebnis.status === "schon_vorbereitet") {
+    return { success: "Der Erstkontakt war bereits vorbereitet." };
+  }
+  return { success: "Erstkontakt vorbereitet – der Entwurf liegt zum Prüfen bereit." };
 }

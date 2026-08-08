@@ -177,7 +177,7 @@ describe("Erstkontakt vorbereiten (Action)", () => {
   it("prueft den Fallzugriff, bevor sie etwas tut", async () => {
     vorbereiten.mockResolvedValue({ status: "vorbereitet", messageId: "msg1" });
     const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
-    await erstkontaktVorbereitenAction(form({ caseId: "c1" }));
+    await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
     const { requireCaseAccess } = await import("@/lib/auth/context");
     expect(requireCaseAccess).toHaveBeenCalledWith("c1");
   });
@@ -185,13 +185,64 @@ describe("Erstkontakt vorbereiten (Action)", () => {
   it("reicht die handelnde Person weiter", async () => {
     vorbereiten.mockResolvedValue({ status: "vorbereitet", messageId: "msg1" });
     const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
-    await erstkontaktVorbereitenAction(form({ caseId: "c1" }));
+    await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
     expect(vorbereiten).toHaveBeenCalledWith("c1", { actorUserId: "u1" });
   });
 
   it("tut ohne caseId nichts", async () => {
     const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
-    await erstkontaktVorbereitenAction(form({}));
+    await erstkontaktVorbereitenAction({}, form({}));
     expect(vorbereiten).not.toHaveBeenCalled();
+  });
+
+  it("meldet einen Fehlschlag als Text, statt die Fehlerseite zu zeigen", async () => {
+    // Vorher lief der throw ungefangen durch: der Vermittler landete auf der
+    // Next.js-Fehlerseite und verlor die Fallseite unter den Fuessen.
+    vorbereiten.mockRejectedValue(new Error("Linkanlage kaputt"));
+    const fehler = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+
+    const state = await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
+
+    expect(state.error).toBeTruthy();
+    expect(state.success).toBeUndefined();
+    // Die interne Ursache gehoert ins Log, nicht auf den Bildschirm.
+    expect(state.error).not.toContain("Linkanlage kaputt");
+    fehler.mockRestore();
+  });
+
+  it("laesst einen notFound-Steuerfehler der Zugriffspruefung durch", async () => {
+    // `requireCaseAccess` wirft bei fremdem Fall den Next.js-Steuerfehler aus
+    // `notFound()`. Wuerde der mitgefangen, wuerde aus einer sauberen 404 eine
+    // belanglose Fehlermeldung an der Karte.
+    const { requireCaseAccess } = await import("@/lib/auth/context");
+    const nichtGefunden = new Error("NEXT_HTTP_ERROR_FALLBACK;404");
+    vi.mocked(requireCaseAccess).mockRejectedValueOnce(nichtGefunden);
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+
+    await expect(erstkontaktVorbereitenAction({}, form({ caseId: "fremd" }))).rejects.toThrow(
+      "NEXT_HTTP_ERROR_FALLBACK;404"
+    );
+    expect(vorbereiten).not.toHaveBeenCalled();
+  });
+
+  it("sagt es, wenn gar keine Adresse hinterlegt ist", async () => {
+    vorbereiten.mockResolvedValue({ status: "kein_empfaenger" });
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+
+    const state = await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
+
+    expect(state.error).toContain("E-Mail-Adresse");
+    expect(state.success).toBeUndefined();
+  });
+
+  it("bestaetigt die gelungene Vorbereitung", async () => {
+    vorbereiten.mockResolvedValue({ status: "vorbereitet", messageId: "msg1" });
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+
+    const state = await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
+
+    expect(state.success).toBeTruthy();
+    expect(state.error).toBeUndefined();
   });
 });

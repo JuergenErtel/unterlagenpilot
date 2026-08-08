@@ -2,10 +2,10 @@ import Link from "next/link";
 import { Mail, Send, CheckCircle2, UserRound } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
-import { erstkontaktVorbereitenAction, type ErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
+import { type ErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
+import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorbereiten-button";
 
 /**
  * Der eine Klick, der den Erstkontakt zu einem neuen Fall in Gang setzt.
@@ -86,12 +86,7 @@ export function ErstkontaktKarte({ caseId, stand }: { caseId: string; stand: Ers
                 </Link>
               </Button>
             ) : stand.empfaenger ? (
-              <form action={erstkontaktVorbereitenAction}>
-                <input type="hidden" name="caseId" value={caseId} />
-                <SubmitButton size="lg" className="w-full justify-center" pendingLabel="Wird vorbereitet …">
-                  Erstkontakt vorbereiten
-                </SubmitButton>
-              </form>
+              <ErstkontaktVorbereitenButton caseId={caseId} />
             ) : (
               <Button asChild variant="outline" size="lg" className="justify-center">
                 <Link href={`/cases/${caseId}/edit`}>
