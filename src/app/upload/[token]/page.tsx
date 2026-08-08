@@ -139,7 +139,11 @@ export default async function PublicUploadPage({
           </p>
         </div>
 
-        <CustomerUploadProgress done={fortschritt.erledigt} total={fortschritt.gesamt} />
+        <CustomerUploadProgress
+          angenommen={fortschritt.erledigt}
+          eingereicht={fortschritt.eingereicht}
+          gesamt={fortschritt.gesamt}
+        />
 
         <Card>
           <CardHeader>

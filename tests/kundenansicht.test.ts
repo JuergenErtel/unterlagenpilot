@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { baueKundenfortschritt } from "@/lib/upload/kundenansicht";
+import { baueKundenfortschritt, fortschrittHinweis } from "@/lib/upload/kundenansicht";
 
 function pos(key: string, extra: Record<string, unknown> = {}) {
   return {
@@ -108,6 +108,44 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     });
     expect(f.positionen[0]!.zustand).toBe("angenommen");
     expect(f.positionen[0]!.grund).toBeUndefined();
+  });
+
+  it("zaehlt eingegangene, noch ungeprüfte Unterlagen sichtbar mit", () => {
+    // Der Kunde hat abends alles hochgeladen. Vorher meldete die Seite bis zur
+    // Pruefung "0 von 12 / 0 %" – der Balken blieb leer.
+    const f = baueKundenfortschritt({
+      positionen: [pos("a"), pos("b"), pos("c"), pos("d")],
+      dokumente: [dok("a", "offen"), dok("b", "offen"), dok("c", "akzeptiert")],
+    });
+    expect(f.erledigt).toBe(1);
+    expect(f.eingereicht).toBe(3);
+    expect(f.prozent).toBe(25);
+    expect(f.prozentEingereicht).toBe(75);
+  });
+
+  it("zaehlt eine abgelehnte Position nicht als eingereicht – dort muss der Kunde handeln", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("a"), pos("b")],
+      dokumente: [dok("a", "abgelehnt", { reviewNote: "Seite 2 fehlt." }), dok("b", "offen")],
+    });
+    expect(f.eingereicht).toBe(1);
+    expect(f.prozentEingereicht).toBe(50);
+  });
+
+  it("fordert nicht mehr zum Hochladen auf, wenn alles eingegangen ist", () => {
+    expect(fortschrittHinweis({ erledigt: 0, eingereicht: 12, gesamt: 12 })).toBe(
+      "Alles eingegangen – wir prüfen Ihre Unterlagen. Sie müssen aktuell nichts weiter tun."
+    );
+  });
+
+  it("fordert weiter zum Hochladen auf, solange etwas offen ist", () => {
+    expect(fortschrittHinweis({ erledigt: 0, eingereicht: 11, gesamt: 12 })).toContain(
+      "Laden Sie die noch offenen Unterlagen hoch"
+    );
+  });
+
+  it("meldet bei vollstaendiger Annahme, dass es geschafft ist", () => {
+    expect(fortschrittHinweis({ erledigt: 12, eingereicht: 12, gesamt: 12 })).toContain("Geschafft");
   });
 
   it("quittiert einen neuen Upload nach einer Ablehnung als eingegangen", () => {

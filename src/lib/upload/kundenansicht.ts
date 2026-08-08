@@ -25,9 +25,20 @@ export interface KundenPosition {
 
 export interface KundenFortschritt {
   positionen: KundenPosition[];
+  /** Positionen, die vollstaendig angenommen sind. */
   erledigt: number;
+  /**
+   * Positionen, zu denen etwas bei uns liegt – angenommen, teilweise oder
+   * ungeprueft eingegangen. Ohne diese Zahl sah ein Kunde, der abends alles
+   * hochgeladen hat, bis zur Pruefung "0 von 12" und wurde weiter zum
+   * Hochladen aufgefordert.
+   */
+  eingereicht: number;
   gesamt: number;
+  /** Anteil der angenommenen Positionen. */
   prozent: number;
+  /** Anteil der Positionen, zu denen etwas vorliegt (>= prozent). */
+  prozentEingereicht: number;
 }
 
 export interface KundenDokument {
@@ -85,9 +96,15 @@ export function baueKundenfortschritt(input: {
 
   const gesamt = positionen.length;
   const erledigt = positionen.filter((p) => p.zustand === "angenommen").length;
+  // "abgelehnt" zaehlt bewusst NICHT als eingereicht: dort muss der Kunde
+  // handeln, die Position ist fuer ihn wieder offen.
+  const eingereicht = positionen.filter(
+    (p) => p.zustand === "angenommen" || p.zustand === "teilweise" || p.zustand === "eingegangen"
+  ).length;
   const prozent = gesamt === 0 ? 100 : Math.round((erledigt / gesamt) * 100);
+  const prozentEingereicht = gesamt === 0 ? 100 : Math.round((eingereicht / gesamt) * 100);
 
-  return { positionen, erledigt, gesamt, prozent };
+  return { positionen, erledigt, eingereicht, gesamt, prozent, prozentEingereicht };
 }
 
 /**
@@ -109,6 +126,31 @@ function wirksameAblehnung(dokumente: KundenDokument[]): KundenDokument | undefi
     letzte = d.reviewStatus === "abgelehnt" ? d : undefined;
   }
   return letzte;
+}
+
+/**
+ * Der Satz unter dem Fortschrittsbalken.
+ *
+ * Bewusst hier statt in der Komponente: So laesst sich pruefen, dass niemand
+ * mehr zum Hochladen aufgefordert wird, obwohl nichts mehr offen ist – genau
+ * das stand vorher da, waehrend die Liste darunter korrekt "Bei uns
+ * eingegangen, wird geprueft" meldete.
+ */
+export function fortschrittHinweis(f: {
+  erledigt: number;
+  eingereicht: number;
+  gesamt: number;
+}): string {
+  if (f.gesamt === 0) {
+    return "Aktuell sind keine Unterlagen offen. Ihr Berater meldet sich, falls noch etwas benötigt wird.";
+  }
+  if (f.erledigt >= f.gesamt) {
+    return "Geschafft – alle Unterlagen sind angenommen. Vielen Dank!";
+  }
+  if (f.eingereicht >= f.gesamt) {
+    return "Alles eingegangen – wir prüfen Ihre Unterlagen. Sie müssen aktuell nichts weiter tun.";
+  }
+  return "Laden Sie die noch offenen Unterlagen hoch. Sie können das jederzeit fortsetzen.";
 }
 
 function basis(
