@@ -1627,6 +1627,8 @@ git commit -m "feat(registrierung): Formular, Bestaetigungsstrecke und Rechtssei
 
 ### Task 6: Freigabe und Ablehnung
 
+> **Nachtrag nach der Pruefung (2026-08-08):** Der unten gezeigte Codeblock hatte einen Fehler — der `try/catch` umschloss auch `audit()`, wodurch eine bereits committete Freigabe als `adresse_vergeben` gemeldet werden konnte. Der umgesetzte Code zieht den `catch` eng um die Transaktion, ruft `audit()` danach mit eigenem, verschluckendem `catch` auf und unterscheidet die Ursachen ueber einen zusaetzlichen Grund `"fehlgeschlagen"` (Prisma `P2002` auf `email` bleibt `adresse_vergeben`). Massgeblich ist `src/lib/auth/freigabe.ts`, nicht dieser Block.
+
 **Files:**
 - Create: `src/lib/auth/freigabe.ts`
 - Test: `tests/signup-db.test.ts` (neu, PGlite)
