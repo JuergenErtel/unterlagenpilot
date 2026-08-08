@@ -332,7 +332,7 @@ async function notifyBrokerOfUpload(
       count,
       caseUrl,
     });
-    await sendEmail({ to: brokerEmail, subject, text });
+    await sendEmail({ to: brokerEmail, subject, text, empfaenger: "intern" });
   } catch (e) {
     // Kein Abbruch des Uploads – nur Metadaten loggen, keine Kundendaten.
     console.error("[customerUpload] Broker-Benachrichtigung fehlgeschlagen:", e);

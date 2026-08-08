@@ -10,17 +10,48 @@ export function isEmailConfigured(): boolean {
   return Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
 }
 
+/**
+ * Wer bekommt die Mail? "kunde" heisst: ein Antragsteller oder eine andere
+ * externe Person aus einem Fall. "intern" heisst: Vermittler, Kollegen,
+ * Registrierungs-Interessenten, Betreiber.
+ *
+ * Bewusst ein PFLICHTFELD ohne Vorgabewert: Ein Vorgabewert "intern" wuerde
+ * jeden kuenftigen Versandweg stillschweigend als unkritisch einstufen.
+ */
+export type Empfaengerklasse = "intern" | "kunde";
+
 export interface SendEmailInput {
   to: string;
   subject: string;
   text: string;
   replyTo?: string;
+  empfaenger: Empfaengerklasse;
+}
+
+/** Darf an diese Adresse eine Kundenmail hinausgehen? */
+export function kundenversandErlaubt(to: string): boolean {
+  const env = getEnv();
+  if (env.KUNDENVERSAND !== "an") return false;
+  const liste = env.KUNDENVERSAND_NUR_AN?.split(",")
+    .map((a) => a.trim().toLowerCase())
+    .filter(Boolean);
+  if (liste && liste.length > 0) return liste.includes(to.trim().toLowerCase());
+  return true;
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {
   const env = getEnv();
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    throw new Error("E-Mail-Versand ist nicht konfiguriert (RESEND_API_KEY / EMAIL_FROM fehlen).");
+    throw new Error("E-Mail-Versand ist nicht eingerichtet (RESEND_API_KEY / EMAIL_FROM fehlen).");
+  }
+
+  // Sperre VOR dem Netzwerkaufruf. Lieber ein lauter Fehler als eine Mail an
+  // einen echten Antragsteller. Der Fehler nennt bewusst weder Betreff noch
+  // Inhalt noch die Adresse.
+  if (input.empfaenger === "kunde" && !kundenversandErlaubt(input.to)) {
+    throw new Error(
+      "Kundenversand gesperrt. Ohne KUNDENVERSAND=an (und ggf. Eintrag in KUNDENVERSAND_NUR_AN) geht nichts an Kunden hinaus."
+    );
   }
 
   const res = await fetch("https://api.resend.com/emails", {

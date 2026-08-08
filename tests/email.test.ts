@@ -25,7 +25,7 @@ describe("Resend-E-Mail-Client", () => {
       })
     );
 
-    const res = await sendEmail({ to: "kunde@example.de", subject: "Betreff", text: "Hallo" });
+    const res = await sendEmail({ to: "kunde@example.de", subject: "Betreff", text: "Hallo", empfaenger: "intern" });
 
     expect(res.id).toBe("email_123");
     expect(url).toBe("https://api.resend.com/emails");
@@ -47,7 +47,7 @@ describe("Resend-E-Mail-Client", () => {
       }))
     );
 
-    await expect(sendEmail({ to: "x@y.de", subject: "s", text: "t" })).rejects.toThrow(/422/);
-    await expect(sendEmail({ to: "x@y.de", subject: "s", text: "t" })).rejects.toThrow(/domain not verified/);
+    await expect(sendEmail({ to: "x@y.de", subject: "s", text: "t", empfaenger: "intern" })).rejects.toThrow(/422/);
+    await expect(sendEmail({ to: "x@y.de", subject: "s", text: "t", empfaenger: "intern" })).rejects.toThrow(/domain not verified/);
   });
 });

@@ -76,12 +76,19 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
       to,
       subject: message!.subject ?? "Ihre Baufinanzierung – benötigte Unterlagen",
       text: message!.body,
+      empfaenger: "kunde",
     });
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);
     // Reservierung zurücknehmen, damit ein erneuter Versuch möglich bleibt.
     await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false } });
-    return { ok: false, error: "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen." };
+    const gesperrt = e instanceof Error && e.message.includes("Kundenversand gesperrt");
+    return {
+      ok: false,
+      error: gesperrt
+        ? "Der Versand an Kunden ist in dieser Umgebung gesperrt. Bitte den Text kopieren und manuell senden."
+        : "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen.",
+    };
   }
 
   await audit({

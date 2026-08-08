@@ -29,7 +29,7 @@ export async function benachrichtigeBetreiber(email: string, firmenname: string)
       wunschtarif: tarif,
       adminUrl: `${env.APP_BASE_URL.replace(/\/$/, "")}/admin/anmeldungen`,
     });
-    await sendEmail({ to: env.PLATFORM_ADMIN_EMAIL, subject: mail.subject, text: mail.text });
+    await sendEmail({ to: env.PLATFORM_ADMIN_EMAIL, subject: mail.subject, text: mail.text, empfaenger: "intern" });
   } catch (e) {
     // Ohne Adresse/Namen loggen – nur, dass die Benachrichtigung scheiterte.
     console.error("[registrierung] Betreiber-Benachrichtigung fehlgeschlagen:", e);

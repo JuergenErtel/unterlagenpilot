@@ -76,6 +76,14 @@ const envSchema = z.object({
   // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(), // z.B. "BaufiDesk <noreply@baufidesk.de>"
+  // Versandsperre gegen versehentlichen Kundenkontakt. In BaufiDesk sind alle
+  // Kunden echt – eine Testmail an einen Antragsteller ist nicht zurueckholbar.
+  // Vorgabe "aus": lokal und in Vorschau-Deployments geht nichts an Kunden
+  // hinaus, ohne dass es jemand ausdruecklich einschaltet.
+  KUNDENVERSAND: z.enum(["an", "aus"]).default("aus"),
+  // Kommagetrennte Liste. Ist sie gesetzt, erreichen Kundenmails AUSSCHLIESSLICH
+  // diese Adressen – zum gefahrlosen Durchspielen des ganzen Weges.
+  KUNDENVERSAND_NUR_AN: z.string().optional(),
   // Empfaenger der Benachrichtigung "neue Anmeldung wartet". Ohne den Wert
   // unterbleibt nur diese Mail – die Antraege stehen trotzdem in /admin/anmeldungen.
   // Formatpruefung, weil ein Tippfehler sonst still bleibt: die Mail geht nie

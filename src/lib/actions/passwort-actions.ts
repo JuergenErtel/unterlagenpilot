@@ -41,7 +41,7 @@ export async function resetAnfordern(
       url: `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/passwort-neu/${angefordert.token}`,
     });
     try {
-      await sendEmail({ to: email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     } catch (e) {
       console.error("[passwort] Reset-Mail fehlgeschlagen:", e);
     }

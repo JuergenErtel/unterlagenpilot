@@ -51,7 +51,7 @@ export async function freigebenAction(formData: FormData): Promise<void> {
       loginUrl: `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/login`,
     });
     try {
-      await sendEmail({ to: antrag.email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: antrag.email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     } catch (e) {
       console.error("[freigabe] Willkommensmail fehlgeschlagen:", e);
       // `ablehnungsgrund` ist hier zweckentfremdet: Nach einer geglueckten

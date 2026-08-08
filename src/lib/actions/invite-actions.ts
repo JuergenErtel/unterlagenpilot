@@ -65,7 +65,7 @@ export async function einladenAction(
       url: `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/einladung/${res.token}`,
     });
     try {
-      await sendEmail({ to: email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     } catch (e) {
       console.error("[einladung] Mailversand fehlgeschlagen:", e);
       return { error: "Konto angelegt, aber die Einladungsmail konnte nicht zugestellt werden." };
@@ -107,7 +107,7 @@ export async function einladungErneutSendenAction(
       url: `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/einladung/${res.token}`,
     });
     try {
-      await sendEmail({ to: res.email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: res.email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     } catch (e) {
       console.error("[einladung] erneuter Mailversand fehlgeschlagen:", e);
       return { error: "Neuer Link erstellt, aber die Einladungsmail konnte nicht zugestellt werden." };

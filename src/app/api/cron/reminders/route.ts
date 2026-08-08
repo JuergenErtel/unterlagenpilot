@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
       const firstName = broker.name.split(" ")[0] || broker.name;
       const digest = buildReminderDigest(firstName, overdue, env.APP_BASE_URL);
       try {
-        await sendEmail({ to: broker.email, subject: digest.subject, text: digest.text });
+        await sendEmail({ to: broker.email, subject: digest.subject, text: digest.text, empfaenger: "intern" });
         emailsSent += 1;
       } catch (e) {
         console.error(`[cron/reminders] Digest an ${broker.email} fehlgeschlagen:`, e);
