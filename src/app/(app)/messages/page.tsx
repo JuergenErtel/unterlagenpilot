@@ -7,6 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils";
+import {
+  MESSAGE_TEMPLATE_TYPE_LABELS,
+  type MessageTemplateType,
+} from "@/lib/domain/enums";
 
 const CHANNEL_LABEL: Record<string, string> = {
   email: "E-Mail",
@@ -51,7 +55,9 @@ export default async function MessagesOverviewPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="space-y-2 p-3">
+          {/* Zeilen auf einem Blatt, nicht Kaesten in einem Kasten: der Rahmen
+              der Karte reicht, dazwischen genuegen Haarlinien. */}
+          <CardContent className="divide-y p-0">
             {messages.map((m) => {
               const namen =
                 m.case.applicants
@@ -62,10 +68,14 @@ export default async function MessagesOverviewPage() {
                 <Link
                   key={m.id}
                   href={`/cases/${m.caseId}/messages`}
-                  className="flex items-center justify-between gap-3 rounded-md border p-3 transition-colors hover:bg-accent/40"
+                  className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-accent/40"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{m.subject ?? m.templateType}</div>
+                    <div className="truncate text-sm font-medium">
+                      {m.subject ??
+                        MESSAGE_TEMPLATE_TYPE_LABELS[m.templateType as MessageTemplateType] ??
+                        m.templateType}
+                    </div>
                     <div className="truncate text-xs text-muted-foreground">
                       <span className="font-mono tabular">{m.case.caseNumber}</span> · {namen}
                     </div>

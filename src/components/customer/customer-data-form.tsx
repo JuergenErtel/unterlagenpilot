@@ -58,7 +58,7 @@ export function CustomerDataForm({
             id="familienstand"
             name="familienstand"
             defaultValue={defaults.familienstand}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            className="feld h-9 w-full"
           >
             <option value="">– wählen –</option>
             {MARITAL_STATUSES.map((m) => (

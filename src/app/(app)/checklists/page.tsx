@@ -9,7 +9,7 @@ export default function ChecklistsPage() {
       <PageHeader
         eyebrow="Wissensbasis"
         title="Checklisten"
-        subtitle="Im MVP fix hinterlegt, später pro Organisation editierbar."
+        subtitle="Welche Unterlagen ein Fall braucht – abhängig von Finanzierungsart, Kundentyp, Objekt und Plattform. Derzeit fest hinterlegt; eigene Regeln folgen."
       />
 
       <ChecklistRuleTester />

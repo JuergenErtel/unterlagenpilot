@@ -45,14 +45,14 @@ export default function NewCasePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="financingType">Finanzierungsart</Label>
-                <select id="financingType" name="financingType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <select id="financingType" name="financingType" className="feld h-9 w-full">
                   <option value="">– bitte wählen –</option>
                   {FINANCING_TYPES.map((f) => (<option key={f} value={f}>{FINANCING_TYPE_LABELS[f]}</option>))}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="employmentType">Kundentyp</Label>
-                <select id="employmentType" name="employmentType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <select id="employmentType" name="employmentType" className="feld h-9 w-full">
                   <option value="">– bitte wählen –</option>
                   {EMPLOYMENT_TYPES.map((e) => (<option key={e} value={e}>{EMPLOYMENT_TYPE_LABELS[e]}</option>))}
                 </select>
@@ -62,7 +62,7 @@ export default function NewCasePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="propertyType">Objektart</Label>
-                <select id="propertyType" name="propertyType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <select id="propertyType" name="propertyType" className="feld h-9 w-full">
                   <option value="">– bitte wählen –</option>
                   {PROPERTY_TYPES.map((p) => (<option key={p} value={p}>{PROPERTY_TYPE_LABELS[p]}</option>))}
                 </select>

@@ -16,7 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CaseStatusBadge } from "@/components/status-badge";
-import { Progress } from "@/components/ui/progress";
 import { formatDate } from "@/lib/utils";
 import { CASE_STATUS_LABELS, type CaseStatus } from "@/lib/domain/enums";
 
@@ -66,6 +65,7 @@ export default async function CasesPage({
   return (
     <div className="space-y-6">
       <PageHeader
+        eyebrow="Bestand"
         title="Fälle"
         subtitle={subtitle}
         actions={
@@ -192,10 +192,24 @@ export default async function CasesPage({
                       {c._count.documents}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={c.readinessScore} className="h-2 w-24" />
-                        <span className="font-mono tabular text-xs text-muted-foreground">
-                          {c.readinessScore}%
+                      {/*
+                        Hier steht bewusst KEINE Pruefleiste: die Liste kennt
+                        nur die vorhandenen Dokumente, nicht die verlangten.
+                        Ein Instrument, das auf der Fallseite "alle verlangten
+                        Unterlagen" und hier "alle vorhandenen" bedeutete,
+                        waere schlimmer als keins. Nur der Reifegrad, in
+                        derselben Schrift wie ueberall.
+                      */}
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-[2px] bg-muted">
+                          <div
+                            className="h-full rounded-[2px] bg-foreground/75"
+                            style={{ width: `${c.readinessScore}%` }}
+                          />
+                        </div>
+                        <span className="display tabular text-sm leading-none">
+                          {c.readinessScore}
+                          <span className="text-xs text-muted-foreground">%</span>
                         </span>
                       </div>
                     </TableCell>
