@@ -78,7 +78,11 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().optional(), // z.B. "BaufiDesk <noreply@baufidesk.de>"
   // Empfaenger der Benachrichtigung "neue Anmeldung wartet". Ohne den Wert
   // unterbleibt nur diese Mail – die Antraege stehen trotzdem in /admin/anmeldungen.
-  PLATFORM_ADMIN_EMAIL: z.string().optional(),
+  // Formatpruefung, weil ein Tippfehler sonst still bleibt: die Mail geht nie
+  // raus, und niemand merkt es. Die leere Zeichenkette bleibt zulaessig – eine
+  // geleerte Variable in Vercel darf den Start nicht verhindern, sie bedeutet
+  // schlicht "keine Benachrichtigung".
+  PLATFORM_ADMIN_EMAIL: z.string().email().optional().or(z.literal("")),
 
   // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
   CRON_SECRET: z.string().optional(),

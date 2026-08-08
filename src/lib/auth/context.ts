@@ -115,7 +115,10 @@ export async function getCurrentContext(): Promise<AppContext | null> {
 export async function requireContext(): Promise<AppContext> {
   const ctx = await getCurrentContext();
   if (!ctx) {
-    if (getEnv().AUTH_MODE === "demo") {
+    // Die Entwicklermeldung gibt es nur ausserhalb der Produktion. Stuende
+    // AUTH_MODE dort versehentlich auf "demo", saehe ein Kunde sonst
+    // "Bitte npm run db:seed ausfuehren" statt der Anmeldeseite.
+    if (getEnv().AUTH_MODE === "demo" && process.env.NODE_ENV !== "production") {
       throw new Error("Kein Vermittler-Kontext gefunden. Bitte `npm run db:seed` ausführen.");
     }
     redirect("/login");

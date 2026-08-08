@@ -4,6 +4,8 @@ import { validateUpload } from "@/lib/security/file-validation";
 import { MockVirusScanner } from "@/lib/security/virus-scan";
 import { hashToken, createUploadToken, verifyUploadToken } from "@/lib/security/upload-token";
 import { rateLimit, __resetRateLimits } from "@/lib/auth/rate-limit";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { safeRedirect } from "@/lib/auth/redirect";
 import { isDeliverableScanStatus } from "@/lib/domain/enums";
 
@@ -206,3 +208,18 @@ describe("Rate-Limiting", () => {
 // Quelltext nach einer Zeichenkette zu durchsuchen (Nachbesserung nach
 // Task-Pruefung: ein reiner Quelltext-Regex haette eine Bedingung wie
 // `... || hintertuer` faelschlich als sicher durchgehen lassen).
+
+describe("Weiterleitungen der Anmeldeflaeche", () => {
+  // Die Seite selbst laesst sich ohne Renderumgebung nicht ausfuehren; geprueft
+  // wird deshalb, dass sie die eigene Pfadpruefung nicht wieder einfuehrt.
+  // `next.startsWith("/")` liess "//evil.com" durch – eine offene Weiterleitung.
+  const quelle = readFileSync(
+    join(process.cwd(), "src/app/login/page.tsx"),
+    "utf-8"
+  );
+
+  it("nutzt safeRedirect statt einer eigenen Pfadpruefung", () => {
+    expect(quelle).toContain("safeRedirect(next)");
+    expect(quelle).not.toMatch(/next\.startsWith\(/);
+  });
+});

@@ -3,6 +3,7 @@ import { Logo } from "@/components/brand/logo";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { RegistrierungForm } from "@/components/auth/registrierung-form";
 import { isEmailConfigured } from "@/lib/email/resend";
+import { waehlbareTarife } from "@/lib/saas/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default function RegistrierenPage() {
           </CardHeader>
           <CardContent>
             {moeglich ? (
-              <RegistrierungForm />
+              <RegistrierungForm tarife={waehlbareTarife()} />
             ) : (
               <p className="text-sm text-muted-foreground">
                 Die Registrierung ist gerade nicht verfügbar. Bitte schreiben Sie uns an

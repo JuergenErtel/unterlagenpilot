@@ -76,6 +76,17 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+// redirect() aus next/navigation wirft in der echten Umgebung eine
+// Sonder-Ausnahme; hier genuegt eine erkennbare Fehlermeldung.
+vi.mock("next/navigation", () => ({
+  redirect: (ziel: string) => {
+    throw new Error(`REDIRECT:${ziel}`);
+  },
+  notFound: () => {
+    throw new Error("NOT_FOUND");
+  },
+}));
+
 let cookieWert: string | undefined;
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (cookieWert ? { value: cookieWert } : undefined) }),
@@ -196,5 +207,30 @@ describe("Demo-Modus in Produktion", () => {
     demoNutzer.vorhanden = true;
     const { getCurrentContext } = await import("@/lib/auth/context");
     await expect(getCurrentContext()).resolves.toMatchObject({ isDemo: true, userId: "demo-u1" });
+  });
+});
+
+describe("requireContext ohne Kontext", () => {
+  it("leitet in Produktion auf /login – auch wenn AUTH_MODE versehentlich demo ist", async () => {
+    // Sonst bekaeme ein Kunde die Entwicklermeldung "npm run db:seed" zu sehen.
+    vi.stubEnv("NODE_ENV", "production");
+    envState.AUTH_MODE = "demo";
+    demoNutzer.vorhanden = false;
+    const { requireContext } = await import("@/lib/auth/context");
+    await expect(requireContext()).rejects.toThrow("REDIRECT:/login");
+  });
+
+  it("leitet im Session-Modus auf /login", async () => {
+    envState.AUTH_MODE = "session";
+    const { requireContext } = await import("@/lib/auth/context");
+    await expect(requireContext()).rejects.toThrow("REDIRECT:/login");
+  });
+
+  it("nennt ausserhalb der Produktion weiterhin den Seed-Hinweis", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    envState.AUTH_MODE = "demo";
+    demoNutzer.vorhanden = false;
+    const { requireContext } = await import("@/lib/auth/context");
+    await expect(requireContext()).rejects.toThrow(/db:seed/);
   });
 });

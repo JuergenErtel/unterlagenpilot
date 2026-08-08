@@ -12,6 +12,7 @@ import {
 import { LoginForm } from "@/components/auth/login-form";
 import { getEnv } from "@/lib/env";
 import { getCurrentContext } from "@/lib/auth/context";
+import { safeRedirect } from "@/lib/auth/redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,11 @@ export default async function LoginPage({
   const { next } = await searchParams;
   const env = getEnv();
 
-  // Bereits angemeldet (echte Session) → direkt weiter.
+  // Bereits angemeldet (echte Session) → direkt weiter. safeRedirect statt
+  // eigener Pruefung: "//evil.com" beginnt ebenfalls mit "/" und waere eine
+  // offene Weiterleitung.
   const ctx = await getCurrentContext();
-  if (ctx && !ctx.isDemo) redirect(next && next.startsWith("/") ? next : "/dashboard");
+  if (ctx && !ctx.isDemo) redirect(safeRedirect(next));
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">

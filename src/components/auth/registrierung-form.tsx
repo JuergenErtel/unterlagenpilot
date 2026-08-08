@@ -8,13 +8,17 @@ import { Label } from "@/components/ui/label";
 import { registriereUndWeiter, type RegistrierungState } from "@/lib/actions/registrierung";
 import { PASSWORT_HINWEIS } from "@/lib/auth/passwort-regeln";
 
-const TARIFE = [
-  { wert: "starter", label: "Starter – 29 €/Monat" },
-  { wert: "pro", label: "Pro – 79 €/Monat" },
-  { wert: "team", label: "Team – 199 €/Monat" },
-];
+/**
+ * Die Tarifliste kommt als Prop von der Seite (aus PLAN_DEFINITIONS). Sie hier
+ * zu wiederholen hiesse, kundenseitig sichtbare Preise doppelt zu pflegen –
+ * nach dem ersten Preiswechsel stuenden im Formular sonst falsche Zahlen.
+ */
+export interface TarifWahl {
+  wert: string;
+  label: string;
+}
 
-export function RegistrierungForm() {
+export function RegistrierungForm({ tarife }: { tarife: TarifWahl[] }) {
   const [state, formAction, pending] = useActionState<RegistrierungState, FormData>(
     registriereUndWeiter,
     {}
@@ -56,7 +60,7 @@ export function RegistrierungForm() {
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           defaultValue="pro"
         >
-          {TARIFE.map((t) => (
+          {tarife.map((t) => (
             <option key={t.wert} value={t.wert}>
               {t.label}
             </option>
