@@ -11,7 +11,13 @@ export function AppShell({
   context,
 }: {
   children: React.ReactNode;
-  context: { organizationName: string; userName: string; role: string; isDemo?: boolean };
+  context: {
+    organizationName: string;
+    userName: string;
+    role: string;
+    isDemo?: boolean;
+    platformAdmin?: boolean;
+  };
 }) {
   const initials = context.userName
     .split(" ")
@@ -28,7 +34,7 @@ export function AppShell({
           <Logo className="h-8 w-auto" />
         </Link>
 
-        <SidebarNav />
+        <SidebarNav platformAdmin={context.platformAdmin} />
 
         <div className="space-y-2 border-t p-3">
           <div className="flex items-center gap-3 rounded-md px-2 py-1.5">

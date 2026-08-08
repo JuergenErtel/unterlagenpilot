@@ -21,6 +21,11 @@ export interface AppContext {
   userId: string;
   userName: string;
   role: UserRole;
+  /** Plattform-Ebene (Freigabe von Registrierungsantraegen). Kommt aus derselben
+   *  Abfrage wie Rolle und Organisation – die Navigation kostet dadurch keine
+   *  zusaetzliche Datenbankrunde. Massgeblich fuer den Zugang bleibt
+   *  requirePlatformAdmin. */
+  platformAdmin: boolean;
   /** true, wenn der Kontext aus dem Demo-Fallback stammt (kein echter Login). */
   isDemo: boolean;
 }
@@ -55,6 +60,7 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         organizationId: true,
         name: true,
         role: true,
+        platformAdmin: true,
         organization: { select: { name: true } },
       },
     });
@@ -65,6 +71,7 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         userId: nutzer.id,
         userName: nutzer.name,
         role: nutzer.role as UserRole,
+        platformAdmin: nutzer.platformAdmin,
         isDemo: false,
       };
     }
@@ -90,6 +97,9 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         userId: user.id,
         userName: user.name,
         role: user.role as UserRole,
+        // Der Demo-Kontext haengt an keinem echten Login – Plattformrechte
+        // gibt es dort grundsaetzlich nicht (vgl. requirePlatformAdmin).
+        platformAdmin: false,
         isDemo: true,
       };
     }

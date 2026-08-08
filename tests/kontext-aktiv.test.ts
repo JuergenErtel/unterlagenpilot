@@ -8,6 +8,7 @@ const nutzer = {
   organizationName: "Beispiel Finanz",
   name: "Anna",
   role: "org_admin" as const,
+  platformAdmin: false,
 };
 
 // Mutierbarer Env-Zustand statt vi.doMock/vi.resetModules: einfacher und ohne
@@ -55,6 +56,7 @@ vi.mock("@/lib/db", () => ({
               organizationId: nutzer.organizationId,
               name: nutzer.name,
               role: nutzer.role,
+              platformAdmin: nutzer.platformAdmin,
               organization: nutzer.orgVorhanden ? { name: nutzer.organizationName } : null,
             }
           : null
@@ -86,6 +88,7 @@ beforeEach(() => {
   nutzer.orgVorhanden = true;
   nutzer.organizationId = "o1";
   nutzer.role = "org_admin";
+  nutzer.platformAdmin = false;
   envState.AUTH_MODE = "session";
   demoNutzer.vorhanden = false;
 });
@@ -140,6 +143,35 @@ describe("Kontext aus der Session", () => {
       organizationId: "o2",
       role: "teammitglied",
     });
+  });
+});
+
+describe("Plattform-Kennzeichen im Kontext", () => {
+  it("traegt platformAdmin aus der DB in den Kontext – ohne zweite Abfrage", async () => {
+    // Die Navigation braucht das Kennzeichen bei jedem Seitenaufruf. Es kommt
+    // deshalb aus derselben Abfrage wie Rolle und Organisation.
+    cookieWert = await sessionCookieFuer();
+    nutzer.platformAdmin = true;
+    const { prisma } = await import("@/lib/db");
+    const { getCurrentContext } = await import("@/lib/auth/context");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.user.findUnique as any).mockClear();
+    await expect(getCurrentContext()).resolves.toMatchObject({ platformAdmin: true });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("laesst einen gewoehnlichen Nutzer ohne Kennzeichen", async () => {
+    cookieWert = await sessionCookieFuer();
+    const { getCurrentContext } = await import("@/lib/auth/context");
+    await expect(getCurrentContext()).resolves.toMatchObject({ platformAdmin: false });
+  });
+
+  it("gibt dem Demo-Kontext niemals Plattformrechte", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    envState.AUTH_MODE = "demo";
+    demoNutzer.vorhanden = true;
+    const { getCurrentContext } = await import("@/lib/auth/context");
+    await expect(getCurrentContext()).resolves.toMatchObject({ isDemo: true, platformAdmin: false });
   });
 });
 
