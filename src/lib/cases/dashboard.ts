@@ -125,6 +125,14 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   const bogenJeFall = new Map<string, (typeof todoBoegen)[number]>();
   for (const b of todoBoegen) if (!bogenJeFall.has(b.caseId)) bogenJeFall.set(b.caseId, b);
 
+  // Erstkontakt-Stand je Kandidat – ebenfalls in EINER Query, damit das
+  // Dashboard dieselbe Prioritätsleiter sieht wie die Fallseite (next-step.ts).
+  const erstkontaktNachrichten = await prisma.generatedMessage.findMany({
+    where: { id: { in: todoCandidates.map((c) => c.erstkontaktMessageId).filter((mid): mid is string => !!mid) } },
+    select: { id: true, sent: true },
+  });
+  const versendetJeNachricht = new Map(erstkontaktNachrichten.map((m) => [m.id, m.sent]));
+
   const enriched = await Promise.all(
     todoCandidates.map(async (c) => {
       const agg = await getCaseAggregate(c.id);
@@ -155,6 +163,11 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
             erstelltVorTagen: Math.floor((Date.now() - b.link.createdAt.getTime()) / 86400_000),
           };
         })(),
+        erstkontakt: {
+          empfaenger: c.applicants.map((a) => a.email).find((e): e is string => !!e && e.includes("@")) ?? null,
+          vorbereitet: Boolean(c.erstkontaktMessageId),
+          versendet: c.erstkontaktMessageId ? (versendetJeNachricht.get(c.erstkontaktMessageId) ?? false) : false,
+        },
       });
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
       return { c, agg, name, step, blockers };

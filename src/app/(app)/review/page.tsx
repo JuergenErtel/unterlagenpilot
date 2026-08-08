@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,11 +50,24 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
     : null;
 
   // Abschluss des geführten Modus: nichts mehr offen → nächster Schritt des Falls.
+  // Derselbe Aufruf wie auf der Fallseite (inkl. Erstkontakt-Stand), sonst
+  // widerspräche sich die Leiter zwischen Review-Abschluss und Fallseite.
   const completion =
     caseScope && documents.length === 0
       ? await (async () => {
-          const cockpit = await getCaseCockpit(caseScope.id);
-          return { cockpit, step: computeNextStep(cockpit) };
+          const [cockpit, erstkontaktStand] = await Promise.all([
+            getCaseCockpit(caseScope.id),
+            ladeErstkontaktStand(caseScope.id),
+          ]);
+          const step = computeNextStep({
+            ...cockpit,
+            erstkontakt: {
+              empfaenger: erstkontaktStand.empfaenger,
+              vorbereitet: Boolean(erstkontaktStand.messageId),
+              versendet: erstkontaktStand.versendet,
+            },
+          });
+          return { cockpit, step };
         })()
       : null;
 

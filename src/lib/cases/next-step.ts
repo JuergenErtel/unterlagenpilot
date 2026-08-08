@@ -10,6 +10,9 @@ export interface NextStep {
   key:
     | "ki_laeuft"
     | "ki_fehler"
+    | "erstkontakt_email_fehlt"
+    | "erstkontakt_vorbereiten"
+    | "erstkontakt_entwurf"
     | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
     | "kundendaten"
@@ -21,7 +24,10 @@ export interface NextStep {
   title: string;
   reason: string;
   tone: Tone;
-  /** Primäraktion als Link. Fehlt bei ki_laeuft (Fortschritt) und ki_fehler (Server-Action-Form). */
+  /**
+   * Primäraktion als Link. Fehlt bei ki_laeuft (Fortschritt), ki_fehler und
+   * erstkontakt_vorbereiten (beide Server-Action-Form statt Link).
+   */
   cta?: { label: string; href: string };
   secondary?: Array<{ label: string; href: string }>;
 }
@@ -48,6 +54,22 @@ export interface NextStepInput {
     /** Tage seit Erstellung des Links; null, wenn kein Link existiert. */
     erstelltVorTagen: number | null;
   };
+  /**
+   * Stand des Erstkontakts. Fehlt dieser Block (z. B. weil ein Aufrufer ihn
+   * nicht lädt), verhält sich die Leiter wie zuvor – ohne Erstkontakt-Stufen.
+   * Ist er gesetzt und noch nicht `versendet`, sticht er alles unterhalb der
+   * KI-Stufen: Der Erstkontakt ist der Weg, auf dem fehlende Kundendaten und
+   * Unterlagen überhaupt erst angefordert werden – ihn zurückzuhalten, bis
+   * z. B. das Geburtsdatum von Hand nachgetragen wurde, wäre ein Henne-Ei-
+   * Problem. Sobald `versendet: true`, taucht keine Erstkontakt-Stufe mehr auf.
+   */
+  erstkontakt?: {
+    /** Erste gültige E-Mail-Adresse unter den Antragstellern, falls vorhanden. */
+    empfaenger: string | null;
+    /** true, sobald ein Entwurf existiert (Upload- + Selbstauskunfts-Link, Nachricht). */
+    vorbereitet: boolean;
+    versendet: boolean;
+  };
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
@@ -69,6 +91,39 @@ export function computeNextStep(c: NextStepInput): NextStep {
       title: `${c.counts.docsFehler} Dokument${c.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis`,
       reason: "Bei der letzten Auswertung ist etwas schiefgelaufen. Ein erneuter Lauf behebt das in der Regel.",
       tone: "review",
+    };
+  }
+
+  // Erstkontakt vor allem Fachlichen: Er ist der Weg, auf dem der Kunde
+  // überhaupt erst um die fehlenden Kundendaten und Unterlagen gebeten wird
+  // (der Entwurf enthält bereits die Checkliste). Solange er nicht versendet
+  // ist, wäre jede andere Anweisung ("Kundendaten ergänzen", "Unterlagen
+  // anfordern") vorschnell – der eigentliche erste Schritt fehlt noch.
+  if (c.erstkontakt && !c.erstkontakt.versendet) {
+    if (!c.erstkontakt.empfaenger) {
+      return {
+        key: "erstkontakt_email_fehlt",
+        title: "E-Mail-Adresse für den Erstkontakt fehlt",
+        reason:
+          "Für diesen Fall ist noch keine E-Mail-Adresse hinterlegt – ohne sie kann weder der Erstkontakt noch eine spätere Nachforderung raus.",
+        tone: "blocker",
+        cta: { label: "Kundendaten ergänzen", href: `/cases/${id}/edit` },
+      };
+    }
+    if (!c.erstkontakt.vorbereitet) {
+      return {
+        key: "erstkontakt_vorbereiten",
+        title: "Erstkontakt vorbereiten",
+        reason: `Upload-Link, Selbstauskunfts-Link und eine fertige Nachricht an ${c.erstkontakt.empfaenger} sind noch nicht erzeugt – verschickt wird dabei noch nichts.`,
+        tone: "review",
+      };
+    }
+    return {
+      key: "erstkontakt_entwurf",
+      title: "Erstkontakt prüfen & senden",
+      reason: `Der Entwurf ist fertig formuliert und wartet auf deine Prüfung, bevor er an ${c.erstkontakt.empfaenger} geht.`,
+      tone: "review",
+      cta: { label: "Prüfen und senden", href: `/cases/${id}/messages` },
     };
   }
 

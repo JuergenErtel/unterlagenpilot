@@ -8,7 +8,10 @@ import {
 } from "@/lib/actions/erstkontakt-actions";
 
 /**
- * „Erstkontakt vorbereiten“ an der Erstkontakt-Karte.
+ * „Erstkontakt vorbereiten“ – als actionSlot der Prioritätsleiter-Karte
+ * (next-step.ts, Stufe `erstkontakt_vorbereiten`), verdrahtet in der
+ * Fallseite. Kein next-step-Link, weil das Vorbereiten eine Server-Action
+ * ist, keine Navigation.
  *
  * Eigene Client-Komponente, damit ein Fehlschlag als Zeile unter dem Knopf
  * landet statt als Next.js-Fehlerseite: Scheitert die Linkanlage, soll der

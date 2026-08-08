@@ -31,8 +31,8 @@ import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
-import { ErstkontaktKarte } from "@/components/case/erstkontakt-karte";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
+import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorbereiten-button";
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
@@ -182,10 +182,6 @@ export default async function CaseCockpitPage({
         Alle Fälle
       </Link>
 
-      {/* Erstkontakt-Freigabe: nur solange noch nichts raus ist, sonst verstellt
-          ein abgeschlossener Erstkontakt dauerhaft die Fallseite. */}
-      {!erstkontaktStand.versendet && <ErstkontaktKarte caseId={id} stand={erstkontaktStand} />}
-
       {/* Hero / Case-Kopf */}
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center">
@@ -242,9 +238,18 @@ export default async function CaseCockpitPage({
         </CardContent>
       </Card>
 
-      {/* Geführte Fallreise: die eine Antwort auf „Was muss ich jetzt tun?“ */}
+      {/* Geführte Fallreise: die eine Antwort auf „Was muss ich jetzt tun?“ –
+          der Erstkontakt ist Teil dieser Leiter (next-step.ts), keine eigene
+          Karte mehr: sonst führt die Fallseite an zwei Stellen gleichzeitig. */}
       {(() => {
-        let step = computeNextStep(cockpit);
+        let step = computeNextStep({
+          ...cockpit,
+          erstkontakt: {
+            empfaenger: erstkontaktStand.empfaenger,
+            vorbereitet: Boolean(erstkontaktStand.messageId),
+            versendet: erstkontaktStand.versendet,
+          },
+        });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
         // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg.
         if (step.key === "ki_laeuft" && !aiCheckRunning) {
@@ -264,6 +269,8 @@ export default async function CaseCockpitPage({
                 <ScanSearch />KI-Prüfung wiederholen
               </SubmitButton>
             </form>
+          ) : step.key === "erstkontakt_vorbereiten" ? (
+            <ErstkontaktVorbereitenButton caseId={id} />
           ) : undefined;
         return <NextStepCard step={step} actionSlot={actionSlot} />;
       })()}
