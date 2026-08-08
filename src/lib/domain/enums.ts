@@ -462,6 +462,24 @@ export const MESSAGE_TEMPLATE_TYPES = [
 ] as const;
 export type MessageTemplateType = (typeof MESSAGE_TEMPLATE_TYPES)[number];
 
+/**
+ * Lesbare Namen der Vorlagentypen. Gebraucht ueberall dort, wo eine Nachricht
+ * keinen eigenen Betreff hat (WhatsApp, PDF, interne Notiz) – sonst stand in
+ * der Uebersicht der Schluessel selbst, also "erstnachforderung".
+ */
+export const MESSAGE_TEMPLATE_TYPE_LABELS: Record<MessageTemplateType, string> = {
+  erstnachforderung: "Nachforderung fehlender Unterlagen",
+  danke_erhalten: "Eingangsbestätigung",
+  datei_nicht_lesbar: "Datei nicht lesbar",
+  datei_veraltet: "Datei veraltet",
+  unterlage_fehlt_weiterhin: "Erinnerung an fehlende Unterlage",
+  pdf_checkliste: "Unterlagen-Checkliste",
+  interne_notiz: "Interne Notiz",
+  status_eingereicht: "Statusmeldung: eingereicht",
+  status_nachforderung: "Statusmeldung: Nachforderung der Bank",
+  status_genehmigt: "Statusmeldung: genehmigt",
+};
+
 /** SaaS-Tarife */
 export const PLAN_TIERS = [
   "starter",

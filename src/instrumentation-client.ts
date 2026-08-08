@@ -15,7 +15,8 @@ import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noi
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
-  enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+  // Nur in Produktion – siehe Begruendung in sentry.server.config.ts.
+  enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === "production",
   sendDefaultPii: false,
   tracesSampleRate: 0.1,
   // Reacts Streaming-Skripte melden bei einem Hydration-Mismatch pro Teilstück

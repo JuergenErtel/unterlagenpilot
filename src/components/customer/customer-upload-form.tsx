@@ -177,7 +177,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
       ) : null}
 
       {result && result.uploaded > 0 ? (
-        <p className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success-foreground">
+        <p className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           {result.uploaded} Datei(en) erfolgreich hochgeladen und in Prüfung.
         </p>
@@ -185,7 +185,7 @@ export function CustomerUploadForm({ token, maxMb }: { token: string; maxMb: num
 
       {result && result.rejected.length > 0 ? (
         <div className="space-y-1.5 rounded-md bg-warning/10 px-3 py-2 text-sm" role="alert">
-          <div className="flex items-center gap-2 font-medium text-warning-foreground">
+          <div className="flex items-center gap-2 font-medium text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" /> Einige Dateien wurden nicht übernommen
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">

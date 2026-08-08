@@ -69,7 +69,7 @@ export default async function BankRequirementsSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="documentType">Dokumenttyp (optional)</Label>
-              <select id="documentType" name="documentType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <select id="documentType" name="documentType" className="feld h-9 w-full">
                 <option value="">– keiner –</option>
                 {DOCUMENT_TYPES.map((t) => (<option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t as DocumentType]}</option>))}
               </select>
@@ -77,7 +77,7 @@ export default async function BankRequirementsSettingsPage() {
             <div className="space-y-1.5">
               <Label htmlFor="level">Priorität</Label>
               <div className="flex gap-2">
-                <select id="level" name="level" defaultValue="bankabhaengig" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <select id="level" name="level" defaultValue="bankabhaengig" className="feld h-9 w-full">
                   {REQUIREMENT_LEVELS.map((l) => (<option key={l} value={l}>{REQUIREMENT_LEVEL_LABELS[l as RequirementLevel]}</option>))}
                 </select>
                 <SubmitButton size="sm" pendingLabel="…">Hinzufügen</SubmitButton>

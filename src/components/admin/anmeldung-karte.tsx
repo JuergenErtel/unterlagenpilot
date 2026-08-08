@@ -86,7 +86,7 @@ export function AnmeldungKarte({ antrag }: { antrag: AnmeldungKarteAntrag }) {
                 id={`tier-${antrag.id}`}
                 name="tier"
                 defaultValue={vorbelegterTarif}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="feld h-9 w-full"
               >
                 {PLAN_TIERS.map((tier) => (
                   <option key={tier} value={tier}>

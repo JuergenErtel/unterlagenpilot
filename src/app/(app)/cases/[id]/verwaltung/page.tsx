@@ -96,7 +96,7 @@ export default async function VerwaltungPage({ params }: { params: Promise<{ id:
                 id="bankName"
                 name="bankName"
                 defaultValue={COMMON_BANKS.includes(c.bankName as (typeof COMMON_BANKS)[number]) ? c.bankName ?? "" : ""}
-                className="flex h-10 w-56 rounded-md border border-input bg-background px-3 text-sm"
+                className="feld h-9 w-56"
               >
                 <option value="">– keine / Andere –</option>
                 {COMMON_BANKS.map((b) => (<option key={b} value={b}>{b}</option>))}
@@ -195,7 +195,7 @@ export default async function VerwaltungPage({ params }: { params: Promise<{ id:
           <form action={addDeadline.bind(null, id)} className="flex flex-wrap items-end gap-3 border-t pt-3">
             <div className="space-y-1.5">
               <Label htmlFor="dl-kind">Art</Label>
-              <select id="dl-kind" name="kind" className="flex h-10 w-44 rounded-md border border-input bg-background px-3 text-sm">
+              <select id="dl-kind" name="kind" className="feld h-9 w-44">
                 {DEADLINE_KINDS.map((k) => (<option key={k} value={k}>{DEADLINE_KIND_LABELS[k]}</option>))}
               </select>
             </div>
@@ -225,7 +225,7 @@ export default async function VerwaltungPage({ params }: { params: Promise<{ id:
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="note-kind">Art</Label>
-                <select id="note-kind" name="kind" className="flex h-10 w-40 rounded-md border border-input bg-background px-3 text-sm">
+                <select id="note-kind" name="kind" className="feld h-9 w-40">
                   {(Object.keys(CASE_NOTE_KIND_LABELS) as CaseNoteKind[]).map((k) => (
                     <option key={k} value={k}>{CASE_NOTE_KIND_LABELS[k]}</option>
                   ))}

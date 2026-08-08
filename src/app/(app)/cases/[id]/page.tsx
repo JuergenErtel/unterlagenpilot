@@ -25,7 +25,7 @@ import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CaseTabs } from "@/components/case/case-tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
-import { ProgressRing } from "@/components/case/progress-ring";
+import { Pruefleiste, type PruefSegment } from "@/components/ui/pruefleiste";
 import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { NextStepCard } from "@/components/case/next-step-card";
@@ -151,6 +151,29 @@ export default async function CaseCockpitPage({
     caseRow.primaryEmploymentType === "geschaeftsfuehrer" ||
     caseRow.primaryEmploymentType === "gesellschafter";
 
+  /*
+   * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
+   * Zeilen gebaut, nicht aus dem Prozentwert abgeleitet: erst dann sagt sie
+   * mehr als der Prozentwert daneben, naemlich WELCHE Art von Arbeit noch
+   * ansteht. Dokumente in der Reihenfolge des Eingangs, danach die noch
+   * fehlenden als leere Faecher.
+   */
+  const pruefSegmente: PruefSegment[] = [
+    ...documents.map((d) => ({
+      name: d.originalName,
+      zustand:
+        d.reviewStatus === "akzeptiert"
+          ? ("angenommen" as const)
+          : d.reviewStatus === "abgelehnt"
+            ? ("abgelehnt" as const)
+            : ("eingegangen" as const),
+    })),
+    ...Array.from({ length: cockpit.counts.docsMissing }, () => ({
+      zustand: "offen" as const,
+      name: "Noch nicht eingereicht",
+    })),
+  ];
+
   return (
     <div className="space-y-6">
       {/* Rückweg zur Fallliste – auf Mobile (Sidebar eingeklappt) der einzige. */}
@@ -165,7 +188,22 @@ export default async function CaseCockpitPage({
       {/* Hero / Case-Kopf */}
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center">
-          <ProgressRing value={cockpit.score} label={cockpit.scoreLabel} sublabel="einreichungsfertig" />
+          {/*
+            Reifegrad. Der Prozentwert sagt "wie weit", die Pruefleiste darunter
+            sagt "woran" – ein Fach je Unterlage. Beides zusammen ersetzt den
+            frueheren Ring, der nur die eine Zahl konnte.
+          */}
+          <div className="w-full shrink-0 lg:w-52">
+            <p className="eyebrow">Reifegrad</p>
+            <p className="display tabular mt-1.5 text-[2.5rem] leading-none">
+              {cockpit.score}
+              <span className="text-xl text-muted-foreground">%</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {cockpit.scoreLabel} · einreichungsfertig
+            </p>
+            <Pruefleiste segmente={pruefSegmente} groesse="md" className="mt-3" />
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-xl font-semibold tracking-tight">{cockpit.applicantNames}</h1>

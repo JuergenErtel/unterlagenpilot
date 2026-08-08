@@ -1,17 +1,5 @@
 import Link from "next/link";
-import {
-  Download,
-  Plus,
-  PlayCircle,
-  Inbox,
-  UploadCloud,
-  ScanSearch,
-  FileWarning,
-  Building2,
-  Timer,
-  CalendarClock,
-  UserPlus,
-} from "lucide-react";
+import { Download, Plus, PlayCircle, CalendarClock } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { getDashboardData } from "@/lib/cases/dashboard";
 import { getSystemStatus } from "@/lib/system/status";
@@ -20,7 +8,7 @@ import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import { Kennzahlenband } from "@/components/dashboard/kennzahlenband";
 import { TodoCaseCard } from "@/components/dashboard/todo-case-card";
 import { Pipeline } from "@/components/case/pipeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,9 +45,9 @@ export default async function DashboardPage() {
     <div className="space-y-7">
       {status.pilot && <PilotBanner pilot={status.pilot} />}
 
-      {/* Hero */}
-      <div className="rounded-xl border bg-card p-6 shadow-soft">
-        <PageHeader
+      {/* Kopf – ohne Karte darum: die Ueberschrift steht auf dem Papier, nicht
+          in einem zweiten Rahmen. */}
+      <PageHeader
           eyebrow="Arbeitszentrale"
           title={`${greeting()}, ${ctx.userName.split(" ")[0]}. Diese Fälle brauchen deine Aufmerksamkeit.`}
           subtitle="Unterlagen prüfen, Lücken schließen und Fälle einreichungsfertig machen."
@@ -81,12 +69,11 @@ export default async function DashboardPage() {
             </>
           }
         />
-      </div>
 
       {/* 1) Priorisierte To-do-Liste */}
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Heute dran</h2>
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="eyebrow">Heute dran</h2>
           <Button asChild variant="link" size="sm"><Link href="/cases">Alle Fälle ansehen</Link></Button>
         </div>
         <div className="space-y-3">
@@ -168,32 +155,52 @@ export default async function DashboardPage() {
 
       {/* 2) Mini-Pipeline */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Fall-Pipeline</CardTitle>
+        <CardHeader className="pb-4">
+          <CardTitle className="eyebrow">Fall-Pipeline</CardTitle>
         </CardHeader>
         <CardContent>
           <Pipeline stages={data.pipeline} />
         </CardContent>
       </Card>
 
-      {/* 3) KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Neue Leads (7 Tage)" value={data.kpis.neueLeads} tone="ai" icon={UserPlus} href="/pipeline" />
-        <MetricCard label="Offene Fälle" value={data.kpis.offen} icon={Inbox} href="/cases" />
-        <MetricCard label="Neue Uploads" value={data.kpis.neueUploads} tone="ai" icon={UploadCloud} href="/review" />
-        <MetricCard label="Prüfbereite KI-Auswertungen" value={data.kpis.pruefbereit} tone="ai" icon={ScanSearch} href="/review" />
-        <MetricCard label="Fehlende Unterlagen" value={data.kpis.unterlagenFehlen} tone="review" icon={FileWarning} href="/cases?status=unterlagen_fehlen" />
-        <MetricCard label="Bereit für Europace" value={data.kpis.bereitEuropace} tone={data.kpis.bereitEuropace > 0 ? "ready" : "neutral"} icon={Building2} href="/cases?status=einreichungsfertig" />
-        <MetricCard label="Bereit für FinLink" value={data.kpis.bereitFinlink} tone={data.kpis.bereitFinlink > 0 ? "ready" : "neutral"} icon={Building2} href="/cases?status=einreichungsfertig" />
-        <MetricCard label="Bereit für eHyp home" value={data.kpis.bereitEhyp} tone={data.kpis.bereitEhyp > 0 ? "ready" : "neutral"} icon={Building2} href="/cases?status=einreichungsfertig" />
-        <MetricCard
-          label="Zeitersparnis diese Woche"
-          value={timeSaved}
-          tone="ready"
-          icon={Timer}
-          hint="Schätzung: 8 Min. je KI-ausgewertetem Dokument"
-        />
-      </div>
+      {/* 3) Kennzahlen entlang des Wegs, den eine Akte nimmt */}
+      <Kennzahlenband
+        abschnitte={[
+          {
+            titel: "Eingang",
+            zeilen: [
+              { label: "Neue Leads (7 Tage)", wert: data.kpis.neueLeads, href: "/pipeline" },
+              { label: "Neue Uploads", wert: data.kpis.neueUploads, href: "/review" },
+              { label: "Offene Fälle", wert: data.kpis.offen, href: "/cases" },
+            ],
+          },
+          {
+            titel: "Prüfung",
+            zeilen: [
+              { label: "Prüfbereite KI-Auswertungen", wert: data.kpis.pruefbereit, href: "/review" },
+              {
+                label: "Fehlende Unterlagen",
+                wert: data.kpis.unterlagenFehlen,
+                href: "/cases?status=unterlagen_fehlen",
+                betont: true,
+              },
+              {
+                label: "Zeitersparnis diese Woche",
+                wert: timeSaved,
+                hinweis: "Schätzung: 8 Min. je KI-ausgewertetem Dokument",
+              },
+            ],
+          },
+          {
+            titel: "Einreichung",
+            zeilen: [
+              { label: "Bereit für Europace", wert: data.kpis.bereitEuropace, href: "/cases?status=einreichungsfertig" },
+              { label: "Bereit für FinLink", wert: data.kpis.bereitFinlink, href: "/cases?status=einreichungsfertig" },
+              { label: "Bereit für eHyp home", wert: data.kpis.bereitEhyp, href: "/cases?status=einreichungsfertig" },
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

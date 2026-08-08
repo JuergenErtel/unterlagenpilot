@@ -1,37 +1,56 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { TONE, type Tone } from "@/lib/ui/tone";
 
+/**
+ * Einzelne Kennzahl mit eigener Flaeche.
+ *
+ * Nur noch dort im Einsatz, wo wenige Zahlen fuer sich stehen (Pipeline). Wo
+ * viele Zahlen zusammengehoeren, gehoert das Kennzahlenband hin – ein Raster
+ * aus gleich grossen Kaesten sagt sonst "alles gleich wichtig".
+ *
+ * Die Zahl steht in der Displayschrift, nicht in der Schreibmaschinenschrift:
+ * Betraege sollen wie eine Bilanzzeile lesen, nicht wie Quelltext. Farbe traegt
+ * sie nur, wenn sie eine Handlung verlangt – eine Null berichtet und tritt
+ * zurueck.
+ */
 export function MetricCard({
   label,
   value,
   hint,
-  tone = "neutral",
   icon: Icon,
   href,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
-  tone?: Tone;
+  /** Wird ignoriert – bleibt fuer bestehende Aufrufe erhalten. */
+  tone?: string;
   icon?: React.ElementType;
   href?: string;
 }) {
+  const leer = value === 0 || value === "0";
+
   const inner = (
-    <div className="group flex h-full flex-col justify-between rounded-lg border bg-card p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-lift">
-      <div className="flex items-start justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        {Icon && (
-          <span className={cn("flex h-7 w-7 items-center justify-center rounded-md", TONE[tone].bg)}>
-            <Icon className={cn("h-4 w-4", TONE[tone].text)} />
-          </span>
-        )}
+    <div
+      className={cn(
+        "flex h-full flex-col justify-between rounded-lg border bg-card p-4 card-elevated",
+        href && "transition-shadow hover:shadow-lift"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="eyebrow">{label}</span>
+        {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
       </div>
-      <div className="mt-3">
-        <div className={cn("font-mono text-2xl font-semibold tabular", tone === "neutral" ? "text-foreground" : TONE[tone].text)}>
+      <div className="mt-4">
+        <div
+          className={cn(
+            "display tabular text-2xl leading-none",
+            leer ? "text-muted-foreground/45" : "text-foreground"
+          )}
+        >
           {value}
         </div>
-        {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
+        {hint && <div className="mt-1.5 text-[11px] text-muted-foreground">{hint}</div>}
       </div>
     </div>
   );

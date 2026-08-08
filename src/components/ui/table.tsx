@@ -19,7 +19,9 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  // Der Tabellenkopf ist die Spaltenbeschriftung eines Bogens, kein Inhalt:
+  // leicht abgesetzte Flaeche, damit die Zeilen darunter als das Blatt lesen.
+  <thead ref={ref} className={cn("bg-muted/40 [&_tr]:border-b", className)} {...props} />
 ));
 TableHeader.displayName = "TableHeader";
 
@@ -57,7 +59,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 px-4 text-left align-middle font-medium text-muted-foreground",
+      "eyebrow h-10 px-4 text-left align-middle",
       className
     )}
     {...props}
@@ -71,7 +73,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle", className)}
+    className={cn("px-4 py-3 align-middle", className)}
     {...props}
   />
 ));

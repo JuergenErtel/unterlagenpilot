@@ -134,7 +134,7 @@ export default async function CaseEditPage({
                       id={`familienstand-${applicant.id}`}
                       name="familienstand"
                       defaultValue={applicant.familienstand ?? ""}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="feld h-9 w-full"
                     >
                       <option value="">– wählen –</option>
                       {MARITAL_STATUSES.map((m) => (

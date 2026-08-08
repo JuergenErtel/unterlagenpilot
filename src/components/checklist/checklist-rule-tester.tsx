@@ -56,7 +56,7 @@ const GROUPS: { level: RequirementLevel; label: string }[] = [
 ];
 
 const selectClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "feld h-9 w-full";
 
 export function ChecklistRuleTester() {
   const [financingType, setFinancingType] = useState<FinancingType>("kauf");
@@ -85,8 +85,8 @@ export function ChecklistRuleTester() {
           Regel testen: Welche Unterlagen braucht dieser Fall?
         </CardTitle>
         <CardDescription>
-          Stell eine Fallkonstellation zusammen – die Regel-Engine zeigt sofort,
-          welche Unterlagen erforderlich werden.
+          Stell eine Fallkonstellation zusammen – darunter steht sofort, welche
+          Unterlagen dieser Fall verlangt.
         </CardDescription>
       </CardHeader>
 

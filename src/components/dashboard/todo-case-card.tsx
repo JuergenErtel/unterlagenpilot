@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CaseStatusBadge } from "@/components/status-badge";
-import { TONE, readinessTone } from "@/lib/ui/tone";
 import { PLATFORM_LABELS, type CaseStatus, type Platform } from "@/lib/domain/enums";
 
 export interface TodoCase {
@@ -20,17 +18,20 @@ export interface TodoCase {
 }
 
 export function TodoCaseCard({ item }: { item: TodoCase }) {
-  const { tone } = readinessTone(item.readiness);
   return (
-    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 shadow-soft transition-all hover:shadow-lift sm:flex-row sm:items-center">
-      {/* Score */}
-      <div className="flex items-center gap-3 sm:w-44 sm:flex-col sm:items-start">
-        <div className="flex items-baseline gap-1.5">
-          <span className={cn("font-mono text-3xl font-semibold tabular", TONE[tone].text)}>{item.readiness}</span>
-          <span className="font-mono text-sm text-muted-foreground">%</span>
-        </div>
-        <div className="h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
-          <div className={cn("h-full rounded-full", TONE[tone].bar)} style={{ width: `${item.readiness}%` }} />
+    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 card-elevated transition-shadow hover:shadow-lift sm:flex-row sm:items-center">
+      {/*
+        Reifegrad. Bewusst NICHT in Ampelfarben: 30 % erledigt ist kein Fehler,
+        sondern ein fruehes Stadium. Den Zustand sagt das Statuszeichen daneben,
+        der Balken sagt nur, wie weit. Deshalb Tinte.
+      */}
+      <div className="flex items-center gap-3 sm:w-40 sm:flex-col sm:items-start">
+        <p className="display tabular text-[2rem] leading-none">
+          {item.readiness}
+          <span className="text-base text-muted-foreground">%</span>
+        </p>
+        <div className="h-1.5 w-full max-w-[8rem] overflow-hidden rounded-[2px] bg-muted">
+          <div className="h-full rounded-[2px] bg-foreground/75" style={{ width: `${item.readiness}%` }} />
         </div>
       </div>
 
@@ -41,7 +42,7 @@ export function TodoCaseCard({ item }: { item: TodoCase }) {
           <span className="font-mono text-xs text-muted-foreground">{item.caseNumber}</span>
           <CaseStatusBadge status={item.status} />
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1.5 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Nächster Schritt:</span> {item.nextStep}
         </p>
         {item.blockers.length > 0 && (

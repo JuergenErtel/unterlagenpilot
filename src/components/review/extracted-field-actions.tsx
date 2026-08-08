@@ -32,7 +32,7 @@ export function ExtractedFieldActions({
 
   if (reviewed && !editing) {
     return (
-      <span className="rounded bg-success/15 px-1.5 py-0.5 text-[11px] text-success-foreground">
+      <span className="rounded bg-success/15 px-1.5 py-0.5 text-[11px] text-success">
         geprüft
       </span>
     );

@@ -57,7 +57,7 @@ export function RegistrierungForm({ tarife }: { tarife: TarifWahl[] }) {
         <select
           id="wunschtarif"
           name="wunschtarif"
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          className="feld h-9 w-full"
           defaultValue="pro"
         >
           {tarife.map((t) => (

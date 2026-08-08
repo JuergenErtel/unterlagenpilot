@@ -249,7 +249,10 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   <Separator />
                   <div className="space-y-1.5">
                     <form action={acceptDocument.bind(null, d.id)}>
-                      <SubmitButton size="sm" variant="success" className="w-full" pendingLabel="Wird übernommen …">
+                      {/* Tinte, nicht Gruen: Gruen ist in dieser App ein
+                          Zustand ("angenommen"), keine Aktion. Die eine
+                          Hauptaktion je Bildschirm traegt immer die Tinte. */}
+                      <SubmitButton size="sm" className="w-full" pendingLabel="Wird übernommen …">
                         {caseScope ? "Alle Felder übernehmen & Dokument freigeben" : "Dokument akzeptieren"}
                       </SubmitButton>
                     </form>
