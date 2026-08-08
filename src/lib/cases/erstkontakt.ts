@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/db";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
 import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
-import { buildEmail } from "@/lib/messages/generators";
+import {
+  buildSignature,
+  buildTemplateVars,
+  DEFAULT_TEMPLATES,
+  renderTemplate,
+  templateKey,
+} from "@/lib/messages/render";
+import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { createSelfDisclosureLink } from "@/lib/security/self-disclosure-link";
 import { createSecureUploadLink } from "@/lib/security/upload-link";
 
@@ -72,11 +79,29 @@ export async function bereiteErstkontaktVor(
     });
 
     const name = [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim();
-    const mail = buildEmail(fehlende, { kundeName: name || undefined, uploadLink: upload.url });
 
-    // Selbstauskunft ergaenzen: der Generator kennt nur den Upload-Link.
+    // Derselbe Weg wie `generateMessage` (src/lib/actions/cases.ts): Signatur
+    // aus den Organisationsdaten, Vorlage der Organisation vor Standardvorlage.
+    // Der fest verdrahtete Absender aus `buildEmail` haette dem Kunden eines
+    // zweiten Vermittlers Juergens Adresse geschickt.
+    const broker = await getBrokerInfo(fall.organizationId);
+    const vars = buildTemplateVars({
+      kundeName: name || undefined,
+      uploadLink: upload.url,
+      signatur: buildSignature(broker),
+      items: fehlende,
+    });
+    const override = await prisma.messageTemplate.findFirst({
+      where: { organizationId: fall.organizationId, type: "erstnachforderung", channel: "email" },
+      select: { subject: true, body: true },
+    });
+    const quelle = override ?? DEFAULT_TEMPLATES[templateKey("erstnachforderung", "email")];
+    if (!quelle) throw new Error("Vorlage für die Erstnachforderung fehlt.");
+    const betreff = quelle.subject ? renderTemplate(quelle.subject, vars) : null;
+
+    // Selbstauskunft ergaenzen: die Vorlage kennt nur den Upload-Link.
     const body =
-      mail.body +
+      renderTemplate(quelle.body, vars) +
       `\n\nDamit ich gleich mit den richtigen Zahlen rechnen kann, füllen Sie bitte außerdem` +
       ` einmal kurz Ihre Angaben aus – das dauert wenige Minuten:\n${selbstauskunft.url}`;
 
@@ -85,7 +110,7 @@ export async function bereiteErstkontaktVor(
         caseId: fall.id,
         channel: "email",
         templateType: "erstnachforderung",
-        subject: mail.subject ?? null,
+        subject: betreff,
         body,
         // Ausdruecklich unversendet. Der Versand ist ein menschlicher Klick.
         sent: false,

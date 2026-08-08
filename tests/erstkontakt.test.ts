@@ -8,8 +8,34 @@ vi.mock("@/lib/env", () => ({
 }));
 
 const faelle: Record<string, any> = {};
+// Zwei Organisationen mit unterschiedlichen Absenderdaten – Grundlage des
+// Mandantenfaehigkeits-Tests weiter unten.
+const orgs: Record<string, any> = {
+  o1: {
+    name: "Baufi Wörth",
+    street: "Ottstr. 9",
+    zip: "76744",
+    city: "Wörth",
+    website: "www.baufi-woerth.de",
+  },
+  o2: {
+    name: "Nordfinanz Beratung",
+    street: "Hafenstr. 4",
+    zip: "20457",
+    city: "Hamburg",
+    website: "www.nordfinanz.example",
+  },
+};
+/** Organisationseigene Vorlagen, je Organisation hoechstens eine. */
+const vorlagen: Record<string, any> = {};
 vi.mock("@/lib/db", () => ({
   prisma: {
+    organization: {
+      findUnique: vi.fn(async ({ where }: any) => orgs[where.id] ?? null),
+    },
+    messageTemplate: {
+      findFirst: vi.fn(async ({ where }: any) => vorlagen[where.organizationId] ?? null),
+    },
     case: {
       findUnique: vi.fn(async ({ where }: any) => faelle[where.id] ?? null),
       update: vi.fn(async ({ where, data }: any) => {
@@ -80,6 +106,7 @@ beforeEach(() => {
   // Brief-Wortlaut, siehe Bericht.
   vi.clearAllMocks();
   for (const k of Object.keys(faelle)) delete faelle[k];
+  for (const k of Object.keys(vorlagen)) delete vorlagen[k];
   faelle.c1 = fall();
   sendSpy.mockReset();
 });
@@ -148,6 +175,55 @@ describe("Erstkontakt vorbereiten", () => {
     expect(body).not.toContain("Gehaltsabrechnungen");
     // Objektbezug kommt jetzt auch in der Mail an (Eigentumswohnung).
     expect(body).toContain("Teilungserklärung");
+  });
+
+  it("unterschreibt mit den Daten der jeweiligen Organisation, nicht mit einer festen Signatur", async () => {
+    // Seit dem Registrierungsweg kann ein zweiter Vermittler freigeschaltet
+    // werden. Der fest verdrahtete Absender aus `buildEmail` haette dessen
+    // Kunden Juergens Anschrift geschickt.
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    const { prisma } = await import("@/lib/db");
+
+    await bereiteErstkontaktVor("c1");
+    const erste = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
+
+    faelle.c2 = fall({ id: "c2", organizationId: "o2" });
+    await bereiteErstkontaktVor("c2");
+    const zweite = (prisma.generatedMessage.create as any).mock.calls[1][0].data.body as string;
+
+    expect(erste).toContain("Baufi Wörth");
+    expect(erste).toContain("Ottstr. 9");
+    expect(zweite).toContain("Nordfinanz Beratung");
+    expect(zweite).toContain("Hafenstr. 4");
+    expect(zweite).toContain("20457 Hamburg");
+    // Entscheidend: die Daten der ersten Organisation tauchen bei der zweiten
+    // nirgends auf.
+    expect(zweite).not.toContain("Ottstr. 9");
+    expect(zweite).not.toContain("baufi-woerth");
+  });
+
+  it("bevorzugt die eigene Vorlage der Organisation", async () => {
+    vorlagen.o1 = {
+      subject: "Ihre Unterlagen für uns",
+      body: "{{anrede}}\n\n{{unterlagen}}\n\n{{uploadLink}}\n\n{{signatur}}",
+    };
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await bereiteErstkontaktVor("c1");
+    const { prisma } = await import("@/lib/db");
+    const data = (prisma.generatedMessage.create as any).mock.calls[0][0].data;
+    expect(data.subject).toBe("Ihre Unterlagen für uns");
+    expect(data.body).toContain("Hallo Anna Beispiel,");
+    expect(data.body).toContain("Baufi Wörth");
+    // Kein Rest der Standardvorlage.
+    expect(data.body).not.toContain("vielen Dank für Ihr Vertrauen");
+  });
+
+  it("laesst keinen unaufgeloesten Platzhalter im Entwurf stehen", async () => {
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await bereiteErstkontaktVor("c1");
+    const { prisma } = await import("@/lib/db");
+    const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
+    expect(body).not.toMatch(/\{\{\w+\}\}/);
   });
 
   it("bereitet keinen zweiten Entwurf vor", async () => {

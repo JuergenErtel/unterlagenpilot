@@ -16,7 +16,7 @@ import { AIService } from "@/lib/ai/service";
 import { mapLimit } from "@/lib/util/concurrency";
 import { generateByType } from "@/lib/messages/generators";
 import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buildSignature } from "@/lib/messages/render";
-import { getBrokerInfo } from "@/lib/pdf/case-pdf";
+import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";

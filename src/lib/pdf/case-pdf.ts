@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
@@ -30,20 +31,6 @@ export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform" | 
 
 function dateStr(d = new Date()): string {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-export async function getBrokerInfo(organizationId: string): Promise<BrokerInfo> {
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { name: true, street: true, zip: true, city: true, website: true },
-  });
-  return {
-    name: org?.name ?? "BaufiDesk",
-    street: org?.street ?? undefined,
-    zip: org?.zip ?? undefined,
-    city: org?.city ?? undefined,
-    website: org?.website ?? undefined,
-  };
 }
 
 function applicantDisplayNames(applicants: { vorname?: string; nachname?: string }[]): string {

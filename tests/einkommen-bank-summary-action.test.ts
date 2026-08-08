@@ -28,7 +28,9 @@ vi.mock("@/lib/storage", async () => {
 });
 const renderEinkommensanalyse = vi.fn();
 vi.mock("@/lib/pdf/renderer", () => ({ renderEinkommensanalyse: (...a: unknown[]) => renderEinkommensanalyse(...a) }));
-vi.mock("@/lib/pdf/case-pdf", () => ({ getBrokerInfo: vi.fn(async () => ({ name: "Makler" })), pdfFileName: () => "Bankzusammenfassung.pdf" }));
+vi.mock("@/lib/pdf/case-pdf", () => ({ pdfFileName: () => "Bankzusammenfassung.pdf" }));
+// Absenderdaten liegen jetzt in einem eigenen, schlanken Modul.
+vi.mock("@/lib/organization/broker-info", () => ({ getBrokerInfo: vi.fn(async () => ({ name: "Makler" })) }));
 
 import { createSelfEmployedBankSummaryAction } from "@/lib/actions/einkommen";
 
