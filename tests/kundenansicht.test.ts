@@ -227,6 +227,60 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     expect(f.prozent).toBe(100);
   });
 
+  it("zaehlt zwei Dokumente desselben Antragstellers nicht als vollstaendig", () => {
+    // Personalausweis bei zwei Antragstellern: Anna hat Vorder- und Rueckseite
+    // hochgeladen, beide angenommen. Ohne Antragstellerbezug galt die Position
+    // damit als erledigt, obwohl von Bernd nichts vorliegt.
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        { ...dok("personalausweis", "akzeptiert", { minute: 1 }), applicantId: "anna" },
+        { ...dok("personalausweis", "akzeptiert", { minute: 2 }), applicantId: "anna" },
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "teilweise", verlangt: 2, akzeptiert: 1 });
+  });
+
+  it("meldet die Position als angenommen, sobald jeder Antragsteller geliefert hat", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        { ...dok("personalausweis", "akzeptiert", { minute: 1 }), applicantId: "anna" },
+        { ...dok("personalausweis", "akzeptiert", { minute: 2 }), applicantId: "bernd" },
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", akzeptiert: 2 });
+  });
+
+  it("rechnet noch nicht zugeordnete Dokumente weiter mit", () => {
+    // Ueber den gemeinsamen Link verraet die Datei nicht, wer sie hochgeladen
+    // hat; der Vermittler ordnet erst spaeter zu. Bis dahin darf der Kunde
+    // seine angenommenen Unterlagen nicht verlieren.
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        dok("personalausweis", "akzeptiert", { minute: 1 }),
+        dok("personalausweis", "akzeptiert", { minute: 2 }),
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", akzeptiert: 2 });
+  });
+
+  it("fuellt bei einem zugeordneten und einem offenen Dokument beide Plaetze", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2, perApplicant: true })],
+      dokumente: [
+        { ...dok("personalausweis", "akzeptiert", { minute: 1 }), applicantId: "anna" },
+        dok("personalausweis", "akzeptiert", { minute: 2 }),
+      ],
+      applicantIds: ["anna", "bernd"],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", akzeptiert: 2 });
+  });
+
   it("verhaelt sich bei effectiveRequiredCount 1 wie bisher (Regressionsschutz)", () => {
     const f = baueKundenfortschritt({
       positionen: [pos("personalausweis")],

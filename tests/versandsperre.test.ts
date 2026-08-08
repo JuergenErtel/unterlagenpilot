@@ -58,6 +58,19 @@ describe("Versandsperre", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("sperrt alles, wenn die Testliste gesetzt, aber leer ist", async () => {
+    // Eine geleerte Variable (etwa in Vercel) darf nicht auf "alle erlaubt"
+    // durchfallen – ausgerechnet die Variable, deren Zweck das gefahrlose
+    // Durchspielen ist.
+    env.KUNDENVERSAND = "an";
+    for (const leer of ["", "   ", ",", " , ,"]) {
+      env.KUNDENVERSAND_NUR_AN = leer;
+      const { sendEmail } = await import("@/lib/email/resend");
+      await expect(sendEmail(kundenmail)).rejects.toThrow(/gesperrt/i);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("blockt auch bei Testliste, wenn KUNDENVERSAND aus ist", async () => {
     env.KUNDENVERSAND = "aus";
     env.KUNDENVERSAND_NUR_AN = "test@baufidesk.de";

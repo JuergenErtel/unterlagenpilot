@@ -32,11 +32,18 @@ export interface SendEmailInput {
 export function kundenversandErlaubt(to: string): boolean {
   const env = getEnv();
   if (env.KUNDENVERSAND !== "an") return false;
-  const liste = env.KUNDENVERSAND_NUR_AN?.split(",")
+  // Nicht gesetzt heisst "keine Einschraenkung". GESETZT heisst dagegen immer
+  // "nur diese Adressen" – auch wenn nichts Brauchbares drinsteht. Vorher fiel
+  // eine gesetzte, aber leere Variable auf "alle erlaubt" durch: ausgerechnet
+  // die Variable, deren Zweck das gefahrlose Durchspielen ist, haette dann den
+  // Versand an echte Kunden freigegeben.
+  const roh = env.KUNDENVERSAND_NUR_AN;
+  if (roh == null) return true;
+  const liste = roh
+    .split(",")
     .map((a) => a.trim().toLowerCase())
     .filter(Boolean);
-  if (liste && liste.length > 0) return liste.includes(to.trim().toLowerCase());
-  return true;
+  return liste.includes(to.trim().toLowerCase());
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {

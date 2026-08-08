@@ -94,7 +94,9 @@ export default async function PublicUploadPage({
       reviewStatus: d.reviewStatus,
       reviewNote: d.reviewNote,
       createdAt: d.createdAt,
+      applicantId: d.applicantId,
     })),
+    applicantIds: checklistEingabe.applicantIds,
   });
 
   const applicant = c.applicants[0];

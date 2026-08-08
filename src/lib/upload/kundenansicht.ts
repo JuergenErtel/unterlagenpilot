@@ -51,13 +51,22 @@ export interface KundenDokument {
    * hoch, darf nicht weiter der alte, abgelehnte Datensatz gewinnen.
    */
   createdAt: Date;
+  /**
+   * Zugeordneter Antragsteller, falls bekannt. Bei Positionen, die pro
+   * Antragsteller verlangt werden, zaehlten sonst zwei Dokumente DESSELBEN
+   * Antragstellers als vollstaendig.
+   */
+  applicantId?: string | null;
 }
 
 export function baueKundenfortschritt(input: {
   positionen: ResolvedChecklistItem[];
   dokumente: KundenDokument[];
+  /** Antragsteller des Falls, nach Position sortiert. */
+  applicantIds?: string[];
 }): KundenFortschritt {
   const sichtbar = input.positionen.filter((p) => p.customerVisible);
+  const applicantIds = input.applicantIds ?? [];
 
   const positionen: KundenPosition[] = sichtbar.map((p) => {
     // Zeitlich aufsteigend: der letzte Eintrag ist der juengste Stand.
@@ -73,25 +82,32 @@ export function baueKundenfortschritt(input: {
     // z. B. der zweite Antragsteller noch gar nichts eingereicht hat.
     const verlangt = Math.max(p.effectiveRequiredCount, 1);
     const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert");
+    // Bei Positionen je Antragsteller zaehlt jede Person nur ihr eigenes Soll:
+    // zwei Ausweise desselben Antragstellers ergeben keine zwei erfuellten
+    // Plaetze. Genau so rechnet auch die Vermittlersicht (checklists/engine).
+    const akzeptiert =
+      p.perApplicant === true && applicantIds.length > 1
+        ? zaehleJeAntragsteller(angenommen, applicantIds, Math.max(p.requiredCount ?? 1, 1))
+        : angenommen.length;
     const abgelehnt = wirksameAblehnung(passende);
     const eingegangen = passende.length > 0;
 
     // Reihenfolge der Zustaende: eine vollstaendige Annahme schlaegt alles,
     // danach eine teilweise Annahme (der Kunde hat bereits etwas geschafft),
     // danach die Ablehnung (der Kunde muss handeln), dann der blosse Eingang.
-    if (angenommen.length >= verlangt) {
-      return basis(p, "angenommen", verlangt, angenommen.length);
+    if (akzeptiert >= verlangt) {
+      return basis(p, "angenommen", verlangt, akzeptiert);
     }
-    if (angenommen.length > 0) {
-      return basis(p, "teilweise", verlangt, angenommen.length);
+    if (akzeptiert > 0) {
+      return basis(p, "teilweise", verlangt, akzeptiert);
     }
     if (abgelehnt) {
-      return { ...basis(p, "abgelehnt", verlangt, angenommen.length), grund: abgelehnt.reviewNote ?? undefined };
+      return { ...basis(p, "abgelehnt", verlangt, akzeptiert), grund: abgelehnt.reviewNote ?? undefined };
     }
     if (eingegangen) {
-      return basis(p, "eingegangen", verlangt, angenommen.length);
+      return basis(p, "eingegangen", verlangt, akzeptiert);
     }
-    return basis(p, "offen", verlangt, angenommen.length);
+    return basis(p, "offen", verlangt, akzeptiert);
   });
 
   const gesamt = positionen.length;
@@ -105,6 +121,35 @@ export function baueKundenfortschritt(input: {
   const prozentEingereicht = gesamt === 0 ? 100 : Math.round((eingereicht / gesamt) * 100);
 
   return { positionen, erledigt, eingereicht, gesamt, prozent, prozentEingereicht };
+}
+
+/**
+ * Zaehlt angenommene Dokumente einer Position, die pro Antragsteller verlangt
+ * wird: je Person hoechstens ihr eigenes Soll.
+ *
+ * Noch nicht zugeordnete Dokumente fuellen die verbliebenen Plaetze auf. Sie
+ * wegzulassen waere unehrlich in die andere Richtung: bei einem gemeinsamen
+ * Upload-Link verraet die Datei nicht, wer sie hochgeladen hat, und der
+ * Vermittler ordnet erst spaeter zu – der Kunde saehe seinen angenommenen
+ * Ausweis sonst gar nicht.
+ */
+function zaehleJeAntragsteller(
+  angenommen: KundenDokument[],
+  applicantIds: string[],
+  proPerson: number
+): number {
+  let frei = angenommen.filter(
+    (d) => !d.applicantId || !applicantIds.includes(d.applicantId)
+  ).length;
+  let summe = 0;
+  for (const id of applicantIds) {
+    const eigene = angenommen.filter((d) => d.applicantId === id).length;
+    const gezaehlt = Math.min(eigene, proPerson);
+    const ausFrei = Math.min(proPerson - gezaehlt, frei);
+    frei -= ausFrei;
+    summe += gezaehlt + ausFrei;
+  }
+  return summe;
 }
 
 /**
