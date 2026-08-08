@@ -42,11 +42,18 @@ export async function ladeErstkontaktStand(caseId: string): Promise<ErstkontaktS
     return { vorbereitetAm: null, messageId: null, versendet: false, versendetAm: null, empfaenger: null };
   }
 
-  const entwurf = await prisma.generatedMessage.findFirst({
-    where: { caseId, channel: "email", templateType: "erstnachforderung" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, sent: true, sentAt: true },
-  });
+  // Genau der Entwurf, den `bereiteErstkontaktVor` angelegt hat. Vorher wurde
+  // die aelteste Nachricht mit templateType "erstnachforderung" gesucht - ein
+  // Typ, den der Vermittler jederzeit selbst erzeugen kann. Ein alter, nie
+  // versendeter Nachforderungsentwurf liess die Karte dann "Entwurf liegt
+  // bereit" behaupten, obwohl kein Erstkontakt vorbereitet und kein
+  // Selbstauskunfts-Link erzeugt worden war.
+  const entwurf = fall.erstkontaktMessageId
+    ? await prisma.generatedMessage.findUnique({
+        where: { id: fall.erstkontaktMessageId },
+        select: { id: true, sent: true, sentAt: true },
+      })
+    : null;
 
   const empfaenger =
     fall.applicants.map((a) => a.email).find((e): e is string => !!e && e.includes("@")) ?? null;

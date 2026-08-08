@@ -30,7 +30,10 @@ vi.mock("@/lib/db", () => ({
       }),
     },
     generatedMessage: {
-      findFirst: vi.fn(async () => db.nachrichten[0] ?? null),
+      // Die Karte liest jetzt genau die am Fall vermerkte Nachricht.
+      findUnique: vi.fn(async ({ where }: any) =>
+        db.nachrichten.find((n) => n.id === where.id) ?? null
+      ),
     },
   },
 }));
@@ -40,6 +43,7 @@ beforeEach(() => {
   db.fall = {
     id: "c1",
     erstkontaktVorbereitetAm: null,
+    erstkontaktMessageId: null,
     applicants: [{ email: "anna@example.de" }],
   };
   db.nachrichten = [];
@@ -75,6 +79,7 @@ describe("Erstkontakt-Stand", () => {
 
   it("meldet den Entwurf, sobald einer da ist", async () => {
     db.fall.erstkontaktVorbereitetAm = new Date("2026-08-08");
+    db.fall.erstkontaktMessageId = "msg1";
     db.nachrichten = [{ id: "msg1", sent: false, sentAt: null, createdAt: new Date("2026-08-08") }];
     const { ladeErstkontaktStand } = await import("@/lib/actions/erstkontakt-actions");
     const stand = await ladeErstkontaktStand("c1");
@@ -83,11 +88,37 @@ describe("Erstkontakt-Stand", () => {
     expect(stand.versendetAm).toBeNull();
   });
 
+  it("haelt einen fremden Nachforderungs-Entwurf NICHT fuer den Erstkontakt", async () => {
+    // "erstnachforderung" ist ein ganz normaler Vorlagentyp, den der Vermittler
+    // jederzeit selbst erzeugen kann. Vorher liess ein alter, nie versendeter
+    // Nachforderungsentwurf die Karte "Entwurf liegt bereit" behaupten, obwohl
+    // nie ein Erstkontakt vorbereitet wurde und kein Selbstauskunfts-Link
+    // existierte.
+    db.nachrichten = [
+      { id: "fremd1", sent: false, sentAt: null, createdAt: new Date("2026-07-01") },
+    ];
+    const { ladeErstkontaktStand } = await import("@/lib/actions/erstkontakt-actions");
+    const stand = await ladeErstkontaktStand("c1");
+    expect(stand.vorbereitetAm).toBeNull();
+    expect(stand.messageId).toBeNull();
+    expect(stand.versendet).toBe(false);
+  });
+
+  it("meldet 'nicht vorbereitet', wenn der vermerkte Entwurf geloescht wurde", async () => {
+    db.fall.erstkontaktVorbereitetAm = new Date("2026-08-08");
+    db.fall.erstkontaktMessageId = "weg";
+    db.nachrichten = [];
+    const { ladeErstkontaktStand } = await import("@/lib/actions/erstkontakt-actions");
+    const stand = await ladeErstkontaktStand("c1");
+    expect(stand.messageId).toBeNull();
+  });
+
   it("meldet den tatsaechlichen Sendezeitpunkt, nicht den Entwurfszeitpunkt", async () => {
     // Regression: `createdAt` ist der Moment der Entwurfserstellung. Liegen
     // zwischen Vorbereiten und Senden Tage, behauptete die Karte sonst ein
     // falsches Datum.
     db.fall.erstkontaktVorbereitetAm = new Date("2026-08-01");
+    db.fall.erstkontaktMessageId = "msg1";
     db.nachrichten = [
       { id: "msg1", sent: true, createdAt: new Date("2026-08-01"), sentAt: new Date("2026-08-08") },
     ];
@@ -99,6 +130,7 @@ describe("Erstkontakt-Stand", () => {
 
   it("meldet 'versendet' auch fuer Altbestand ohne bekannten Sendezeitpunkt, aber ohne Datum zu behaupten", async () => {
     db.fall.erstkontaktVorbereitetAm = new Date("2026-08-01");
+    db.fall.erstkontaktMessageId = "msg1";
     db.nachrichten = [{ id: "msg1", sent: true, createdAt: new Date("2026-08-01"), sentAt: null }];
     const { ladeErstkontaktStand } = await import("@/lib/actions/erstkontakt-actions");
     const stand = await ladeErstkontaktStand("c1");

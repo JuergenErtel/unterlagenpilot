@@ -75,6 +75,8 @@ describe.runIf(RUN)("Erstkontakt vorbereiten (PGlite)", () => {
 
     const fall = await prisma.case.findUnique({ where: { id: c.id } });
     expect(fall.erstkontaktVorbereitetAm).not.toBeNull();
+    // Der Entwurf haengt eindeutig am Fall – die Karte muss nicht raten.
+    expect(fall.erstkontaktMessageId).toBe(nachricht.id);
 
     // Zweiter Lauf: schon vorbereitet, nichts zusätzlich angelegt.
     const zweiterLauf = await bereiteErstkontaktVor(c.id);

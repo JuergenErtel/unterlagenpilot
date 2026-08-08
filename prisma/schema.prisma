@@ -481,6 +481,14 @@ model Case {
   // Wann der Erstkontakt vorbereitet wurde (Links + Nachrichtenentwurf).
   // Verhindert, dass ein zweiter Lauf einen zweiten Entwurf erzeugt.
   erstkontaktVorbereitetAm DateTime?
+  // Genau der Entwurf, der zu diesem Erstkontakt gehoert. Ohne diesen Bezug
+  // musste die Fallseite den aeltesten "erstnachforderung"-Entwurf raten - ein
+  // ganz normaler, vom Vermittler erzeugbarer Nachrichtentyp. Ein alter, nie
+  // versendeter Nachforderungsentwurf liess die Karte dann "Entwurf liegt
+  // bereit" behaupten, obwohl nie ein Erstkontakt vorbereitet wurde.
+  // Bewusst ohne Fremdschluessel-Relation: die Nachricht ist nur ein Verweis,
+  // kein Besitz - wird sie geloescht, gilt der Erstkontakt als nicht vorbereitet.
+  erstkontaktMessageId     String?
 
   notes     String?
   createdAt DateTime @default(now())

@@ -92,6 +92,13 @@ export async function bereiteErstkontaktVor(
       },
     });
 
+    // Den Entwurf am Fall festmachen: die Fallseite liest genau diese
+    // Nachricht, statt anhand des Vorlagentyps zu raten.
+    await prisma.case.update({
+      where: { id: fall.id },
+      data: { erstkontaktMessageId: entwurf.id },
+    });
+
     return {
       status: "vorbereitet",
       messageId: entwurf.id,
