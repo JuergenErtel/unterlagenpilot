@@ -135,7 +135,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     expect(org.slug).toBe("beispiel-finanz-gmbh-2");
   }, 60_000);
 
-  it("hinterlaesst keine halbe Organisation, wenn die Adresse inzwischen vergeben ist", async () => {
+  it("weist eine bereits vergebene Adresse schon vor der Transaktion ab", async () => {
     const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
     const { gibFrei } = await import("@/lib/auth/freigabe");
     const dritter = await erstelleAntrag(
@@ -151,7 +151,9 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     if (dritter.status !== "neu_angelegt") throw new Error("unerwartet");
     await bestaetigeEmail(dritter.token);
 
-    // Jemand legt die Adresse zwischenzeitlich als Nutzer an.
+    // Die Adresse ist bereits als Nutzer vergeben, BEVOR gibFrei aufgerufen
+    // wird – das faengt schon der Vorab-Check ab, die Transaktion wird gar
+    // nicht erst versucht.
     const fremd = await prisma.organization.create({ data: { name: "Fremd", slug: "fremd" } });
     await prisma.user.create({
       data: { organizationId: fremd.id, email: "clara@beispiel.de", name: "Clara", role: "vermittler" },
@@ -163,6 +165,63 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     expect(await prisma.organization.count()).toBe(vorher);
     const antrag = await prisma.signupRequest.findUnique({ where: { id: dritter.requestId } });
     expect(antrag.status).toBe("bestaetigt"); // bleibt offen, nichts verloren
+  }, 60_000);
+
+  it("hinterlaesst keine halbe Organisation, wenn die Adresse zwischen Vorab-Check und Transaktion vergeben wird", async () => {
+    const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
+    const { gibFrei } = await import("@/lib/auth/freigabe");
+    const antragsteller = await erstelleAntrag(
+      {
+        name: "Ella Beispiel",
+        firmenname: "Ella Finanz",
+        email: "ella@beispiel.de",
+        passwort: "einWeiteresLangesGeheimwort",
+        agb: true,
+      },
+      { ip: null }
+    );
+    if (antragsteller.status !== "neu_angelegt") throw new Error("unerwartet");
+    await bestaetigeEmail(antragsteller.token);
+
+    // Die Adresse existiert bereits real als Nutzer – aber der Vorab-Check
+    // wird fuer genau diesen einen Aufruf gezielt ins Leere geschickt, damit
+    // gibFrei bis zur Transaktion vordringt und dort am Eindeutigkeitsindex
+    // scheitern muss (der eigentliche Wettlauf, den der Vorab-Check nicht
+    // abfangen kann).
+    const fremd = await prisma.organization.create({ data: { name: "Fremd2", slug: "fremd-2" } });
+    await prisma.user.create({
+      data: { organizationId: fremd.id, email: "ella@beispiel.de", name: "Ella", role: "vermittler" },
+    });
+    // vi.spyOn(prisma.user, "findUnique") + mockRestore() beschaedigt hier den
+    // Prisma-Delegate dauerhaft (nachfolgende Aufrufe schlagen mit
+    // "prisma.user.findUnique is not a function" fehl) – vermutlich weil der
+    // Delegate intern ueber eine Proxy-/Getter-Konstruktion arbeitet, die
+    // vitests mockRestore() nicht sauber zuruecksetzt. Deshalb hier ein
+    // simples manuelles Monkeypatch samt manueller Wiederherstellung fuer
+    // genau einen Aufruf statt vi.spyOn.
+    const echtesFindUnique = prisma.user.findUnique.bind(prisma.user);
+    let ersterAufruf = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prisma.user.findUnique = ((...args: any[]) => {
+      if (ersterAufruf) {
+        ersterAufruf = false;
+        return Promise.resolve(null);
+      }
+      return echtesFindUnique(...args);
+    }) as typeof prisma.user.findUnique;
+
+    try {
+      const vorherOrgs = await prisma.organization.count();
+      const vorherSubs = await prisma.subscription.count();
+      const res = await gibFrei(antragsteller.requestId, { tier: "pro", testEndeAm: null, adminUserId });
+      expect(res).toMatchObject({ ok: false, grund: "adresse_vergeben" });
+      expect(await prisma.organization.count()).toBe(vorherOrgs);
+      expect(await prisma.subscription.count()).toBe(vorherSubs); // kein Abo ohne Nutzer
+      const antrag = await prisma.signupRequest.findUnique({ where: { id: antragsteller.requestId } });
+      expect(antrag.status).toBe("bestaetigt"); // bleibt offen, nichts verloren
+    } finally {
+      prisma.user.findUnique = echtesFindUnique;
+    }
   }, 60_000);
 
   it("trennt die Faelle der neuen Organisation von fremden", async () => {

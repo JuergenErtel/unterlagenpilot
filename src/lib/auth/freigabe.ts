@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { PLAN_DEFINITIONS } from "@/lib/saas/plans";
@@ -34,7 +35,7 @@ async function freierSlug(firmenname: string): Promise<string> {
 
 export type FreigabeErgebnis =
   | { ok: true; organizationId: string; userId: string }
-  | { ok: false; grund: "nicht_gefunden" | "falscher_status" | "adresse_vergeben" };
+  | { ok: false; grund: "nicht_gefunden" | "falscher_status" | "adresse_vergeben" | "fehlgeschlagen" };
 
 export async function gibFrei(
   requestId: string,
@@ -52,8 +53,10 @@ export async function gibFrei(
 
   const slug = await freierSlug(antrag.firmenname);
 
+  let organizationId: string;
+  let userId: string;
   try {
-    const { organizationId, userId } = await prisma.$transaction(async (tx) => {
+    const ergebnis = await prisma.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
           name: antrag.firmenname,
@@ -89,7 +92,29 @@ export async function gibFrei(
       });
       return { organizationId: org.id, userId: nutzer.id };
     });
+    organizationId = ergebnis.organizationId;
+    userId = ergebnis.userId;
+  } catch (e) {
+    // Eindeutigkeitsverletzung auf der E-Mail-Adresse: der Wettlauf, den der
+    // Vorab-Check oben nicht abfangen kann (Adresse wurde zwischen Pruefung
+    // und Transaktion vergeben). Der Antrag bleibt offen und kann erneut
+    // freigegeben werden, sobald die Ursache geklaert ist. Alles andere
+    // (z. B. ein Slug-Konflikt oder ein sonstiger DB-Fehler) ist ein echter
+    // Fehlschlag und darf nicht als "Adresse vergeben" kaschiert werden.
+    const istAdressKonflikt =
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002" &&
+      Array.isArray(e.meta?.target) &&
+      (e.meta.target as string[]).includes("email");
+    console.error("[freigabe] Transaktion fehlgeschlagen:", e);
+    return { ok: false, grund: istAdressKonflikt ? "adresse_vergeben" : "fehlgeschlagen" };
+  }
 
+  // Die Freigabe ist an dieser Stelle bereits vollzogen und committet – der
+  // Kunde kann sich anmelden. Ein misslungener Protokolleintrag darf das im
+  // Nachhinein nicht zum Fehlschlag erklaeren, deshalb ein eigenes,
+  // verschluckendes try/catch statt Teil des obigen Blocks.
+  try {
     await audit({
       organizationId,
       userId: entscheidung.adminUserId,
@@ -98,15 +123,11 @@ export async function gibFrei(
       entityId: organizationId,
       metadata: { tier: entscheidung.tier, plan: PLAN_DEFINITIONS[entscheidung.tier].name },
     });
-
-    return { ok: true, organizationId, userId };
   } catch (e) {
-    // Haeufigster Fall: die Adresse wurde zwischen Pruefung und Transaktion
-    // vergeben (Unique-Index). Der Antrag bleibt offen und kann erneut
-    // freigegeben werden, sobald die Ursache geklaert ist.
-    console.error("[freigabe] Transaktion fehlgeschlagen:", e);
-    return { ok: false, grund: "adresse_vergeben" };
+    console.error("[freigabe] Audit-Log nach erfolgreicher Freigabe fehlgeschlagen:", e);
   }
+
+  return { ok: true, organizationId, userId };
 }
 
 export async function lehneAb(
