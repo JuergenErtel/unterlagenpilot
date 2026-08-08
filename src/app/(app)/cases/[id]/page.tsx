@@ -185,7 +185,7 @@ export default async function CaseCockpitPage({
 
       {/* Erstkontakt-Freigabe: nur solange noch nichts raus ist, sonst verstellt
           ein abgeschlossener Erstkontakt dauerhaft die Fallseite. */}
-      {!erstkontaktStand.versendetAm && <ErstkontaktKarte caseId={id} stand={erstkontaktStand} />}
+      {!erstkontaktStand.versendet && <ErstkontaktKarte caseId={id} stand={erstkontaktStand} />}
 
       {/* Hero / Case-Kopf */}
       <Card>

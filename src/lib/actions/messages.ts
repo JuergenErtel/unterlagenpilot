@@ -81,7 +81,9 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);
     // Reservierung zurücknehmen, damit ein erneuter Versuch möglich bleibt.
-    await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false } });
+    // sentAt gehoert dazu, auch wenn es an dieser Stelle noch nie gesetzt wurde -
+    // sonst bliebe im Fehlerfall ein inkonsistenter Zwischenzustand denkbar.
+    await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false, sentAt: null } });
     const gesperrt = e instanceof Error && e.message.includes("Kundenversand gesperrt");
     return {
       ok: false,
@@ -90,6 +92,10 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
         : "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen.",
     };
   }
+
+  // Sendezeitpunkt festhalten - erst NACH erfolgreichem Versand. `createdAt`
+  // ist nur der Entwurfszeitpunkt und taugt nicht als Sendedatum.
+  await prisma.generatedMessage.update({ where: { id: messageId }, data: { sentAt: new Date() } });
 
   await audit({
     organizationId: ctx.organizationId,

@@ -14,6 +14,13 @@ import { bereiteErstkontaktVor } from "@/lib/cases/erstkontakt";
 export interface ErstkontaktStand {
   vorbereitetAm: Date | null;
   messageId: string | null;
+  /** true, sobald die Nachricht tatsaechlich verschickt wurde. */
+  versendet: boolean;
+  /**
+   * Tatsaechlicher Sendezeitpunkt, falls bekannt. Kann bei `versendet: true`
+   * dennoch `null` sein (Altbestand ohne `sentAt`) - dann darf die
+   * Oberflaeche kein Datum behaupten, aber trotzdem "versendet" anzeigen.
+   */
   versendetAm: Date | null;
   empfaenger: string | null;
 }
@@ -26,16 +33,19 @@ export async function ladeErstkontaktStand(caseId: string): Promise<ErstkontaktS
   await requireCaseAccess(caseId);
   const fall = await prisma.case.findUnique({
     where: { id: caseId },
-    include: { applicants: { select: { email: true } } },
+    // Reihenfolge wie beim tatsaechlichen Versand (sendMessageByEmail):
+    // sonst kann die Karte eine andere Adresse zeigen als die, an die
+    // tatsaechlich gesendet wird.
+    include: { applicants: { orderBy: { position: "asc" }, select: { email: true } } },
   });
   if (!fall) {
-    return { vorbereitetAm: null, messageId: null, versendetAm: null, empfaenger: null };
+    return { vorbereitetAm: null, messageId: null, versendet: false, versendetAm: null, empfaenger: null };
   }
 
   const entwurf = await prisma.generatedMessage.findFirst({
     where: { caseId, channel: "email", templateType: "erstnachforderung" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, sent: true, createdAt: true },
+    select: { id: true, sent: true, sentAt: true },
   });
 
   const empfaenger =
@@ -44,7 +54,8 @@ export async function ladeErstkontaktStand(caseId: string): Promise<ErstkontaktS
   return {
     vorbereitetAm: fall.erstkontaktVorbereitetAm ?? null,
     messageId: entwurf?.id ?? null,
-    versendetAm: entwurf?.sent ? entwurf.createdAt : null,
+    versendet: entwurf?.sent ?? false,
+    versendetAm: entwurf?.sentAt ?? null,
     empfaenger,
   };
 }

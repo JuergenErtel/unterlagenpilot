@@ -18,8 +18,8 @@ import { erstkontaktVorbereitenAction, type ErstkontaktStand } from "@/lib/actio
  * Stelle, an der diese Sicherungen vergessen werden koennten.
  */
 export function ErstkontaktKarte({ caseId, stand }: { caseId: string; stand: ErstkontaktStand }) {
-  const tone = stand.versendetAm ? TONE.ready : stand.messageId ? TONE.review : TONE.neutral;
-  const Icon = stand.versendetAm ? CheckCircle2 : stand.messageId ? Send : stand.empfaenger ? Mail : UserRound;
+  const tone = stand.versendet ? TONE.ready : stand.messageId ? TONE.review : TONE.neutral;
+  const Icon = stand.versendet ? CheckCircle2 : stand.messageId ? Send : stand.empfaenger ? Mail : UserRound;
 
   return (
     <Card className={cn("border-2", tone.border, tone.bg)}>
@@ -37,11 +37,15 @@ export function ErstkontaktKarte({ caseId, stand }: { caseId: string; stand: Ers
             Erstkontakt
           </div>
 
-          {stand.versendetAm ? (
+          {stand.versendet ? (
             <>
               <div className="text-lg font-semibold leading-snug">Erstkontakt versendet</div>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Am {stand.versendetAm.toLocaleDateString("de-DE")} an{" "}
+                {stand.versendetAm ? (
+                  <>Am {stand.versendetAm.toLocaleDateString("de-DE")} an{" "}</>
+                ) : (
+                  "An "
+                )}
                 <span className="font-medium text-foreground">{stand.empfaenger}</span> gesendet.
               </p>
             </>
@@ -72,7 +76,7 @@ export function ErstkontaktKarte({ caseId, stand }: { caseId: string; stand: Ers
           )}
         </div>
 
-        {!stand.versendetAm && (
+        {!stand.versendet && (
           <div className="flex w-full flex-col gap-2 sm:w-auto">
             {stand.messageId ? (
               <Button asChild size="lg" className="justify-center">

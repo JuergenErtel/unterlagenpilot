@@ -974,6 +974,9 @@ model GeneratedMessage {
   body         String
   // Im MVP nur vorformuliert, nicht automatisch versendet
   sent         Boolean             @default(false)
+  // Tatsaechlicher Sendezeitpunkt. `createdAt` ist der Zeitpunkt der
+  // Entwurfserstellung und taugt nicht als Sendedatum.
+  sentAt       DateTime?
   createdAt    DateTime            @default(now())
 
   @@index([caseId])
