@@ -21,7 +21,7 @@ import { PLAN_TIERS } from "@/lib/domain/enums";
 
 /** Fassung der AGB/Datenschutzerklaerung, der zugestimmt wurde. Bei jeder
  *  inhaltlichen Aenderung hochzaehlen – der Nachweis haengt daran. */
-export const AGB_VERSION = "2026-08";
+export const AGB_VERSION = "2026-08-08";
 
 export const SIGNUP_EINGABE = z.object({
   name: z.string().trim().min(2, "Bitte Ihren Namen angeben."),
