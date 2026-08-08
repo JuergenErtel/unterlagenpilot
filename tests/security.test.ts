@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken } from "@/lib/auth/session";
 import { validateUpload } from "@/lib/security/file-validation";
 import { MockVirusScanner } from "@/lib/security/virus-scan";
@@ -197,5 +198,12 @@ describe("Rate-Limiting", () => {
   it("blockt nach Überschreiten des Limits", () => {
     for (let i = 0; i < 3; i++) expect(rateLimit("k", 3, 60).ok).toBe(true);
     expect(rateLimit("k", 3, 60).ok).toBe(false);
+  });
+});
+
+describe("Demo-Modus", () => {
+  it("ist in Produktion nicht erreichbar", async () => {
+    const quelle = readFileSync("src/lib/auth/context.ts", "utf-8");
+    expect(quelle).toMatch(/AUTH_MODE === "demo" && process\.env\.NODE_ENV !== "production"/);
   });
 });

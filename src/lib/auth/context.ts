@@ -43,25 +43,38 @@ export async function getCurrentContext(): Promise<AppContext | null> {
   // 1) Echte Session aus dem Cookie
   const session = verifySessionToken(await readSessionToken());
   if (session) {
-    // Org-Name nachladen (klein, ungecached – Korrektheit vor Mikro-Optimierung).
-    const org = await prisma.organization.findUnique({
-      where: { id: session.org },
-      select: { name: true },
+    // Rolle, Organisation und Aktiv-Kennzeichen kommen aus der DATENBANK, nicht
+    // aus dem Cookie: sonst behielte ein gesperrter oder herabgestufter Nutzer
+    // seine Rechte bis zum Ablauf des Tokens (bis zu SESSION_TTL_HOURS).
+    const nutzer = await prisma.user.findUnique({
+      where: { id: session.sub },
+      select: { id: true, active: true, organizationId: true, name: true, role: true },
     });
-    if (org) {
-      return {
-        organizationId: session.org,
-        organizationName: org.name,
-        userId: session.sub,
-        userName: session.name,
-        role: session.role,
-        isDemo: false,
-      };
+    if (nutzer?.active) {
+      const org = await prisma.organization.findUnique({
+        where: { id: nutzer.organizationId },
+        select: { name: true },
+      });
+      if (org) {
+        return {
+          organizationId: nutzer.organizationId,
+          organizationName: org.name,
+          userId: nutzer.id,
+          userName: nutzer.name,
+          role: nutzer.role as UserRole,
+          isDemo: false,
+        };
+      }
     }
+    // Ungueltig gewordene Session: nicht in den Demo-Zweig durchfallen lassen.
+    return null;
   }
 
-  // 2) Demo-Fallback (nur wenn ausdrücklich erlaubt)
-  if (env.AUTH_MODE === "demo") {
+  // 2) Demo-Fallback (nur ausserhalb der Produktion). Der Fallback nimmt den
+  // ersten aktiven Nutzer ALLER Organisationen – mit mehreren Mandanten waere
+  // das ein Fremdzugriff per Konfigurationsfehler. Deshalb hart gesperrt,
+  // unabhaengig davon, was AUTH_MODE sagt.
+  if (env.AUTH_MODE === "demo" && process.env.NODE_ENV !== "production") {
     const user = await prisma.user.findFirst({
       where: { active: true },
       include: { organization: true },
