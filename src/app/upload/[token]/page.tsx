@@ -3,6 +3,7 @@ import { Logo } from "@/components/brand/logo";
 import { prisma } from "@/lib/db";
 import { resolveUploadToken } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
+import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
 import { baueKundenfortschritt, type KundenPosition } from "@/lib/upload/kundenansicht";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CustomerUploadProgress } from "@/components/customer/customer-upload-progress";
 import { CustomerUploadForm } from "@/components/customer/customer-upload-form";
-import { type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 // Headroom für die Hintergrund-Verarbeitung (OCR/KI) der Kunden-Upload-Actions,
@@ -71,17 +71,11 @@ export default async function PublicUploadPage({
   }
 
   const c = link.case;
+  // Dieselbe Eingabe wie Vermittlersicht und Erstkontakt – sonst verlangt die
+  // Mail andere Unterlagen als die Seite, auf die sie verlinkt.
+  const checklistEingabe = checklistEingabeFuerFall(c);
   const checklist = buildChecklistForCase(
-    {
-      financingType: c.financingType ?? undefined,
-      propertyType: (c.property?.objektart as PropertyType | undefined) ?? undefined,
-      kapitalanlage: c.kapitalanlage,
-      applicantCount: c.applicants.length,
-      applicantIds: c.applicants
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((a) => a.id),
-    },
+    checklistEingabe,
     c.documents.map((d) => ({
       documentType: d.documentType,
       reviewStatus: d.reviewStatus,

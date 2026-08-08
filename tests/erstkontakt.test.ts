@@ -119,6 +119,37 @@ describe("Erstkontakt vorbereiten", () => {
     expect(body).toContain("Anna");
   });
 
+  it("verlangt genau die Unterlagen, die der Kunde spaeter auf der Upload-Seite sieht", async () => {
+    // Der Fehler, den dieser Test verhindert: Mail und Upload-Seite bauten ihre
+    // Liste aus unterschiedlichen Angaben. Ein Selbststaendiger las in der Mail
+    // "BWA, Jahresabschluss" und fand auf der Seite "Gehaltsabrechnungen" –
+    // was er hochlud, passte zu keiner sichtbaren Position.
+    faelle.c1 = fall({
+      primaryEmploymentType: "selbststaendiger",
+      property: { objektart: "eigentumswohnung", nutzung: "eigennutzung" },
+    });
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    await bereiteErstkontaktVor("c1");
+    const { prisma } = await import("@/lib/db");
+    const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
+
+    // Genau der Weg der Upload-Seite: gemeinsame Eingabe -> Checkliste -> Kundensicht.
+    const { checklistEingabeFuerFall } = await import("@/lib/checklists/case-input");
+    const { buildChecklistForCase } = await import("@/lib/checklists/engine");
+    const { baueKundenfortschritt } = await import("@/lib/upload/kundenansicht");
+    const seite = baueKundenfortschritt({
+      positionen: buildChecklistForCase(checklistEingabeFuerFall(faelle.c1), []),
+      dokumente: [],
+    });
+
+    expect(seite.positionen.length).toBeGreaterThan(0);
+    for (const p of seite.positionen) expect(body).toContain(p.name);
+    expect(body).toContain("Aktuelle BWA");
+    expect(body).not.toContain("Gehaltsabrechnungen");
+    // Objektbezug kommt jetzt auch in der Mail an (Eigentumswohnung).
+    expect(body).toContain("Teilungserklärung");
+  });
+
   it("bereitet keinen zweiten Entwurf vor", async () => {
     const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
     await bereiteErstkontaktVor("c1");

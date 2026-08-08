@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
+import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
 import { buildEmail } from "@/lib/messages/generators";
 import { createSelfDisclosureLink } from "@/lib/security/self-disclosure-link";
 import { createSecureUploadLink } from "@/lib/security/upload-link";
-import type { EmploymentType, FinancingType } from "@/lib/domain/enums";
 
 /**
  * Bereitet den Erstkontakt zu einem neuen Fall vor: Upload-Link,
@@ -31,7 +31,9 @@ export async function bereiteErstkontaktVor(
 ): Promise<ErstkontaktErgebnis> {
   const fall = await prisma.case.findUnique({
     where: { id: caseId },
-    include: { applicants: true },
+    // `property` gehoert dazu: Objektart und Nutzung steuern die Checkliste.
+    // Ohne sie verlangte die Mail eine andere Liste als die Upload-Seite.
+    include: { applicants: true, property: true },
   });
   if (!fall) return { status: "kein_empfaenger" };
   if (fall.erstkontaktVorbereitetAm) return { status: "schon_vorbereitet" };
@@ -53,16 +55,8 @@ export async function bereiteErstkontaktVor(
 
   try {
     // Ohne Dokumente liefert die Checkliste genau das, was zu Beginn fehlt.
-    const positionen = buildChecklistForCase(
-      {
-        financingType: (fall.financingType as FinancingType) ?? undefined,
-        employmentType: (fall.primaryEmploymentType as EmploymentType) ?? undefined,
-        kapitalanlage: fall.kapitalanlage ?? undefined,
-        applicantCount: fall.applicants.length,
-        applicantIds: fall.applicants.map((a) => a.id),
-      },
-      []
-    );
+    // Eingabe aus derselben Funktion wie Vermittler- und Kundensicht.
+    const positionen = buildChecklistForCase(checklistEingabeFuerFall(fall), []);
     const fehlende = positionen
       .filter((p) => p.customerVisible && p.status === "offen")
       .map((p) => ({ title: p.name }));
