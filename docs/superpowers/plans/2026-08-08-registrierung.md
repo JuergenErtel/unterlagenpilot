@@ -535,7 +535,7 @@ const gueltig = {
   name: "Anna Beispiel",
   firmenname: "Beispiel Finanz GmbH",
   email: "anna@beispiel.de",
-  passwort: "einLangesPasswort2026",
+  passwort: "einLangesGeheimwort2026",
   agb: true,
   wunschtarif: "pro" as const,
 };
@@ -549,7 +549,7 @@ describe("Passwortregeln", () => {
   it("verlangt mindestens 12 Zeichen", async () => {
     const { pruefePasswort } = await import("@/lib/auth/passwort-regeln");
     expect(pruefePasswort("kurz123").ok).toBe(false);
-    expect(pruefePasswort("einLangesPasswort2026").ok).toBe(true);
+    expect(pruefePasswort("einLangesGeheimwort2026").ok).toBe(true);
   });
 
   it("weist offensichtliche Passwoerter ab", async () => {
@@ -575,7 +575,7 @@ describe("Antrag anlegen", () => {
   it("speichert das Passwort nur als Hash", async () => {
     const { erstelleAntrag } = await import("@/lib/auth/signup");
     await erstelleAntrag(gueltig, { ip: null });
-    expect(db.requests[0].passwordHash).not.toContain("einLangesPasswort2026");
+    expect(db.requests[0].passwordHash).not.toContain("einLangesGeheimwort2026");
     expect(String(db.requests[0].passwordHash).startsWith("scrypt$")).toBe(true);
   });
 
@@ -1153,7 +1153,7 @@ const eingabe = {
   name: "Anna Beispiel",
   firmenname: "Beispiel Finanz GmbH",
   email: "anna@beispiel.de",
-  passwort: "einLangesPasswort2026",
+  passwort: "einLangesGeheimwort2026",
   wunschtarif: "pro",
   agb: "on",
 };
@@ -1715,7 +1715,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
         name: "Anna Beispiel",
         firmenname: "Beispiel Finanz GmbH",
         email: "anna@beispiel.de",
-        passwort: "einLangesPasswort2026",
+        passwort: "einLangesGeheimwort2026",
         wunschtarif: "pro",
         agb: true,
       },
@@ -1752,7 +1752,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
   it("uebernimmt das bei der Anmeldung gesetzte Passwort", async () => {
     const { getAuthProvider } = await import("@/lib/auth/provider");
     await expect(
-      getAuthProvider().authenticate("anna@beispiel.de", "einLangesPasswort2026")
+      getAuthProvider().authenticate("anna@beispiel.de", "einLangesGeheimwort2026")
     ).resolves.toMatchObject({ role: "org_admin" });
     await expect(
       getAuthProvider().authenticate("anna@beispiel.de", "falsch")
@@ -1767,7 +1767,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
         name: "Bernd Beispiel",
         firmenname: "Beispiel Finanz GmbH",
         email: "bernd@beispiel.de",
-        passwort: "einAnderesLangesPasswort",
+        passwort: "einAnderesLangesGeheimwort",
         agb: true,
       },
       { ip: null }
@@ -1788,7 +1788,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
         name: "Clara Beispiel",
         firmenname: "Clara Finanz",
         email: "clara@beispiel.de",
-        passwort: "nochEinLangesPasswort",
+        passwort: "nochEinLangesGeheimwort",
         agb: true,
       },
       { ip: null }
@@ -1828,7 +1828,7 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
         name: "Dora Beispiel",
         firmenname: "Dora Finanz",
         email: "dora@beispiel.de",
-        passwort: "wiederEinLangesPasswort",
+        passwort: "wiederEinLangesGeheimwort",
         agb: true,
       },
       { ip: null }
@@ -2396,7 +2396,7 @@ describe("Passwort zuruecksetzen", () => {
   it("setzt ein neues Passwort und ersetzt den alten Hash", async () => {
     verbraucheToken.mockResolvedValue({ id: "t1", userId: "u1", signupRequestId: null });
     const { setzeNeuesPasswort } = await import("@/lib/auth/passwort");
-    const res = await setzeNeuesPasswort("reset-token", "einGanzNeuesPasswort");
+    const res = await setzeNeuesPasswort("reset-token", "einGanzNeuesGeheimwort");
     expect(res).toMatchObject({ ok: true, userId: "u1" });
     expect(nutzer[0].passwordHash).not.toBe("scrypt$alt");
     expect(nutzer[0].passwordHash?.startsWith("scrypt$")).toBe(true);
@@ -2413,7 +2413,7 @@ describe("Passwort zuruecksetzen", () => {
   it("weist ein ungueltiges Token ab", async () => {
     verbraucheToken.mockResolvedValue(null);
     const { setzeNeuesPasswort } = await import("@/lib/auth/passwort");
-    await expect(setzeNeuesPasswort("falsch", "einGanzNeuesPasswort")).resolves.toMatchObject({
+    await expect(setzeNeuesPasswort("falsch", "einGanzNeuesGeheimwort")).resolves.toMatchObject({
       ok: false,
       grund: "ungueltig",
     });
@@ -2733,16 +2733,16 @@ describe.runIf(RUN)("Einladung (PGlite)", () => {
   it("setzt beim Einloesen das Passwort und macht das Konto nutzbar", async () => {
     const { loeseEinladungEin } = await import("@/lib/auth/invite");
     const { getAuthProvider } = await import("@/lib/auth/provider");
-    const res = await loeseEinladungEin(g.__inviteToken, "einLangesTeamPasswort");
+    const res = await loeseEinladungEin(g.__inviteToken, "einLangesTeamGeheimwort");
     expect(res).toMatchObject({ ok: true, organizationId: orgId, role: "vermittler" });
     await expect(
-      getAuthProvider().authenticate("neu@beispiel.de", "einLangesTeamPasswort")
+      getAuthProvider().authenticate("neu@beispiel.de", "einLangesTeamGeheimwort")
     ).resolves.toMatchObject({ organizationId: orgId });
   }, 60_000);
 
   it("laesst denselben Einladungslink kein zweites Mal zu", async () => {
     const { loeseEinladungEin } = await import("@/lib/auth/invite");
-    await expect(loeseEinladungEin(g.__inviteToken, "nochEinLangesPasswort")).resolves.toMatchObject({
+    await expect(loeseEinladungEin(g.__inviteToken, "nochEinLangesGeheimwort")).resolves.toMatchObject({
       ok: false,
       grund: "ungueltig",
     });
