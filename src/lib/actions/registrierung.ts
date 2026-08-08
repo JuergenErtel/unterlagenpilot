@@ -6,7 +6,8 @@ import { getEnv } from "@/lib/env";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
 import { mailAdresseVergeben, mailBestaetigung } from "@/lib/email/auth-mails";
-import { SIGNUP_EINGABE, erstelleAntrag } from "@/lib/auth/signup";
+import { SIGNUP_EINGABE, bestaetigeEmail, erstelleAntrag } from "@/lib/auth/signup";
+import { benachrichtigeBetreiber } from "@/lib/actions/registrierung-benachrichtigung";
 
 /**
  * Server Action der Registrierung. Enthaelt bewusst nur Validierung,
@@ -100,6 +101,34 @@ export async function registriere(
     return { error: "Die Bestätigungsmail konnte nicht versendet werden. Bitte später erneut versuchen." };
   }
 
+  return { ok: true };
+}
+
+export interface BestaetigungState {
+  ok?: boolean;
+  error?: string;
+}
+
+/**
+ * Bestaetigt die E-Mail-Adresse – ausgeloest durch den Knopf auf der
+ * Bestaetigungsseite, nicht durch deren Aufruf. Genau deshalb ueberlebt der
+ * Link die Scanner in Firmen-Mailservern, die jede URL einmal abrufen.
+ */
+export async function bestaetigeEmailAction(
+  _prev: BestaetigungState,
+  formData: FormData
+): Promise<BestaetigungState> {
+  const token = String(formData.get("token") ?? "");
+  const ergebnis = await bestaetigeEmail(token);
+  if (!ergebnis.ok) {
+    return {
+      error:
+        ergebnis.grund === "abgelehnt"
+          ? "Diese Anmeldung ist nicht mehr offen. Bitte fragen Sie den Zugang erneut an."
+          : "Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fragen Sie den Zugang erneut an.",
+    };
+  }
+  await benachrichtigeBetreiber(ergebnis.email, ergebnis.firmenname);
   return { ok: true };
 }
 

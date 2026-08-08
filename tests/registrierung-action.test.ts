@@ -26,10 +26,16 @@ vi.mock("next/headers", () => ({
 }));
 
 const erstelleAntrag = vi.fn();
+const bestaetigeEmail = vi.fn();
 vi.mock("@/lib/auth/signup", async (orig) => {
   const echt = await (orig() as Promise<Record<string, unknown>>);
-  return { ...echt, erstelleAntrag };
+  return { ...echt, erstelleAntrag, bestaetigeEmail };
 });
+
+const benachrichtigeBetreiber = vi.fn(async () => {});
+vi.mock("@/lib/actions/registrierung-benachrichtigung", () => ({
+  benachrichtigeBetreiber: (...args: unknown[]) => benachrichtigeBetreiber(...(args as [])),
+}));
 
 function form(werte: Record<string, string>): FormData {
   const fd = new FormData();
@@ -48,6 +54,8 @@ const eingabe = {
 
 beforeEach(() => {
   gesendet.length = 0;
+  bestaetigeEmail.mockReset();
+  benachrichtigeBetreiber.mockClear();
   erstelleAntrag.mockReset();
   isEmailConfiguredMock.mockReset();
   isEmailConfiguredMock.mockReturnValue(true);
@@ -103,5 +111,23 @@ describe("Registrierungs-Action", () => {
     expect(antwort.error).toBeTruthy();
     expect(erstelleAntrag).not.toHaveBeenCalled();
     expect(gesendet).toHaveLength(0);
+  });
+});
+
+describe("Bestaetigungs-Action", () => {
+  it("loest den Link erst beim Absenden ein und meldet dem Betreiber", async () => {
+    bestaetigeEmail.mockResolvedValue({ ok: true, email: "anna@beispiel.de", firmenname: "Beispiel Finanz GmbH" });
+    const { bestaetigeEmailAction } = await import("@/lib/actions/registrierung");
+    await expect(bestaetigeEmailAction({}, form({ token: "tok" }))).resolves.toMatchObject({ ok: true });
+    expect(bestaetigeEmail).toHaveBeenCalledWith("tok");
+    expect(benachrichtigeBetreiber).toHaveBeenCalledWith("anna@beispiel.de", "Beispiel Finanz GmbH");
+  });
+
+  it("meldet einen verbrauchten Link, ohne den Betreiber zu behelligen", async () => {
+    bestaetigeEmail.mockResolvedValue({ ok: false, grund: "ungueltig" });
+    const { bestaetigeEmailAction } = await import("@/lib/actions/registrierung");
+    const antwort = await bestaetigeEmailAction({}, form({ token: "alt" }));
+    expect(antwort.error).toBeTruthy();
+    expect(benachrichtigeBetreiber).not.toHaveBeenCalled();
   });
 });

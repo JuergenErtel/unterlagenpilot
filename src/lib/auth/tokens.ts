@@ -80,6 +80,30 @@ export async function verbraucheToken(
   return { id: row.id, userId: row.userId, signupRequestId: row.signupRequestId };
 }
 
+/**
+ * Schlaegt ein Token NUR nach – ohne es zu verbrauchen.
+ *
+ * Fuer Seiten, die beim Aufruf lediglich entscheiden muessen, ob der Link noch
+ * gilt: Link-Scanner in Firmen-Mailservern (Outlook Safe Links, Proofpoint)
+ * rufen jede URL aus einer Mail einmal ab. Wuerde die Seite das Token beim
+ * Rendern verbrauchen, waere es entwertet, bevor ein Mensch klickt.
+ *
+ * Das ist KEIN zweiter Einloeseweg: `usedAt` bleibt unangetastet, und die
+ * eigentliche Wirkung tritt weiterhin nur ueber `verbraucheToken` ein.
+ */
+export async function findeToken(
+  token: string,
+  zweck: AuthTokenZweck
+): Promise<TokenTreffer | null> {
+  if (!token) return null;
+  const row = await prisma.authToken.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!row) return null;
+  if (row.zweck !== zweck) return null;
+  if (row.usedAt) return null;
+  if (row.expiresAt.getTime() < Date.now()) return null;
+  return { id: row.id, userId: row.userId, signupRequestId: row.signupRequestId };
+}
+
 /** Entwertet alle offenen Token eines Zwecks (z. B. nach erfolgreichem Reset). */
 export async function entwerteOffeneToken(
   zweck: AuthTokenZweck,

@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/auth/session";
 import {
   entwerteOffeneToken,
   erstelleToken,
+  findeToken,
   verbraucheToken,
   TOKEN_GUELTIGKEIT,
 } from "@/lib/auth/tokens";
@@ -142,6 +143,33 @@ export async function erstelleAntrag(
   });
 
   return { status: "neu_angelegt", requestId: antrag.id, token };
+}
+
+export type BestaetigungVorschau =
+  | { ok: true; firmenname: string; bereitsBestaetigt: boolean }
+  | { ok: false; grund: "ungueltig" | "abgelehnt" };
+
+/**
+ * Lesende Vorschau fuer die Bestaetigungsseite – veraendert NICHTS.
+ *
+ * Die Seite darf das Token nicht beim Rendern verbrauchen: Link-Scanner in
+ * Firmen-Mailservern rufen die URL vor dem Menschen ab und wuerden den Link
+ * entwerten. Bestaetigt wird deshalb erst per Knopfdruck (bestaetigeEmail),
+ * wie bei /passwort-neu und /einladung auch.
+ */
+export async function liesBestaetigung(token: string): Promise<BestaetigungVorschau> {
+  const treffer = await findeToken(token, "email_bestaetigung");
+  if (!treffer?.signupRequestId) return { ok: false, grund: "ungueltig" };
+
+  const antrag = await prisma.signupRequest.findUnique({ where: { id: treffer.signupRequestId } });
+  if (!antrag) return { ok: false, grund: "ungueltig" };
+  if (antrag.status === "abgelehnt") return { ok: false, grund: "abgelehnt" };
+
+  return {
+    ok: true,
+    firmenname: antrag.firmenname,
+    bereitsBestaetigt: antrag.status !== "neu",
+  };
 }
 
 export type BestaetigungErgebnis =

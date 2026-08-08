@@ -234,6 +234,37 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     expect(nurA[0].caseNumber).toBe("UP-2026-8001");
   }, 60_000);
 
+  it("ueberlebt einen Link-Scanner: das Nachschlagen verbraucht das Token nicht", async () => {
+    const { erstelleAntrag, liesBestaetigung, bestaetigeEmail } = await import("@/lib/auth/signup");
+    const gerd = await erstelleAntrag(
+      {
+        name: "Gerd Beispiel",
+        firmenname: "Gerd Finanz",
+        email: "gerd@beispiel.de",
+        passwort: "einLangesGeheimwortGerd",
+        agb: true,
+      },
+      { ip: null }
+    );
+    if (gerd.status !== "neu_angelegt") throw new Error("unerwartet");
+
+    // Zwei Aufrufe der Seite (z. B. Scanner + Mensch) aendern nichts.
+    await expect(liesBestaetigung(gerd.token)).resolves.toMatchObject({
+      ok: true,
+      bereitsBestaetigt: false,
+    });
+    await expect(liesBestaetigung(gerd.token)).resolves.toMatchObject({ ok: true });
+    const tokenZeile = await prisma.authToken.findFirst({
+      where: { signupRequestId: gerd.requestId, zweck: "email_bestaetigung" },
+    });
+    expect(tokenZeile.usedAt).toBeNull();
+
+    // Erst der Knopf loest ein.
+    await expect(bestaetigeEmail(gerd.token)).resolves.toMatchObject({ ok: true });
+    const danach = await prisma.authToken.findUnique({ where: { id: tokenZeile.id } });
+    expect(danach.usedAt).toBeInstanceOf(Date);
+  }, 60_000);
+
   it("laesst einen unbestaetigten Antrag erneut anfordern und entwertet den alten Link", async () => {
     const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
     const eingabe = {

@@ -44,6 +44,9 @@ vi.mock("@/lib/auth/tokens", () => ({
   verbraucheToken: vi.fn(async (token: string) =>
     token === "klartext-token" ? { id: "t1", userId: null, signupRequestId: "r1" } : null
   ),
+  findeToken: vi.fn(async (token: string) =>
+    token === "klartext-token" ? { id: "t1", userId: null, signupRequestId: "r1" } : null
+  ),
   entwerteOffeneToken: vi.fn(async () => {}),
 }));
 
@@ -167,6 +170,48 @@ describe("Antrag anlegen", () => {
     // Zweiter Anlauf unmittelbar danach: Sperre greift
     const res2 = await erstelleAntrag(gueltig, { ip: null });
     expect(res2.status).toBe("zu_haeufig");
+  });
+});
+
+describe("Bestaetigungsseite (nur lesend)", () => {
+  it("schlaegt das Token nach, ohne es zu verbrauchen", async () => {
+    const { erstelleAntrag, liesBestaetigung } = await import("@/lib/auth/signup");
+    const { verbraucheToken } = await import("@/lib/auth/tokens");
+    await erstelleAntrag(gueltig, { ip: null });
+
+    const res = await liesBestaetigung("klartext-token");
+    expect(res).toMatchObject({ ok: true, bereitsBestaetigt: false });
+    // Der blosse Seitenaufruf (auch der eines Link-Scanners) darf nichts aendern.
+    expect(verbraucheToken).not.toHaveBeenCalled();
+    expect(db.requests[0]!.status).toBe("neu");
+  });
+
+  it("meldet ein unbekanntes Token als ungueltig", async () => {
+    const { liesBestaetigung } = await import("@/lib/auth/signup");
+    await expect(liesBestaetigung("falsch")).resolves.toMatchObject({
+      ok: false,
+      grund: "ungueltig",
+    });
+  });
+
+  it("nennt einen bereits bestaetigten Antrag beim Namen", async () => {
+    const { erstelleAntrag, liesBestaetigung } = await import("@/lib/auth/signup");
+    await erstelleAntrag(gueltig, { ip: null });
+    db.requests[0]!.status = "bestaetigt";
+    await expect(liesBestaetigung("klartext-token")).resolves.toMatchObject({
+      ok: true,
+      bereitsBestaetigt: true,
+    });
+  });
+
+  it("gibt zu einem abgelehnten Antrag keinen Grund nach aussen", async () => {
+    const { erstelleAntrag, liesBestaetigung } = await import("@/lib/auth/signup");
+    await erstelleAntrag(gueltig, { ip: null });
+    db.requests[0]!.status = "abgelehnt";
+    await expect(liesBestaetigung("klartext-token")).resolves.toMatchObject({
+      ok: false,
+      grund: "abgelehnt",
+    });
   });
 });
 
