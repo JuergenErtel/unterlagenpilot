@@ -76,6 +76,9 @@ const envSchema = z.object({
   // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(), // z.B. "BaufiDesk <noreply@baufidesk.de>"
+  // Empfaenger der Benachrichtigung "neue Anmeldung wartet". Ohne den Wert
+  // unterbleibt nur diese Mail – die Antraege stehen trotzdem in /admin/anmeldungen.
+  PLATFORM_ADMIN_EMAIL: z.string().optional(),
 
   // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
   CRON_SECRET: z.string().optional(),
