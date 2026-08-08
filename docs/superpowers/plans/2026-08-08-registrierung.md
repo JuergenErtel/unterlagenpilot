@@ -2610,6 +2610,8 @@ git commit -m "feat(registrierung): Passwort vergessen mit einmalig gueltigem Li
 
 ### Task 9: Kollegen einladen
 
+> **Nachtrag nach der Pruefung (2026-08-08):** Der unten gezeigte `ladeEin`-Code prueft die Rolle zuerst; zwei der Tests in diesem Task bestehen nur mit der Reihenfolge **Limit → Adresse → Rolle**. Der umgesetzte Code verwendet diese Reihenfolge — fachlich auch die bessere, weil `limit_erreicht` der alltagsrelevante Fall ist, waehrend `rolle_nicht_erlaubt` ueber die Oberflaeche gar nicht ausloesbar ist. Die Rollenpruefung steht weiterhin vor `prisma.user.create` und ist durch einen eigenen Test abgedeckt. Massgeblich ist `src/lib/auth/invite.ts`.
+
 **Files:**
 - Create: `src/lib/auth/invite.ts`
 - Create: `src/lib/actions/invite-actions.ts`
