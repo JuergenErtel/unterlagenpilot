@@ -9,8 +9,16 @@ export const dynamic = "force-dynamic";
 export default async function AnmeldungenPage() {
   await requirePlatformAdmin();
 
-  const [wartend, entschieden] = await Promise.all([
+  const [wartend, unbestaetigt, entschieden] = await Promise.all([
     prisma.signupRequest.findMany({ where: { status: "bestaetigt" }, orderBy: { createdAt: "asc" } }),
+    // Ohne diese Liste bliebe jedes Steckenbleiben unsichtbar: eine nicht
+    // zugestellte Bestaetigungsmail sieht fuer den Betreiber sonst genauso aus
+    // wie "es hat sich niemand angemeldet".
+    prisma.signupRequest.findMany({
+      where: { status: "neu" },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }),
     prisma.signupRequest.findMany({
       where: { status: { in: ["freigegeben", "abgelehnt"] } },
       orderBy: { entschiedenAm: "desc" },
@@ -37,6 +45,28 @@ export default async function AnmeldungenPage() {
           ))}
         </div>
       )}
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-medium text-muted-foreground">Noch nicht bestätigt</h2>
+        <p className="text-xs text-muted-foreground">
+          Diese Anmeldungen warten auf den Klick im Bestätigungslink – hier gibt es nichts
+          freizugeben. Häufen sie sich, stimmt vermutlich etwas mit dem Mailversand nicht.
+        </p>
+        <ul className="space-y-1.5 text-sm">
+          {unbestaetigt.map((a) => (
+            <li key={a.id} className="flex gap-3">
+              <span className="w-24 shrink-0 text-muted-foreground">
+                {a.createdAt.toLocaleDateString("de-DE")}
+              </span>
+              <span>{a.firmenname}</span>
+              <span className="text-muted-foreground">{a.email}</span>
+            </li>
+          ))}
+          {unbestaetigt.length === 0 ? (
+            <li className="text-muted-foreground">Nichts offen.</li>
+          ) : null}
+        </ul>
+      </div>
 
       <div className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">Zuletzt entschieden</h2>

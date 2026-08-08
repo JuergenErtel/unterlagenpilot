@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/session";
-import { erstelleToken, verbraucheToken, TOKEN_GUELTIGKEIT } from "@/lib/auth/tokens";
+import {
+  entwerteOffeneToken,
+  erstelleToken,
+  verbraucheToken,
+  TOKEN_GUELTIGKEIT,
+} from "@/lib/auth/tokens";
 import { pruefePasswort } from "@/lib/auth/passwort-regeln";
 import { PLAN_TIERS } from "@/lib/domain/enums";
 
@@ -50,6 +55,10 @@ const MAIL_ABSTAND_MS = 5 * 60 * 1000;
  * Der Unterschied ist NUR fuer die Wahl der Mail gedacht. Nach aussen muss die
  * aufrufende Server Action in beiden Faellen dieselbe Antwort geben, sonst wird
  * das Formular zum Kontopruefer.
+ *
+ * Ein noch unbestaetigter Antrag (Status "neu") ist wiederholbar: der Aufruf
+ * ueberschreibt ihn, entwertet die alten Bestaetigungslinks und liefert ein
+ * frisches Token – nach aussen ununterscheidbar von einer Erstanmeldung.
  */
 export async function erstelleAntrag(
   eingabe: SignupEingabe,
@@ -66,19 +75,26 @@ export async function erstelleAntrag(
     prisma.user.findUnique({ where: { email } }),
     prisma.signupRequest.findUnique({ where: { email } }),
   ]);
-  // Ein abgelehnter oder abgelaufener Antrag darf einen neuen Anlauf nicht
-  // dauerhaft blockieren – der alte wird dann ueberschrieben.
-  const blockiert =
-    nutzer ||
-    (vorhanden && (vorhanden.status === "neu" || vorhanden.status === "bestaetigt" || vorhanden.status === "freigegeben"));
-  if (blockiert) {
-    // Wiederholte Versuche auf dieselbe Adresse duerfen keine Mailflut ausloesen.
-    if (vorhanden?.letzteMailAm && Date.now() - vorhanden.letzteMailAm.getTime() < MAIL_ABSTAND_MS) {
-      return { status: "zu_haeufig" };
-    }
-    if (nutzer?.letzteHinweisMailAm && Date.now() - nutzer.letzteHinweisMailAm.getTime() < MAIL_ABSTAND_MS) {
-      return { status: "zu_haeufig" };
-    }
+  // Belegt ist eine Adresse nur durch ein echtes Konto oder durch einen bereits
+  // bestaetigten/freigegebenen Antrag. Ein Antrag im Status "neu" belegt sie
+  // ausdruecklich NICHT: Wer den Bestaetigungslink nie angeklickt hat (Mail im
+  // Spam, Versand gescheitert, schlicht vergessen), muss einen neuen anfordern
+  // koennen. Sonst waere die Adresse fuer immer verbrannt – und ein Dritter
+  // koennte fremde Adressen vorregistrieren und die Betroffenen damit dauerhaft
+  // von der Registrierung aussperren.
+  const belegt =
+    Boolean(nutzer) || vorhanden?.status === "bestaetigt" || vorhanden?.status === "freigegeben";
+
+  // Wiederholte Versuche auf dieselbe Adresse duerfen keine Mailflut ausloesen –
+  // gleich, welche der beiden Mails es waere.
+  if (vorhanden?.letzteMailAm && Date.now() - vorhanden.letzteMailAm.getTime() < MAIL_ABSTAND_MS) {
+    return { status: "zu_haeufig" };
+  }
+  if (nutzer?.letzteHinweisMailAm && Date.now() - nutzer.letzteHinweisMailAm.getTime() < MAIL_ABSTAND_MS) {
+    return { status: "zu_haeufig" };
+  }
+
+  if (belegt) {
     if (vorhanden) {
       await prisma.signupRequest.update({
         where: { id: vorhanden.id },
@@ -111,6 +127,13 @@ export async function erstelleAntrag(
   const antrag = vorhanden
     ? await prisma.signupRequest.update({ where: { id: vorhanden.id }, data: daten })
     : await prisma.signupRequest.create({ data: daten });
+
+  // Ein neuer Anlauf entwertet die Bestaetigungslinks der frueheren Mails.
+  // Sonst blieben mehrere gueltige Links zu derselben Adresse im Umlauf – und
+  // ein alter Link wuerde einen inzwischen ueberschriebenen Antrag bestaetigen.
+  if (vorhanden) {
+    await entwerteOffeneToken("email_bestaetigung", { signupRequestId: antrag.id });
+  }
 
   const { token } = await erstelleToken({
     zweck: "email_bestaetigung",

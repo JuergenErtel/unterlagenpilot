@@ -234,6 +234,42 @@ describe.runIf(RUN)("Registrierung (PGlite)", () => {
     expect(nurA[0].caseNumber).toBe("UP-2026-8001");
   }, 60_000);
 
+  it("laesst einen unbestaetigten Antrag erneut anfordern und entwertet den alten Link", async () => {
+    const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
+    const eingabe = {
+      name: "Frida Beispiel",
+      firmenname: "Frida Finanz",
+      email: "frida@beispiel.de",
+      passwort: "einLangesGeheimwortFrida",
+      agb: true as const,
+    };
+    const erster = await erstelleAntrag(eingabe, { ip: null });
+    if (erster.status !== "neu_angelegt") throw new Error("unerwartet");
+
+    // Die Bestaetigungsmail liegt laenger zurueck als die Mailsperre – genau
+    // die Lage, in der jemand den Link nie angeklickt hat (Spam, Versand
+    // gescheitert, vergessen).
+    await prisma.signupRequest.update({
+      where: { id: erster.requestId },
+      data: { letzteMailAm: new Date(Date.now() - 6 * 60 * 1000) },
+    });
+
+    const zweiter = await erstelleAntrag(eingabe, { ip: null });
+    expect(zweiter.status).toBe("neu_angelegt"); // NICHT "bereits_vergeben"
+    if (zweiter.status !== "neu_angelegt") throw new Error("unerwartet");
+    expect(zweiter.requestId).toBe(erster.requestId);
+    expect(await prisma.signupRequest.count({ where: { email: "frida@beispiel.de" } })).toBe(1);
+
+    // Der Link aus der ersten Mail ist entwertet, nur der neue zieht.
+    await expect(bestaetigeEmail(erster.token)).resolves.toMatchObject({
+      ok: false,
+      grund: "ungueltig",
+    });
+    await expect(bestaetigeEmail(zweiter.token)).resolves.toMatchObject({ ok: true });
+    const antrag = await prisma.signupRequest.findUnique({ where: { id: erster.requestId } });
+    expect(antrag.status).toBe("bestaetigt");
+  }, 60_000);
+
   it("gibt einen abgelehnten Antrag nicht frei", async () => {
     const { erstelleAntrag, bestaetigeEmail } = await import("@/lib/auth/signup");
     const { gibFrei, lehneAb } = await import("@/lib/auth/freigabe");

@@ -59,6 +59,9 @@ const gueltig = {
 beforeEach(() => {
   db.users = [];
   db.requests = [];
+  // Nur die Aufrufzaehler zuruecksetzen, die Implementierungen der Mocks
+  // bleiben erhalten (vi.clearAllMocks, nicht resetAllMocks).
+  vi.clearAllMocks();
 });
 
 describe("Passwortregeln", () => {
@@ -121,6 +124,36 @@ describe("Antrag anlegen", () => {
     const zweiter = await erstelleAntrag(gueltig, { ip: null });
     expect(zweiter.status).toBe("zu_haeufig");
     expect(db.requests).toHaveLength(1);
+  });
+
+  it("laesst einen unbestaetigten Antrag nach der Mailsperre erneut anfordern", async () => {
+    const { erstelleAntrag } = await import("@/lib/auth/signup");
+    const { entwerteOffeneToken } = await import("@/lib/auth/tokens");
+    const erster = await erstelleAntrag(gueltig, { ip: null });
+    expect(erster.status).toBe("neu_angelegt");
+
+    // Die Bestaetigungsmail liegt laenger als MAIL_ABSTAND_MS zurueck – genau
+    // die Lage, in der jemand den Link nie angeklickt hat.
+    db.requests[0]!.letzteMailAm = new Date(Date.now() - 6 * 60 * 1000);
+
+    const zweiter = await erstelleAntrag(gueltig, { ip: null });
+    // Kein "bereits_vergeben": der Trichter bleibt offen.
+    expect(zweiter.status).toBe("neu_angelegt");
+    expect(db.requests).toHaveLength(1);
+    expect(db.requests[0]!.status).toBe("neu");
+    // Die alten Links sind entwertet, es gibt nur einen gueltigen.
+    expect(entwerteOffeneToken).toHaveBeenCalledWith("email_bestaetigung", {
+      signupRequestId: "r1",
+    });
+  });
+
+  it("sperrt die Adresse, sobald der Antrag bestaetigt ist", async () => {
+    const { erstelleAntrag } = await import("@/lib/auth/signup");
+    await erstelleAntrag(gueltig, { ip: null });
+    db.requests[0]!.status = "bestaetigt";
+    db.requests[0]!.letzteMailAm = new Date(Date.now() - 6 * 60 * 1000);
+    const zweiter = await erstelleAntrag(gueltig, { ip: null });
+    expect(zweiter.status).toBe("bereits_vergeben");
   });
 
   it("bremst schnelle Wiederholungen auch fuer bestehende User ohne Antrag", async () => {
