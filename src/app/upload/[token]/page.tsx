@@ -3,7 +3,9 @@ import { Logo } from "@/components/brand/logo";
 import { prisma } from "@/lib/db";
 import { resolveUploadToken } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
+import { baueKundenfortschritt, type KundenPosition } from "@/lib/upload/kundenansicht";
 import { maxUploadMb } from "@/lib/documents/pipeline";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -86,9 +88,19 @@ export default async function PublicUploadPage({
       readable: d.readable,
       applicantId: d.applicantId,
     }))
-  ).filter((i) => i.customerVisible);
+  );
 
-  const doneCount = checklist.filter((i) => i.status === "vorhanden").length;
+  // Übersetzt den internen Stand in das, was der Kunde sehen soll: eigene
+  // Zustände (offen/eingegangen/angenommen/abgelehnt) statt reviewStatus, und
+  // nur Positionen, die ihn etwas angehen.
+  const fortschritt = baueKundenfortschritt({
+    positionen: checklist,
+    dokumente: c.documents.map((d) => ({
+      documentType: d.documentType,
+      reviewStatus: d.reviewStatus,
+      reviewNote: d.reviewNote,
+    })),
+  });
 
   const applicant = c.applicants[0];
   const kunde = applicant
@@ -132,7 +144,7 @@ export default async function PublicUploadPage({
           </p>
         </div>
 
-        <CustomerUploadProgress done={doneCount} total={checklist.length} />
+        <CustomerUploadProgress done={fortschritt.erledigt} total={fortschritt.gesamt} />
 
         <Card>
           <CardHeader>
@@ -142,24 +154,26 @@ export default async function PublicUploadPage({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {checklist.length === 0 && (
+            {fortschritt.gesamt === 0 && (
               <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
                 Aktuell sind keine offenen Unterlagen hinterlegt. Ihr Berater
                 meldet sich, falls noch etwas benötigt wird.
               </p>
             )}
-            {checklist.map((i) => (
-              <div
-                key={i.key}
-                className="flex items-start justify-between gap-3 rounded-md border p-3"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{i.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {i.customerDescription}
+            {fortschritt.positionen.map((p) => (
+              <div key={p.key} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">{p.beschreibung}</div>
                   </div>
+                  <PositionZustand zustand={p.zustand} />
                 </div>
-                <ItemStatusBadge status={i.status} matchedDocuments={i.matchedDocuments} />
+                {p.zustand === "abgelehnt" && p.grund && (
+                  <p className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                    {p.grund}
+                  </p>
+                )}
               </div>
             ))}
           </CardContent>
@@ -238,27 +252,20 @@ export default async function PublicUploadPage({
   );
 }
 
-function ItemStatusBadge({
-  status,
-  matchedDocuments,
-}: {
-  status: string;
-  matchedDocuments: number;
-}) {
-  if (status === "vorhanden")
-    return <Badge variant="success">hochgeladen / akzeptiert</Badge>;
-  if (status === "unvollstaendig") {
-    // Es liegen bereits Dateien vor – sie sind nur noch nicht geprüft bzw. der
-    // Person zugeordnet (bei zwei Antragstellern weiß die App nicht, wer
-    // hochgeladen hat). "Bitte erneut hochladen" wäre hier schlicht falsch.
-    return matchedDocuments > 0 ? (
-      <Badge variant="neutral">eingegangen, wird geprüft</Badge>
-    ) : (
-      <Badge variant="warning">bitte erneut hochladen</Badge>
-    );
-  }
-  if (status === "nicht_aktuell")
-    return <Badge variant="warning">bitte aktuelle Version</Badge>;
-  return <Badge variant="neutral">fehlt</Badge>;
+/** Zustandspunkt + Beschriftung je Checklisten-Position, in der Sprache des Kunden. */
+function PositionZustand({ zustand }: { zustand: KundenPosition["zustand"] }) {
+  const config: Record<KundenPosition["zustand"], { punkt: string; text: string; farbe: string }> = {
+    offen: { punkt: "bg-muted-foreground/40", text: "Noch offen", farbe: "text-muted-foreground" },
+    eingegangen: { punkt: "bg-ai", text: "Bei uns eingegangen, wird geprüft", farbe: "text-ai" },
+    angenommen: { punkt: "bg-success", text: "Angenommen", farbe: "text-success" },
+    abgelehnt: { punkt: "bg-destructive", text: "Bitte erneut hochladen", farbe: "text-destructive" },
+  };
+  const { punkt, text, farbe } = config[zustand];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5 text-xs font-medium", farbe)}>
+      <span className={cn("h-2 w-2 rounded-full", punkt)} aria-hidden />
+      {text}
+    </span>
+  );
 }
 

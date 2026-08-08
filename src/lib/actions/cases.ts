@@ -481,7 +481,8 @@ export async function releasePlatform(caseId: string, platform: Platform): Promi
 
 export async function setDocumentReview(
   documentId: string,
-  reviewStatus: "akzeptiert" | "abgelehnt" | "duplikat" | "ersetzt"
+  reviewStatus: "akzeptiert" | "abgelehnt" | "duplikat" | "ersetzt",
+  grund?: string
 ): Promise<void> {
   const ctx = await requireContext();
   // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
@@ -495,7 +496,13 @@ export async function setDocumentReview(
   }
   const doc = await prisma.document.update({
     where: { id: documentId },
-    data: { reviewStatus },
+    data: {
+      reviewStatus,
+      // Beim Ablehnen den Grund speichern (kundentauglich formuliert, siehe
+      // Review-Center) – sonst ausdrücklich leeren, damit ein alter Grund nicht
+      // an einem später angenommenen Dokument kleben bleibt.
+      reviewNote: reviewStatus === "abgelehnt" ? grund?.trim().slice(0, 500) || null : null,
+    },
     select: { caseId: true, documentType: true },
   });
   await audit({
@@ -528,6 +535,19 @@ export async function setDocumentReview(
 
   revalidatePath(`/cases/${doc.caseId}`);
   revalidatePath(`/review`);
+}
+
+/**
+ * Dünner Wrapper für `<form action={acceptDocument.bind(null, documentId)}>`.
+ *
+ * `setDocumentReview` hat seit dem optionalen `grund`-Parameter drei
+ * Argumente – mit zwei gebundenen Argumenten (documentId, "akzeptiert")
+ * bliebe als drittes, ungebundenes Argument `grund?: string` übrig, und React
+ * würde dort beim Formular-Submit ein FormData-Objekt hineinreichen. Dieser
+ * Wrapper bindet vollständig, sodass kein Formularwert erwartet wird.
+ */
+export async function acceptDocument(documentId: string): Promise<void> {
+  await setDocumentReview(documentId, "akzeptiert");
 }
 
 /** Zu prüfende/befüllende Stammdaten-Spalten des Antragstellers. */

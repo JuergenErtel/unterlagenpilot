@@ -720,6 +720,9 @@ model Document {
   classificationStatus ProcessingStatus     @default(ausstehend)
   extractionStatus     ProcessingStatus     @default(ausstehend)
   reviewStatus         DocumentReviewStatus @default(offen)
+  // Grund einer Ablehnung. Wird dem Kunden auf der Upload-Seite angezeigt –
+  // deshalb kundentauglich formulieren, keine internen Kuerzel.
+  reviewNote           String?
   confidence           Float?
 
   detectedApplicant String?

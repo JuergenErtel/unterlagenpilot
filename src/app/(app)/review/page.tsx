@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
-import { setDocumentReview } from "@/lib/actions/cases";
+import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
 import { NextStepCard } from "@/components/case/next-step-card";
@@ -16,6 +16,7 @@ import { ConfidenceBadge } from "@/components/case/confidence-badge";
 import { ExtractedFieldActions } from "@/components/review/extracted-field-actions";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
+import { RejectDocumentButton } from "@/components/review/reject-document-button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatConfidence } from "@/lib/utils";
 import {
@@ -233,18 +234,14 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   </div>
                   <Separator />
                   <div className="space-y-1.5">
-                    <form action={setDocumentReview.bind(null, d.id, "akzeptiert")}>
+                    <form action={acceptDocument.bind(null, d.id)}>
                       <SubmitButton size="sm" variant="success" className="w-full" pendingLabel="Wird übernommen …">
                         {caseScope ? "Alle Felder übernehmen & Dokument freigeben" : "Dokument akzeptieren"}
                       </SubmitButton>
                     </form>
                     <div className="grid grid-cols-2 gap-1.5">
                       <Button asChild size="sm" variant="outline"><Link href={`/cases/${d.caseId}/messages`}>Nachfordern</Link></Button>
-                      <form action={setDocumentReview.bind(null, d.id, "abgelehnt")}>
-                        <SubmitButton size="sm" variant="outline" className="w-full" pendingLabel="…">
-                          Unlesbar
-                        </SubmitButton>
-                      </form>
+                      <RejectDocumentButton documentId={d.id} />
                     </div>
                     {/*
                       Früher standen hier drei "Für Plattform freigeben"-Buttons. Sie gaben
