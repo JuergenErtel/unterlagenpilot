@@ -10,7 +10,8 @@ import { geocodeAddress, OSM_ATTRIBUTION } from "@/lib/geo/geocode";
 import { buildTopPlusUrl, fetchMapPng, TOPPLUS_ATTRIBUTION } from "@/lib/geo/map";
 import { geoportalFor } from "@/lib/geo/geoportale";
 import { renderLageplan } from "@/lib/pdf/renderer";
-import { getBrokerInfo, pdfFileName } from "@/lib/pdf/case-pdf";
+import { pdfFileName } from "@/lib/pdf/case-pdf";
+import { getBrokerInfo } from "@/lib/organization/broker-info";
 
 export interface LageplanState {
   mapDataUri: string | null;

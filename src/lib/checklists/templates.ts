@@ -85,17 +85,22 @@ const I = {
   estBescheid: item({
     key: "est_bescheid",
     name: "Einkommensteuerbescheid (letzter)",
+    customerDescription:
+      "Bitte laden Sie Ihren letzten Einkommensteuerbescheid hoch – das Schreiben, das Sie vom Finanzamt nach Abgabe Ihrer Steuererklärung erhalten. Er sollte nicht älter als eineinhalb Jahre sein.",
     documentType: "einkommensteuerbescheid",
     level: "spaeter",
     recencyDays: 540,
+    example: "Einkommensteuerbescheid_2024.pdf",
   }),
   eigenkapital: item({
     key: "eigenkapitalnachweis",
     name: "Eigenkapitalnachweis",
-    customerDescription: "Nachweis über Ihr Eigenkapital (z. B. Kontoauszug, Depotauszug, Bausparvertrag).",
+    customerDescription:
+      "Nachweis über Ihr Eigenkapital (z. B. Kontoauszug, Depotauszug, Bausparvertrag) – bitte nicht älter als 3 Monate und mit gut lesbarem Kontostand.",
     internalDescription: "Herkunft/Verfügbarkeit des Eigenkapitals belegen.",
     documentType: "eigenkapitalnachweis",
     recencyDays: 90,
+    example: "Kontoauszug_Tagesgeldkonto_Mai_2026.pdf",
   }),
   kontoauszug: item({
     key: "kontoauszug",
@@ -119,94 +124,155 @@ const I = {
   expose: item({
     key: "expose",
     name: "Exposé / Objektunterlagen",
-    customerDescription: "Exposé oder Objektbeschreibung mit Kaufpreis, Wohnfläche und Baujahr.",
+    customerDescription:
+      "Exposé oder Objektbeschreibung mit Kaufpreis, Wohnfläche und Baujahr. Bitte das vollständige Dokument hochladen, gut lesbar.",
     documentType: "expose",
     example: "Expose_Musterstrasse_12.pdf",
   }),
   kaufvertrag: item({
     key: "kaufvertragsentwurf",
     name: "Kaufvertragsentwurf",
+    customerDescription:
+      "Bitte laden Sie den Entwurf des Kaufvertrags hoch, den Sie von Notar oder Verkäufer erhalten haben. Ein noch nicht unterschriebener Entwurf reicht zunächst aus.",
     documentType: "kaufvertragsentwurf",
     level: "spaeter",
+    example: "Kaufvertragsentwurf_Notar_Mueller.pdf",
   }),
   wohnflaeche: item({
     key: "wohnflaechenberechnung",
     name: "Wohnflächenberechnung",
+    customerDescription:
+      "Bitte laden Sie die Wohnflächenberechnung hoch, falls vorhanden – damit lässt sich die Wohnfläche der Immobilie genau nachvollziehen. Bitte die vollständige Berechnung hochladen, gut lesbar.",
     documentType: "wohnflaechenberechnung",
     level: "optional",
+    example: "Wohnflaechenberechnung_Musterstrasse_12.pdf",
   }),
   flurkarte: item({
     key: "flurkarte_lageplan",
     name: "Flurkarte / Lageplan",
+    customerDescription:
+      "Bitte laden Sie die Flurkarte oder den Lageplan des Grundstücks hoch, falls vorhanden – die bekommen Sie beim Katasteramt oder von Ihrem Notar. Bitte laden Sie das vollständige Dokument gut lesbar hoch.",
     documentType: "flurkarte_lageplan",
     level: "optional",
+    example: "Flurkarte_Musterstrasse_12.pdf",
   }),
   teilung: item({
     key: "teilungserklaerung",
     name: "Teilungserklärung",
+    customerDescription:
+      "Bitte laden Sie die Teilungserklärung der Eigentumswohnung hoch – das Dokument, das die Aufteilung des Gebäudes in einzelne Wohnungseinheiten regelt. Sie ist meist mehrseitig, bitte alle Seiten und Anlagen mit hochladen.",
     documentType: "teilungserklaerung",
     level: "zwingend",
+    example: "Teilungserklaerung_Musterstrasse_12.pdf",
   }),
   baubeschreibung: item({
     key: "baubeschreibung",
     name: "Baubeschreibung",
+    customerDescription:
+      "Bitte laden Sie die Baubeschreibung hoch, die Sie von Ihrem Bauunternehmen oder Architekten erhalten haben – darin stehen die geplanten Baumaterialien und die Ausstattung. Bitte das vollständige Dokument mit allen Seiten hochladen.",
     documentType: "baubeschreibung",
+    example: "Baubeschreibung_Neubau_Musterstrasse.pdf",
   }),
   baukosten: item({
     key: "baukostenaufstellung",
     name: "Baukostenaufstellung",
+    customerDescription:
+      "Bitte laden Sie die Aufstellung der geplanten Baukosten hoch – zum Beispiel den Kostenvoranschlag Ihres Bauunternehmens oder der beteiligten Handwerker. Bitte die vollständige Aufstellung hochladen, nicht nur einzelne Positionen.",
     documentType: "baukostenaufstellung",
+    example: "Baukostenaufstellung_Musterstrasse.pdf",
   }),
   baugenehmigung: item({
     key: "baugenehmigung",
     name: "Baugenehmigung",
+    customerDescription:
+      "Bitte laden Sie Ihre Baugenehmigung hoch, sobald sie Ihnen von der Bauaufsichtsbehörde vorliegt. Bitte den vollständigen Bescheid mit allen Anlagen hochladen.",
     documentType: "baugenehmigung",
     level: "spaeter",
+    example: "Baugenehmigung_Musterstrasse.pdf",
   }),
   restschuld: item({
     key: "restschuldnachweis",
     name: "Restschuldnachweis bestehendes Darlehen",
+    customerDescription:
+      "Bitte laden Sie einen aktuellen Nachweis über die Restschuld Ihres bestehenden Darlehens hoch – z. B. ein aktueller Kontoauszug des Darlehenskontos, den Sie bei Ihrer Bank bekommen.",
     documentType: "restschuldnachweis",
+    example: "Kontoauszug_Darlehenskonto_Musterbank_2026.pdf",
   }),
   darlehensvertrag: item({
     key: "darlehensvertrag",
     name: "Bestehender Darlehensvertrag",
+    customerDescription:
+      "Bitte laden Sie Ihren bestehenden Darlehensvertrag hoch – die Vertragsunterlagen, die Sie beim Abschluss Ihres aktuellen Darlehens erhalten haben. Bitte alle Seiten hochladen, auch die Darlehensbedingungen im Anhang.",
     documentType: "darlehensvertrag",
+    example: "Darlehensvertrag_Musterbank.pdf",
   }),
   mietvertrag: item({
     key: "mietvertrag",
     name: "Mietvertrag / Mietnachweis",
+    customerDescription:
+      "Bitte laden Sie den Mietvertrag für die vermietete Immobilie hoch – alle Seiten, inklusive eventueller Nachträge.",
     documentType: "mietvertrag",
+    example: "Mietvertrag_Musterstrasse_12.pdf",
   }),
   mietaufstellung: item({
     key: "mietaufstellung",
     name: "Mietaufstellung",
+    customerDescription:
+      "Bitte laden Sie eine Aufstellung der Mieteinnahmen hoch – zum Beispiel eine Übersicht aller vermieteten Einheiten mit der jeweiligen Kaltmiete. Bitte die Aufstellung vollständig und möglichst aktuell hochladen.",
     documentType: "mietaufstellung",
+    example: "Mietaufstellung_Musterstrasse_12.pdf",
   }),
   bwa: item({
     key: "bwa",
     name: "Aktuelle BWA",
+    customerDescription:
+      "Bitte laden Sie Ihre aktuelle betriebswirtschaftliche Auswertung (BWA) hoch. Die bekommen Sie von Ihrem Steuerberater oder aus Ihrer Buchhaltungssoftware – sie sollte nicht älter als 4 Monate sein.",
     documentType: "bwa",
     recencyDays: 120,
+    example: "BWA_Januar_bis_April_2026.pdf",
   }),
-  susa: item({ key: "susa", name: "Summen- und Saldenliste (SuSa)", documentType: "susa" }),
+  susa: item({
+    key: "susa",
+    name: "Summen- und Saldenliste (SuSa)",
+    customerDescription:
+      "Bitte laden Sie Ihre aktuelle Summen- und Saldenliste (SuSa) hoch. Die bekommen Sie wie die BWA von Ihrem Steuerberater oder aus Ihrer Buchhaltungssoftware. Bitte das vollständige Dokument mit allen Seiten hochladen.",
+    documentType: "susa",
+    example: "Summen_und_Saldenliste_2026.pdf",
+  }),
   jahresabschluss: item({
     key: "jahresabschluss",
     name: "Jahresabschlüsse (letzte 2 Jahre)",
+    customerDescription:
+      "Bitte laden Sie Ihre Jahresabschlüsse der letzten zwei Geschäftsjahre hoch – jeweils Bilanz und Gewinn- und Verlustrechnung, so wie Sie sie von Ihrem Steuerberater erhalten haben. Bitte pro Jahr das vollständige Dokument mit allen Seiten hochladen.",
     documentType: "jahresabschluss",
     requiredCount: 2,
+    example: "Jahresabschluss_2024.pdf",
   }),
-  euer: item({ key: "euer", name: "EÜR (letzte 2 Jahre)", documentType: "euer", requiredCount: 2 }),
+  euer: item({
+    key: "euer",
+    name: "EÜR (letzte 2 Jahre)",
+    customerDescription:
+      "Bitte laden Sie Ihre Einnahmenüberschussrechnung (EÜR) der letzten zwei Jahre hoch. Die erstellt in der Regel Ihr Steuerberater. Bitte jeweils die vollständige Berechnung mit allen Seiten hochladen.",
+    documentType: "euer",
+    requiredCount: 2,
+    example: "Einnahmenueberschussrechnung_2024.pdf",
+  }),
   estErklaerung: item({
     key: "est_erklaerung",
     name: "Einkommensteuererklärung",
+    customerDescription:
+      "Bitte laden Sie Ihre komplette Einkommensteuererklärung hoch, so wie Sie sie beim Finanzamt eingereicht haben – bitte alle Anlagen und Seiten.",
     documentType: "einkommensteuererklaerung",
     level: "spaeter",
+    example: "Einkommensteuererklaerung_2024_mit_Anlagen.pdf",
   }),
   rentenbescheid: item({
     key: "rentenbescheid",
     name: "Rentenbescheid",
+    customerDescription:
+      "Bitte laden Sie Ihren aktuellen Rentenbescheid hoch – das Schreiben Ihres Rentenversicherungsträgers mit der Höhe Ihrer monatlichen Rente. Bitte alle Seiten hochladen, auch eventuelle Anlagen zu Rentenanpassungen.",
     documentType: "rentenbescheid",
+    example: "Rentenbescheid_2026.pdf",
   }),
 };
 

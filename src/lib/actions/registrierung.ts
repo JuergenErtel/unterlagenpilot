@@ -87,13 +87,13 @@ export async function registriere(
         name: geparst.data.name,
         url: `${basis()}/registrieren/bestaetigen/${ergebnis.token}`,
       });
-      await sendEmail({ to: geparst.data.email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: geparst.data.email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     } else {
       const mail = mailAdresseVergeben({
         loginUrl: `${basis()}/login`,
         resetUrl: `${basis()}/passwort-vergessen`,
       });
-      await sendEmail({ to: geparst.data.email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: geparst.data.email, subject: mail.subject, text: mail.text, empfaenger: "intern" });
     }
   } catch (e) {
     // Ohne Adresse/Namen loggen – nur, dass der Versand scheiterte.

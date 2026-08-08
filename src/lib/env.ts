@@ -76,6 +76,22 @@ const envSchema = z.object({
   // (Nachrichten bleiben dann Copy-Paste-Vorlagen).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(), // z.B. "BaufiDesk <noreply@baufidesk.de>"
+  // Versandschalter mit drei Stufen gegen versehentlichen Kundenkontakt. In
+  // BaufiDesk sind alle Kunden echt – eine Testmail an einen Antragsteller
+  // ist nicht zurueckholbar.
+  //   "kunden"     = Normalbetrieb, Mail geht an die adressierte Person.
+  //   "nur_intern" = Testbetrieb, ALLES (auch Kundenmails) geht an
+  //                  PLATFORM_ADMIN_EMAIL statt an die echte Adresse.
+  //   "aus"        = Nichts verlaesst das System, auch keine internen Mails.
+  // Vorgabe "nur_intern": lokal und in Vorschau-Deployments geht nichts an
+  // echte Empfaenger hinaus, ohne dass es jemand ausdruecklich einschaltet.
+  // Ein unbekannter Wert (z.B. Tippfehler oder ein Rest der alten Variable
+  // KUNDENVERSAND) faellt bewusst auf die sichere Vorgabe zurueck, statt die
+  // App mit einem Konfigurationsfehler lahmzulegen.
+  MAILVERSAND: z.preprocess(
+    (v) => (v === "kunden" || v === "nur_intern" || v === "aus" ? v : "nur_intern"),
+    z.enum(["kunden", "nur_intern", "aus"])
+  ),
   // Empfaenger der Benachrichtigung "neue Anmeldung wartet". Ohne den Wert
   // unterbleibt nur diese Mail – die Antraege stehen trotzdem in /admin/anmeldungen.
   // Formatpruefung, weil ein Tippfehler sonst still bleibt: die Mail geht nie

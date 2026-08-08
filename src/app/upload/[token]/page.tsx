@@ -3,7 +3,14 @@ import { Logo } from "@/components/brand/logo";
 import { prisma } from "@/lib/db";
 import { resolveUploadToken } from "@/lib/auth/context";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
+import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
+import {
+  baueKundenfortschritt,
+  fehlmengeHinweis,
+  type KundenPosition,
+} from "@/lib/upload/kundenansicht";
 import { maxUploadMb } from "@/lib/documents/pipeline";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -14,7 +21,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CustomerUploadProgress } from "@/components/customer/customer-upload-progress";
 import { CustomerUploadForm } from "@/components/customer/customer-upload-form";
-import { type PropertyType } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 // Headroom für die Hintergrund-Verarbeitung (OCR/KI) der Kunden-Upload-Actions,
@@ -69,26 +75,33 @@ export default async function PublicUploadPage({
   }
 
   const c = link.case;
+  // Dieselbe Eingabe wie Vermittlersicht und Erstkontakt – sonst verlangt die
+  // Mail andere Unterlagen als die Seite, auf die sie verlinkt.
+  const checklistEingabe = checklistEingabeFuerFall(c);
   const checklist = buildChecklistForCase(
-    {
-      financingType: c.financingType ?? undefined,
-      propertyType: (c.property?.objektart as PropertyType | undefined) ?? undefined,
-      kapitalanlage: c.kapitalanlage,
-      applicantCount: c.applicants.length,
-      applicantIds: c.applicants
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((a) => a.id),
-    },
+    checklistEingabe,
     c.documents.map((d) => ({
       documentType: d.documentType,
       reviewStatus: d.reviewStatus,
       readable: d.readable,
       applicantId: d.applicantId,
     }))
-  ).filter((i) => i.customerVisible);
+  );
 
-  const doneCount = checklist.filter((i) => i.status === "vorhanden").length;
+  // Übersetzt den internen Stand in das, was der Kunde sehen soll: eigene
+  // Zustände (offen/eingegangen/angenommen/abgelehnt) statt reviewStatus, und
+  // nur Positionen, die ihn etwas angehen.
+  const fortschritt = baueKundenfortschritt({
+    positionen: checklist,
+    dokumente: c.documents.map((d) => ({
+      documentType: d.documentType,
+      reviewStatus: d.reviewStatus,
+      reviewNote: d.reviewNote,
+      createdAt: d.createdAt,
+      applicantId: d.applicantId,
+    })),
+    applicantIds: checklistEingabe.applicantIds,
+  });
 
   const applicant = c.applicants[0];
   const kunde = applicant
@@ -132,7 +145,11 @@ export default async function PublicUploadPage({
           </p>
         </div>
 
-        <CustomerUploadProgress done={doneCount} total={checklist.length} />
+        <CustomerUploadProgress
+          angenommen={fortschritt.erledigt}
+          eingereicht={fortschritt.eingereicht}
+          gesamt={fortschritt.gesamt}
+        />
 
         <Card>
           <CardHeader>
@@ -142,24 +159,45 @@ export default async function PublicUploadPage({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {checklist.length === 0 && (
+            {fortschritt.gesamt === 0 && (
               <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
                 Aktuell sind keine offenen Unterlagen hinterlegt. Ihr Berater
                 meldet sich, falls noch etwas benötigt wird.
               </p>
             )}
-            {checklist.map((i) => (
-              <div
-                key={i.key}
-                className="flex items-start justify-between gap-3 rounded-md border p-3"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{i.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {i.customerDescription}
+            {fortschritt.positionen.map((p) => (
+              <div key={p.key} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{p.name}</div>
+                    {/* Wer die Position schon geschafft hat, braucht die
+                        Anleitung nicht mehr – Beschreibung und Beispiel
+                        blenden wir dann aus, damit die Liste knapp bleibt. */}
+                    {p.zustand !== "angenommen" && (
+                      <>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                          {p.beschreibung}
+                        </p>
+                        {p.beispiel && (
+                          <p className="mt-1 text-[11px] text-muted-foreground/70">
+                            Beispiel: {p.beispiel}
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
+                  <PositionZustand zustand={p.zustand} verlangt={p.verlangt} akzeptiert={p.akzeptiert} />
                 </div>
-                <ItemStatusBadge status={i.status} matchedDocuments={i.matchedDocuments} />
+                {p.zustand === "abgelehnt" && p.grund && (
+                  <p className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                    {p.grund}
+                  </p>
+                )}
+                {p.zustand === "teilweise" && (
+                  <p className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-[hsl(var(--warning))]">
+                    {fehlmengeHinweis(p.verlangt, p.akzeptiert)}
+                  </p>
+                )}
               </div>
             ))}
           </CardContent>
@@ -238,27 +276,36 @@ export default async function PublicUploadPage({
   );
 }
 
-function ItemStatusBadge({
-  status,
-  matchedDocuments,
+/** Zustandspunkt + Beschriftung je Checklisten-Position, in der Sprache des Kunden. */
+function PositionZustand({
+  zustand,
+  verlangt,
+  akzeptiert,
 }: {
-  status: string;
-  matchedDocuments: number;
+  zustand: KundenPosition["zustand"];
+  verlangt: number;
+  akzeptiert: number;
 }) {
-  if (status === "vorhanden")
-    return <Badge variant="success">hochgeladen / akzeptiert</Badge>;
-  if (status === "unvollstaendig") {
-    // Es liegen bereits Dateien vor – sie sind nur noch nicht geprüft bzw. der
-    // Person zugeordnet (bei zwei Antragstellern weiß die App nicht, wer
-    // hochgeladen hat). "Bitte erneut hochladen" wäre hier schlicht falsch.
-    return matchedDocuments > 0 ? (
-      <Badge variant="neutral">eingegangen, wird geprüft</Badge>
-    ) : (
-      <Badge variant="warning">bitte erneut hochladen</Badge>
-    );
-  }
-  if (status === "nicht_aktuell")
-    return <Badge variant="warning">bitte aktuelle Version</Badge>;
-  return <Badge variant="neutral">fehlt</Badge>;
+  const config: Record<KundenPosition["zustand"], { punkt: string; text: string; farbe: string }> = {
+    offen: { punkt: "bg-muted-foreground/40", text: "Noch offen", farbe: "text-muted-foreground" },
+    eingegangen: { punkt: "bg-ai", text: "Bei uns eingegangen, wird geprüft", farbe: "text-ai" },
+    // Nicht alle verlangten Dokumente sind schon da (z. B. erst ein
+    // Antragsteller von zweien) – ehrlicher als "offen" (der Kunde hat ja
+    // schon etwas geschafft) und ehrlicher als "angenommen" (es fehlt noch was).
+    teilweise: {
+      punkt: "bg-warning",
+      text: `${akzeptiert} von ${verlangt} angenommen`,
+      farbe: "text-[hsl(var(--warning))]",
+    },
+    angenommen: { punkt: "bg-success", text: "Angenommen", farbe: "text-success" },
+    abgelehnt: { punkt: "bg-destructive", text: "Bitte erneut hochladen", farbe: "text-destructive" },
+  };
+  const { punkt, text, farbe } = config[zustand];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5 text-xs font-medium", farbe)}>
+      <span className={cn("h-2 w-2 rounded-full", punkt)} aria-hidden />
+      {text}
+    </span>
+  );
 }
 

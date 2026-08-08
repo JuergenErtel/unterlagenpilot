@@ -7,7 +7,6 @@ function signale(over: Partial<PhasenSignale> = {}): PhasenSignale {
     verlorenAm: null,
     status: "neu",
     abschlussdatum: null,
-    hatLink: false,
     hatGesendeteNachricht: false,
     selbstauskunftBegonnen: false,
     dokumenteVorhanden: false,
@@ -20,16 +19,20 @@ describe("schlagePhaseVor", () => {
     expect(schlagePhaseVor(signale())).toBeNull();
   });
 
-  it("schlägt 'Anfrage erstellt' vor, sobald ein Link existiert", () => {
-    expect(schlagePhaseVor(signale({ hatLink: true }))).toBe("anfrage_erstellt");
-  });
-
-  it("schlägt 'Anfrage erstellt' auch bei einer gesendeten Nachricht vor", () => {
+  it("schlägt 'Anfrage erstellt' vor, sobald eine Nachricht versendet wurde", () => {
     expect(schlagePhaseVor(signale({ hatGesendeteNachricht: true }))).toBe("anfrage_erstellt");
   });
 
+  it("schlägt für einen frisch importierten Lead nichts vor, nur weil Links bereitliegen", () => {
+    // Der Erstkontakt legt Upload- und Selbstauskunftslink schon beim
+    // Lead-Eingang an. Waere "ein Link existiert" weiterhin ein Signal, bekaeme
+    // JEDER neue Lead sofort "Anfrage erstellt" vorgeschlagen, obwohl nichts
+    // hinausgegangen ist – und der Vermittler gewoehnte sich das Wegklicken an.
+    expect(schlagePhaseVor(signale({ leadPhase: "neu", hatGesendeteNachricht: false }))).toBeNull();
+  });
+
   it("schlägt 'Selbstauskunft läuft' vor, sobald der Kunde begonnen hat", () => {
-    expect(schlagePhaseVor(signale({ hatLink: true, selbstauskunftBegonnen: true }))).toBe(
+    expect(schlagePhaseVor(signale({ selbstauskunftBegonnen: true }))).toBe(
       "selbstauskunft_laeuft"
     );
   });
@@ -51,12 +54,14 @@ describe("schlagePhaseVor", () => {
   it("schlägt nie rückwärts vor", () => {
     // Fall steht schon auf Zusage; ein Dokument darf ihn nicht zurückholen.
     expect(
-      schlagePhaseVor(signale({ leadPhase: "zusage", dokumenteVorhanden: true, hatLink: true }))
+      schlagePhaseVor(signale({ leadPhase: "zusage", dokumenteVorhanden: true, hatGesendeteNachricht: true }))
     ).toBeNull();
   });
 
   it("schlägt nichts vor, wenn die Phase bereits stimmt", () => {
-    expect(schlagePhaseVor(signale({ leadPhase: "anfrage_erstellt", hatLink: true }))).toBeNull();
+    expect(
+      schlagePhaseVor(signale({ leadPhase: "anfrage_erstellt", hatGesendeteNachricht: true }))
+    ).toBeNull();
   });
 
   it("schlägt bei einem verlorenen Fall nichts vor", () => {
@@ -65,7 +70,7 @@ describe("schlagePhaseVor", () => {
 
   it("schlägt Finanzierungsvorschlag und Zusage nie vor – dafür gibt es kein Signal", () => {
     const alle = [
-      signale({ hatLink: true }),
+      signale({ hatGesendeteNachricht: true }),
       signale({ dokumenteVorhanden: true }),
       signale({ status: "einreichungsfertig", dokumenteVorhanden: true }),
       signale({ status: "bank_nachforderung" }),

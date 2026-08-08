@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { computeNextStep } from "@/lib/cases/next-step";
+import type { NextStepInput } from "@/lib/cases/next-step";
 import type { CockpitData } from "@/lib/cases/cockpit";
+
+/** Cockpit-Ausschnitt plus Erstkontakt-Stand – zusammen das, was die Fallseite liefert. */
+type TestInput = CockpitData & Pick<NextStepInput, "erstkontakt">;
 
 /** Minimal-Cockpit; Tests überschreiben nur, was für die jeweilige Stufe zählt. */
 function cockpit(over: {
@@ -12,7 +16,8 @@ function cockpit(over: {
     begonnen: boolean;
     erstelltVorTagen: number | null;
   };
-}): CockpitData {
+  erstkontakt?: NextStepInput["erstkontakt"];
+}): TestInput {
   return {
     caseId: "c1",
     caseNumber: "UP-2026-0001",
@@ -38,6 +43,7 @@ function cockpit(over: {
     },
     missingCustomerFields: over.missingCustomerFields ?? [],
     selbstauskunft: over.selbstauskunft,
+    erstkontakt: over.erstkontakt,
   };
 }
 
@@ -135,5 +141,90 @@ describe("computeNextStep – Prioritätsleiter", () => {
   it("Singular-Formulierungen stimmen", () => {
     expect(computeNextStep(cockpit({ counts: { pruefbereit: 1 } })).title).toContain("1 Dokument prüfen");
     expect(computeNextStep(cockpit({ counts: { docsMissing: 1 } })).title).toContain("1 Unterlage anfordern");
+  });
+});
+
+describe("computeNextStep – Erstkontakt in der Prioritätsleiter", () => {
+  it("fehlende E-Mail-Adresse blockiert den Erstkontakt vor allem anderen", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { docsMissing: 3 },
+        erstkontakt: { empfaenger: null, vorbereitet: false, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_email_fehlt");
+    expect(s.cta?.href).toBe("/cases/c1/edit");
+  });
+
+  it("liegt eine Adresse vor, muss der Erstkontakt erst vorbereitet werden", () => {
+    const s = computeNextStep(
+      cockpit({ erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: false, versendet: false } })
+    );
+    expect(s.key).toBe("erstkontakt_vorbereiten");
+    // Keine Primäraktion als Link – das Vorbereiten läuft über die Server-Action-Form
+    // in der Fallseite (wie bei ki_fehler), nicht über einen next-step-Link.
+    expect(s.cta).toBeUndefined();
+  });
+
+  it("liegt ein vorbereiteter, unversendeter Entwurf vor, führt der Schritt zur Nachrichtenseite", () => {
+    const s = computeNextStep(
+      cockpit({ erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false } })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+    expect(s.reason).toContain("kunde@example.com");
+    expect(s.cta?.href).toBe("/cases/c1/messages");
+  });
+
+  it("ein unversendeter Erstkontakt schlägt fehlende Kundendaten, kritische Hinweise und fehlende Unterlagen", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { docsMissing: 5, criticals: 1 },
+        missingCustomerFields: ["Geburtsdatum"],
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+  });
+
+  it("ein unversendeter Erstkontakt schlägt eine eingegangene Selbstauskunft", () => {
+    const s = computeNextStep(
+      cockpit({
+        selbstauskunft: { eingegangen: true, begonnen: true, erstelltVorTagen: 2 },
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+  });
+
+  it("ein unversendeter Erstkontakt schlägt prüfbereite Dokumente", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 2 },
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+  });
+
+  it("eine laufende KI-Prüfung schlägt auch einen unversendeten Erstkontakt", () => {
+    const s = computeNextStep(
+      cockpit({
+        status: "ki_pruefung_laeuft",
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
+      })
+    );
+    expect(s.key).toBe("ki_laeuft");
+  });
+
+  it("ein versendeter Erstkontakt taucht nicht mehr in der Leiter auf", () => {
+    const s = computeNextStep(
+      cockpit({ erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: true } })
+    );
+    expect(s.key).toBe("einreichung");
+  });
+
+  it("ohne geladenen Erstkontakt-Stand bleibt die Leiter wie zuvor (z. B. im Dashboard-Batch)", () => {
+    const s = computeNextStep(cockpit({ counts: { docsMissing: 3 } }));
+    expect(s.key).toBe("unterlagen_anfordern");
   });
 });

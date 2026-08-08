@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
-import { setDocumentReview } from "@/lib/actions/cases";
+import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import { ConfidenceBadge } from "@/components/case/confidence-badge";
 import { ExtractedFieldActions } from "@/components/review/extracted-field-actions";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
+import { RejectDocumentButton } from "@/components/review/reject-document-button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatConfidence } from "@/lib/utils";
 import {
@@ -48,11 +50,24 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
     : null;
 
   // Abschluss des geführten Modus: nichts mehr offen → nächster Schritt des Falls.
+  // Derselbe Aufruf wie auf der Fallseite (inkl. Erstkontakt-Stand), sonst
+  // widerspräche sich die Leiter zwischen Review-Abschluss und Fallseite.
   const completion =
     caseScope && documents.length === 0
       ? await (async () => {
-          const cockpit = await getCaseCockpit(caseScope.id);
-          return { cockpit, step: computeNextStep(cockpit) };
+          const [cockpit, erstkontaktStand] = await Promise.all([
+            getCaseCockpit(caseScope.id),
+            ladeErstkontaktStand(caseScope.id),
+          ]);
+          const step = computeNextStep({
+            ...cockpit,
+            erstkontakt: {
+              empfaenger: erstkontaktStand.empfaenger,
+              vorbereitet: Boolean(erstkontaktStand.messageId),
+              versendet: erstkontaktStand.versendet,
+            },
+          });
+          return { cockpit, step };
         })()
       : null;
 
@@ -233,18 +248,14 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   </div>
                   <Separator />
                   <div className="space-y-1.5">
-                    <form action={setDocumentReview.bind(null, d.id, "akzeptiert")}>
+                    <form action={acceptDocument.bind(null, d.id)}>
                       <SubmitButton size="sm" variant="success" className="w-full" pendingLabel="Wird übernommen …">
                         {caseScope ? "Alle Felder übernehmen & Dokument freigeben" : "Dokument akzeptieren"}
                       </SubmitButton>
                     </form>
                     <div className="grid grid-cols-2 gap-1.5">
                       <Button asChild size="sm" variant="outline"><Link href={`/cases/${d.caseId}/messages`}>Nachfordern</Link></Button>
-                      <form action={setDocumentReview.bind(null, d.id, "abgelehnt")}>
-                        <SubmitButton size="sm" variant="outline" className="w-full" pendingLabel="…">
-                          Unlesbar
-                        </SubmitButton>
-                      </form>
+                      <RejectDocumentButton documentId={d.id} />
                     </div>
                     {/*
                       Früher standen hier drei "Für Plattform freigeben"-Buttons. Sie gaben

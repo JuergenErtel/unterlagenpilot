@@ -64,6 +64,24 @@ describe("sendMessageByEmail", () => {
     expect(messageUpdateMany).toHaveBeenCalledWith({ where: { id: "m1", sent: false }, data: { sent: true } });
   });
 
+  it("haelt den tatsaechlichen Sendezeitpunkt fest, NACH erfolgreichem Versand", async () => {
+    // Regression: `createdAt` (Entwurfszeitpunkt) taugt nicht als Sendedatum.
+    // sentAt muss erst gesetzt werden, wenn der Versand tatsaechlich geglueckt ist.
+    messageFindUnique.mockResolvedValue(msg());
+    const res = await sendMessageByEmail("m1");
+    expect(res.ok).toBe(true);
+    expect(messageUpdate).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: { sentAt: expect.any(Date) },
+    });
+    // Reihenfolge: erst senden, dann sentAt setzen.
+    const [sendOrder] = sendEmail.mock.invocationCallOrder;
+    const [sentAtOrder] = messageUpdate.mock.invocationCallOrder;
+    expect(sendOrder).toBeDefined();
+    expect(sentAtOrder).toBeDefined();
+    expect(sendOrder as number).toBeLessThan(sentAtOrder as number);
+  });
+
   it("verhindert Doppelversand bei parallelen Klicks (Reservierung greift nicht)", async () => {
     // Regression: "lesen → prüfen → senden → sent=true" ließ zwei gleichzeitige
     // Requests beide durchlaufen; der Kunde erhielt die Nachricht doppelt.
@@ -118,8 +136,34 @@ describe("sendMessageByEmail", () => {
     sendEmail.mockRejectedValue(new Error("Resend HTTP 422: domain not verified"));
     const res = await sendMessageByEmail("m1");
     expect(res.ok).toBe(false);
-    // sent wird zurückgesetzt, sonst wäre die Nachricht dauerhaft blockiert.
-    expect(messageUpdateMany).toHaveBeenCalledWith({ where: { id: "m1" }, data: { sent: false } });
+    // sent (und sentAt) werden zurückgesetzt, sonst wäre die Nachricht
+    // dauerhaft blockiert bzw. traeger ein falsches Sendedatum.
+    expect(messageUpdateMany).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: { sent: false, sentAt: null },
+    });
+    // Bei einem fehlgeschlagenen Versand darf sentAt nie gesetzt werden.
+    expect(messageUpdate).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("meldet eine verständliche Meldung, wenn der Mailversand ausgeschaltet ist (statt eines generischen Fehlers)", async () => {
+    // Regression: eine ausgeschaltete Versandstufe ist kein zufälliger
+    // Netzwerkfehler - der Vermittler soll wissen, dass er den Text kopieren
+    // und manuell senden muss, statt es "später erneut" zu versuchen.
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    messageFindUnique.mockResolvedValue(msg());
+    sendEmail.mockRejectedValue(new Error("Der Mailversand ist derzeit ausgeschaltet."));
+    const res = await sendMessageByEmail("m1");
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Mailversand ist derzeit ausgeschaltet/);
+    // Auch hier muss die Reservierung zurückgenommen werden - die Nachricht
+    // bleibt unversendet, nicht fälschlich als versendet markiert.
+    expect(messageUpdateMany).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: { sent: false, sentAt: null },
+    });
+    expect(messageUpdate).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
 });

@@ -326,25 +326,25 @@ model Organization {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String       @unique
-  name           String
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email               String       @unique
+  name                String
   // Passwort-Hash – niemals Klartext. Auth via Provider moeglich.
-  passwordHash   String?
-  role           UserRole     @default(vermittler)
-  active         Boolean      @default(true)
+  passwordHash        String?
+  role                UserRole     @default(vermittler)
+  active              Boolean      @default(true)
   // Plattform-Ebene: darf Registrierungsantraege freigeben. Bewusst KEIN Wert im
   // UserRole-Enum – die Rollen beschreiben die Stellung innerhalb einer
   // Organisation, nicht ueber ihnen.
-  platformAdmin  Boolean      @default(false)
-  invitedAt      DateTime?
+  platformAdmin       Boolean      @default(false)
+  invitedAt           DateTime?
   // Sperre gegen wiederholte "Adresse bereits vergeben"-Mails. Liegt am User,
   // weil es zu direkt angelegten Konten keinen SignupRequest gibt.
   letzteHinweisMailAm DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   casesAsBroker Case[]      @relation("CaseBroker")
   auditLogs     AuditLog[]
@@ -477,6 +477,18 @@ model Case {
   // Datenschutz / Aufbewahrung pro Vorgang
   retentionDays Int?
   deleteAfter   DateTime?
+
+  // Wann der Erstkontakt vorbereitet wurde (Links + Nachrichtenentwurf).
+  // Verhindert, dass ein zweiter Lauf einen zweiten Entwurf erzeugt.
+  erstkontaktVorbereitetAm DateTime?
+  // Genau der Entwurf, der zu diesem Erstkontakt gehoert. Ohne diesen Bezug
+  // musste die Fallseite den aeltesten "erstnachforderung"-Entwurf raten - ein
+  // ganz normaler, vom Vermittler erzeugbarer Nachrichtentyp. Ein alter, nie
+  // versendeter Nachforderungsentwurf liess die Karte dann "Entwurf liegt
+  // bereit" behaupten, obwohl nie ein Erstkontakt vorbereitet wurde.
+  // Bewusst ohne Fremdschluessel-Relation: die Nachricht ist nur ein Verweis,
+  // kein Besitz - wird sie geloescht, gilt der Erstkontakt als nicht vorbereitet.
+  erstkontaktMessageId     String?
 
   notes     String?
   createdAt DateTime @default(now())
@@ -716,6 +728,9 @@ model Document {
   classificationStatus ProcessingStatus     @default(ausstehend)
   extractionStatus     ProcessingStatus     @default(ausstehend)
   reviewStatus         DocumentReviewStatus @default(offen)
+  // Grund einer Ablehnung. Wird dem Kunden auf der Upload-Seite angezeigt –
+  // deshalb kundentauglich formulieren, keine internen Kuerzel.
+  reviewNote           String?
   confidence           Float?
 
   detectedApplicant String?
@@ -970,6 +985,9 @@ model GeneratedMessage {
   body         String
   // Im MVP nur vorformuliert, nicht automatisch versendet
   sent         Boolean             @default(false)
+  // Tatsaechlicher Sendezeitpunkt. `createdAt` ist der Zeitpunkt der
+  // Entwurfserstellung und taugt nicht als Sendedatum.
+  sentAt       DateTime?
   createdAt    DateTime            @default(now())
 
   @@index([caseId])
@@ -1311,8 +1329,8 @@ model LeadSyncState {
  * keine abgebrochenen Anmeldungen, die jede Auswertung verfaelschen wuerden.
  */
 model SignupRequest {
-  id    String @id @default(cuid())
-  email String @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
   // Nur bis zur Freigabe belegt: dort wandert der Hash an den neuen User und
   // wird hier auf null gesetzt. Sonst laege er doppelt vor, und die Kopie am
   // Antrag ueberlebte jeden spaeteren Passwortwechsel des Nutzers.

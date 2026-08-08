@@ -6,7 +6,7 @@ import { PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
  * Systemstatus für den Pilotbetrieb: zeigt transparent, welche Bausteine
  * produktiv konfiguriert sind und welche im Demo-/Stub-Modus laufen.
  */
-export type StatusMode = "active" | "demo" | "stub" | "configured" | "warn";
+export type StatusMode = "active" | "demo" | "stub" | "configured" | "warn" | "off";
 
 export interface SystemStatusItem {
   key: string;
@@ -19,6 +19,55 @@ export interface SystemStatusItem {
 export interface SystemStatus {
   pilot: boolean; // true, solange nicht alles produktiv konfiguriert ist
   items: SystemStatusItem[];
+}
+
+/**
+ * Zeigt die aktuelle Mailversand-Stufe (MAILVERSAND), damit der Betreiber sie
+ * sieht, ohne danach suchen zu müssen – gerade in den beiden nicht-normalen
+ * Stufen ist das sicherheitsrelevant: Wer glaubt, eine Mail sei rausgegangen,
+ * obwohl sie umgeleitet oder gar nicht verschickt wurde, verpasst eine echte
+ * Nachforderung an einen Kunden.
+ */
+function mailversandStatus(
+  stufe: "kunden" | "nur_intern" | "aus",
+  platformAdminEmail: string | undefined
+): SystemStatusItem {
+  if (stufe === "kunden") {
+    return {
+      key: "mailversand",
+      label: "Mailversand",
+      value: "An Kunden (Normalbetrieb)",
+      mode: "active",
+    };
+  }
+  if (stufe === "aus") {
+    return {
+      key: "mailversand",
+      label: "Mailversand",
+      value: "Ausgeschaltet",
+      mode: "off",
+      hint: "Es geht keine Mail hinaus – auch keine internen. sendEmail() wirft einen Fehler.",
+    };
+  }
+  // "nur_intern": ohne Betreiberadresse verhält sich diese Stufe fail-closed
+  // wie "aus" (siehe src/lib/email/resend.ts) – das muss die Anzeige zeigen,
+  // sonst wirkt die Stufe hier faelschlich funktionsfaehig.
+  if (!platformAdminEmail) {
+    return {
+      key: "mailversand",
+      label: "Mailversand",
+      value: "Nur an mich (aber PLATFORM_ADMIN_EMAIL fehlt → faktisch aus)",
+      mode: "off",
+      hint: "MAILVERSAND=nur_intern ohne PLATFORM_ADMIN_EMAIL sendet nichts, auch keine internen Mails.",
+    };
+  }
+  return {
+    key: "mailversand",
+    label: "Mailversand",
+    value: `Nur an mich (Testbetrieb → ${platformAdminEmail})`,
+    mode: "warn",
+    hint: "Testbetrieb: Jede Mail – auch an Kunden adressierte – geht an die Betreiberadresse statt an die echte Person.",
+  };
 }
 
 export async function getSystemStatus(organizationId: string): Promise<SystemStatus> {
@@ -75,6 +124,7 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
       value: isConfigured(p) ? "konfiguriert" : "Stub (ManualExport)",
       mode: (isConfigured(p) ? "configured" : "stub") as StatusMode,
     })),
+    mailversandStatus(env.MAILVERSAND, env.PLATFORM_ADMIN_EMAIL),
   ];
 
   const pilot =
@@ -82,7 +132,8 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
     env.STORAGE_PROVIDER === "local" ||
     env.AI_PROVIDER === "mock" ||
     !(env.VIRUS_SCANNER === "clamav" && env.CLAMAV_HOST) ||
-    !(["europace", "finlink", "ehyp_home"] as Platform[]).every(isConfigured);
+    !(["europace", "finlink", "ehyp_home"] as Platform[]).every(isConfigured) ||
+    env.MAILVERSAND !== "kunden";
 
   return { pilot, items };
 }

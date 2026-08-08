@@ -5,15 +5,12 @@ import {
   type ExistingDocument,
   type ResolvedChecklistItem,
 } from "@/lib/checklists/engine";
+import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
 import { computeReadiness, type ReadinessResult } from "@/lib/documents/readiness";
 import { bankRequirementItems, resolveBankRequirements } from "@/lib/rules/bank-requirements";
 import { AIService } from "@/lib/ai/service";
 import type { CanonicalCase } from "@/lib/domain/canonical";
-import type {
-  DocumentType,
-  PropertyType,
-  UsageType,
-} from "@/lib/domain/enums";
+import type { DocumentType } from "@/lib/domain/enums";
 import type { ExtractedField, PlausibilityCheck } from "@/lib/domain/ai-schemas";
 
 const ai = new AIService();
@@ -73,18 +70,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
   }));
 
   const checklist = buildChecklistForCase(
-    {
-      financingType: caseRow.financingType ?? undefined,
-      employmentType: caseRow.primaryEmploymentType ?? undefined,
-      propertyType: (caseRow.property?.objektart as PropertyType) ?? undefined,
-      usage: (caseRow.property?.nutzung as UsageType) ?? undefined,
-      kapitalanlage: caseRow.kapitalanlage,
-      applicantCount: caseRow.applicants.length,
-      applicantIds: caseRow.applicants
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((a) => a.id),
-    },
+    checklistEingabeFuerFall(caseRow),
     existing,
     extraItems
   );

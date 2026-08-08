@@ -76,13 +76,26 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
       to,
       subject: message!.subject ?? "Ihre Baufinanzierung – benötigte Unterlagen",
       text: message!.body,
+      empfaenger: "kunde",
     });
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);
     // Reservierung zurücknehmen, damit ein erneuter Versuch möglich bleibt.
-    await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false } });
-    return { ok: false, error: "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen." };
+    // sentAt gehoert dazu, auch wenn es an dieser Stelle noch nie gesetzt wurde -
+    // sonst bliebe im Fehlerfall ein inkonsistenter Zwischenzustand denkbar.
+    await prisma.generatedMessage.updateMany({ where: { id: messageId }, data: { sent: false, sentAt: null } });
+    const ausgeschaltet = e instanceof Error && e.message.includes("Mailversand ist derzeit ausgeschaltet");
+    return {
+      ok: false,
+      error: ausgeschaltet
+        ? "Der Mailversand ist derzeit ausgeschaltet. Bitte den Text kopieren und manuell senden."
+        : "Die E-Mail konnte nicht versendet werden. Bitte später erneut versuchen.",
+    };
   }
+
+  // Sendezeitpunkt festhalten - erst NACH erfolgreichem Versand. `createdAt`
+  // ist nur der Entwurfszeitpunkt und taugt nicht als Sendedatum.
+  await prisma.generatedMessage.update({ where: { id: messageId }, data: { sentAt: new Date() } });
 
   await audit({
     organizationId: ctx.organizationId,
