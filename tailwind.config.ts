@@ -17,6 +17,8 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+        // Nur fuer Fallnummern, Reifegrad, Seitentitel und Registerbeschriftungen.
+        display: ["var(--font-archivo)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         canvas: "hsl(var(--canvas))",

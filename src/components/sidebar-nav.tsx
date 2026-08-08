@@ -65,13 +65,11 @@ export function SidebarNav({
   const pathname = usePathname();
   const gruppen = navGruppen(platformAdmin);
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto p-3">
+    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
       {gruppen.map((g) => (
         <div key={g.label}>
-          <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            {g.label}
-          </div>
-          <div className="space-y-0.5">
+          <div className="eyebrow px-3 pb-2 text-[0.625rem]">{g.label}</div>
+          <div className="space-y-px">
             {g.items.map((it) => {
               const active = pathname === it.href || (it.href !== "/dashboard" && pathname.startsWith(it.href));
               return (
@@ -79,14 +77,20 @@ export function SidebarNav({
                   key={it.href}
                   href={it.href}
                   onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    // Der aktive Eintrag ist der herausgezogene Registerreiter:
+                    // eine Marke am linken Rand, kein eingefaerbter Kasten. Die
+                    // Marke traegt das Markentuerkis – dieselbe Farbe, die in
+                    // der App ueberall "hier passiert gerade etwas" bedeutet.
+                    "relative flex items-center gap-3 rounded-md py-2 pl-4 pr-3 text-sm transition-colors",
+                    "before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:transition-colors",
                     active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      ? "bg-accent font-semibold text-foreground before:bg-ai"
+                      : "font-medium text-muted-foreground before:bg-transparent hover:bg-accent/60 hover:text-foreground"
                   )}
                 >
-                  <it.icon className="h-4 w-4" />
+                  <it.icon className={cn("h-4 w-4 shrink-0", active ? "text-ai" : "text-muted-foreground")} />
                   {it.label}
                 </Link>
               );

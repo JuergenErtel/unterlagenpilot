@@ -13,3 +13,6 @@ next-env.d.ts
 /uploads
 .vercel
 .env.prod-check
+
+# Screenshots aus der Gestaltungsarbeit (Playwright-MCP)
+.playwright-mcp/

@@ -149,6 +149,10 @@ export default async function PublicUploadPage({
           angenommen={fortschritt.erledigt}
           eingereicht={fortschritt.eingereicht}
           gesamt={fortschritt.gesamt}
+          segmente={fortschritt.positionen.map((p) => ({
+            zustand: p.zustand,
+            name: p.name,
+          }))}
         />
 
         <Card>

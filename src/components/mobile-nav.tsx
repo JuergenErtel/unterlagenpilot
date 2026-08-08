@@ -80,7 +80,7 @@ export function MobileNav({
               </div>
             </div>
             {context.isDemo ? (
-              <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning-foreground">
+              <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning">
                 Demo-Zugang (ohne Login).
               </div>
             ) : (

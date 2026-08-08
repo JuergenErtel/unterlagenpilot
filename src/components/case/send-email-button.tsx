@@ -42,7 +42,7 @@ export function SendEmailButton({
 
   if (sent) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success-foreground">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success">
         <Check className="h-3.5 w-3.5" /> {result?.message ?? "Versendet"}
       </span>
     );

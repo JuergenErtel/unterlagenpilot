@@ -229,9 +229,9 @@ export function WohnflaecheEditor({ caseId }: { caseId: string }) {
                           <span
                             className={`rounded px-1.5 py-0.5 text-xs ${
                               konf >= 0.8
-                                ? "bg-success/15 text-success-foreground"
+                                ? "bg-success/15 text-success"
                                 : konf >= 0.6
-                                  ? "bg-warning/15 text-warning-foreground"
+                                  ? "bg-warning/15 text-warning"
                                   : "bg-destructive/15 text-destructive"
                             }`}
                           >

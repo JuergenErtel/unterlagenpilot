@@ -30,26 +30,30 @@ export function AppShell({
   return (
     <div className="flex min-h-screen bg-canvas">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
-        <Link href="/dashboard" className="flex h-16 items-center border-b px-5">
-          <Logo className="h-8 w-auto" />
+        <Link href="/dashboard" className="flex h-14 shrink-0 items-center border-b px-5">
+          <Logo className="h-7 w-auto" />
         </Link>
 
         <SidebarNav platformAdmin={context.platformAdmin} />
 
-        <div className="space-y-2 border-t p-3">
-          <div className="flex items-center gap-3 rounded-md px-2 py-1.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+        <div className="shrink-0 space-y-2 border-t p-3">
+          <div className="flex items-center gap-3 px-2 py-1.5">
+            {/* Kein rundes Profilbild: ein eckiges Namensschild passt zur Akte
+                und unterscheidet sich von den runden Statusmarken. */}
+            <div className="display flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary text-[0.6875rem] tracking-normal text-primary-foreground">
               {initials}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{context.userName}</div>
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="truncate text-[0.8125rem] font-medium leading-tight">
+                {context.userName}
+              </div>
+              <div className="truncate text-xs leading-tight text-muted-foreground">
                 {roleLabel} · {context.organizationName}
               </div>
             </div>
           </div>
           {context.isDemo ? (
-            <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning-foreground">
+            <div className="rounded-md bg-warning/10 px-2 py-1 text-[10px] font-medium text-warning">
               Demo-Zugang (ohne Login). Für echte Daten AUTH_MODE=session.
             </div>
           ) : (
@@ -66,19 +70,26 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-2 border-b bg-card/80 px-4 backdrop-blur sm:px-6">
-          <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+        {/*
+          Die Kopfzeile traegt bewusst fast nichts: Sie steht auf jedem
+          Bildschirm und darf deshalb nichts wiederholen, was die Seite selbst
+          schon sagt. Uebrig bleibt der eine Satz, der fuer diese App
+          konstitutiv ist – dass nichts ohne Freigabe das Haus verlaesst.
+        */}
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-2 border-b bg-canvas/85 px-4 backdrop-blur sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <MobileNav context={context} />
-            <span className="hidden sm:inline">KI-Sachbearbeiter für Baufinanzierung</span>
-            <Logo className="h-6 w-auto sm:hidden" />
+            <Logo className="h-6 w-auto md:hidden" />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
+          <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
             <span className="hidden sm:inline">Manuelle Freigabe vor jeder Übertragung · DSGVO/EU</span>
             <span className="sm:hidden">DSGVO/EU</span>
           </div>
         </header>
-        <main className="flex-1 animate-fade-in p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[92rem] flex-1 animate-fade-in p-4 sm:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

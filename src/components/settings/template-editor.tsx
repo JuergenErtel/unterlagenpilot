@@ -69,7 +69,7 @@ export function TemplateEditor({
             <Save className="h-4 w-4" /> {pending ? "Speichern …" : "Speichern"}
           </Button>
           {state.ok ? (
-            <span className="flex items-center gap-1 text-xs text-success-foreground">
+            <span className="flex items-center gap-1 text-xs text-success">
               <CheckCircle2 className="h-3.5 w-3.5" /> Gespeichert
             </span>
           ) : null}

@@ -54,7 +54,7 @@ export function LageplanTool({ caseId, initialAddress }: { caseId: string; initi
             <MapPin className="h-4 w-4" />{pending ? "Suche …" : "Lageplan erzeugen"}
           </Button>
         </div>
-        {state.error ? <p className="mt-2 text-sm text-warning-foreground">{state.error}</p> : null}
+        {state.error ? <p className="mt-2 text-sm text-warning">{state.error}</p> : null}
       </form>
 
       {state.geoportalUrl ? (

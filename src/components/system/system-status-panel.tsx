@@ -30,7 +30,7 @@ export function SystemStatusPanel({ status }: { status: SystemStatus }) {
                 <div className="font-medium">{item.label}</div>
                 <div className="text-xs text-muted-foreground">
                   {item.value}
-                  {item.hint ? <span className="block text-warning-foreground">{item.hint}</span> : null}
+                  {item.hint ? <span className="block text-warning">{item.hint}</span> : null}
                 </div>
               </div>
               <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -42,30 +42,44 @@ export function SystemStatusPanel({ status }: { status: SystemStatus }) {
   );
 }
 
+/**
+ * Der Hinweis auf den Pilotbetrieb steht auf dem Bildschirm, den der Vermittler
+ * jeden Morgen zuerst sieht. Als fuenfzeilige Liste war er dort eine Wand vor
+ * der eigentlichen Arbeit – und wurde nach dem dritten Tag ohnehin ueberlesen.
+ *
+ * Deshalb: eine Zeile mit der einen Aussage, die im Alltag zaehlt, und die
+ * Einzelheiten aufklappbar dahinter. Es geht nichts verloren, es steht nur
+ * nichts mehr im Weg.
+ */
 export function PilotBanner({ pilot }: { pilot: boolean }) {
   if (!pilot) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/[0.06] p-3 text-sm">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-        <span>Alle Kernbausteine sind produktiv konfiguriert.</span>
-      </div>
+        Alle Kernbausteine sind produktiv konfiguriert.
+      </p>
     );
   }
   return (
-    <div className="space-y-2 rounded-lg border border-ai/30 bg-ai/[0.05] p-4 text-sm">
-      <div className="flex items-center gap-2 font-medium text-ai">
-        <FlaskConical className="h-4 w-4 shrink-0" /> Pilotbetrieb
-      </div>
-      <ul className="ml-1 space-y-1 text-muted-foreground">
-        <li>• Plattform-APIs (Europace, FinLink, eHyp home) sind vorbereitet, aber noch nicht produktiv angebunden.</li>
-        <li>• <strong>ManualExport</strong> (PDF, Kopiermaske, JSON, CSV) ist der aktive Übergabeweg.</li>
-        <li>• KI/OCR laufen im Demo-/Mock-Modus oder mit konfiguriertem Anbieter.</li>
-        <li>• Jede Übertragung erfolgt ausschließlich manuell nach Freigabe.</li>
-        <li className="flex items-start gap-1 text-warning-foreground">
+    <details className="group rounded-lg border border-ai/25 bg-ai/[0.04] px-4 py-2.5">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm [&::-webkit-details-marker]:hidden">
+        <FlaskConical className="h-4 w-4 shrink-0 text-ai" />
+        <span className="font-medium text-ai">Pilotbetrieb</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+          Übergabe an die Banken läuft manuell nach Freigabe.
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground group-open:hidden">Einzelheiten</span>
+        <span className="hidden shrink-0 text-xs text-muted-foreground group-open:inline">Zuklappen</span>
+      </summary>
+      <ul className="mt-3 space-y-1.5 border-t pt-3 text-sm text-muted-foreground">
+        <li>Plattform-APIs (Europace, FinLink, eHyp home) sind vorbereitet, aber noch nicht produktiv angebunden.</li>
+        <li><strong className="font-medium text-foreground">ManualExport</strong> (PDF, Kopiermaske, JSON, CSV) ist der aktive Übergabeweg.</li>
+        <li>KI/OCR laufen im Demo-/Mock-Modus oder mit konfiguriertem Anbieter.</li>
+        <li className="flex items-start gap-1.5 text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Echte Kundendaten nur nutzen, wenn Auth, Storage, Upload-Sicherheit und Datenschutz korrekt konfiguriert sind.
         </li>
       </ul>
-    </div>
+    </details>
   );
 }

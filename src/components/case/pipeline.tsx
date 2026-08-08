@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { TONE, type Tone } from "@/lib/ui/tone";
+import type { Tone } from "@/lib/ui/tone";
 
 export interface PipelineStage {
   key: string;
@@ -8,33 +8,57 @@ export interface PipelineStage {
   tone?: Tone;
 }
 
-/** Horizontale Mini-Pipeline: Importiert → Upload offen → … → Exportbereit. */
+/**
+ * Der Weg, den eine Akte nimmt: Importiert → Upload offen → … → Exportbereit.
+ *
+ * Sechs Kaesten nebeneinander waren die falsche Form – sie zeigen sechs
+ * gleichrangige Dinge, obwohl es sich um EINE Strecke handelt. Jetzt sind es
+ * Stationen auf einer durchgehenden Linie: die Zahl darueber, die Station
+ * darunter, und ein Punkt auf der Linie, der gefuellt ist, solange dort etwas
+ * liegt. Wo nichts liegt, bleibt die Station blass und tritt zurueck.
+ */
 export function Pipeline({ stages }: { stages: PipelineStage[] }) {
   return (
-    <div className="flex items-stretch gap-1 overflow-x-auto pb-1">
+    <ol className="flex items-start gap-0 overflow-x-auto">
       {stages.map((s, i) => {
-        const tone = s.tone ?? (s.count > 0 ? "ai" : "neutral");
+        const belegt = s.count > 0;
         return (
-          <div key={s.key} className="flex min-w-[8.5rem] flex-1 items-center">
-            <div className="flex-1 rounded-lg border bg-card px-3 py-2.5 shadow-soft">
-              <div className="flex items-center gap-2">
-                <span className={cn("font-mono text-lg font-semibold tabular", count(tone, s.count))}>{s.count}</span>
-              </div>
-              <div className="mt-0.5 text-[11px] font-medium leading-tight text-muted-foreground">{s.label}</div>
-              <div className={cn("mt-2 h-1 rounded-full", TONE[tone].bar, s.count === 0 && "opacity-40")} />
+          <li key={s.key} className="flex min-w-[7.5rem] flex-1 flex-col">
+            <p
+              className={cn(
+                "display tabular px-1 text-center text-xl leading-none",
+                belegt ? "text-foreground" : "text-muted-foreground/40"
+              )}
+            >
+              {s.count}
+            </p>
+
+            {/* Die Strecke selbst: Linie mit Station. Der erste und letzte
+                Halbstrich fehlen, damit die Linie nicht ins Leere laeuft. */}
+            <div className="mt-2.5 flex items-center" aria-hidden>
+              <span className={cn("h-px flex-1", i === 0 ? "bg-transparent" : "bg-border")} />
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  belegt ? "bg-ai" : "border border-border bg-card"
+                )}
+              />
+              <span
+                className={cn("h-px flex-1", i === stages.length - 1 ? "bg-transparent" : "bg-border")}
+              />
             </div>
-            {i < stages.length - 1 && (
-              <div className="px-1 text-muted-foreground/50" aria-hidden>
-                ›
-              </div>
-            )}
-          </div>
+
+            <p
+              className={cn(
+                "mt-2.5 px-1 text-center text-[11px] leading-tight",
+                belegt ? "font-medium text-foreground" : "text-muted-foreground"
+              )}
+            >
+              {s.label}
+            </p>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
-}
-
-function count(tone: Tone, n: number): string {
-  return n === 0 ? "text-muted-foreground/50" : TONE[tone].text;
 }

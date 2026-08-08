@@ -1,7 +1,24 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { Archivo } from "next/font/google";
 import "./globals.css";
+
+/**
+ * Displayschrift fuer die wenigen grossen Momente (Fallnummer, Reifegrad,
+ * Seitentitel, Registerbeschriftungen). Archivo ist eine Grotesk mit
+ * institutionellem, leicht technischem Charakter – sie liest wie eine
+ * Beschilderung, nicht wie eine Werbeseite. Bewusst NICHT fuer Fliesstext:
+ * dort bleibt Geist, das auf Bildschirmlaenge ruhiger laeuft.
+ *
+ * Wird von next/font selbst gehostet – die Content-Security-Policy erlaubt
+ * keine fremden Schriftquellen.
+ */
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://baufidesk.de"),
@@ -29,7 +46,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de" translate="no" className={`notranslate ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html
+      lang="de"
+      translate="no"
+      className={`notranslate ${GeistSans.variable} ${GeistMono.variable} ${archivo.variable}`}
+    >
       <body className="min-h-screen bg-canvas font-sans antialiased">{children}</body>
     </html>
   );

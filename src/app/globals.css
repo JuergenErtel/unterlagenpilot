@@ -2,71 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * BaufiDesk – Gestaltung "Die Akte"
+ *
+ * Leitbild: Dies ist kein Dashboard, sondern der Schreibtisch, an dem eine
+ * Baufinanzierungsakte einreichungsfertig gemacht wird.
+ *
+ * Die Palette ist nicht erfunden, sondern aus der Wortmarke abgeleitet – sonst
+ * hätte die App zwei Akzente, die nichts miteinander zu tun haben. Das Logo
+ * trägt genau zwei Farben:
+ *
+ *   Tinte   #00183c – der dominante Ton des Zeichens. Wird die Primärfarbe:
+ *           Schrift, Struktur und die EINE Hauptaktion je Seite. Ein
+ *           tintenblauer Knopf, kein Royalblau, kein Schwarz.
+ *   Türkis  #008478 – der eine lebendige Ton. Streng rationiert: Fokusring,
+ *           aktives Register und alles, was die KI beigetragen hat. Türkis
+ *           heisst in dieser App "von der Maschine", nie "gut" oder "fertig".
+ *
+ * Papier ist ein minimal kühles Grau statt Creme – Konzeptpapier, nicht
+ * Büttenkarton. Auf ihm liegt das Dokument (die Karte) als reines Weiss.
+ *
+ * Statusfarben sind bewusst entsättigt: Sie sollen wie Marken auf Papier lesen,
+ * nicht wie eine Ampel. Dadurch bekommt das eine verbleibende Rot wieder
+ * Gewicht – es steht nur dort, wo wirklich etwas blockiert. Grün steht bewusst
+ * weit weg vom Markentürkis, damit "angenommen" und "von der KI" im selben
+ * Instrument nie verwechselt werden.
+ */
+
 @layer base {
   :root {
-    /* Helles, ruhiges FinTech – kühles Near-White als Leinwand, Weiß als Fläche */
-    --canvas: 214 38% 97%;
-    --background: 214 38% 97%;
-    --foreground: 222 38% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 38% 11%;
+    /* Flächen */
+    --canvas: 210 16% 96.5%;         /* Konzeptpapier: matt, minimal kühl */
+    --background: 210 16% 96.5%;
+    --foreground: 215 45% 12%;       /* Archivtinte, aus der Wortmarke */
+    --card: 0 0% 100%;               /* Das Dokument selbst: reines Weiss */
+    --card-foreground: 215 45% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 38% 11%;
+    --popover-foreground: 215 45% 12%;
 
-    /* Marke / Primäraktion: tiefes, vertrauenswürdiges Royalblau */
-    --primary: 224 71% 45%;
-    --primary-foreground: 210 40% 99%;
+    /* Marke / Primaeraktion: die Tinte der Wortmarke */
+    --primary: 214 76% 14%;
+    --primary-foreground: 210 30% 98%;
 
-    --secondary: 214 32% 95%;
-    --secondary-foreground: 222 38% 16%;
-    --muted: 214 32% 95%;
-    --muted-foreground: 215 16% 44%;
-    --accent: 214 40% 95%;
-    --accent-foreground: 222 38% 16%;
+    --secondary: 210 14% 93%;
+    --secondary-foreground: 215 40% 16%;
+    --muted: 210 14% 93.5%;
+    --muted-foreground: 214 12% 42%;
+    --accent: 210 16% 92%;
+    --accent-foreground: 215 40% 16%;
 
-    /* Semantische Statusfarben (Farblogik laut Brief) */
-    --success: 142 58% 38%;          /* Grün: bereit / geprüft */
-    --success-foreground: 140 60% 97%;
-    --warning: 36 94% 44%;           /* Gelb: Prüfung erforderlich */
-    --warning-foreground: 40 90% 97%;
-    --destructive: 0 72% 50%;        /* Rot: Blocker / fehlt */
-    --destructive-foreground: 0 86% 98%;
-    --ai: 213 94% 58%;               /* Blau: KI / automatisiert */
-    --ai-foreground: 210 50% 99%;
+    /* Semantische Statusfarben – entsaettigt, "Marke auf Papier" */
+    --success: 146 42% 26%;          /* Haken in Tinte: geprueft, freigegeben */
+    --success-foreground: 146 40% 97%;
+    --warning: 32 62% 38%;           /* Ocker: pruefen */
+    --warning-foreground: 40 60% 98%;
+    --destructive: 358 52% 42%;      /* Gedaempftes Rot: blockiert, fehlt */
+    --destructive-foreground: 0 60% 98%;
+    --ai: 176 100% 24%;              /* Markentürkis: von der Maschine beigetragen */
+    --ai-foreground: 176 40% 98%;
 
-    --border: 214 28% 89%;
-    --input: 214 26% 88%;
-    --ring: 224 71% 45%;
-    --radius: 0.7rem;
+    /* Struktur: Haarlinien statt Kaesten */
+    --border: 212 16% 87%;
+    --input: 212 16% 83%;
+    --ring: 176 100% 24%;            /* Fokus traegt das Tuerkis – nie uebersehbar */
+
+    /* Praezisionsgeraet, kein weiches SaaS */
+    --radius: 0.375rem;
   }
 
   .dark {
-    --canvas: 222 40% 8%;
-    --background: 222 40% 8%;
-    --foreground: 210 40% 98%;
-    --card: 222 38% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 38% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 62%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 18%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 18%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 20%;
-    --accent-foreground: 210 40% 98%;
-    --success: 142 55% 45%;
-    --success-foreground: 140 60% 97%;
-    --warning: 36 92% 55%;
-    --warning-foreground: 222 47% 11%;
-    --destructive: 0 63% 52%;
-    --destructive-foreground: 0 86% 98%;
-    --ai: 213 94% 64%;
-    --ai-foreground: 222 47% 11%;
-    --border: 217 33% 22%;
-    --input: 217 33% 22%;
-    --ring: 217 91% 62%;
+    --canvas: 215 30% 8%;
+    --background: 215 30% 8%;
+    --foreground: 210 20% 94%;
+    --card: 215 26% 11.5%;
+    --card-foreground: 210 20% 94%;
+    --popover: 215 26% 11.5%;
+    --popover-foreground: 210 20% 94%;
+
+    /* Im Dunkeln kann die Tinte nicht die Aktion tragen – dort uebernimmt das
+       Tuerkis, aufgehellt bis es auf dunklem Grund traegt. */
+    --primary: 176 58% 62%;
+    --primary-foreground: 215 40% 9%;
+
+    --secondary: 215 20% 17%;
+    --secondary-foreground: 210 20% 94%;
+    --muted: 215 20% 17%;
+    --muted-foreground: 212 12% 64%;
+    --accent: 215 20% 19%;
+    --accent-foreground: 210 20% 94%;
+
+    --success: 146 40% 46%;
+    --success-foreground: 146 40% 97%;
+    --warning: 34 66% 56%;
+    --warning-foreground: 215 40% 9%;
+    --destructive: 358 60% 60%;
+    --destructive-foreground: 0 60% 98%;
+    --ai: 176 58% 52%;
+    --ai-foreground: 215 40% 9%;
+
+    --border: 215 16% 21%;
+    --input: 215 16% 24%;
+    --ring: 176 58% 62%;
   }
 }
 
@@ -78,17 +114,95 @@
     @apply bg-canvas text-foreground;
     font-feature-settings: "cv01", "ss01", "rlig" 1, "calt" 1;
   }
-  /* Kennzahlen (Scores, Prozente, €, Fall-IDs) tabellarisch & monospaced */
+
+  /*
+   * Zahlen stehen untereinander. In einer Akte werden Betraege, Datumsangaben
+   * und Fallnummern verglichen, nicht gelesen – proportionale Ziffern machen
+   * das unnoetig schwer.
+   */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
-  /* Dezenter Karten-Schatten – ruhig, hochwertig */
+  /*
+   * Erhebung durch Kante, nicht durch Schlagschatten. Ein Blatt auf einem
+   * Schreibtisch wirft einen sehr kurzen Schatten; alles darueber hinaus
+   * sieht nach Benutzeroberflaeche aus, nicht nach Dokument.
+   */
   .card-elevated {
     box-shadow:
-      0 1px 2px -1px hsl(222 38% 11% / 0.08),
-      0 2px 8px -2px hsl(222 38% 11% / 0.06);
+      0 0 0 1px hsl(var(--border)),
+      0 1px 1px hsl(215 45% 12% / 0.04),
+      0 4px 12px -6px hsl(215 45% 12% / 0.10);
+  }
+  .dark .card-elevated {
+    box-shadow:
+      0 0 0 1px hsl(var(--border)),
+      0 1px 2px hsl(0 0% 0% / 0.4);
+  }
+
+  /*
+   * Schraffur fuer "liegt vor, aber noch nicht gewertet".
+   *
+   * Eine abgeschwaechte Version der Fertig-Farbe waere die falsche Aussage –
+   * ungeprueft ist nicht "ein bisschen fertig", sondern ein anderer Zustand.
+   * Deshalb eine eigene Marke: diagonale Schraffur in Markentuerkis, wie ein
+   * angelegter, aber noch nicht abgezeichneter Vorgang.
+   */
+  .fach-schraffur {
+    background-color: hsl(var(--ai) / 0.14);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      hsl(var(--ai) / 0.85) 0 2px,
+      transparent 2px 5px
+    );
+  }
+
+  /*
+   * Eingabefeld – eine Zeile auf dem Formular, kein Kasten.
+   *
+   * Warum flach und weiss statt grau gefuellt: Die Karte IST das Blatt; ein
+   * graues Feld darauf wirkt wie ein Loch. Die Linie unten traegt das Feld,
+   * die Umrandung haelt es nur zusammen.
+   *
+   * Der Fokus ist der einzige Ort, an dem das Markentuerkis in einem Formular
+   * auftaucht – dafuer unuebersehbar, ohne den alten Abstandsring, der die
+   * Feldreihe auseinanderschiebt.
+   */
+  .feld {
+    @apply flex w-full rounded-md border border-input bg-card px-3 text-sm text-foreground
+      placeholder:text-muted-foreground
+      focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/20
+      disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-70;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  /*
+   * Eyebrow: die kleine Zeile ueber einer Ueberschrift, die sagt, WO man ist.
+   * Gesperrte Versalien in der Displayschrift – wie die Beschriftung eines
+   * Aktenregisters.
+   */
+  .eyebrow {
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /*
+   * Displayschrift fuer die wenigen grossen Momente: Fallnummer, Reifegrad,
+   * Seitentitel. Bewusst eng gesetzt – eine Grotesk in engem Satz liest wie
+   * eine Instrumententafel, nicht wie eine Werbeseite.
+   */
+  .display {
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    font-weight: 600;
   }
 }
