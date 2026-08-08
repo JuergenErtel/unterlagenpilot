@@ -103,4 +103,40 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     expect(f.positionen[0]!.zustand).toBe("angenommen");
     expect(f.positionen[0]!.grund).toBeUndefined();
   });
+
+  it("meldet eine Position mit mehreren verlangten Dokumenten erst als teilweise, nicht als angenommen", () => {
+    // z.B. Personalausweis bei zwei Antragstellern (perApplicant): ein
+    // akzeptiertes Dokument darf die Position nicht faelschlich abschliessen,
+    // solange der zweite Antragsteller noch nichts eingereicht hat.
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2 })],
+      dokumente: [{ documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null }],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "teilweise", verlangt: 2, akzeptiert: 1 });
+    expect(f.erledigt).toBe(0);
+    expect(f.prozent).toBe(0);
+  });
+
+  it("meldet eine Position mit mehreren verlangten Dokumenten als angenommen, sobald alle da sind", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis", { effectiveRequiredCount: 2 })],
+      dokumente: [
+        { documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null },
+        { documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null },
+      ],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", verlangt: 2, akzeptiert: 2 });
+    expect(f.erledigt).toBe(1);
+    expect(f.prozent).toBe(100);
+  });
+
+  it("verhaelt sich bei effectiveRequiredCount 1 wie bisher (Regressionsschutz)", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("personalausweis")],
+      dokumente: [{ documentType: "personalausweis", reviewStatus: "akzeptiert", reviewNote: null }],
+    });
+    expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", verlangt: 1, akzeptiert: 1 });
+    expect(f.erledigt).toBe(1);
+    expect(f.prozent).toBe(100);
+  });
 });

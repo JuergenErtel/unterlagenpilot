@@ -167,11 +167,17 @@ export default async function PublicUploadPage({
                     <div className="text-sm font-medium">{p.name}</div>
                     <div className="text-xs text-muted-foreground">{p.beschreibung}</div>
                   </div>
-                  <PositionZustand zustand={p.zustand} />
+                  <PositionZustand zustand={p.zustand} verlangt={p.verlangt} akzeptiert={p.akzeptiert} />
                 </div>
                 {p.zustand === "abgelehnt" && p.grund && (
                   <p className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
                     {p.grund}
+                  </p>
+                )}
+                {p.zustand === "teilweise" && (
+                  <p className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-[hsl(var(--warning))]">
+                    Bitte reichen Sie die restlichen {p.verlangt - p.akzeptiert} Unterlage
+                    {p.verlangt - p.akzeptiert === 1 ? "" : "n"} noch nach.
                   </p>
                 )}
               </div>
@@ -253,10 +259,26 @@ export default async function PublicUploadPage({
 }
 
 /** Zustandspunkt + Beschriftung je Checklisten-Position, in der Sprache des Kunden. */
-function PositionZustand({ zustand }: { zustand: KundenPosition["zustand"] }) {
+function PositionZustand({
+  zustand,
+  verlangt,
+  akzeptiert,
+}: {
+  zustand: KundenPosition["zustand"];
+  verlangt: number;
+  akzeptiert: number;
+}) {
   const config: Record<KundenPosition["zustand"], { punkt: string; text: string; farbe: string }> = {
     offen: { punkt: "bg-muted-foreground/40", text: "Noch offen", farbe: "text-muted-foreground" },
     eingegangen: { punkt: "bg-ai", text: "Bei uns eingegangen, wird geprüft", farbe: "text-ai" },
+    // Nicht alle verlangten Dokumente sind schon da (z. B. erst ein
+    // Antragsteller von zweien) – ehrlicher als "offen" (der Kunde hat ja
+    // schon etwas geschafft) und ehrlicher als "angenommen" (es fehlt noch was).
+    teilweise: {
+      punkt: "bg-warning",
+      text: `${akzeptiert} von ${verlangt} angenommen`,
+      farbe: "text-[hsl(var(--warning))]",
+    },
     angenommen: { punkt: "bg-success", text: "Angenommen", farbe: "text-success" },
     abgelehnt: { punkt: "bg-destructive", text: "Bitte erneut hochladen", farbe: "text-destructive" },
   };

@@ -11,9 +11,16 @@ export interface KundenPosition {
   name: string;
   beschreibung: string;
   beispiel?: string;
-  zustand: "offen" | "eingegangen" | "angenommen" | "abgelehnt";
+  zustand: "offen" | "eingegangen" | "teilweise" | "angenommen" | "abgelehnt";
   /** Nur bei Ablehnung, und nur wenn der Vermittler einen Grund hinterlegt hat. */
   grund?: string;
+  /**
+   * Wie viele Dokumente diese Position insgesamt braucht (z. B. 2 bei einer
+   * `perApplicant`-Position mit zwei Antragstellern, oder 2 Jahre EÜR).
+   */
+  verlangt: number;
+  /** Wie viele davon bereits angenommen wurden. */
+  akzeptiert: number;
 }
 
 export interface KundenFortschritt {
@@ -38,22 +45,32 @@ export function baueKundenfortschritt(input: {
   const positionen: KundenPosition[] = sichtbar.map((p) => {
     const passende = input.dokumente.filter((d) => d.documentType && d.documentType === p.documentType);
 
-    // Reihenfolge der Zustaende: eine Annahme schlaegt alles, danach die
-    // Ablehnung (der Kunde muss handeln), dann der blosse Eingang.
-    const angenommen = passende.find((d) => d.reviewStatus === "akzeptiert");
+    // Manche Positionen verlangen mehr als ein Dokument (z. B. `perApplicant`
+    // bei zwei Antragstellern, oder mehrere Jahre EÜR) – effectiveRequiredCount
+    // traegt das bereits aufgeloest. Ohne diesen Zaehler wuerde EIN akzeptiertes
+    // Dokument die Position faelschlich als komplett "angenommen" melden, obwohl
+    // z. B. der zweite Antragsteller noch gar nichts eingereicht hat.
+    const verlangt = Math.max(p.effectiveRequiredCount, 1);
+    const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert");
     const abgelehnt = passende.find((d) => d.reviewStatus === "abgelehnt");
     const eingegangen = passende.length > 0;
 
-    if (angenommen) {
-      return basis(p, "angenommen");
+    // Reihenfolge der Zustaende: eine vollstaendige Annahme schlaegt alles,
+    // danach eine teilweise Annahme (der Kunde hat bereits etwas geschafft),
+    // danach die Ablehnung (der Kunde muss handeln), dann der blosse Eingang.
+    if (angenommen.length >= verlangt) {
+      return basis(p, "angenommen", verlangt, angenommen.length);
+    }
+    if (angenommen.length > 0) {
+      return basis(p, "teilweise", verlangt, angenommen.length);
     }
     if (abgelehnt) {
-      return { ...basis(p, "abgelehnt"), grund: abgelehnt.reviewNote ?? undefined };
+      return { ...basis(p, "abgelehnt", verlangt, angenommen.length), grund: abgelehnt.reviewNote ?? undefined };
     }
     if (eingegangen) {
-      return basis(p, "eingegangen");
+      return basis(p, "eingegangen", verlangt, angenommen.length);
     }
-    return basis(p, "offen");
+    return basis(p, "offen", verlangt, angenommen.length);
   });
 
   const gesamt = positionen.length;
@@ -63,12 +80,19 @@ export function baueKundenfortschritt(input: {
   return { positionen, erledigt, gesamt, prozent };
 }
 
-function basis(p: ResolvedChecklistItem, zustand: KundenPosition["zustand"]): KundenPosition {
+function basis(
+  p: ResolvedChecklistItem,
+  zustand: KundenPosition["zustand"],
+  verlangt: number,
+  akzeptiert: number
+): KundenPosition {
   return {
     key: p.key,
     name: p.name,
     beschreibung: p.customerDescription,
     beispiel: p.example,
     zustand,
+    verlangt,
+    akzeptiert,
   };
 }
