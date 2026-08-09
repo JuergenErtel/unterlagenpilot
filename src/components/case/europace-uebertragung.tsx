@@ -131,8 +131,10 @@ export function EuropaceUebertragung({
             </p>
             {feldmeldungen.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-6 text-muted-foreground">
-                {feldmeldungen.map((f) => (
-                  <li key={f}>{f}</li>
+                {feldmeldungen.map((f, i) => (
+                  // Index als Teil des Schluessels: Der Meldungstext allein ist nicht
+                  // eindeutig, z. B. bei zwei gleichnamigen Dokumenten wie "Kontoauszug.pdf".
+                  <li key={`${i}-${f}`}>{f}</li>
                 ))}
               </ul>
             )}
