@@ -3,11 +3,12 @@ import type {
   CanonicalCase,
   CanonicalEmployment,
 } from "@/lib/domain/canonical";
-import type { EmploymentType, MaritalStatus, PropertyType } from "@/lib/domain/enums";
+import type { EmploymentType, FinancingType, MaritalStatus, PropertyType } from "@/lib/domain/enums";
 import type {
   Datenkontext,
   EuropaceAnschrift,
   EuropaceBeschaeftigung,
+  EuropaceFinanzierungsbedarf,
   EuropaceFinanzierungsobjekt,
   EuropaceHaushalt,
   EuropaceKunde,
@@ -145,14 +146,27 @@ function kunde(c: CanonicalCase, a: CanonicalApplicant): EuropaceKunde {
   };
 }
 
-/** Alle Antragsteller bilden einen Haushalt; Europace erlaubt hoechstens zwei Kunden. */
+/**
+ * Alle Antragsteller bilden einen Haushalt; Europace erlaubt hoechstens zwei
+ * Kunden. Eigenkapital ist eine Haushaltsgroesse, keine Eigenschaft eines
+ * Antragstellers – deshalb landet es hier statt bei `kunde()`, und ein
+ * Eigenkapital ohne Antragsteller erzeugt trotzdem einen Haushalt.
+ */
 function haushalte(c: CanonicalCase): EuropaceHaushalt[] | undefined {
-  if (c.applicants.length === 0) return undefined;
+  const eigenkapital = c.financing.eigenkapital;
+  if (c.applicants.length === 0 && eigenkapital == null) return undefined;
+
   const kunden = [...c.applicants]
     .sort((a, b) => a.position - b.position)
     .slice(0, 2)
     .map((a) => kunde(c, a));
-  return [{ kunden }];
+
+  const finanzielleSituation =
+    eigenkapital != null
+      ? { vermoegen: { summeBankUndSparguthaben: { guthaben: eigenkapital } } }
+      : undefined;
+
+  return [wegLassenWennLeer({ kunden: kunden.length ? kunden : undefined, finanzielleSituation })!];
 }
 
 /**
@@ -213,6 +227,54 @@ function finanzierungsobjekt(c: CanonicalCase): EuropaceFinanzierungsobjekt | un
   return immobilie ? { immobilie } : undefined;
 }
 
+/**
+ * "umschuldung" hat in Europace keinen eigenen Zweck – fachlich ist es dort
+ * eine Anschlussfinanzierung. Fehlt die Finanzierungsart, bleibt der Zweck leer,
+ * statt KAUF zu unterstellen.
+ */
+const FINANZIERUNGSZWECK: Record<FinancingType, string> = {
+  kauf: "KAUF",
+  neubau: "NEUBAU",
+  anschlussfinanzierung: "ANSCHLUSSFINANZIERUNG",
+  umschuldung: "ANSCHLUSSFINANZIERUNG",
+  modernisierung: "MODERNISIERUNG_UMBAU_ANBAU",
+  kapitalbeschaffung: "KAPITALBESCHAFFUNG",
+};
+
+/** Nur der Kauf kennt einen Kaufpreis samt Kaufnebenkosten. */
+const MIT_KAUFPREIS = new Set(["KAUF", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
+
+function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | undefined {
+  const f = c.financing;
+  const typ = f.finanzierungsart ? FINANZIERUNGSZWECK[f.finanzierungsart] : undefined;
+
+  const nebenkosten = wegLassenWennLeer({
+    maklergebuehr:
+      f.maklerprovisionProzent != null
+        ? { einheit: "PROZENT" as const, wert: f.maklerprovisionProzent }
+        : undefined,
+  });
+
+  const zweck =
+    typ === undefined
+      ? undefined
+      : {
+          "@type": typ,
+          ...(MIT_KAUFPREIS.has(typ) && f.kaufpreis != null ? { kaufpreis: f.kaufpreis } : {}),
+          ...(MIT_KAUFPREIS.has(typ) && nebenkosten ? { nebenkosten } : {}),
+        };
+
+  const bausteine =
+    f.darlehenswunsch != null
+      ? [{ "@type": "ANNUITAETENDARLEHEN", darlehensbetrag: f.darlehenswunsch }]
+      : undefined;
+
+  return wegLassenWennLeer({
+    finanzierungszweck: zweck,
+    finanzierungsbausteine: bausteine,
+  });
+}
+
 export function canonicalToKundenangaben(
   c: CanonicalCase,
   opts: { datenkontext: Datenkontext }
@@ -226,6 +288,7 @@ export function canonicalToKundenangaben(
     kundenangaben: {
       haushalte: haushalte(c),
       finanzierungsobjekt: finanzierungsobjekt(c),
+      finanzierungsbedarf: finanzierungsbedarf(c),
     },
   };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalToKundenangaben } from "@/lib/platforms/europace/kundenangaben-mapping";
 import type { CanonicalCase } from "@/lib/domain/canonical";
-import { PROPERTY_TYPES } from "@/lib/domain/enums";
+import { FINANCING_TYPES, PROPERTY_TYPES } from "@/lib/domain/enums";
 import { validateKundenangabenRequest } from "./helpers/europace-schema";
 
 /** Minimaler Fall; einzelne Tests ueberschreiben gezielt Felder. */
@@ -236,6 +236,92 @@ describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
             wohnflaeche: 142.5,
             baujahr: 1998,
             grundstuecksflaeche: 620,
+          },
+        }),
+        { datenkontext: "TEST_MODUS" }
+      );
+      expect(validateKundenangabenRequest(r).errors).toEqual([]);
+    }
+  );
+});
+
+describe("canonicalToKundenangaben – Finanzierungsbedarf", () => {
+  const kauffall = fall({
+    applicants: [{ position: 1, vorname: "Anna", nachname: "Muster" }],
+    financing: {
+      finanzierungsart: "kauf",
+      kaufpreis: 450_000,
+      nebenkosten: 40_000,
+      maklerprovisionProzent: 3.57,
+      eigenkapital: 90_000,
+      darlehenswunsch: 400_000,
+    },
+  });
+
+  it("mappt den Zweck als KAUF mit Kaufpreis", () => {
+    const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
+    const zweck = r.kundenangaben.finanzierungsbedarf!.finanzierungszweck!;
+    expect(zweck["@type"]).toBe("KAUF");
+    expect(zweck.kaufpreis).toBe(450_000);
+  });
+
+  it("mappt die Maklerprovision als Prozentwert", () => {
+    const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
+    expect(r.kundenangaben.finanzierungsbedarf!.finanzierungszweck!.nebenkosten).toEqual({
+      maklergebuehr: { einheit: "PROZENT", wert: 3.57 },
+    });
+  });
+
+  it("macht aus dem Darlehenswunsch ein Annuitaetendarlehen", () => {
+    const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
+    expect(r.kundenangaben.finanzierungsbedarf!.finanzierungsbausteine).toEqual([
+      { "@type": "ANNUITAETENDARLEHEN", darlehensbetrag: 400_000 },
+    ]);
+  });
+
+  it("legt das Eigenkapital als Bank- und Sparguthaben im Haushalt ab", () => {
+    const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
+    expect(r.kundenangaben.haushalte![0]!.finanzielleSituation).toEqual({
+      vermoegen: { summeBankUndSparguthaben: { guthaben: 90_000 } },
+    });
+  });
+
+  it("mappt die Anschlussfinanzierung auf ihren eigenen Zweck", () => {
+    const r = canonicalToKundenangaben(
+      fall({ financing: { finanzierungsart: "anschlussfinanzierung", darlehenswunsch: 210_000 } }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const zweck = r.kundenangaben.finanzierungsbedarf!.finanzierungszweck!;
+    expect(zweck["@type"]).toBe("ANSCHLUSSFINANZIERUNG");
+    expect(zweck.kaufpreis).toBeUndefined();
+  });
+
+  it("laesst den Zweck weg, wenn die Finanzierungsart unbekannt ist", () => {
+    const r = canonicalToKundenangaben(fall({ financing: { darlehenswunsch: 100_000 } }), {
+      datenkontext: "TEST_MODUS",
+    });
+    expect(r.kundenangaben.finanzierungsbedarf!.finanzierungszweck).toBeUndefined();
+    expect(r.kundenangaben.finanzierungsbedarf!.finanzierungsbausteine).toHaveLength(1);
+  });
+
+  it("bleibt schemakonform", () => {
+    const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+
+  it.each(FINANCING_TYPES)(
+    "bleibt fuer Finanzierungsart '%s' mit vollstaendigen Bedarfsdaten schemakonform",
+    (finanzierungsart) => {
+      const r = canonicalToKundenangaben(
+        fall({
+          applicants: [{ position: 1, vorname: "Anna", nachname: "Muster" }],
+          financing: {
+            finanzierungsart,
+            kaufpreis: 450_000,
+            nebenkosten: 40_000,
+            maklerprovisionProzent: 3.57,
+            eigenkapital: 90_000,
+            darlehenswunsch: 400_000,
           },
         }),
         { datenkontext: "TEST_MODUS" }
