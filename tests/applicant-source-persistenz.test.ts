@@ -3,6 +3,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Der Hintergrundlauf soll im Test sofort ausgeführt werden.
 vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// Der Detektiv laeuft am Ende der Pipeline und braucht Modelle, die diese
+// Prisma-Attrappe nicht kennt. Hier geht es um die Antragsteller-Zuordnung –
+// der Detektiv wird stillgelegt, statt einen gefangenen Fehler ins Testprotokoll
+// zu schreiben. Dass ein Detektiv-Ausfall die Analyse nicht kippt, prueft
+// tests/pipeline.test.ts.
+vi.mock("@/lib/detektiv/service", () => ({
+  runReferenceExtraction: vi.fn(async () => undefined),
+  reconcileCase: vi.fn(async () => ({ angelegt: 0, erledigt: 0 })),
+}));
 
 const documentCreate = vi.fn();
 const documentUpdate = vi.fn();
@@ -70,10 +79,18 @@ function upload() {
   });
 }
 
-/** Letzter update()-Aufruf – das ist der Abschluss der Hintergrund-Analyse. */
+/**
+ * Der Abschluss der Hintergrund-Analyse. Bewusst NICHT einfach der letzte
+ * update()-Aufruf: danach laeuft noch der Unterlagen-Detektiv und setzt
+ * `referenceStatus`. Gesucht ist der Aufruf, der die Analyse festschreibt –
+ * erkennbar an `extractionStatus`.
+ */
 function lastUpdateData(): Record<string, unknown> {
-  const call = documentUpdate.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
-  return call.data;
+  const call = documentUpdate.mock.calls
+    .map((c) => c[0] as { data: Record<string, unknown> })
+    .reverse()
+    .find((c) => c.data && "extractionStatus" in c.data);
+  return call?.data ?? {};
 }
 
 describe("Persistenz des erkannten Antragstellers", () => {
