@@ -19,6 +19,11 @@ import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buil
 import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
+import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/client";
+import {
+  uebertrageFallNachEuropace,
+  type UebertragungErgebnis,
+} from "@/lib/platforms/europace/uebertragung";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
@@ -678,4 +683,57 @@ async function applyExtractedFieldsToObject(
     entityId: caseId,
     metadata: { source: "document_extraction", documentId, fields: appliedLabels },
   });
+}
+
+/**
+ * Legt den Fall als Europace-Vorgang an. Nur nach manueller Freigabe.
+ */
+export async function europaceVorgangAnlegen(caseId: string): Promise<UebertragungErgebnis> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const mapping = await prisma.platformMapping.findUnique({
+    where: { caseId_platform: { caseId, platform: "europace" } },
+    select: { released: true },
+  });
+  if (!mapping?.released) {
+    return { ok: false, meldung: "Der Fall ist fuer Europace noch nicht freigegeben." };
+  }
+
+  const ergebnis = await uebertrageFallNachEuropace(caseId, {
+    client: getEuropaceClient(ctx.organizationId),
+    datenkontext: getDatenkontext(),
+    ladeCanonical: (id) => caseToCanonical(id),
+    ladeVorhandeneNummer: async (id) =>
+      (
+        await prisma.platformMapping.findUnique({
+          where: { caseId_platform: { caseId: id, platform: "europace" } },
+          select: { externalId: true },
+        })
+      )?.externalId ?? null,
+    speichereNummer: async (id, vorgangsnummer) => {
+      await prisma.platformMapping.update({
+        where: { caseId_platform: { caseId: id, platform: "europace" } },
+        data: { externalId: vorgangsnummer },
+      });
+    },
+    protokolliere: async ({ caseId: id, status, meldung }) => {
+      await prisma.platformSyncLog.create({
+        data: { caseId: id, platform: "europace", direction: "export", status, message: meldung },
+      });
+    },
+  });
+
+  if (ergebnis.ok) {
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "platform.pushed",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { platform: "europace", vorgangsnummer: ergebnis.vorgangsnummer },
+    });
+  }
+
+  revalidatePath(`/cases/${caseId}/export`);
+  return ergebnis;
 }
