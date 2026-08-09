@@ -10,6 +10,7 @@ import { validateUpload } from "@/lib/security/file-validation";
 import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
 import { matchApplicant } from "@/lib/documents/applicant-match";
+import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
 /**
@@ -392,6 +393,18 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     });
   } catch (e) {
     console.error(`[pipeline] Hintergrund-Analyse für Dokument ${documentId} fehlgeschlagen:`, e);
+  }
+
+  // Unterlagen-Detektiv ZULETZT und gekapselt: erst die Verweise dieses
+  // Dokuments lesen, dann den ganzen Fall neu abgleichen (damit ein frueher
+  // gemeldeter Befund sich schliesst, wenn die Urkunde jetzt dabei war).
+  // Faellt das aus, bleibt die Dokumentanalyse unberuehrt – sichtbar wird der
+  // Ausfall ueber referenceStatus.
+  try {
+    await runReferenceExtraction(documentId);
+    await reconcileCase(caseId);
+  } catch (e) {
+    console.error(`[pipeline] Detektiv-Lauf für Dokument ${documentId} fehlgeschlagen:`, e);
   }
 }
 

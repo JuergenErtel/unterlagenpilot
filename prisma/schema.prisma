@@ -155,6 +155,7 @@ enum DocumentType {
   restschuldnachweis
   mietvertrag
   mietaufstellung
+  weg_protokoll
   bwa
   susa
   jahresabschluss
@@ -516,6 +517,8 @@ model Case {
   wohnflaechen        WohnflaechenBerechnung[]
   caseNotes           CaseNote[]
   deadlines           CaseDeadline[]
+  documentReferences  DocumentReference[]
+  findings            CaseFinding[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -727,6 +730,9 @@ model Document {
   ocrStatus            ProcessingStatus     @default(ausstehend)
   classificationStatus ProcessingStatus     @default(ausstehend)
   extractionStatus     ProcessingStatus     @default(ausstehend)
+  // Lauf des Unterlagen-Detektivs. Eigener Status, damit "nicht geprueft" und
+  // "nichts gefunden" im UI unterscheidbar bleiben.
+  referenceStatus      ProcessingStatus     @default(ausstehend)
   reviewStatus         DocumentReviewStatus @default(offen)
   // Grund einer Ablehnung. Wird dem Kunden auf der Upload-Seite angezeigt –
   // deshalb kundentauglich formulieren, keine internen Kuerzel.
@@ -766,6 +772,8 @@ model Document {
   checklistLinks   CaseChecklistItem[]      @relation("ChecklistDocuments")
   ocrJobs          OcrJob[]
   aiJobs           AiJob[]
+  references       DocumentReference[]
+  findings         CaseFinding[]            @relation("FindingSource")
 
   @@index([caseId])
   @@index([documentType])
@@ -1392,4 +1400,82 @@ model AuthToken {
   @@index([signupRequestId])
   @@index([expiresAt])
   @@map("auth_tokens")
+}
+
+/**
+ * Ein von der KI im Dokument gefundener Verweis auf eine andere Urkunde.
+ * Reine Faktenebene ohne Bewertung. kind = "selbst" ist die Eigenauskunft des
+ * Dokuments ("Ich bin der 2. Nachtrag, UR 789/2011") und die Voraussetzung
+ * dafuer, dass der Abgleich ueberhaupt einen Treffer finden kann.
+ */
+model DocumentReference {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  kind           String
+  label          String
+  urkundeDatum   DateTime?
+  urkundenNummer String?
+  notar          String?
+  abteilung      String?
+  laufendeNummer String?
+  sourcePage     Int
+  sourceQuote    String
+  confidence     Float?
+
+  createdAt DateTime @default(now())
+
+  findings CaseFinding[]
+
+  @@index([documentId])
+  @@index([caseId])
+  @@map("document_references")
+}
+
+/**
+ * Ein aus Verweisen und Regeln abgeleiteter Befund. Traegt Zustand, weil die
+ * Freigabe- und Verwerf-Entscheidungen des Vermittlers einen erneuten Lauf
+ * ueberleben muessen; der fingerprint sichert das ueber den Unique-Index ab.
+ */
+model CaseFinding {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  code       String
+  title      String
+  reason     String
+  severity   Severity @default(warnung)
+  /// neue_position | dokument_nachfordern
+  resolution String
+
+  suggestedDocumentType DocumentType?
+
+  sourceDocumentId String
+  sourceDocument   Document @relation("FindingSource", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  sourcePage       Int?
+  sourceQuote      String?
+
+  referenceId String?
+  reference   DocumentReference? @relation(fields: [referenceId], references: [id], onDelete: SetNull)
+
+  /// Bei unsicherem Abgleich: das vermutete, bereits vorhandene Dokument.
+  matchCandidateId String?
+
+  /// offen | unsicher | freigegeben | verworfen | erledigt
+  status String @default("offen")
+
+  checklistItemId String?
+
+  fingerprint String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([caseId, fingerprint])
+  @@index([caseId, status])
+  @@map("case_findings")
 }

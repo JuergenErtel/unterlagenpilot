@@ -310,6 +310,7 @@ export const DOCUMENT_TYPES = [
   "restschuldnachweis",
   "mietvertrag",
   "mietaufstellung",
+  "weg_protokoll",
   "bwa",
   "susa",
   "jahresabschluss",
@@ -340,6 +341,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   restschuldnachweis: "Restschuldnachweis",
   mietvertrag: "Mietvertrag",
   mietaufstellung: "Mietaufstellung",
+  weg_protokoll: "Protokoll der Eigentümerversammlung",
   bwa: "BWA",
   susa: "Summen- und Saldenliste (SuSa)",
   jahresabschluss: "Jahresabschluss",
@@ -577,6 +579,10 @@ export const AUDIT_ACTIONS = [
   "customer.data_exported",
   "customer.deleted",
   "access.viewed",
+  // Unterlagen-Detektiv: Freigabe und Verwerfen sind fachliche Entscheidungen
+  // mit Haftungsbezug und gehoeren deshalb ins Audit-Log.
+  "finding.accepted",
+  "finding.dismissed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

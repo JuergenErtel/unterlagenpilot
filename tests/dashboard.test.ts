@@ -18,6 +18,7 @@ const caseFindMany = vi.fn();
 const documentFindMany = vi.fn();
 const selfDisclosureLinkFindMany = vi.fn();
 const generatedMessageFindMany = vi.fn();
+const caseFindingGroupBy = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -35,6 +36,9 @@ vi.mock("@/lib/db", () => ({
     },
     generatedMessage: {
       findMany: (...a: unknown[]) => generatedMessageFindMany(...a),
+    },
+    caseFinding: {
+      groupBy: (...a: unknown[]) => caseFindingGroupBy(...a),
     },
   },
 }));
@@ -87,6 +91,7 @@ beforeEach(() => {
   documentCount.mockReset().mockResolvedValue(0);
   caseCount.mockReset().mockResolvedValue(0);
   documentFindMany.mockReset().mockResolvedValue([]);
+  caseFindingGroupBy.mockReset().mockResolvedValue([]);
   generatedMessageFindMany.mockReset().mockResolvedValue([
     { id: "msg-1", sent: true },
     { id: "msg-2", sent: true },

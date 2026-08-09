@@ -17,6 +17,7 @@ export interface NextStep {
     | "dokumente_freigeben"
     | "kundendaten"
     | "kritische_hinweise"
+    | "unterlagen_luecken"
     | "unterlagen_anfordern"
     | "selbstauskunft_wartet"
     | "fristen"
@@ -45,6 +46,8 @@ export interface NextStepInput {
     criticals: number;
     docsFehler: number;
     docsLaufend: number;
+    /** Offene Lücken des Unterlagen-Detektivs, vom Vermittler noch nicht gesichtet. */
+    offeneBefunde: number;
   };
   missingCustomerFields: string[];
   /** Stand der Selbstauskunft; fehlt bei Fällen ohne Link. */
@@ -167,6 +170,20 @@ export function computeNextStep(c: NextStepInput): NextStep {
       reason: "Die Plausibilitätsprüfung hat Widersprüche gefunden, die vor der Einreichung geklärt werden müssen.",
       tone: "blocker",
       cta: { label: "Hinweise ansehen", href: `/cases/${id}?tab=plausibilitaet` },
+    };
+  }
+
+  // Erst die gefundenen Lücken sichten, dann nachfordern. Andernfalls geht eine
+  // Nachforderung raus, der die Hälfte fehlt, und der Kunde wird zweimal
+  // angeschrieben – genau der Fehler, den der Detektiv verhindern soll.
+  if (c.counts.offeneBefunde > 0) {
+    return {
+      key: "unterlagen_luecken",
+      title: `${c.counts.offeneBefunde} Lücke${c.counts.offeneBefunde === 1 ? "" : "n"} in den Unterlagen gefunden`,
+      reason:
+        "Die vorliegenden Objektunterlagen nennen Urkunden, die noch nicht in der Akte sind. Sichten und übernehmen, bevor die Nachforderung rausgeht.",
+      tone: "review",
+      cta: { label: "Lücken ansehen", href: `/cases/${id}?tab=fehlt` },
     };
   }
 
