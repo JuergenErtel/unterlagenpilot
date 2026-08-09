@@ -785,12 +785,40 @@ describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
     expect(typ.grundstuecksgroesse).toBeUndefined();
   });
 
-  it("bleibt schemakonform", () => {
-    const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
+  it("haengt dem Baugrundstueck kein Gebaeude an", () => {
+    const r = canonicalToKundenangaben(
+      fall({ property: { objektart: "grundstueck", baujahr: 2020, grundstuecksflaeche: 800 } }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ["@type"]).toBe("BAUGRUNDSTUECK");
+    expect(typ.gebaeude).toBeUndefined();
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+
+  // Die eigentliche Absicherung: jede Objektart mit vollen Daten gegen das Schema.
+  // Genau hier faellt die naechste Variante mit abweichender Struktur auf.
+  it.each(PROPERTY_TYPES)("bleibt schemakonform fuer Objektart %s", (objektart) => {
+    const r = canonicalToKundenangaben(
+      fall({
+        property: {
+          objektart,
+          strasse: "Feldweg 12a",
+          plz: "14467",
+          ort: "Potsdam",
+          wohnflaeche: 142.5,
+          baujahr: 1998,
+          grundstuecksflaeche: 620,
+        },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
     expect(validateKundenangabenRequest(r).errors).toEqual([]);
   });
 });
 ```
+
+`PROPERTY_TYPES` kommt aus `@/lib/domain/enums` und muss oben im Test importiert werden.
 
 - [ ] **Schritt 2: Test ausführen, Fehlschlag bestätigen**
 
@@ -825,15 +853,25 @@ const OBJEKTART: Record<PropertyType, string> = {
 /** Diese Typen kennen keine eigene Grundstuecksgroesse. */
 const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG", "IMMOBILIE_OHNE_TYP"]);
 
+/**
+ * Varianten ohne `gebaeude` im Schema. BAUGRUNDSTUECK fuehrt nur
+ * grundstuecksart und grundstuecksgroesse – ein angehaengtes gebaeude macht die
+ * Nutzlast ungueltig. Die Menge gehoert aus dem Schema abgeleitet, nicht geraten:
+ * fuer jeden @type-Zielwert pruefen, ob die Variante `gebaeude` deklariert.
+ */
+const OHNE_GEBAEUDE = new Set(["BAUGRUNDSTUECK"]);
+
 function finanzierungsobjekt(c: CanonicalCase): EuropaceFinanzierungsobjekt | undefined {
   const p = c.property;
   if (!p) return undefined;
 
   const typ = p.objektart ? OBJEKTART[p.objektart] : "IMMOBILIE_OHNE_TYP";
-  const gebaeude = wegLassenWennLeer({
-    baujahr: p.baujahr,
-    nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
-  });
+  const gebaeude = OHNE_GEBAEUDE.has(typ)
+    ? undefined
+    : wegLassenWennLeer({
+        baujahr: p.baujahr,
+        nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
+      });
 
   const immobilie = wegLassenWennLeer({
     adresse: anschriftAufteilen(p.strasse, p.plz, p.ort),
@@ -999,8 +1037,16 @@ const FINANZIERUNGSZWECK: Record<FinancingType, string> = {
   kapitalbeschaffung: "KAPITALBESCHAFFUNG",
 };
 
-/** Nur der Kauf kennt einen Kaufpreis samt Kaufnebenkosten. */
+/** Nur der Kauf kennt einen Kaufpreis. */
 const MIT_KAUFPREIS = new Set(["KAUF", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
+
+/**
+ * Nebenkosten haengen NICHT am Kaufpreis: Neubau deklariert sie laut Schema
+ * ebenfalls, ohne einen Kaufpreis zu kennen. Beide Tore zusammenzulegen liess
+ * eine erfasste Maklerprovision beim Neubau verschwinden. Anschlussfinanzierung,
+ * Modernisierung und Kapitalbeschaffung kennen weder das eine noch das andere.
+ */
+const MIT_NEBENKOSTEN = new Set(["KAUF", "NEUBAU", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
 
 function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | undefined {
   const f = c.financing;
@@ -1019,8 +1065,12 @@ function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | un
       : {
           "@type": typ,
           ...(MIT_KAUFPREIS.has(typ) && f.kaufpreis != null ? { kaufpreis: f.kaufpreis } : {}),
-          ...(MIT_KAUFPREIS.has(typ) && nebenkosten ? { nebenkosten } : {}),
+          ...(MIT_NEBENKOSTEN.has(typ) && nebenkosten ? { nebenkosten } : {}),
         };
+
+  // Das kanonische `financing.nebenkosten` (Gesamtbetrag) bleibt bewusst
+  // unbenutzt: Europace kennt nur die Einzelposten Grunderwerbsteuer,
+  // Maklergebuehr und Notargebuehr – jede Aufteilung waere geraten.
 
   const bausteine =
     f.darlehenswunsch != null
@@ -1096,13 +1146,33 @@ git commit -m "feat(europace): Finanzierungsbedarf und Eigenkapital mappen"
 - Create: `tests/europace-client.test.ts`
 
 **Interfaces:**
-- Consumes: `fetchWithRateLimitRetry(url, init, timeoutMs)` aus `@/lib/ai/http`; `EuropaceKundenangabenRequest`, `Datenkontext` (Task 2)
+- Consumes: `fetchWithRateLimitRetry(url, init, timeoutMs, fetchImpl?)` aus `@/lib/ai/http`; `EuropaceKundenangabenRequest`, `Datenkontext` (Task 2)
+
+**Voraussetzung:** `fetchWithTimeout` und `fetchWithRateLimitRetry` in `src/lib/ai/http.ts`
+brauchen einen optionalen vierten Parameter `fetchImpl: typeof fetch = fetch`, der an
+**beide** internen `fetchWithTimeout`-Aufrufstellen durchgereicht wird (Erstversuch und
+Wiederholungsschleife). Ohne ihn landet das injizierte `fetch` im Client im Leeren, und
+die Tests sprechen in Wahrheit das echte Netz an. Die Änderung ist additiv: bestehende
+Aufrufer (Mistral-OCR, OpenAI-kompatibler Anbieter) übergeben drei Argumente und bleiben
+unverändert.
 - Produces:
   - `class EuropaceAuthError`, `EuropaceValidationError` (Feld `meldungen: string[]`), `EuropaceApiError`
   - `interface EuropaceClient { validiereKundenangaben(req): Promise<void>; legeVorgangAn(req): Promise<string>; ladeDokumentHoch(input: DokumentUpload): Promise<string>; }`
   - `interface DokumentUpload { vorgangsnummer: string; datei: Buffer; dateiname: string; mimeType: string; anzeigename: string; kategorie: string }`
-  - `function getEuropaceClient(fetchImpl?: typeof fetch): EuropaceClient | null` — `null`, wenn nicht konfiguriert
+  - `function getEuropaceClient(organizationId: string, fetchImpl?: typeof fetch): EuropaceClient | null` — `null`, wenn nicht konfiguriert
   - `function getDatenkontext(): Datenkontext`
+
+**Warum `organizationId`, obwohl sie heute nicht benutzt wird.** BaufiDesk soll ein
+Produkt für viele Vermittler werden, und jeder Vermittler ist bei Europace ein
+eigener Partner. Der saubere SaaS-Weg dafür ist Europaces Authorization-Code-Flow:
+BaufiDesk registriert sich einmalig als Tech-Partner, jeder Vermittler autorisiert
+es per Consent-Seite, und niemand tippt Secrets ab. Das ist ein eigenes Projekt und
+setzt eine Tech-Partner-Registrierung voraus, die es noch nicht gibt.
+
+Damit der spätere Umbau nicht durch den halben Code wandert, nimmt
+`getEuropaceClient` die `organizationId` **jetzt schon** entgegen — und ignoriert
+sie vorerst bewusst. Wenn der SaaS-Weg kommt, ändert sich genau diese eine
+Funktion, kein Aufrufer.
 
 - [ ] **Schritt 1: Den fehlschlagenden Test schreiben**
 
@@ -1302,7 +1372,8 @@ export class HttpEuropaceClient implements EuropaceClient {
           },
           body: new URLSearchParams({ grant_type: "client_credentials", scope: SCOPES }).toString(),
         },
-        TIMEOUT_MS
+        TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       // Keine Details durchreichen – der Basic-Header darf nirgends landen.
@@ -1358,7 +1429,8 @@ export class HttpEuropaceClient implements EuropaceClient {
           },
           body: JSON.stringify(req),
         },
-        TIMEOUT_MS
+        TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
@@ -1408,7 +1480,8 @@ export class HttpEuropaceClient implements EuropaceClient {
       res = await fetchWithRateLimitRetry(
         `${UNTERLAGEN_HOST}/v2/dokumente`,
         { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form },
-        UPLOAD_TIMEOUT_MS
+        UPLOAD_TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
@@ -1429,8 +1502,21 @@ export class HttpEuropaceClient implements EuropaceClient {
   }
 }
 
-/** null, wenn keine Zugangsdaten gesetzt sind – die UI zeigt dann den Hinweis. */
-export function getEuropaceClient(fetchImpl: typeof fetch = fetch): EuropaceClient | null {
+/**
+ * Liefert den Client fuer eine Organisation. null, wenn keine Zugangsdaten
+ * gesetzt sind – die UI zeigt dann den Hinweis statt eines toten Knopfes.
+ *
+ * `organizationId` wird im Pilotbetrieb bewusst NICHT ausgewertet: es gibt genau
+ * einen Europace-Partner, dessen Zugangsdaten in der Umgebung stehen. Der
+ * Parameter ist die Naht fuer den spaeteren SaaS-Betrieb, in dem jeder Vermittler
+ * ein eigener Europace-Partner ist (Authorization-Code-Flow ueber einen
+ * BaufiDesk-Tech-Partner-Client). Dann aendert sich nur diese Funktion.
+ */
+export function getEuropaceClient(
+  organizationId: string,
+  fetchImpl: typeof fetch = fetch
+): EuropaceClient | null {
+  void organizationId;
   const clientId = process.env.EUROPACE_CLIENT_ID;
   const clientSecret = process.env.EUROPACE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -1917,7 +2003,7 @@ export async function europaceVorgangAnlegen(caseId: string): Promise<Uebertragu
   }
 
   const ergebnis = await uebertrageFallNachEuropace(caseId, {
-    client: getEuropaceClient(),
+    client: getEuropaceClient(ctx.organizationId),
     datenkontext: getDatenkontext(),
     ladeCanonical: (id) => caseToCanonical(id),
     ladeVorhandeneNummer: async (id) =>
@@ -2253,11 +2339,11 @@ Am Ende von `src/lib/actions/cases.ts`:
  * Schiebt die akzeptierten Unterlagen an den bestehenden Europace-Vorgang.
  */
 export async function europaceUnterlagenUebertragen(caseId: string): Promise<UnterlagenErgebnis> {
-  await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId);
   const storage = getStorage();
 
   const ergebnis = await uebertrageUnterlagen(caseId, {
-    client: getEuropaceClient(),
+    client: getEuropaceClient(ctx.organizationId),
     ladeVorgangsnummer: async (id) =>
       (
         await prisma.platformMapping.findUnique({
@@ -2371,19 +2457,32 @@ export function EuropaceUebertragung({
     starte(async () => {
       const e = await europaceVorgangAnlegen(caseId);
       setMeldung(e.meldung);
-      setFeldmeldungen(e.feldmeldungen ?? []);
+      // Bei einem parallelen zweiten Aufruf entsteht in Europace ein
+      // ueberzaehliger Vorgang. Die Nummer MUSS sichtbar werden, sonst bleibt er
+      // dort unbemerkt liegen.
+      setFeldmeldungen(
+        e.verwaisteVorgangsnummer
+          ? [
+              `Achtung: In Europace ist zusätzlich der Vorgang ${e.verwaisteVorgangsnummer} entstanden. Bitte dort prüfen und entfernen.`,
+              ...(e.feldmeldungen ?? []),
+            ]
+          : (e.feldmeldungen ?? [])
+      );
       setErfolg(e.ok);
     });
 
   const unterlagen = () =>
     starte(async () => {
       const e = await europaceUnterlagenUebertragen(caseId);
-      setMeldung(
-        e.fehlgeschlagen.length
-          ? `${e.meldung} ${e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`).join(" | ")}`
-          : e.meldung
-      );
-      setFeldmeldungen([]);
+      setMeldung(e.meldung);
+      // Fehlgeschlagene und ueberzaehlige Dokumente einzeln benennen – eine
+      // Sammelmeldung "teilweise" allein hilft beim Aufraeumen nicht weiter.
+      setFeldmeldungen([
+        ...e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`),
+        ...e.ueberzaehlig.map(
+          (u) => `${u.name}: doppelt nach Europace übertragen – bitte dort prüfen und entfernen.`
+        ),
+      ]);
       setErfolg(e.ok);
     });
 
@@ -2486,6 +2585,13 @@ import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/cli
 import { EuropaceUebertragung } from "@/components/case/europace-uebertragung";
 ```
 
+Die Seite ruft heute `await requireCaseAccess(id);` ohne das Ergebnis zu nutzen. Für
+die Organisation brauchen wir es jetzt:
+
+```ts
+const { ctx } = await requireCaseAccess(id);
+```
+
 Und rendere die Komponente innerhalb des Europace-Tabs, direkt über der Feldtabelle:
 
 ```tsx
@@ -2494,7 +2600,7 @@ Und rendere die Komponente innerhalb des Europace-Tabs, direkt über der Feldtab
     caseId={id}
     freigegeben={releasedOf("europace")}
     vorgangsnummer={mappings.find((m) => m.platform === "europace")?.externalId ?? null}
-    konfiguriert={getEuropaceClient() !== null}
+    konfiguriert={getEuropaceClient(ctx.organizationId) !== null}
     datenkontext={getDatenkontext()}
     offeneDokumente={docsOpen}
   />

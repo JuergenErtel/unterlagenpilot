@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { releasePlatform } from "@/lib/actions/cases";
+import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CopyBlock } from "@/components/copy-block";
 import { ProgressRing } from "@/components/case/progress-ring";
 import { PlatformExportTable, type ExportGroup } from "@/components/case/platform-export-table";
+import { EuropaceUebertragung } from "@/components/case/europace-uebertragung";
 import { readinessTone } from "@/lib/ui/tone";
 import { PLATFORM_LABELS, PLATFORMS, type Platform } from "@/lib/domain/enums";
+
+// Headroom fuer die Europace-Anlegen-/Uebertragungskette: bis zu drei
+// sequenzielle 30s-Aufrufe (Trockenlauf, Anlegen, ggf. Token-Erneuerung) plus
+// bis zu 120s je Dokument-Upload. Ohne dieses Budget wuerde die Function beim
+// Plattform-Standard (10-15s) mitten in der Kette beendet -- z.B. nach dem
+// Anlegen des Europace-Vorgangs, aber vor dem Speichern der Vorgangsnummer.
+// Dann haette Europace einen Vorgang ohne Entsprechung in BaufiDesk und ohne
+// Protokolleintrag, und der naechste Klick wuerde einen zweiten anlegen.
+export const maxDuration = 300;
 
 function internalName(platformField: string): string {
   const parts = platformField.split(".");
@@ -36,12 +47,15 @@ export default async function ExportPage({
 }) {
   const { id } = await params;
   const { platform } = await searchParams;
-  await requireCaseAccess(id);
+  const { ctx } = await requireCaseAccess(id);
   const canonical = await caseToCanonical(id);
   const active = (PLATFORMS.includes(platform as Platform) ? platform : "europace") as Platform;
 
   const [mappings, docCounts] = await Promise.all([
-    prisma.platformMapping.findMany({ where: { caseId: id }, select: { platform: true, released: true } }),
+    prisma.platformMapping.findMany({
+      where: { caseId: id },
+      select: { platform: true, released: true, externalId: true },
+    }),
     prisma.document.groupBy({ by: ["reviewStatus"], where: { caseId: id }, _count: true }),
   ]);
   const releasedOf = (p: Platform) => mappings.find((m) => m.platform === p)?.released ?? false;
@@ -53,7 +67,7 @@ export default async function ExportPage({
       <PageHeader
         eyebrow="Einreichung"
         title="Einreichungsassistent"
-        subtitle="Aufbereitete Felder pro Plattform – kopieren, exportieren und manuell freigeben. Keine automatische Übertragung im MVP."
+        subtitle="Aufbereitete Felder pro Plattform – kopieren, exportieren und manuell freigeben. Für Europace läuft die Übertragung nach Freigabe automatisch über die API, für FinLink und eHyp home weiterhin über Export und Kopiermaske."
         actions={
           <>
             {/* Der eHyp-Übernahmeworkflow war von nirgendwo verlinkt und nur per
@@ -202,6 +216,17 @@ export default async function ExportPage({
                 </div>
               )}
 
+              {p === "europace" && (
+                <EuropaceUebertragung
+                  caseId={id}
+                  freigegeben={releasedOf("europace")}
+                  vorgangsnummer={mappings.find((m) => m.platform === "europace")?.externalId ?? null}
+                  konfiguriert={getEuropaceClient(ctx.organizationId) !== null}
+                  datenkontext={getDatenkontext()}
+                  offeneDokumente={docsOpen}
+                />
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Felder für {PLATFORM_LABELS[p]}</CardTitle>
@@ -249,8 +274,9 @@ export default async function ExportPage({
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-ai" />
                 <span>
                   <Lock className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
-                  Keine automatische Übertragung. API-Anbindung vorbereitet. Im MVP erfolgt die Übergabe sicher über Export und
-                  Kopiermaske – jede Freigabe bleibt manuell. Verarbeitung DSGVO-konform in der EU.
+                  {p === "europace"
+                    ? "Für Europace steht eine echte API-Übertragung bereit – sie läuft ausschließlich nach manueller Freigabe an, jeder Schritt bleibt protokolliert. Verarbeitung DSGVO-konform in der EU."
+                    : "Keine automatische Übertragung. API-Anbindung vorbereitet. Im MVP erfolgt die Übergabe sicher über Export und Kopiermaske – jede Freigabe bleibt manuell. Verarbeitung DSGVO-konform in der EU."}
                 </span>
               </div>
             </TabsContent>

@@ -306,7 +306,7 @@ BaufiDesk verarbeitet hochsensible personenbezogene Finanz- und Identitätsdaten
 | --- | --- | --- |
 | Dokumentenerkennung | Personalausweis, Gehaltsabrechnung, Grundbuch, Exposé | Alle weiteren Typen (Kontoauszüge, ESt-Bescheid, Kaufvertrag, Teilungserklärung, BWA, SuSa, Jahresabschluss, EÜR, …) |
 | Datenextraktion | Gehaltsabrechnung (inkl. KO), Grundbuch, Kontoauszüge, Personalausweis, Exposé | Erweiterte Felder & Typen |
-| Plattform-Connectoren | Stubs mit ManualExport-Fallback (PDF/Kopiermaske/JSON/CSV) | Echte API-Anbindung Europace/FinLink/eHyp |
+| Plattform-Connectoren | Europace: Vorgang anlegen + Unterlagen (API). FinLink: Import. eHyp: Stub mit ManualExport-Fallback | eHyp-API, Rückkanal aus Europace |
 | Übergabe | Manuelle Freigabe + Export | API-Push, Browser-Automation (optional) |
 | Rollen | Vermittler/Admin, Kunde (Upload) | Org-Admin, Team, Sachbearbeiter, White-Label-Admin |
 | Kommunikation | Vorformuliert (E-Mail/WhatsApp/PDF) | Direkter Versand, Vorlagenverwaltung |
@@ -348,7 +348,15 @@ BaufiDesk verarbeitet hochsensible personenbezogene Finanz- und Identitätsdaten
 
 ## 14. Offene Punkte / Annahmen
 
-- **Echte API-Details fehlen:** Die produktiven Endpunkte und Authentifizierungsdetails von **Europace**, **FinLink** und **eHyp home** liegen noch nicht vollständig vor. → Anbindung über **Adapter/Stubs** mit **ManualExport-Fallback**; echte Endpunkte werden **nicht erraten**.
+- **Europace-API angebunden (Stand 09.08.2026):** Die Endpunkte sind öffentlich
+  dokumentiert und als OpenAPI-Schema eingecheckt (`src/lib/platforms/europace/schema/`).
+  Vorgang anlegen und Unterlagen übertragen sind umgesetzt; es fehlt der
+  API-Client-Zugang sowie die Antragsteller-Zuordnung (`assignmentId`) beim
+  Dokumenten-Upload, deren Endpunkt (`moeglicheZuordnungen`) noch nicht verifiziert
+  ist und deshalb bewusst nicht geraten wurde – Dokumente gehen bis dahin ohne
+  Zuordnung an den Vorgang. **FinLink** ist per Partner-API angebunden. Für **eHyp
+  home** liegen die produktiven Endpunkte weiterhin nicht vor → Adapter/Stub mit
+  ManualExport-Fallback, keine geratenen Endpunkte.
 - **TODOs:** API-Spezifikationen einholen, Mapping-Tabellen je Plattform finalisieren, Bank-/Plattform-Regelwerke pflegen, KO-Kriterienkatalog erweitern.
 - **Annahme:** Das kanonische Datenmodell ist führend; Plattformformate werden nur an den Connectoren abgebildet.
 - **Annahme:** Im MVP ersetzt der ManualExport-Fallback die fehlenden APIs vollständig (keine Funktionsblockade).

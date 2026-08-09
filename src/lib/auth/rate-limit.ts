@@ -74,3 +74,39 @@ export async function checkRateLimit(
     return rateLimit(key, max, windowSec);
   }
 }
+
+/**
+ * Nur Schluessel mit diesem Praefix duerfen vorzeitig freigegeben werden.
+ * Bewusste Schranke: `checkRateLimit`/`rateLimit` sichern auch echte
+ * Sicherheitszaehler ab (Login, Registrierung, Passwort-Reset) -- ohne diese
+ * Schranke koennte ein spaeterer, unbedachter Aufruf von `releaseRateLimit`
+ * mit einem falschen Schluessel versehentlich einen solchen Zaehler
+ * zuruecksetzen und damit den Brute-Force-Schutz aushebeln. Diese Funktion
+ * ist ausdruecklich nur fuer den kurzlebigen Europace-Mutex gedacht (siehe
+ * `uebertragung.ts`).
+ */
+const FREIGABEFAEHIGES_PRAEFIX = "europace-";
+
+/**
+ * Gibt eine Beanspruchung vorzeitig frei, bevor ihr Fenster regulär abläuft.
+ * Gedacht für Aufrufer, die `checkRateLimit`/`rateLimit` mit `max=1` als
+ * kurzlebigen Mutex um einen kritischen Abschnitt zweckentfremden (siehe
+ * `uebertragung.ts`): nach erfolgreichem oder fehlgeschlagenem Abschnitt soll
+ * ein zweiter, regulärer Versuch sofort wieder durchkommen, statt bis zum
+ * Fensterende zu warten.
+ *
+ * Wirkt NUR auf den In-Memory-Speicher. Ist Upstash Redis konfiguriert, tut
+ * diese Funktion bewusst NICHTS – der Zähler dort läuft regulär mit
+ * `windowSec` ab, statt vorzeitig freigegeben zu werden. Ein verteiltes DEL
+ * über die Upstash-REST-Pipeline wäre technisch denkbar, ließe sich hier aber
+ * nicht gegen echtes Upstash verifizieren (in diesem Projekt bislang nirgends
+ * konfiguriert) – lieber ein benannter Teilweg als ungetesteter Code, der nur
+ * so tut, als würde er freigeben. Bestehende Aufrufer von `checkRateLimit`
+ * (Login, Registrierung, Passwort-Reset, Upload, Einkommen) rufen diese
+ * Funktion nicht auf und sind von ihr nicht betroffen.
+ */
+export function releaseRateLimit(key: string): void {
+  if (!key.startsWith(FREIGABEFAEHIGES_PRAEFIX)) return;
+  if (upstashConfig()) return;
+  buckets.delete(key);
+}

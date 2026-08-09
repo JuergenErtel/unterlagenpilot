@@ -94,9 +94,9 @@ Die Anwendung läuft anschließend standardmäßig unter `http://localhost:3000`
 | `AZURE_DOCUMENT_INTELLIGENCE_API_KEY` | Azure Document Intelligence API-Key | `…` |
 | `FINLINK_BASE_URL` | FinLink API-Basis-URL | `https://api.finlink.example` |
 | `FINLINK_API_KEY` | FinLink API-Key | `…` |
-| `EUROPACE_BASE_URL` | Europace API-Basis-URL | `https://api.europace.example` |
-| `EUROPACE_CLIENT_ID` | Europace OAuth Client-ID | `…` |
+| `EUROPACE_CLIENT_ID` | Europace OAuth Client-ID (Antrag an helpdesk@europace2.de) | `…` |
 | `EUROPACE_CLIENT_SECRET` | Europace OAuth Client-Secret | `…` |
+| `EUROPACE_DATENKONTEXT` | `TEST_MODUS` (Vorgabe) oder `ECHT_GESCHAEFT` | `TEST_MODUS` (Default) |
 | `EHYP_BASE_URL` | eHyp home API-Basis-URL | `https://api.ehyp.example` |
 | `EHYP_API_KEY` | eHyp home API-Key (Developer Studio) | `…` |
 | `EHYP_CLIENT_ID` | eHyp home Client-ID | `…` |
@@ -138,11 +138,11 @@ Die Anwendung läuft anschließend standardmäßig unter `http://localhost:3000`
 
 Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein internes kanonisches Datenmodell.
 
-- **Europace** (höchste Priorität): Anbindung via **OAuth/API** (`EUROPACE_CLIENT_ID`, `EUROPACE_CLIENT_SECRET`, `EUROPACE_BASE_URL`). **Echte Endpunkte werden nicht erraten** – im MVP **Stub mit TODO**.
+- **Europace** (höchste Priorität): Anbindung via **OAuth/API** (`EUROPACE_CLIENT_ID`, `EUROPACE_CLIENT_SECRET`), Hosts fest im Client hinterlegt. Die Endpunkte sind öffentlich dokumentiert und als OpenAPI-Schema eingecheckt (`src/lib/platforms/europace/schema/`). Vorgang anlegen und Unterlagen übertragen sind umgesetzt; es fehlen die echten Zugangsdaten und der Rückkanal (Vorgang aus Europace laden) sowie die Antragsteller-Zuordnung (`assignmentId`) beim Dokumenten-Upload.
 - **FinLink:** Anbindung via **API-Key** (`FINLINK_API_KEY`) und konfigurierbarer **Base URL** (`FINLINK_BASE_URL`).
 - **eHyp home:** Zugang über das **Developer Studio** – **API-Key**, **Client-ID**, **Client-Secret** und **Firmen-ID** (`EHYP_API_KEY`, `EHYP_CLIENT_ID`, `EHYP_CLIENT_SECRET`, `EHYP_COMPANY_ID`).
 
-> **Wichtig:** Im MVP sind **alle Connectoren Stubs** mit **ManualExport-Fallback** (PDF, Kopiermaske, JSON, CSV). Eine echte API-Übertragung erfolgt erst nach Verfügbarkeit der offiziellen Endpunkte und nur nach manueller Freigabe.
+> **Wichtig:** **Europace** ist per echter API angebunden und wartet nur noch auf echte Zugangsdaten. **FinLink** ist per Partner-API angebunden (Import). Für **eHyp home** liegen die produktiven Endpunkte weiterhin nicht vor – hier bleibt es im MVP bei **Stub mit ManualExport-Fallback** (PDF, Kopiermaske, JSON, CSV); echte Endpunkte werden nicht erraten. Jede Übertragung erfolgt ausschließlich nach manueller Freigabe.
 
 ---
 
@@ -155,7 +155,8 @@ Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein i
 | **Datenbank** | **echt** | PostgreSQL (Supabase, EU/Frankfurt), Schema `unterlagenpilot`. |
 | **Datei-Storage** | **echt** | Supabase Storage, privater Bucket. |
 | **Demo-Fall Mustermann** | **Demo-Daten** | Geseedet (3 Dokumente, 4 fehlende Unterlagen, Warnungen, Nachrichten, Audit-Ereignisse), damit alle Screens mit Inhalt wirken. |
-| **Europace / FinLink / eHyp home Übertragung** | **Stub** | API-Adapter vorbereitet; produktiv über Export/Kopiermaske/JSON. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
+| **Europace Übertragung** | **echt (API)** | Vorgang anlegen + Unterlagen übertragen über die echte API; wartet nur noch auf echte Zugangsdaten (`EUROPACE_CLIENT_ID`/`EUROPACE_CLIENT_SECRET`). Rückkanal (Vorgang aus Europace laden) noch nicht umgesetzt. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
+| **FinLink / eHyp home Übertragung** | **Stub** | API-Adapter vorbereitet; produktiv über Export/Kopiermaske/JSON. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
 | **Browser-Assist** | **Konzept/deaktiviert** | Nur als späterer optionaler Assistenz-Fallback vorgesehen. |
 | **Auth** | **echt (umschaltbar)** | `AUTH_MODE=session`: Login-Pflicht, scrypt-Passwörter, signiertes Session-Cookie, Rollen, CSRF, Login-Rate-Limit. `AUTH_MODE=demo`: ohne Login (nur Dev/Demo). |
 | **Upload-Sicherheit** | **echt** | Typ-/MIME-/Magic-Bytes-Prüfung, Größenlimit, Quarantäne, Virenscan-Adapter (Mock-Demo; ClamAV vorbereitet). OCR/KI erst nach sauberem Scan. |
@@ -226,10 +227,10 @@ Der Pilotbetrieb erlaubt **echte Fälle mit einem Vermittler**, bevor die Plattf
 
 ## Offene Punkte für den Produktivbetrieb
 
-**Bewusste MVP-Stubs (kein Bug):** Europace-/FinLink-/eHyp-home-API, echte KI/OCR sofern nicht konfiguriert, Zahlungsintegration, direkter Nachrichtenversand.
+**Bewusste MVP-Stubs (kein Bug):** FinLink-/eHyp-home-API, echte KI/OCR sofern nicht konfiguriert, Zahlungsintegration, direkter Nachrichtenversand. Europace ist keine Stub-Attrappe mehr – die API ist angebunden, es fehlen nur echte Zugangsdaten.
 
 **Echte offene Aufgaben vor Produktivbetrieb:**
-- **Echte API-Anbindung** der Plattformen (Europace, FinLink, eHyp home) statt Stubs – Spezifikationen/Zugänge beschaffen.
+- **Echte API-Anbindung** der Plattformen (FinLink, eHyp home) statt Stubs – Spezifikationen/Zugänge beschaffen. Für **Europace**: echte Zugangsdaten beschaffen (`EUROPACE_CLIENT_ID`/`EUROPACE_CLIENT_SECRET` bei helpdesk@europace2.de), Trockenlauf im Testmodus fahren, dann `baufinanzierung:echtgeschaeft` freischalten.
 - **Produktiven Virenscan** aktivieren (ClamAV-INSTREAM-Protokoll implementieren / Cloud-AV).
 - **Produktiven Storage** mit At-Rest-Verschlüsselung (Supabase/S3 SSE-KMS); OCR-Text zusätzlich app-seitig verschlüsseln.
 - **Auth-Härtung** (MFA, verteiltes Rate-Limiting via Redis/KV, ggf. SSO).

@@ -8,12 +8,13 @@
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetchImpl(url, { ...init, signal: controller.signal });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(`Zeitüberschreitung nach ${Math.round(timeoutMs / 1000)}s`);
@@ -50,9 +51,10 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export async function fetchWithRateLimitRetry(
   url: string,
   init: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
-  let res = await fetchWithTimeout(url, init, timeoutMs);
+  let res = await fetchWithTimeout(url, init, timeoutMs, fetchImpl);
   for (const backoffMs of RATE_LIMIT_BACKOFF_MS) {
     if (res.status !== 429) return res;
     const retryAfterSeconds = Number(res.headers?.get?.("retry-after"));
@@ -61,7 +63,7 @@ export async function fetchWithRateLimitRetry(
         ? Math.min(retryAfterSeconds * 1000, RATE_LIMIT_MAX_WAIT_MS)
         : backoffMs;
     await sleep(waitMs + Math.random() * 2_000);
-    res = await fetchWithTimeout(url, init, timeoutMs);
+    res = await fetchWithTimeout(url, init, timeoutMs, fetchImpl);
   }
   return res;
 }

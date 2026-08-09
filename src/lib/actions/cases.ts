@@ -19,6 +19,16 @@ import { buildTemplateVars, renderTemplate, templateKey, DEFAULT_TEMPLATES, buil
 import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
+import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/client";
+import {
+  uebertrageFallNachEuropace,
+  type UebertragungErgebnis,
+} from "@/lib/platforms/europace/uebertragung";
+import {
+  uebertrageUnterlagen,
+  type UnterlagenErgebnis,
+} from "@/lib/platforms/europace/unterlagen";
+import { getStorage } from "@/lib/storage";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
@@ -678,4 +688,154 @@ async function applyExtractedFieldsToObject(
     entityId: caseId,
     metadata: { source: "document_extraction", documentId, fields: appliedLabels },
   });
+}
+
+/**
+ * Prueft die bindende Zusage "keine Uebertragung ohne manuelle Freigabe" fuer
+ * beide Europace-Aktionen (Vorgang anlegen wie Unterlagen nachschieben) --
+ * die Zusage darf nicht nur an einer Stelle greifen. Anders als jeder andere
+ * Ausgang der beiden Ablaufdateien war dieser Abbruch bisher der einzige ohne
+ * PlatformSyncLog-Eintrag; das holt diese Funktion nach.
+ *
+ * Liefert die Abbruchmeldung, wenn (noch) nicht freigegeben ist, sonst null.
+ */
+async function pruefeEuropaceFreigabe(caseId: string): Promise<string | null> {
+  const mapping = await prisma.platformMapping.findUnique({
+    where: { caseId_platform: { caseId, platform: "europace" } },
+    select: { released: true },
+  });
+  if (mapping?.released) return null;
+
+  const meldung = "Der Fall ist fuer Europace noch nicht freigegeben.";
+  await prisma.platformSyncLog.create({
+    data: { caseId, platform: "europace", direction: "export", status: "uebersprungen", message: meldung },
+  });
+  return meldung;
+}
+
+/**
+ * Legt den Fall als Europace-Vorgang an. Nur nach manueller Freigabe.
+ */
+export async function europaceVorgangAnlegen(caseId: string): Promise<UebertragungErgebnis> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const freigabeFehler = await pruefeEuropaceFreigabe(caseId);
+  if (freigabeFehler) {
+    return { ok: false, meldung: freigabeFehler };
+  }
+
+  const ergebnis = await uebertrageFallNachEuropace(caseId, {
+    client: getEuropaceClient(ctx.organizationId),
+    datenkontext: getDatenkontext(),
+    ladeCanonical: (id) => caseToCanonical(id),
+    ladeVorhandeneNummer: async (id) =>
+      (
+        await prisma.platformMapping.findUnique({
+          where: { caseId_platform: { caseId: id, platform: "europace" } },
+          select: { externalId: true },
+        })
+      )?.externalId ?? null,
+    speichereNummer: async (id, vorgangsnummer) => {
+      // Bedingtes Update: schreibt nur, wenn noch keine Nummer gesetzt ist.
+      // Ein ueberlappender Aufruf (Doppelklick, zweiter Tab) hat sonst die
+      // Chance, die zuerst gespeicherte Nummer kommentarlos zu ueberschreiben.
+      const { count } = await prisma.platformMapping.updateMany({
+        where: { caseId: id, platform: "europace", externalId: null },
+        data: { externalId: vorgangsnummer },
+      });
+      if (count > 0) return { ok: true };
+
+      const aktuell = await prisma.platformMapping.findUnique({
+        where: { caseId_platform: { caseId: id, platform: "europace" } },
+        select: { externalId: true },
+      });
+      return { ok: false, vorhandeneNummer: aktuell?.externalId ?? undefined };
+    },
+    protokolliere: async ({ caseId: id, status, meldung }) => {
+      await prisma.platformSyncLog.create({
+        data: { caseId: id, platform: "europace", direction: "export", status, message: meldung },
+      });
+    },
+  });
+
+  if (ergebnis.ok) {
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "platform.pushed",
+      entityType: "case",
+      entityId: caseId,
+      metadata: { platform: "europace", vorgangsnummer: ergebnis.vorgangsnummer },
+    });
+  }
+
+  revalidatePath(`/cases/${caseId}/export`);
+  return ergebnis;
+}
+
+/**
+ * Schiebt die akzeptierten Unterlagen an den bestehenden Europace-Vorgang.
+ */
+export async function europaceUnterlagenUebertragen(caseId: string): Promise<UnterlagenErgebnis> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const freigabeFehler = await pruefeEuropaceFreigabe(caseId);
+  if (freigabeFehler) {
+    return {
+      ok: false,
+      uebertragen: 0,
+      uebersprungen: 0,
+      fehlgeschlagen: [],
+      ueberzaehlig: [],
+      meldung: freigabeFehler,
+    };
+  }
+
+  const storage = getStorage();
+
+  const ergebnis = await uebertrageUnterlagen(caseId, {
+    client: getEuropaceClient(ctx.organizationId),
+    ladeVorgangsnummer: async (id) =>
+      (
+        await prisma.platformMapping.findUnique({
+          where: { caseId_platform: { caseId: id, platform: "europace" } },
+          select: { externalId: true },
+        })
+      )?.externalId ?? null,
+    ladeDokumente: (id) =>
+      prisma.document.findMany({
+        where: { caseId: id, reviewStatus: "akzeptiert" },
+        select: {
+          id: true,
+          generatedName: true,
+          originalName: true,
+          documentType: true,
+          mimeType: true,
+          storageKey: true,
+          europaceDokumentId: true,
+        },
+      }),
+    ladeDatei: (storageKey) => storage.get(storageKey),
+    merkeDokumentId: async (dokumentId, europaceDokumentId) => {
+      // Bedingtes Update: schreibt nur, wenn fuer das Dokument noch keine ID
+      // gesetzt ist. Ein ueberlappender Aufruf (Doppelklick, zweiter Tab) hat
+      // sonst die Chance, die zuerst gespeicherte ID kommentarlos zu
+      // ueberschreiben -- die Zuordnung des ersten, ebenfalls real
+      // hochgeladenen Dokuments waere dann verloren, siehe `merkeDokumentId`
+      // in unterlagen.ts.
+      const { count } = await prisma.document.updateMany({
+        where: { id: dokumentId, europaceDokumentId: null },
+        data: { europaceDokumentId },
+      });
+      return { ok: count > 0 };
+    },
+    protokolliere: async ({ caseId: id, status, meldung }) => {
+      await prisma.platformSyncLog.create({
+        data: { caseId: id, platform: "europace", direction: "export", status, message: meldung },
+      });
+    },
+  });
+
+  revalidatePath(`/cases/${caseId}/export`);
+  return ergebnis;
 }

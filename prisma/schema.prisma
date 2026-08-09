@@ -734,6 +734,8 @@ model Document {
   confidence           Float?
 
   detectedApplicant String?
+  /// Von Europace vergebene Dokument-ID. Gesetzt = bereits uebertragen.
+  europaceDokumentId String?
   /// Herkunft der Antragsteller-Zuordnung: "auto" (Namensabgleich) oder
   /// "manuell" (Vermittler). null = Bestandsdaten unbekannter Herkunft; diese
   /// werden wie "manuell" behandelt, solange sie eine Zuordnung tragen.
@@ -1052,6 +1054,8 @@ model PlatformMapping {
   platform              Platform
   payload               Json // gemapptes Payload (kanonisch -> Plattform)
   missingRequiredFields String[]  @default([])
+  /// Vorgangsnummer der Plattform (Europace). Gesetzt = Vorgang wurde angelegt.
+  externalId            String?
   released              Boolean   @default(false) // manuelle Freigabe vor Export
   releasedBy            String?
   releasedAt            DateTime?
