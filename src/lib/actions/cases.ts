@@ -711,10 +711,20 @@ export async function europaceVorgangAnlegen(caseId: string): Promise<Uebertragu
         })
       )?.externalId ?? null,
     speichereNummer: async (id, vorgangsnummer) => {
-      await prisma.platformMapping.update({
-        where: { caseId_platform: { caseId: id, platform: "europace" } },
+      // Bedingtes Update: schreibt nur, wenn noch keine Nummer gesetzt ist.
+      // Ein ueberlappender Aufruf (Doppelklick, zweiter Tab) hat sonst die
+      // Chance, die zuerst gespeicherte Nummer kommentarlos zu ueberschreiben.
+      const { count } = await prisma.platformMapping.updateMany({
+        where: { caseId: id, platform: "europace", externalId: null },
         data: { externalId: vorgangsnummer },
       });
+      if (count > 0) return { ok: true };
+
+      const aktuell = await prisma.platformMapping.findUnique({
+        where: { caseId_platform: { caseId: id, platform: "europace" } },
+        select: { externalId: true },
+      });
+      return { ok: false, vorhandeneNummer: aktuell?.externalId ?? undefined };
     },
     protokolliere: async ({ caseId: id, status, meldung }) => {
       await prisma.platformSyncLog.create({

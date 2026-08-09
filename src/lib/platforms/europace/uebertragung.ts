@@ -9,6 +9,19 @@ export interface UebertragungErgebnis {
   meldung: string;
   /** Feldgenaue Meldungen aus einer abgelehnten Validierung. */
   feldmeldungen?: string[];
+  /**
+   * Nur gesetzt, wenn ein ueberlappender Aufruf (Doppelklick, zweiter Tab)
+   * denselben Fall zeitgleich uebertragen hat: die hier genannte Nummer ist
+   * NICHT gespeichert und muss in Europace manuell aufgeraeumt werden.
+   */
+  verwaisteVorgangsnummer?: string;
+}
+
+/** Ergebnis eines bedingten Schreibversuchs, siehe `UebertragungDeps.speichereNummer`. */
+export interface SpeichernErgebnis {
+  ok: boolean;
+  /** Nur gesetzt, wenn ok=false: die von einem parallelen Aufruf bereits gespeicherte Nummer. */
+  vorhandeneNummer?: string;
 }
 
 export interface UebertragungDeps {
@@ -16,7 +29,14 @@ export interface UebertragungDeps {
   datenkontext: Datenkontext;
   ladeCanonical: (caseId: string) => Promise<CanonicalCase>;
   ladeVorhandeneNummer: (caseId: string) => Promise<string | null>;
-  speichereNummer: (caseId: string, vorgangsnummer: string) => Promise<void>;
+  /**
+   * Schreibt die Vorgangsnummer NUR, wenn fuer den Fall noch keine gespeichert
+   * ist (in der Implementierung ein bedingtes `updateMany` mit `externalId:
+   * null` und Auswertung von `count`). So bleibt eine von einem ueberlappenden
+   * Aufruf bereits gespeicherte Nummer unangetastet, statt kommentarlos
+   * ueberschrieben zu werden.
+   */
+  speichereNummer: (caseId: string, vorgangsnummer: string) => Promise<SpeichernErgebnis>;
   protokolliere: (eintrag: { caseId: string; status: string; meldung: string }) => Promise<void>;
 }
 
@@ -25,26 +45,32 @@ export interface UebertragungDeps {
  *
  * Reihenfolge ist wesentlich: erst Trockenlauf (body-validation), dann anlegen.
  * Scheitert der Trockenlauf, entsteht in Europace kein halbfertiger Vorgang.
+ *
+ * Bekannte Grenze: Der Aufruf gegen Europace laesst sich nicht zurueckrollen.
+ * Erreichen zwei ueberlappende Aufrufe (Doppelklick, zweiter Tab) beide
+ * `legeVorgangAn`, bevor einer fertig ist, entstehen in Europace zwei echte
+ * Vorgaenge -- das laesst sich im Nachhinein nicht mehr verhindern. Diese
+ * Funktion verhindert dafuer zuverlaessig den schlimmeren Fall: dass die
+ * zweite Nummer die erste in der Datenbank still ueberschreibt und der erste
+ * Vorgang damit fuer BaufiDesk unsichtbar wird (siehe `speichereNummer`
+ * unten und `SpeichernErgebnis`).
  */
 export async function uebertrageFallNachEuropace(
   caseId: string,
   deps: UebertragungDeps
 ): Promise<UebertragungErgebnis> {
   if (!deps.client) {
-    return {
-      ok: false,
-      meldung:
-        "Europace ist nicht verbunden. Bitte EUROPACE_CLIENT_ID und EUROPACE_CLIENT_SECRET hinterlegen.",
-    };
+    const meldung =
+      "Europace ist nicht verbunden. Bitte EUROPACE_CLIENT_ID und EUROPACE_CLIENT_SECRET hinterlegen.";
+    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+    return { ok: false, meldung };
   }
 
   const vorhanden = await deps.ladeVorhandeneNummer(caseId);
   if (vorhanden) {
-    return {
-      ok: false,
-      vorgangsnummer: vorhanden,
-      meldung: `Fuer diesen Fall besteht bereits der Europace-Vorgang ${vorhanden}. Unterlagen koennen weiterhin nachgeschoben werden.`,
-    };
+    const meldung = `Fuer diesen Fall besteht bereits der Europace-Vorgang ${vorhanden}. Unterlagen koennen weiterhin nachgeschoben werden.`;
+    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+    return { ok: false, vorgangsnummer: vorhanden, meldung };
   }
 
   const canonical = await deps.ladeCanonical(caseId);
@@ -70,7 +96,28 @@ export async function uebertrageFallNachEuropace(
 
   try {
     const vorgangsnummer = await deps.client.legeVorgangAn(request);
-    await deps.speichereNummer(caseId, vorgangsnummer);
+
+    // Sicherheitsnetz gegen ueberlappende Aufrufe: der Anlegen-Aufruf ist
+    // bereits passiert und laesst sich nicht zurueckrollen. speichereNummer
+    // schreibt deshalb nur, wenn noch keine Nummer gespeichert ist -- verliert
+    // dieser Aufruf den Wettlauf, bleibt seine Nummer NICHT still verloren,
+    // sondern wird als verwaister Doppel-Vorgang gemeldet und protokolliert.
+    const speicherErgebnis = await deps.speichereNummer(caseId, vorgangsnummer);
+    if (!speicherErgebnis.ok) {
+      const gespeicherteNummer = speicherErgebnis.vorhandeneNummer ?? "unbekannt";
+      const meldung =
+        `Ein gleichzeitiger Aufruf war schneller: In Europace sind dadurch zwei Vorgaenge entstanden ` +
+        `(gespeichert ist ${gespeicherteNummer}, zusaetzlich angelegt wurde ${vorgangsnummer}). ` +
+        `Bitte den ueberzaehligen Vorgang ${vorgangsnummer} in Europace pruefen und entfernen.`;
+      await deps.protokolliere({ caseId, status: "fehler", meldung });
+      return {
+        ok: false,
+        vorgangsnummer: gespeicherteNummer,
+        verwaisteVorgangsnummer: vorgangsnummer,
+        meldung,
+      };
+    }
+
     await deps.protokolliere({
       caseId,
       status: "erfolg",

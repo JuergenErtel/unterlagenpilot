@@ -23,18 +23,31 @@ function deps(over: Partial<Parameters<typeof uebertrageFallNachEuropace>[1]> = 
     datenkontext: "TEST_MODUS" as const,
     ladeCanonical: vi.fn(async () => CANONICAL),
     ladeVorhandeneNummer: vi.fn(async () => null),
-    speichereNummer: vi.fn(async () => {}),
+    speichereNummer: vi.fn(async () => ({ ok: true })),
     protokolliere: vi.fn(async () => {}),
     ...over,
   };
 }
 
 describe("uebertrageFallNachEuropace", () => {
-  it("validiert erst, legt dann an und speichert die Nummer", async () => {
-    const d = deps();
+  it("validiert erst, legt dann an und speichert die Nummer (in dieser Reihenfolge)", async () => {
+    const reihenfolge: string[] = [];
+    const d = deps({
+      client: {
+        validiereKundenangaben: vi.fn(async () => {
+          reihenfolge.push("validiere");
+        }),
+        legeVorgangAn: vi.fn(async () => {
+          reihenfolge.push("anlegen");
+          return "YX4MDU";
+        }),
+        ladeDokumentHoch: vi.fn(async () => "dok-1"),
+      },
+    });
     const ergebnis = await uebertrageFallNachEuropace("case-1", d);
 
     expect(ergebnis).toMatchObject({ ok: true, vorgangsnummer: "YX4MDU" });
+    expect(reihenfolge).toEqual(["validiere", "anlegen"]);
     expect(d.client!.validiereKundenangaben).toHaveBeenCalledOnce();
     expect(d.client!.legeVorgangAn).toHaveBeenCalledOnce();
     expect(d.speichereNummer).toHaveBeenCalledWith("case-1", "YX4MDU");
@@ -62,21 +75,27 @@ describe("uebertrageFallNachEuropace", () => {
     expect(d.speichereNummer).not.toHaveBeenCalled();
   });
 
-  it("uebertraegt einen Fall mit vorhandener Vorgangsnummer nicht erneut", async () => {
+  it("uebertraegt einen Fall mit vorhandener Vorgangsnummer nicht erneut und protokolliert den Skip", async () => {
     const d = deps({ ladeVorhandeneNummer: vi.fn(async () => "ALT123") });
     const ergebnis = await uebertrageFallNachEuropace("case-1", d);
 
     expect(ergebnis.ok).toBe(false);
     expect(ergebnis.vorgangsnummer).toBe("ALT123");
     expect(d.client!.legeVorgangAn).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "uebersprungen" })
+    );
   });
 
-  it("meldet fehlenden Zugang verstaendlich", async () => {
+  it("meldet fehlenden Zugang verstaendlich und protokolliert ihn", async () => {
     const d = deps({ client: null });
     const ergebnis = await uebertrageFallNachEuropace("case-1", d);
 
     expect(ergebnis.ok).toBe(false);
     expect(ergebnis.meldung).toContain("nicht verbunden");
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "uebersprungen" })
+    );
   });
 
   it("protokolliert auch den Auth-Fehler", async () => {
@@ -93,5 +112,42 @@ describe("uebertrageFallNachEuropace", () => {
     const ergebnis = await uebertrageFallNachEuropace("case-1", d);
     expect(ergebnis.ok).toBe(false);
     expect(d.protokolliere).toHaveBeenCalledWith(expect.objectContaining({ status: "fehler" }));
+  });
+
+  it("ueberschreibt eine parallel gespeicherte Nummer nicht, sondern meldet ok:false", async () => {
+    const d = deps({
+      speichereNummer: vi.fn(async () => ({ ok: false, vorhandeneNummer: "PARALLEL1" })),
+    });
+
+    const ergebnis = await uebertrageFallNachEuropace("case-1", d);
+
+    // Der Aufruf darf sich NIE als Erfolg ausgeben, wenn seine Nummer nicht
+    // gespeichert werden konnte -- sonst haelt BaufiDesk faelschlich fest,
+    // dass die Uebertragung glatt lief.
+    expect(ergebnis.ok).toBe(false);
+  });
+
+  it("meldet im Konfliktfall beide Vorgangsnummern und protokolliert den Fehler", async () => {
+    const d = deps({
+      speichereNummer: vi.fn(async () => ({ ok: false, vorhandeneNummer: "PARALLEL1" })),
+    });
+
+    const ergebnis = await uebertrageFallNachEuropace("case-1", d);
+
+    // "PARALLEL1" ist die Nummer, die tatsaechlich gespeichert ist; "YX4MDU"
+    // ist die von diesem Aufruf angelegte, aber verwaiste Nummer -- beide
+    // muessen im Ergebnis auftauchen, sonst geht der doppelte Vorgang in
+    // Europace unbemerkt unter.
+    expect(ergebnis.vorgangsnummer).toBe("PARALLEL1");
+    expect(ergebnis.verwaisteVorgangsnummer).toBe("YX4MDU");
+    expect(ergebnis.meldung).toContain("PARALLEL1");
+    expect(ergebnis.meldung).toContain("YX4MDU");
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        caseId: "case-1",
+        status: "fehler",
+        meldung: expect.stringContaining("PARALLEL1"),
+      })
+    );
   });
 });
