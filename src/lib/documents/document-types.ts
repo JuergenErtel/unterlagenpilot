@@ -214,6 +214,13 @@ export const DOCUMENT_TYPE_SPECS: Record<DocumentType, DocumentTypeSpec> = {
     warningCodes: [...QUALITY],
     platformRelevance: ALL,
   },
+  weg_protokoll: {
+    type: "weg_protokoll",
+    keywords: ["eigentümerversammlung", "beschlusssammlung", "wohnungseigentümer", "verwalter", "tagesordnung", "sonderumlage"],
+    fields: [req("versammlungsdatum", "Datum der Versammlung"), opt("verwalter", "Verwalter"), opt("sonderumlage", "Beschlossene Sonderumlage"), opt("ruecklage", "Instandhaltungsrücklage")],
+    warningCodes: [...QUALITY],
+    platformRelevance: ALL,
+  },
   flurkarte_lageplan: {
     type: "flurkarte_lageplan",
     keywords: ["flurkarte", "lageplan", "katasteramt", "liegenschaftskarte"],

@@ -58,6 +58,13 @@ const KATEGORIE: Record<DocumentType, string> = {
   // Kaltmiete" - eine Einkommensuebersicht, kein Vertrag; keine eigene
   // Mieteinnahmen-Kategorie vorhanden.
   mietaufstellung: "Sonstige_Einnahmen",
+  // Fuer das Protokoll der Eigentuemerversammlung gibt es keine Kategorie. Die
+  // drei vorhandenen Protokoll-Kategorien meinen etwas anderes:
+  // "Beratungsprotokoll" ist die Beratungsdokumentation nach § 34i GewO,
+  // "Uebergabeprotokoll" die Objektuebergabe, "Erlaeuterungsprotokoll" die
+  // Produkterlaeuterung. Ein aehnlich klingender falscher Wert wuerde die
+  // Unterlage bei der Bank unter dem falschen Reiter ablegen.
+  weg_protokoll: "Sonstiges",
   bwa: "BWA",
   // Europace kennt keine eigenen Kategorien fuer SuSa/Jahresabschluss/EUER;
   // laut Checkliste "selbststaendiger_kauf" liefert derselbe Steuerberater

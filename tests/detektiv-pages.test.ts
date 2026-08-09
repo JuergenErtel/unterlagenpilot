@@ -19,7 +19,7 @@ describe("Kandidatenseiten-Filter", () => {
       { pageNumber: 2, text: "1. Nachtrag zur Teilungserklaerung" },
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0].pageNumber).toBe(2);
+    expect(out[0]!.pageNumber).toBe(2);
   });
 
   it("deckelt auf hoechstens max Seiten", () => {

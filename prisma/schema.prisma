@@ -155,6 +155,7 @@ enum DocumentType {
   restschuldnachweis
   mietvertrag
   mietaufstellung
+  weg_protokoll
   bwa
   susa
   jahresabschluss
