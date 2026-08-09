@@ -2457,19 +2457,32 @@ export function EuropaceUebertragung({
     starte(async () => {
       const e = await europaceVorgangAnlegen(caseId);
       setMeldung(e.meldung);
-      setFeldmeldungen(e.feldmeldungen ?? []);
+      // Bei einem parallelen zweiten Aufruf entsteht in Europace ein
+      // ueberzaehliger Vorgang. Die Nummer MUSS sichtbar werden, sonst bleibt er
+      // dort unbemerkt liegen.
+      setFeldmeldungen(
+        e.verwaisteVorgangsnummer
+          ? [
+              `Achtung: In Europace ist zusätzlich der Vorgang ${e.verwaisteVorgangsnummer} entstanden. Bitte dort prüfen und entfernen.`,
+              ...(e.feldmeldungen ?? []),
+            ]
+          : (e.feldmeldungen ?? [])
+      );
       setErfolg(e.ok);
     });
 
   const unterlagen = () =>
     starte(async () => {
       const e = await europaceUnterlagenUebertragen(caseId);
-      setMeldung(
-        e.fehlgeschlagen.length
-          ? `${e.meldung} ${e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`).join(" | ")}`
-          : e.meldung
-      );
-      setFeldmeldungen([]);
+      setMeldung(e.meldung);
+      // Fehlgeschlagene und ueberzaehlige Dokumente einzeln benennen – eine
+      // Sammelmeldung "teilweise" allein hilft beim Aufraeumen nicht weiter.
+      setFeldmeldungen([
+        ...e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`),
+        ...e.ueberzaehlig.map(
+          (u) => `${u.name}: doppelt nach Europace übertragen – bitte dort prüfen und entfernen.`
+        ),
+      ]);
       setErfolg(e.ok);
     });
 
