@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { execFileSync } from "node:child_process";
 
 const RUN = process.env.RUN_DB_IT === "1";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,27 +14,8 @@ describe.runIf(RUN)("Bestandsdaten-Lauf (PGlite)", () => {
   let orgId: string;
 
   beforeAll(async () => {
-    process.env.UP_SEED_NO_AUTORUN = "1";
-    const ddl = execFileSync(
-      "npx",
-      [
-        "prisma",
-        "migrate",
-        "diff",
-        "--from-empty",
-        "--to-schema-datamodel",
-        "prisma/schema.prisma",
-        "--script",
-      ],
-      { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
-    );
-    const { PGlite } = await import("@electric-sql/pglite");
-    const { PrismaPGlite } = await import("pglite-prisma-adapter");
-    const { PrismaClient } = await import("@prisma/client");
-    const pg = new PGlite();
-    await pg.exec(ddl);
-    const adapter = new PrismaPGlite(pg) as never;
-    prisma = new PrismaClient({ adapter });
+    const { startPGlite } = await import("./helpers/pglite-setup");
+    prisma = await startPGlite();
     g.prisma = prisma;
 
     const org = await prisma.organization.create({ data: { name: "Testorg", slug: "testorg-lp" } });
