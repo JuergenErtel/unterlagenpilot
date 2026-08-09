@@ -24,6 +24,11 @@ import {
   uebertrageFallNachEuropace,
   type UebertragungErgebnis,
 } from "@/lib/platforms/europace/uebertragung";
+import {
+  uebertrageUnterlagen,
+  type UnterlagenErgebnis,
+} from "@/lib/platforms/europace/unterlagen";
+import { getStorage } from "@/lib/storage";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
@@ -743,6 +748,50 @@ export async function europaceVorgangAnlegen(caseId: string): Promise<Uebertragu
       metadata: { platform: "europace", vorgangsnummer: ergebnis.vorgangsnummer },
     });
   }
+
+  revalidatePath(`/cases/${caseId}/export`);
+  return ergebnis;
+}
+
+/**
+ * Schiebt die akzeptierten Unterlagen an den bestehenden Europace-Vorgang.
+ */
+export async function europaceUnterlagenUebertragen(caseId: string): Promise<UnterlagenErgebnis> {
+  const { ctx } = await requireCaseAccess(caseId);
+  const storage = getStorage();
+
+  const ergebnis = await uebertrageUnterlagen(caseId, {
+    client: getEuropaceClient(ctx.organizationId),
+    ladeVorgangsnummer: async (id) =>
+      (
+        await prisma.platformMapping.findUnique({
+          where: { caseId_platform: { caseId: id, platform: "europace" } },
+          select: { externalId: true },
+        })
+      )?.externalId ?? null,
+    ladeDokumente: (id) =>
+      prisma.document.findMany({
+        where: { caseId: id, reviewStatus: "akzeptiert" },
+        select: {
+          id: true,
+          generatedName: true,
+          originalName: true,
+          documentType: true,
+          mimeType: true,
+          storageKey: true,
+          europaceDokumentId: true,
+        },
+      }),
+    ladeDatei: (storageKey) => storage.get(storageKey),
+    merkeDokumentId: async (dokumentId, europaceDokumentId) => {
+      await prisma.document.update({ where: { id: dokumentId }, data: { europaceDokumentId } });
+    },
+    protokolliere: async ({ caseId: id, status, meldung }) => {
+      await prisma.platformSyncLog.create({
+        data: { caseId: id, platform: "europace", direction: "export", status, message: meldung },
+      });
+    },
+  });
 
   revalidatePath(`/cases/${caseId}/export`);
   return ergebnis;
