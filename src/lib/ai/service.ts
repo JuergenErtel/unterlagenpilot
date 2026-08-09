@@ -30,6 +30,7 @@ import { floorplanAnalysisSchema, floorplanJsonSchema, type FloorplanAnalysis } 
 import { selfEmployedAnalysisSchema, selfEmployedJsonSchema, type SelfEmployedAnalysis } from "@/lib/einkommen/schema";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import { crossDocumentChecks, parseGermanNumber } from "@/lib/ai/cross-checks";
+import { documentReferencesSchema, type DocumentReferencesResult } from "@/lib/detektiv/schema";
 
 /**
  * AIService – die einzige Schnittstelle für KI-Auswertungen.
@@ -482,6 +483,38 @@ export class AIService {
   ): Promise<GeneratedMessageResult> {
     const { buildPdfChecklistText } = await import("@/lib/messages/generators");
     return generatedMessageSchema.parse(buildPdfChecklistText(missingItems, caseData));
+  }
+
+  /**
+   * Liest aus den Kandidatenseiten eines Dokuments, welche anderen Urkunden es
+   * nennt – und welche Urkunde es selbst ist. Eigener Aufruf mit eigenem Schema:
+   * ein Fehlschlag hier darf die Feld-Extraktion nicht mitreissen.
+   */
+  async extractDocumentReferences(
+    documentType: DocumentType | null,
+    pages: Array<{ pageNumber: number; text: string }>
+  ): Promise<DocumentReferencesResult> {
+    if (pages.length === 0) return { references: [] };
+
+    const seiten = pages.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join("\n\n");
+    return this.run(
+      "documentReferences",
+      documentReferencesSchema,
+      [
+        "Du liest deutsche Grundstuecks- und Wohnungseigentumsunterlagen.",
+        "Deine EINZIGE Aufgabe ist es, Fakten zu melden: welche anderen Urkunden nennt dieses Dokument, und welche Urkunde ist es selbst.",
+        "Bewerte NICHTS. Schlage KEINE Unterlagen vor. Erfinde nichts.",
+        "kind=selbst genau einmal, wenn das Dokument sich selbst als Urkunde ausweist (Datum, UR-Nummer, Bezeichnung).",
+        "kind=bezugsurkunde fuer in Bezug genommene Urkunden, kind=nachtrag fuer Nachtraege,",
+        "kind=anlage fuer im Text erwaehnte Anlagen, kind=last fuer Eintragungen in Abteilung II,",
+        "kind=grundpfandrecht fuer Eintragungen in Abteilung III.",
+        "sourcePage ist die Seitenzahl aus der Ueberschrift '--- Seite N ---'.",
+        "sourceQuote ist ein woertliches Zitat aus genau dieser Seite, hoechstens 200 Zeichen.",
+        "Datumsangaben im Format yyyy-mm-dd. Unbekanntes ist null, nie geraten.",
+      ].join(" "),
+      `Dokumenttyp: ${documentType ?? "unbekannt"}\n\n${seiten}`,
+      { documentType }
+    );
   }
 }
 

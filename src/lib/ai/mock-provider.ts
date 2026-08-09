@@ -66,6 +66,23 @@ export class MockAIProvider implements AIProvider {
         return req.hints?.precomputed ?? { platform: "europace", groups: [], missingRequiredFields: [] };
       case "generatedMessage":
         return req.hints?.precomputed ?? { channel: "email", subject: "Ihre Unterlagen", body: "" };
+      case "documentReferences":
+        return {
+          references: [
+            {
+              kind: "nachtrag",
+              label: "2. Nachtrag zur Teilungserklärung",
+              urkundeDatum: "2011-08-11",
+              urkundenNummer: "789/2011",
+              notar: "Dr. Mustermann",
+              abteilung: "BV",
+              laufendeNummer: null,
+              sourcePage: 1,
+              sourceQuote: "2. Nachtrag vom 11.08.2011, UR-Nr. 789/2011",
+              confidence: 0.88,
+            },
+          ],
+        };
       case "selfEmployed":
         return {
           docs: [
