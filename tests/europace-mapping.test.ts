@@ -82,7 +82,7 @@ describe("canonicalToKundenangaben – Haushalt", () => {
     });
   });
 
-  it("mappt Beschaeftigung als ANGESTELLTER mit Arbeitgeber und Probezeit", () => {
+  it("mappt Beschaeftigung als ANGESTELLTER mit Arbeitgeber", () => {
     const r = canonicalToKundenangaben(angestellt, { datenkontext: "TEST_MODUS" });
     const finanzielles = r.kundenangaben.haushalte![0]!.kunden![0]!.finanzielles!;
     expect(finanzielles.einkommenNetto).toBe(3200);
@@ -92,9 +92,39 @@ describe("canonicalToKundenangaben – Haushalt", () => {
       beschaeftigungsverhaeltnis: {
         arbeitgeber: { name: "Beispiel GmbH" },
         beschaeftigtSeit: "2019-03-01",
-        probezeit: false,
       },
     });
+  });
+
+  it("laesst probezeit weg, wenn inProbezeit false ist: die DB-Spalte ist ein nicht-nullables Boolean mit Default false, also nicht von 'nie erfasst' unterscheidbar", () => {
+    const r = canonicalToKundenangaben(angestellt, { datenkontext: "TEST_MODUS" });
+    const verhaeltnis = r.kundenangaben.haushalte![0]!.kunden![0]!.finanzielles!.beschaeftigung!
+      .beschaeftigungsverhaeltnis!;
+    // Bewusst toBeUndefined statt not.toHaveProperty: das Objekt traegt den
+    // Schluessel `probezeit` durchaus (mit Wert undefined) -- JSON.stringify
+    // laesst ihn beim Senden ohnehin weg, aber toHaveProperty saehe ihn als
+    // vorhanden an.
+    expect(verhaeltnis.probezeit).toBeUndefined();
+  });
+
+  it("sendet probezeit:true, weil ein wahrer Wert nur aus einer expliziten Antwort (Selbstauskunft) stammen kann", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        applicants: [{ position: 1, vorname: "Cem", nachname: "Yildiz" }],
+        employment: [
+          {
+            applicantPosition: 1,
+            beschaeftigungsart: "angestellter",
+            arbeitgeber: "Beispiel GmbH",
+            inProbezeit: true,
+          },
+        ],
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const verhaeltnis = r.kundenangaben.haushalte![0]!.kunden![0]!.finanzielles!.beschaeftigung!
+      .beschaeftigungsverhaeltnis!;
+    expect(verhaeltnis.probezeit).toBe(true);
   });
 
   it("mappt Selbststaendige ohne Arbeitgeberblock", () => {
@@ -187,6 +217,17 @@ describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
       datenkontext: "TEST_MODUS",
     });
     expect(r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!["@type"]).toBe("IMMOBILIE_OHNE_TYP");
+  });
+
+  it("behaelt die Grundstuecksflaeche bei IMMOBILIE_OHNE_TYP (Gewerbe/Sonstiges) statt sie wegzuwerfen", () => {
+    const r = canonicalToKundenangaben(
+      fall({ property: { objektart: "gewerbe", grundstuecksflaeche: 300 } }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ["@type"]).toBe("IMMOBILIE_OHNE_TYP");
+    expect(typ.grundstuecksgroesse).toBe(300);
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
   });
 
   it("laesst die Eigentumswohnung ohne Grundstuecksgroesse", () => {

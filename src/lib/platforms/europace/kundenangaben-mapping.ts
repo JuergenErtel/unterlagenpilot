@@ -107,7 +107,17 @@ function beschaeftigung(e: CanonicalEmployment | undefined): EuropaceBeschaeftig
     ? wegLassenWennLeer({
         arbeitgeber: e.arbeitgeber ? { name: e.arbeitgeber } : undefined,
         beschaeftigtSeit: e.eintrittsdatum,
-        probezeit: e.inProbezeit,
+        // NICHT einfach e.inProbezeit durchreichen: die Spalte ist in der DB
+        // `Boolean @default(false)` (nicht nullable), es gibt also keinen
+        // Zustand "unbekannt" zu lesen -- ein unberuehrtes Beschaeftigungs-
+        // verhaeltnis und ein explizit verneintes ("nein, keine Probezeit
+        // mehr") sehen fuer BaufiDesk identisch aus: false. `true` dagegen
+        // entsteht ausschliesslich durch eine explizite Antwort (Selbst-
+        // auskunft, "Noch in der Probezeit" = ja) und ist deshalb belastbar.
+        // Also wie sonst im Mapping ueblich: was nicht sicher bekannt ist,
+        // wird weggelassen statt als Tatsache behauptet -- hier eben nur fuer
+        // den unsicheren Fall false.
+        probezeit: e.inProbezeit === true ? true : undefined,
       })
     : undefined;
 
@@ -186,8 +196,20 @@ const OBJEKTART: Record<PropertyType, string> = {
   sonstiges: "IMMOBILIE_OHNE_TYP",
 };
 
-/** Diese Typen kennen keine eigene Grundstuecksgroesse. */
-const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG", "IMMOBILIE_OHNE_TYP"]);
+/**
+ * EIGENTUMSWOHNUNG deklariert im Schema zwar `grundstuecksgroesse` (gegen
+ * kundenangaben-openapi.json geprueft) -- das Feld bleibt hier trotzdem
+ * bewusst leer: das Gesamtgrundstueck der Wohnanlage ist fachlich nicht die
+ * Flaeche der einzelnen Eigentumswohnung, und BaufiDesk erfasst beides nicht
+ * getrennt. Eine gesetzte `grundstuecksflaeche` hier zu senden waere geraten,
+ * nicht abgeleitet.
+ *
+ * IMMOBILIE_OHNE_TYP (Auffangwert fuer Gewerbe und Sonstiges) steht bewusst
+ * NICHT in dieser Menge: dort gibt es keine fachliche Begruendung, eine
+ * erfasste Grundstuecksflaeche wegzuwerfen -- und das Schema erlaubt
+ * `grundstuecksgroesse` dort ebenfalls.
+ */
+const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG"]);
 
 /**
  * Diese Typen kennen im Schema kein `gebaeude`-Feld. Gegen
