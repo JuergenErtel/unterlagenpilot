@@ -785,12 +785,40 @@ describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
     expect(typ.grundstuecksgroesse).toBeUndefined();
   });
 
-  it("bleibt schemakonform", () => {
-    const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
+  it("haengt dem Baugrundstueck kein Gebaeude an", () => {
+    const r = canonicalToKundenangaben(
+      fall({ property: { objektart: "grundstueck", baujahr: 2020, grundstuecksflaeche: 800 } }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ["@type"]).toBe("BAUGRUNDSTUECK");
+    expect(typ.gebaeude).toBeUndefined();
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+
+  // Die eigentliche Absicherung: jede Objektart mit vollen Daten gegen das Schema.
+  // Genau hier faellt die naechste Variante mit abweichender Struktur auf.
+  it.each(PROPERTY_TYPES)("bleibt schemakonform fuer Objektart %s", (objektart) => {
+    const r = canonicalToKundenangaben(
+      fall({
+        property: {
+          objektart,
+          strasse: "Feldweg 12a",
+          plz: "14467",
+          ort: "Potsdam",
+          wohnflaeche: 142.5,
+          baujahr: 1998,
+          grundstuecksflaeche: 620,
+        },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
     expect(validateKundenangabenRequest(r).errors).toEqual([]);
   });
 });
 ```
+
+`PROPERTY_TYPES` kommt aus `@/lib/domain/enums` und muss oben im Test importiert werden.
 
 - [ ] **Schritt 2: Test ausführen, Fehlschlag bestätigen**
 
@@ -825,15 +853,25 @@ const OBJEKTART: Record<PropertyType, string> = {
 /** Diese Typen kennen keine eigene Grundstuecksgroesse. */
 const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG", "IMMOBILIE_OHNE_TYP"]);
 
+/**
+ * Varianten ohne `gebaeude` im Schema. BAUGRUNDSTUECK fuehrt nur
+ * grundstuecksart und grundstuecksgroesse – ein angehaengtes gebaeude macht die
+ * Nutzlast ungueltig. Die Menge gehoert aus dem Schema abgeleitet, nicht geraten:
+ * fuer jeden @type-Zielwert pruefen, ob die Variante `gebaeude` deklariert.
+ */
+const OHNE_GEBAEUDE = new Set(["BAUGRUNDSTUECK"]);
+
 function finanzierungsobjekt(c: CanonicalCase): EuropaceFinanzierungsobjekt | undefined {
   const p = c.property;
   if (!p) return undefined;
 
   const typ = p.objektart ? OBJEKTART[p.objektart] : "IMMOBILIE_OHNE_TYP";
-  const gebaeude = wegLassenWennLeer({
-    baujahr: p.baujahr,
-    nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
-  });
+  const gebaeude = OHNE_GEBAEUDE.has(typ)
+    ? undefined
+    : wegLassenWennLeer({
+        baujahr: p.baujahr,
+        nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
+      });
 
   const immobilie = wegLassenWennLeer({
     adresse: anschriftAufteilen(p.strasse, p.plz, p.ort),
