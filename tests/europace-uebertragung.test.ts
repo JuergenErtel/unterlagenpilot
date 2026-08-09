@@ -160,22 +160,38 @@ describe("uebertrageFallNachEuropace", () => {
     );
   });
 
-  it("lehnt einen ueberlappenden zweiten Aufruf waehrend einer laufenden Beanspruchung ab, ohne zu validieren oder anzulegen", async () => {
-    const d = deps();
+  it("lehnt einen wirklich ueberlappenden zweiten Aufruf waehrend eines noch laufenden ersten ab, ohne zu validieren oder anzulegen", async () => {
+    // Die Freigabe passiert jetzt in `finally`, sobald der erste Aufruf
+    // fertig ist -- ein einfaches sequenzielles "erst warten, dann nochmal
+    // aufrufen" wuerde die Beanspruchung also laengst nicht mehr vorfinden.
+    // Um echtes Ueberlappen (Doppelklick, zweiter Tab) zu simulieren, haelt
+    // dieser Test den ersten Aufruf bewusst MITTEN im kritischen Abschnitt
+    // fest, bevor der zweite startet.
+    let freigeben: () => void = () => {};
+    const haeltErstenAufrufFest = new Promise<void>((resolve) => {
+      freigeben = resolve;
+    });
 
-    const erster = await uebertrageFallNachEuropace("case-1", d);
-    expect(erster.ok).toBe(true);
+    const d = deps({
+      client: {
+        validiereKundenangaben: vi.fn(async () => {
+          await haeltErstenAufrufFest;
+        }),
+        legeVorgangAn: vi.fn(async () => "YX4MDU"),
+        ladeDokumentHoch: vi.fn(async () => "dok-1"),
+      },
+    });
 
-    // Zweiter Aufruf fuer denselben Fall, noch innerhalb des Beanspruchungs-
-    // Fensters (kein __resetRateLimits dazwischen) -- simuliert Doppelklick
-    // oder zweiten Tab.
+    const ersterPromise = uebertrageFallNachEuropace("case-1", d);
+    // Der Mikrotask-Queue Gelegenheit geben, den ersten Aufruf bis zum
+    // (bewusst blockierenden) Trockenlauf voranschreiten zu lassen -- danach
+    // haelt er dort fest, die Beanspruchung ist aber schon vergeben.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     const zweiter = await uebertrageFallNachEuropace("case-1", d);
 
     expect(zweiter.ok).toBe(false);
     expect(zweiter.meldung).toContain("laeuft bereits");
-    // Nur der erste Aufruf hat tatsaechlich validiert und angelegt.
-    expect(d.client!.validiereKundenangaben).toHaveBeenCalledOnce();
-    expect(d.client!.legeVorgangAn).toHaveBeenCalledOnce();
     expect(d.protokolliere).toHaveBeenCalledWith(
       expect.objectContaining({
         caseId: "case-1",
@@ -183,5 +199,51 @@ describe("uebertrageFallNachEuropace", () => {
         meldung: expect.stringContaining("laeuft bereits"),
       })
     );
+    // In diesem Moment hat noch NIEMAND legeVorgangAn erreicht: der erste
+    // Aufruf haengt weiterhin im Trockenlauf fest, der zweite wurde vorher
+    // abgewiesen.
+    expect(d.client!.legeVorgangAn).not.toHaveBeenCalled();
+
+    freigeben();
+    const erster = await ersterPromise;
+    expect(erster.ok).toBe(true);
+    // Nur der erste Aufruf hat tatsaechlich validiert und angelegt.
+    expect(d.client!.validiereKundenangaben).toHaveBeenCalledOnce();
+    expect(d.client!.legeVorgangAn).toHaveBeenCalledOnce();
+  });
+
+  it("laesst einen zweiten Versuch nach einem erfolgreich abgeschlossenen ersten sofort durch (keine Aussperrung)", async () => {
+    const d = deps();
+
+    const erster = await uebertrageFallNachEuropace("case-1", d);
+    expect(erster.ok).toBe(true);
+
+    // Sofort danach, ohne __resetRateLimits: die Freigabe in `finally` muss
+    // gegriffen haben, sonst wuerde dieser Versuch faelschlich als "laeuft
+    // bereits" abgewiesen.
+    const zweiter = await uebertrageFallNachEuropace("case-1", d);
+
+    expect(zweiter.meldung).not.toContain("laeuft bereits");
+    expect(d.client!.validiereKundenangaben).toHaveBeenCalledTimes(2);
+  });
+
+  it("laesst einen zweiten Versuch nach einem gescheiterten ersten sofort durch (keine Aussperrung)", async () => {
+    const d = deps({
+      client: {
+        validiereKundenangaben: vi.fn(async () => {
+          throw new EuropaceValidationError(["kundenangaben.haushalte[0]: Kunde ohne referenzId"]);
+        }),
+        legeVorgangAn: vi.fn(async () => "YX4MDU"),
+        ladeDokumentHoch: vi.fn(async () => "dok-1"),
+      },
+    });
+
+    const erster = await uebertrageFallNachEuropace("case-1", d);
+    expect(erster.ok).toBe(false);
+
+    const zweiter = await uebertrageFallNachEuropace("case-1", d);
+
+    expect(zweiter.meldung).not.toContain("laeuft bereits");
+    expect(d.client!.validiereKundenangaben).toHaveBeenCalledTimes(2);
   });
 });

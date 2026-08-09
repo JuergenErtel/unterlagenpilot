@@ -74,3 +74,26 @@ export async function checkRateLimit(
     return rateLimit(key, max, windowSec);
   }
 }
+
+/**
+ * Gibt eine Beanspruchung vorzeitig frei, bevor ihr Fenster regulär abläuft.
+ * Gedacht für Aufrufer, die `checkRateLimit`/`rateLimit` mit `max=1` als
+ * kurzlebigen Mutex um einen kritischen Abschnitt zweckentfremden (siehe
+ * `uebertragung.ts`): nach erfolgreichem oder fehlgeschlagenem Abschnitt soll
+ * ein zweiter, regulärer Versuch sofort wieder durchkommen, statt bis zum
+ * Fensterende zu warten.
+ *
+ * Wirkt NUR auf den In-Memory-Speicher. Ist Upstash Redis konfiguriert, tut
+ * diese Funktion bewusst NICHTS – der Zähler dort läuft regulär mit
+ * `windowSec` ab, statt vorzeitig freigegeben zu werden. Ein verteiltes DEL
+ * über die Upstash-REST-Pipeline wäre technisch denkbar, ließe sich hier aber
+ * nicht gegen echtes Upstash verifizieren (in diesem Projekt bislang nirgends
+ * konfiguriert) – lieber ein benannter Teilweg als ungetesteter Code, der nur
+ * so tut, als würde er freigeben. Bestehende Aufrufer von `checkRateLimit`
+ * (Login, Registrierung, Passwort-Reset, Upload, Einkommen) rufen diese
+ * Funktion nicht auf und sind von ihr nicht betroffen.
+ */
+export function releaseRateLimit(key: string): void {
+  if (upstashConfig()) return;
+  buckets.delete(key);
+}

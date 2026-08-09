@@ -18,7 +18,10 @@ const UNTERLAGEN_HOST = "https://api.europace2.de";
 
 /** Token laeuft nach 3600 s ab; wir erneuern es eine Minute vorher. */
 const TOKEN_PUFFER_MS = 60_000;
-const TIMEOUT_MS = 30_000;
+/** Exportiert, damit Aufrufer (z. B. die Beanspruchung in uebertragung.ts) ihre
+ *  eigenen Zeitfenster an der tatsaechlichen Obergrenze eines Aufrufs ausrichten
+ *  koennen, statt sie zu erraten. */
+export const TIMEOUT_MS = 30_000;
 /** Der Upload darf laenger dauern – Europace erlaubt bis 100 MB je Datei. */
 const UPLOAD_TIMEOUT_MS = 120_000;
 
