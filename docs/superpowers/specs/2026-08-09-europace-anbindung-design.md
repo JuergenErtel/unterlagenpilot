@@ -95,8 +95,14 @@ POST https://api.europace2.de/v2/dokumente
 Multipart-Upload mit `caseId` (= Vorgangsnummer), `file`, `displayName`,
 `category`, optional `assignmentId`. Erlaubt sind PDF, JPG, PNG, TIFF bis 100 MB.
 Die gültigen Kategorien (über 100 Werte wie `Ausweis`, `BWA`, `Baugenehmigung`)
-stehen maschinenlesbar im Europace-Repo. Mögliche Zuordnungen — etwa zu einem
-bestimmten Antragsteller — liefert der Endpunkt `moeglicheZuordnungen`.
+stehen maschinenlesbar im Europace-Repo.
+
+**Die Antragsteller-Zuordnung bleibt vorerst außen vor.** Die gültigen Werte für
+`assignmentId` liefert laut Doku ein Endpunkt `moeglicheZuordnungen`, dessen
+genaue URL und Antwortformat in den geprüften Quellen nicht stehen. Sie werden
+nicht geraten. Dokumente gehen ohne Zuordnung an den Vorgang — das funktioniert;
+die Zuordnung nimmt Jürgen wie bisher in Europace vor. Nachgerüstet wird, sobald
+der API-Zugang eine Prüfung des Endpunkts erlaubt.
 
 ## Entscheidungen
 
