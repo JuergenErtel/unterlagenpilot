@@ -241,13 +241,28 @@ const FINANZIERUNGSZWECK: Record<FinancingType, string> = {
   kapitalbeschaffung: "KAPITALBESCHAFFUNG",
 };
 
-/** Nur der Kauf kennt einen Kaufpreis samt Kaufnebenkosten. */
+/** Nur der Kauf kennt im Schema einen Kaufpreis. */
 const MIT_KAUFPREIS = new Set(["KAUF", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
+
+/**
+ * Nebenkosten sind ein eigenes Tor, getrennt vom Kaufpreis: Neubau kennt im
+ * Schema `nebenkosten`, aber keinen `kaufpreis` (gegen
+ * kundenangaben-openapi.json geprueft: Kauf, KaufNeubauVomBautraeger und
+ * Neubau deklarieren `nebenkosten`; Anschlussfinanzierung,
+ * ModernisierungUmbauAnbau und Kapitalbeschaffung keins von beidem). Ein
+ * gemeinsames Tor haette bei "neubau" die erfasste Maklerprovision stumm
+ * verworfen.
+ */
+const MIT_NEBENKOSTEN = new Set(["KAUF", "KAUF_NEUBAU_VOM_BAUTRAEGER", "NEUBAU"]);
 
 function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | undefined {
   const f = c.financing;
   const typ = f.finanzierungsart ? FINANZIERUNGSZWECK[f.finanzierungsart] : undefined;
 
+  // financing.nebenkosten (Gesamtbetrag) wird bewusst NICHT gemappt: Europaces
+  // Nebenkosten-Objekt kennt nur die Einzelposten Grunderwerbsteuer,
+  // Maklergebuehr und Notargebuehr – eine Aufteilung des Gesamtbetrags auf
+  // diese drei waere geraten, nicht abgeleitet.
   const nebenkosten = wegLassenWennLeer({
     maklergebuehr:
       f.maklerprovisionProzent != null
@@ -261,7 +276,7 @@ function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | un
       : {
           "@type": typ,
           ...(MIT_KAUFPREIS.has(typ) && f.kaufpreis != null ? { kaufpreis: f.kaufpreis } : {}),
-          ...(MIT_KAUFPREIS.has(typ) && nebenkosten ? { nebenkosten } : {}),
+          ...(MIT_NEBENKOSTEN.has(typ) && nebenkosten ? { nebenkosten } : {}),
         };
 
   const bausteine =

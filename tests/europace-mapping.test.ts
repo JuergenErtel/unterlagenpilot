@@ -272,6 +272,23 @@ describe("canonicalToKundenangaben – Finanzierungsbedarf", () => {
     });
   });
 
+  it("behaelt die Maklerprovision beim Neubau, obwohl der keinen Kaufpreis kennt", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        financing: {
+          finanzierungsart: "neubau",
+          kaufpreis: 450_000,
+          maklerprovisionProzent: 3.57,
+        },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const zweck = r.kundenangaben.finanzierungsbedarf!.finanzierungszweck!;
+    expect(zweck["@type"]).toBe("NEUBAU");
+    expect(zweck.kaufpreis).toBeUndefined();
+    expect(zweck.nebenkosten).toEqual({ maklergebuehr: { einheit: "PROZENT", wert: 3.57 } });
+  });
+
   it("macht aus dem Darlehenswunsch ein Annuitaetendarlehen", () => {
     const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
     expect(r.kundenangaben.finanzierungsbedarf!.finanzierungsbausteine).toEqual([
