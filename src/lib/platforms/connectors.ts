@@ -74,15 +74,27 @@ export class EuropaceConnector extends BaseConnector {
     return "europace" as const;
   }
   async isConfigured() {
-    return Boolean(process.env.EUROPACE_BASE_URL && process.env.EUROPACE_CLIENT_ID && process.env.EUROPACE_CLIENT_SECRET);
+    return Boolean(process.env.EUROPACE_CLIENT_ID && process.env.EUROPACE_CLIENT_SECRET);
   }
   async testConnection(): Promise<ConnectionStatus> {
     const ok = await this.isConfigured();
+    const kontext = process.env.EUROPACE_DATENKONTEXT === "ECHT_GESCHAEFT" ? "Echtgeschäft" : "Testmodus";
     return {
       ok,
       message: ok
-        ? "Konfiguration vorhanden (OAuth/API). TODO: echten Health-Check ausführen."
-        : "Europace nicht konfiguriert. EUROPACE_BASE_URL/CLIENT_ID/CLIENT_SECRET setzen.",
+        ? `Europace verbunden (${kontext}). Vorgang anlegen und Unterlagen übertragen im Einreichungsassistenten.`
+        : "Europace nicht verbunden. EUROPACE_CLIENT_ID und EUROPACE_CLIENT_SECRET setzen (API-Client bei helpdesk@europace2.de beantragen).",
+    };
+  }
+  /**
+   * Die Uebertragung laeuft ueber den Einreichungsassistenten, weil sie eine
+   * manuelle Freigabe und den Trockenlauf voraussetzt.
+   */
+  async pushCaseData(): Promise<PushResult> {
+    return {
+      ok: false,
+      transmitted: false,
+      message: "Bitte im Einreichungsassistenten übertragen – dort läuft die Prüfung vor dem Anlegen.",
     };
   }
   // Vorbereitet für Vorgangsimport (Kundenangaben, Dokumente, Anforderungen).

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { releasePlatform } from "@/lib/actions/cases";
+import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CopyBlock } from "@/components/copy-block";
 import { ProgressRing } from "@/components/case/progress-ring";
 import { PlatformExportTable, type ExportGroup } from "@/components/case/platform-export-table";
+import { EuropaceUebertragung } from "@/components/case/europace-uebertragung";
 import { readinessTone } from "@/lib/ui/tone";
 import { PLATFORM_LABELS, PLATFORMS, type Platform } from "@/lib/domain/enums";
 
@@ -36,12 +38,15 @@ export default async function ExportPage({
 }) {
   const { id } = await params;
   const { platform } = await searchParams;
-  await requireCaseAccess(id);
+  const { ctx } = await requireCaseAccess(id);
   const canonical = await caseToCanonical(id);
   const active = (PLATFORMS.includes(platform as Platform) ? platform : "europace") as Platform;
 
   const [mappings, docCounts] = await Promise.all([
-    prisma.platformMapping.findMany({ where: { caseId: id }, select: { platform: true, released: true } }),
+    prisma.platformMapping.findMany({
+      where: { caseId: id },
+      select: { platform: true, released: true, externalId: true },
+    }),
     prisma.document.groupBy({ by: ["reviewStatus"], where: { caseId: id }, _count: true }),
   ]);
   const releasedOf = (p: Platform) => mappings.find((m) => m.platform === p)?.released ?? false;
@@ -200,6 +205,17 @@ export default async function ExportPage({
                     ))}
                   </ul>
                 </div>
+              )}
+
+              {p === "europace" && (
+                <EuropaceUebertragung
+                  caseId={id}
+                  freigegeben={releasedOf("europace")}
+                  vorgangsnummer={mappings.find((m) => m.platform === "europace")?.externalId ?? null}
+                  konfiguriert={getEuropaceClient(ctx.organizationId) !== null}
+                  datenkontext={getDatenkontext()}
+                  offeneDokumente={docsOpen}
+                />
               )}
 
               <Card>
