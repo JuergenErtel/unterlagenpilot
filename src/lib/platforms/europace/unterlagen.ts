@@ -79,14 +79,26 @@ export async function uebertrageUnterlagen(
     return { ok: false, ...leer, meldung };
   }
 
-  const vorgangsnummer = await deps.ladeVorgangsnummer(caseId);
-  if (!vorgangsnummer) {
-    const meldung = "Es gibt noch keinen Europace-Vorgang. Bitte zuerst den Vorgang anlegen.";
-    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+  let vorgangsnummer: string | null;
+  let dokumente: UnterlagenDokument[];
+  try {
+    vorgangsnummer = await deps.ladeVorgangsnummer(caseId);
+    if (!vorgangsnummer) {
+      const meldung = "Es gibt noch keinen Europace-Vorgang. Bitte zuerst den Vorgang anlegen.";
+      await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+      return { ok: false, ...leer, meldung };
+    }
+    dokumente = await deps.ladeDokumente(caseId);
+  } catch (e) {
+    // Faengt ab, was `ladeVorgangsnummer`/`ladeDokumente` (Prisma; Pool-
+    // Zeitueberschreitungen sind hier belegt) unerwartet wirft. Ohne diesen
+    // Fang wuerde die Server-Action ungefangen werfen: kein PlatformSyncLog-
+    // Eintrag, keine Rueckmeldung fuer den Nutzer.
+    const meldung = e instanceof Error ? e.message : "Unbekannter Fehler.";
+    await deps.protokolliere({ caseId, status: "fehler", meldung });
     return { ok: false, ...leer, meldung };
   }
 
-  const dokumente = await deps.ladeDokumente(caseId);
   let uebertragen = 0;
   let uebersprungen = 0;
   const fehlgeschlagen: Array<{ name: string; grund: string }> = [];

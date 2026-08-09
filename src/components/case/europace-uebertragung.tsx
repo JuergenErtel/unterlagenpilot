@@ -30,37 +30,56 @@ export function EuropaceUebertragung({
   const [feldmeldungen, setFeldmeldungen] = useState<string[]>([]);
   const [erfolg, setErfolg] = useState(false);
 
+  // Fallback-Meldung fuer den Fall, dass die Server-Action selbst ungefangen
+  // wirft (z.B. requireCaseAccess schlaegt fehl, Netzwerkabbruch). Ohne diesen
+  // Fang haette der Nutzer beim Klick keinerlei Rueckmeldung gesehen – der
+  // Knopf haette einfach aufgehoert zu arbeiten, ohne erkennbaren Grund.
+  const UNERWARTETER_FEHLER =
+    "Unerwarteter Fehler bei der Übertragung. Bitte erneut versuchen oder die Seite neu laden.";
+
   const anlegen = () =>
     starte(async () => {
-      const e = await europaceVorgangAnlegen(caseId);
-      setMeldung(e.meldung);
-      // Bei einem parallelen zweiten Aufruf entsteht in Europace ein
-      // ueberzaehliger Vorgang. Die Nummer MUSS sichtbar werden, sonst bleibt er
-      // dort unbemerkt liegen.
-      setFeldmeldungen(
-        e.verwaisteVorgangsnummer
-          ? [
-              `Achtung: In Europace ist zusätzlich der Vorgang ${e.verwaisteVorgangsnummer} entstanden. Bitte dort prüfen und entfernen.`,
-              ...(e.feldmeldungen ?? []),
-            ]
-          : (e.feldmeldungen ?? [])
-      );
-      setErfolg(e.ok);
+      try {
+        const e = await europaceVorgangAnlegen(caseId);
+        setMeldung(e.meldung);
+        // Bei einem parallelen zweiten Aufruf entsteht in Europace ein
+        // ueberzaehliger Vorgang. Die Nummer MUSS sichtbar werden, sonst bleibt er
+        // dort unbemerkt liegen.
+        setFeldmeldungen(
+          e.verwaisteVorgangsnummer
+            ? [
+                `Achtung: In Europace ist zusätzlich der Vorgang ${e.verwaisteVorgangsnummer} entstanden. Bitte dort prüfen und entfernen.`,
+                ...(e.feldmeldungen ?? []),
+              ]
+            : (e.feldmeldungen ?? [])
+        );
+        setErfolg(e.ok);
+      } catch {
+        setMeldung(UNERWARTETER_FEHLER);
+        setFeldmeldungen([]);
+        setErfolg(false);
+      }
     });
 
   const unterlagen = () =>
     starte(async () => {
-      const e = await europaceUnterlagenUebertragen(caseId);
-      setMeldung(e.meldung);
-      // Fehlgeschlagene und ueberzaehlige Dokumente einzeln benennen – eine
-      // Sammelmeldung "teilweise" allein hilft beim Aufraeumen nicht weiter.
-      setFeldmeldungen([
-        ...e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`),
-        ...e.ueberzaehlig.map(
-          (u) => `${u.name}: doppelt nach Europace übertragen – bitte dort prüfen und entfernen.`
-        ),
-      ]);
-      setErfolg(e.ok);
+      try {
+        const e = await europaceUnterlagenUebertragen(caseId);
+        setMeldung(e.meldung);
+        // Fehlgeschlagene und ueberzaehlige Dokumente einzeln benennen – eine
+        // Sammelmeldung "teilweise" allein hilft beim Aufraeumen nicht weiter.
+        setFeldmeldungen([
+          ...e.fehlgeschlagen.map((f) => `${f.name}: ${f.grund}`),
+          ...e.ueberzaehlig.map(
+            (u) => `${u.name}: doppelt nach Europace übertragen – bitte dort prüfen und entfernen.`
+          ),
+        ]);
+        setErfolg(e.ok);
+      } catch {
+        setMeldung(UNERWARTETER_FEHLER);
+        setFeldmeldungen([]);
+        setErfolg(false);
+      }
     });
 
   return (
@@ -72,6 +91,12 @@ export function EuropaceUebertragung({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" />
+          Die Übertragung sendet den aktuellen Datenstand des Falls zum Zeitpunkt des Klicks – inklusive
+          weiterer Felder, die die Tabelle unten nicht zeigt. Prüfe daher vor der Freigabe die Fallakte selbst,
+          nicht nur die Feldtabelle.
+        </p>
         {!konfiguriert && (
           <p className="flex items-start gap-2 text-sm text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" />

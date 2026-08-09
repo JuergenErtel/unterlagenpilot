@@ -107,6 +107,44 @@ describe("uebertrageFallNachEuropace", () => {
     );
   });
 
+  it("protokolliert und meldet einen unerwarteten Fehler VOR dem ersten Europace-Aufruf (z.B. Prisma-Pool-Zeitueberschreitung)", async () => {
+    const d = deps({
+      ladeCanonical: vi.fn(async () => {
+        throw new Error("Timed out fetching a new connection from the pool");
+      }),
+    });
+
+    const ergebnis = await uebertrageFallNachEuropace("case-1", d);
+
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.meldung).toContain("Timed out");
+    // Der Fehler entsteht, bevor irgendein Europace-Aufruf passiert -- keiner
+    // davon darf hier ausgeloest worden sein.
+    expect(d.client!.validiereKundenangaben).not.toHaveBeenCalled();
+    expect(d.client!.legeVorgangAn).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "fehler" })
+    );
+  });
+
+  it("gibt die Beanspruchung auch nach einem unerwarteten Fehler frei (finally greift)", async () => {
+    const d = deps({
+      ladeCanonical: vi.fn(async () => {
+        throw new Error("Timed out fetching a new connection from the pool");
+      }),
+    });
+
+    const erster = await uebertrageFallNachEuropace("case-1", d);
+    expect(erster.ok).toBe(false);
+
+    // Ohne __resetRateLimits: ein sofortiger zweiter Versuch darf nicht als
+    // "laeuft bereits" abgewiesen werden -- sonst bliebe die Beanspruchung bis
+    // zum Fensterende liegen, nur weil der erste Versuch ungefangen geworfen
+    // haette statt regulaer zurueckzukehren.
+    const zweiter = await uebertrageFallNachEuropace("case-1", d);
+    expect(zweiter.meldung).not.toContain("laeuft bereits");
+  });
+
   it("protokolliert auch den Auth-Fehler", async () => {
     const d = deps({
       client: {

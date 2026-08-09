@@ -20,6 +20,15 @@ import { EuropaceUebertragung } from "@/components/case/europace-uebertragung";
 import { readinessTone } from "@/lib/ui/tone";
 import { PLATFORM_LABELS, PLATFORMS, type Platform } from "@/lib/domain/enums";
 
+// Headroom fuer die Europace-Anlegen-/Uebertragungskette: bis zu drei
+// sequenzielle 30s-Aufrufe (Trockenlauf, Anlegen, ggf. Token-Erneuerung) plus
+// bis zu 120s je Dokument-Upload. Ohne dieses Budget wuerde die Function beim
+// Plattform-Standard (10-15s) mitten in der Kette beendet -- z.B. nach dem
+// Anlegen des Europace-Vorgangs, aber vor dem Speichern der Vorgangsnummer.
+// Dann haette Europace einen Vorgang ohne Entsprechung in BaufiDesk und ohne
+// Protokolleintrag, und der naechste Klick wuerde einen zweiten anlegen.
+export const maxDuration = 300;
+
 function internalName(platformField: string): string {
   const parts = platformField.split(".");
   return parts.length > 1 ? parts.slice(1).join(".") : platformField;
@@ -58,7 +67,7 @@ export default async function ExportPage({
       <PageHeader
         eyebrow="Einreichung"
         title="Einreichungsassistent"
-        subtitle="Aufbereitete Felder pro Plattform – kopieren, exportieren und manuell freigeben. Keine automatische Übertragung im MVP."
+        subtitle="Aufbereitete Felder pro Plattform – kopieren, exportieren und manuell freigeben. Für Europace läuft die Übertragung nach Freigabe automatisch über die API, für FinLink und eHyp home weiterhin über Export und Kopiermaske."
         actions={
           <>
             {/* Der eHyp-Übernahmeworkflow war von nirgendwo verlinkt und nur per
@@ -265,8 +274,9 @@ export default async function ExportPage({
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-ai" />
                 <span>
                   <Lock className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
-                  Keine automatische Übertragung. API-Anbindung vorbereitet. Im MVP erfolgt die Übergabe sicher über Export und
-                  Kopiermaske – jede Freigabe bleibt manuell. Verarbeitung DSGVO-konform in der EU.
+                  {p === "europace"
+                    ? "Für Europace steht eine echte API-Übertragung bereit – sie läuft ausschließlich nach manueller Freigabe an, jeder Schritt bleibt protokolliert. Verarbeitung DSGVO-konform in der EU."
+                    : "Keine automatische Übertragung. API-Anbindung vorbereitet. Im MVP erfolgt die Übergabe sicher über Export und Kopiermaske – jede Freigabe bleibt manuell. Verarbeitung DSGVO-konform in der EU."}
                 </span>
               </div>
             </TabsContent>

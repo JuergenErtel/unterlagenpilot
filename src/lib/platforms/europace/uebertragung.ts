@@ -174,6 +174,13 @@ export async function uebertrageFallNachEuropace(
     } catch (e) {
       return await fehlerAusgang(caseId, e, deps);
     }
+  } catch (e) {
+    // Faengt ab, was VOR dem ersten Europace-Aufruf scheitert -- allen voran
+    // `ladeCanonical` (Prisma; Pool-Zeitueberschreitungen sind hier belegt).
+    // Ohne diesen Fang wuerde die Server-Action ungefangen werfen: kein
+    // PlatformSyncLog-Eintrag, keine Rueckmeldung fuer den Nutzer -- der Knopf
+    // wuerde einfach aufhoeren zu arbeiten.
+    return await fehlerAusgang(caseId, e, deps);
   } finally {
     // Auf JEDEM Ausgang freigeben -- Erfolg, erwarteter Fehler (return oben)
     // oder ein unerwarteter Wurf. Sonst bliebe die Beanspruchung bis zum

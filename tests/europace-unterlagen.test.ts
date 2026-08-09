@@ -109,6 +109,40 @@ describe("uebertrageUnterlagen", () => {
     );
   });
 
+  it("protokolliert und meldet einen unerwarteten Fehler beim Laden der Vorgangsnummer (z.B. Prisma-Pool-Zeitueberschreitung)", async () => {
+    const d = deps({
+      ladeVorgangsnummer: vi.fn(async () => {
+        throw new Error("Timed out fetching a new connection from the pool");
+      }),
+    });
+
+    const ergebnis = await uebertrageUnterlagen("case-1", d);
+
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.meldung).toContain("Timed out");
+    expect(d.client!.ladeDokumentHoch).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "fehler" })
+    );
+  });
+
+  it("protokolliert und meldet einen unerwarteten Fehler beim Laden der Dokumente (z.B. Prisma-Pool-Zeitueberschreitung)", async () => {
+    const d = deps({
+      ladeDokumente: vi.fn(async () => {
+        throw new Error("Timed out fetching a new connection from the pool");
+      }),
+    });
+
+    const ergebnis = await uebertrageUnterlagen("case-1", d);
+
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.meldung).toContain("Timed out");
+    expect(d.client!.ladeDokumentHoch).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "fehler" })
+    );
+  });
+
   it("verweigert die Uebertragung ohne Vorgangsnummer und protokolliert den Skip", async () => {
     const d = deps({ ladeVorgangsnummer: vi.fn(async () => null) });
     const ergebnis = await uebertrageUnterlagen("case-1", d);

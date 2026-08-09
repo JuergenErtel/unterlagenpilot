@@ -691,17 +691,37 @@ async function applyExtractedFieldsToObject(
 }
 
 /**
+ * Prueft die bindende Zusage "keine Uebertragung ohne manuelle Freigabe" fuer
+ * beide Europace-Aktionen (Vorgang anlegen wie Unterlagen nachschieben) --
+ * die Zusage darf nicht nur an einer Stelle greifen. Anders als jeder andere
+ * Ausgang der beiden Ablaufdateien war dieser Abbruch bisher der einzige ohne
+ * PlatformSyncLog-Eintrag; das holt diese Funktion nach.
+ *
+ * Liefert die Abbruchmeldung, wenn (noch) nicht freigegeben ist, sonst null.
+ */
+async function pruefeEuropaceFreigabe(caseId: string): Promise<string | null> {
+  const mapping = await prisma.platformMapping.findUnique({
+    where: { caseId_platform: { caseId, platform: "europace" } },
+    select: { released: true },
+  });
+  if (mapping?.released) return null;
+
+  const meldung = "Der Fall ist fuer Europace noch nicht freigegeben.";
+  await prisma.platformSyncLog.create({
+    data: { caseId, platform: "europace", direction: "export", status: "uebersprungen", message: meldung },
+  });
+  return meldung;
+}
+
+/**
  * Legt den Fall als Europace-Vorgang an. Nur nach manueller Freigabe.
  */
 export async function europaceVorgangAnlegen(caseId: string): Promise<UebertragungErgebnis> {
   const { ctx } = await requireCaseAccess(caseId);
 
-  const mapping = await prisma.platformMapping.findUnique({
-    where: { caseId_platform: { caseId, platform: "europace" } },
-    select: { released: true },
-  });
-  if (!mapping?.released) {
-    return { ok: false, meldung: "Der Fall ist fuer Europace noch nicht freigegeben." };
+  const freigabeFehler = await pruefeEuropaceFreigabe(caseId);
+  if (freigabeFehler) {
+    return { ok: false, meldung: freigabeFehler };
   }
 
   const ergebnis = await uebertrageFallNachEuropace(caseId, {
@@ -758,6 +778,19 @@ export async function europaceVorgangAnlegen(caseId: string): Promise<Uebertragu
  */
 export async function europaceUnterlagenUebertragen(caseId: string): Promise<UnterlagenErgebnis> {
   const { ctx } = await requireCaseAccess(caseId);
+
+  const freigabeFehler = await pruefeEuropaceFreigabe(caseId);
+  if (freigabeFehler) {
+    return {
+      ok: false,
+      uebertragen: 0,
+      uebersprungen: 0,
+      fehlgeschlagen: [],
+      ueberzaehlig: [],
+      meldung: freigabeFehler,
+    };
+  }
+
   const storage = getStorage();
 
   const ergebnis = await uebertrageUnterlagen(caseId, {
