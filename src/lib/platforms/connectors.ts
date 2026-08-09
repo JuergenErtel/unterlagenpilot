@@ -77,12 +77,15 @@ export class EuropaceConnector extends BaseConnector {
     return Boolean(process.env.EUROPACE_CLIENT_ID && process.env.EUROPACE_CLIENT_SECRET);
   }
   async testConnection(): Promise<ConnectionStatus> {
+    // Prueft nur, ob Zugangsdaten hinterlegt sind -- macht KEINEN Aufruf gegen
+    // Europace. "verbunden" waere hier eine Behauptung, die diese Funktion nie
+    // geprueft hat; "Zugangsdaten hinterlegt" ist die ehrliche Aussage.
     const ok = await this.isConfigured();
     const kontext = process.env.EUROPACE_DATENKONTEXT === "ECHT_GESCHAEFT" ? "Echtgeschäft" : "Testmodus";
     return {
       ok,
       message: ok
-        ? `Europace verbunden (${kontext}). Vorgang anlegen und Unterlagen übertragen im Einreichungsassistenten.`
+        ? `Europace-Zugangsdaten hinterlegt (${kontext}). Vorgang anlegen und Unterlagen übertragen im Einreichungsassistenten.`
         : "Europace nicht verbunden. EUROPACE_CLIENT_ID und EUROPACE_CLIENT_SECRET setzen (API-Client bei helpdesk@europace2.de beantragen).",
     };
   }

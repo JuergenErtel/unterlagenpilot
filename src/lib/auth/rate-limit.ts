@@ -76,6 +76,18 @@ export async function checkRateLimit(
 }
 
 /**
+ * Nur Schluessel mit diesem Praefix duerfen vorzeitig freigegeben werden.
+ * Bewusste Schranke: `checkRateLimit`/`rateLimit` sichern auch echte
+ * Sicherheitszaehler ab (Login, Registrierung, Passwort-Reset) -- ohne diese
+ * Schranke koennte ein spaeterer, unbedachter Aufruf von `releaseRateLimit`
+ * mit einem falschen Schluessel versehentlich einen solchen Zaehler
+ * zuruecksetzen und damit den Brute-Force-Schutz aushebeln. Diese Funktion
+ * ist ausdruecklich nur fuer den kurzlebigen Europace-Mutex gedacht (siehe
+ * `uebertragung.ts`).
+ */
+const FREIGABEFAEHIGES_PRAEFIX = "europace-";
+
+/**
  * Gibt eine Beanspruchung vorzeitig frei, bevor ihr Fenster regulär abläuft.
  * Gedacht für Aufrufer, die `checkRateLimit`/`rateLimit` mit `max=1` als
  * kurzlebigen Mutex um einen kritischen Abschnitt zweckentfremden (siehe
@@ -94,6 +106,7 @@ export async function checkRateLimit(
  * Funktion nicht auf und sind von ihr nicht betroffen.
  */
 export function releaseRateLimit(key: string): void {
+  if (!key.startsWith(FREIGABEFAEHIGES_PRAEFIX)) return;
   if (upstashConfig()) return;
   buckets.delete(key);
 }

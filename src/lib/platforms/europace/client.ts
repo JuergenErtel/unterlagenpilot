@@ -56,6 +56,15 @@ interface EuropaceConfig {
 }
 
 export class HttpEuropaceClient implements EuropaceClient {
+  /**
+   * In-Memory-Cache fuer das Token. Das Token selbst ist laut Europace 3600 s
+   * gueltig (siehe TOKEN_PUFFER_MS) -- das ist aber NICHT die tatsaechliche
+   * Lebensdauer dieses Caches: `getEuropaceClient()` erzeugt pro Server-
+   * Action-Aufruf eine neue Client-Instanz (kein Modul-Singleton), die mit
+   * dem Ende des Aufrufs verworfen wird. In der Praxis lebt der Cache deshalb
+   * nur innerhalb eines einzelnen Aufrufs -- spart hoechstens einen zweiten
+   * Token-Request zwischen z. B. Trockenlauf und Anlegen, nicht stundenlang.
+   */
   private token: { wert: string; gueltigBis: number } | null = null;
 
   constructor(
