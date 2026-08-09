@@ -1037,8 +1037,16 @@ const FINANZIERUNGSZWECK: Record<FinancingType, string> = {
   kapitalbeschaffung: "KAPITALBESCHAFFUNG",
 };
 
-/** Nur der Kauf kennt einen Kaufpreis samt Kaufnebenkosten. */
+/** Nur der Kauf kennt einen Kaufpreis. */
 const MIT_KAUFPREIS = new Set(["KAUF", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
+
+/**
+ * Nebenkosten haengen NICHT am Kaufpreis: Neubau deklariert sie laut Schema
+ * ebenfalls, ohne einen Kaufpreis zu kennen. Beide Tore zusammenzulegen liess
+ * eine erfasste Maklerprovision beim Neubau verschwinden. Anschlussfinanzierung,
+ * Modernisierung und Kapitalbeschaffung kennen weder das eine noch das andere.
+ */
+const MIT_NEBENKOSTEN = new Set(["KAUF", "NEUBAU", "KAUF_NEUBAU_VOM_BAUTRAEGER"]);
 
 function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | undefined {
   const f = c.financing;
@@ -1057,8 +1065,12 @@ function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | un
       : {
           "@type": typ,
           ...(MIT_KAUFPREIS.has(typ) && f.kaufpreis != null ? { kaufpreis: f.kaufpreis } : {}),
-          ...(MIT_KAUFPREIS.has(typ) && nebenkosten ? { nebenkosten } : {}),
+          ...(MIT_NEBENKOSTEN.has(typ) && nebenkosten ? { nebenkosten } : {}),
         };
+
+  // Das kanonische `financing.nebenkosten` (Gesamtbetrag) bleibt bewusst
+  // unbenutzt: Europace kennt nur die Einzelposten Grunderwerbsteuer,
+  // Maklergebuehr und Notargebuehr – jede Aufteilung waere geraten.
 
   const bausteine =
     f.darlehenswunsch != null
