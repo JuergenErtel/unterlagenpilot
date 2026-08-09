@@ -175,15 +175,29 @@ const OBJEKTART: Record<PropertyType, string> = {
 /** Diese Typen kennen keine eigene Grundstuecksgroesse. */
 const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG", "IMMOBILIE_OHNE_TYP"]);
 
+/**
+ * Diese Typen kennen im Schema kein `gebaeude`-Feld. Gegen
+ * kundenangaben-openapi.json geprueft: Von den acht Immobilientyp-Varianten
+ * (Baugrundstueck, Doppelhaushaelfte, Eigentumswohnung, Einfamilienhaus,
+ * ImmobilieOhneTyp, Mehrfamilienhaus, Reihenhaus, Zweifamilienhaus) ist
+ * Baugrundstueck die einzige ohne `gebaeude` (nur `grundstuecksart` und
+ * `grundstuecksgroesse`) – ein Grundstueck hat eben kein Gebaeude. Ohne diese
+ * Sperre haette z.B. `objektart: "grundstueck"` mit gesetztem `baujahr` ein
+ * schemawidriges `gebaeude` an BAUGRUNDSTUECK gehaengt.
+ */
+const OHNE_GEBAEUDE = new Set(["BAUGRUNDSTUECK"]);
+
 function finanzierungsobjekt(c: CanonicalCase): EuropaceFinanzierungsobjekt | undefined {
   const p = c.property;
   if (!p) return undefined;
 
   const typ = p.objektart ? OBJEKTART[p.objektart] : "IMMOBILIE_OHNE_TYP";
-  const gebaeude = wegLassenWennLeer({
-    baujahr: p.baujahr,
-    nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
-  });
+  const gebaeude = OHNE_GEBAEUDE.has(typ)
+    ? undefined
+    : wegLassenWennLeer({
+        baujahr: p.baujahr,
+        nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
+      });
 
   const immobilie = wegLassenWennLeer({
     adresse: anschriftAufteilen(p.strasse, p.plz, p.ort),

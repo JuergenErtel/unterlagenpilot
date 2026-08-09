@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalToKundenangaben } from "@/lib/platforms/europace/kundenangaben-mapping";
 import type { CanonicalCase } from "@/lib/domain/canonical";
+import { PROPERTY_TYPES } from "@/lib/domain/enums";
 import { validateKundenangabenRequest } from "./helpers/europace-schema";
 
 /** Minimaler Fall; einzelne Tests ueberschreiben gezielt Felder. */
@@ -202,4 +203,44 @@ describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
     const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
     expect(validateKundenangabenRequest(r).errors).toEqual([]);
   });
+
+  it("laesst ein Baugrundstueck ohne gebaeude, obwohl baujahr und wohnflaeche gesetzt sind", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        property: {
+          objektart: "grundstueck",
+          baujahr: 2020,
+          wohnflaeche: 100,
+          grundstuecksflaeche: 800,
+        },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ["@type"]).toBe("BAUGRUNDSTUECK");
+    expect(typ.gebaeude).toBeUndefined();
+    expect(typ.grundstuecksgroesse).toBe(800);
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+
+  it.each(PROPERTY_TYPES)(
+    "bleibt fuer Objektart '%s' mit vollstaendigen Objektdaten schemakonform",
+    (objektart) => {
+      const r = canonicalToKundenangaben(
+        fall({
+          property: {
+            objektart,
+            strasse: "Feldweg 12a",
+            plz: "14467",
+            ort: "Potsdam",
+            wohnflaeche: 142.5,
+            baujahr: 1998,
+            grundstuecksflaeche: 620,
+          },
+        }),
+        { datenkontext: "TEST_MODUS" }
+      );
+      expect(validateKundenangabenRequest(r).errors).toEqual([]);
+    }
+  );
 });
