@@ -111,6 +111,22 @@ der API-Zugang eine Prüfung des Endpunkts erlaubt.
 | Umfang zuerst | Vorgang anlegen **und** Unterlagen übertragen | Nur beides zusammen beseitigt das Abtippen; die Vorgangsnummer aus Schritt 1 ist ohnehin der Schlüssel für Schritt 2. |
 | Änderungen nach Übertragung | **Einmal anlegen**, danach nur noch Dokumente nachschieben | `PUT /kundenangaben/{nr}` ersetzt den Vorgang und würde alles überschreiben, was Jürgen inzwischen in Europace ergänzt hat. Spätere Korrekturen macht er dort. |
 | Bauen ohne Zugang | Ja, offline gegen das echte Schema verifiziert | Der teure Teil ist das Mapping, und das Schema ist öffentlich. Warten kostet Wochen, ändert am Mapping aber nichts. |
+| Zugangsdaten je Vermittler | Pilot über die Umgebung, aber `getEuropaceClient(organizationId)` als Naht | Siehe unten — der SaaS-Weg ist ein eigenes Projekt, soll aber später nicht durch den halben Code wandern. |
+
+### Mandantenfähigkeit: heute Umgebung, später Tech-Partner
+
+Im SaaS-Betrieb ist jeder Vermittler bei Europace ein **eigener Partner**. Der
+dafür vorgesehene Weg ist nicht „jeder trägt seine Client-ID ein", sondern
+Europaces **Authorization-Code-Flow**: BaufiDesk registriert sich einmalig als
+Tech-Partner, jeder Vermittler autorisiert es über eine Consent-Seite, BaufiDesk
+merkt sich dessen `partnerId` samt Token. Niemand tippt Secrets ab.
+
+Das setzt eine Tech-Partner-Registrierung bei Europace voraus, die es noch nicht
+gibt, und braucht eine eigene Consent-/Callback-Strecke — ein eigenes Projekt,
+das dem Piloten keinen Tag früher hilft. Deshalb: Zugangsdaten kommen vorerst aus
+der Umgebung, aber `getEuropaceClient` nimmt die `organizationId` bereits
+entgegen und ignoriert sie bewusst. Der spätere Umbau betrifft dann genau diese
+eine Funktion.
 
 ## Architektur
 

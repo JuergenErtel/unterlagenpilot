@@ -1101,8 +1101,20 @@ git commit -m "feat(europace): Finanzierungsbedarf und Eigenkapital mappen"
   - `class EuropaceAuthError`, `EuropaceValidationError` (Feld `meldungen: string[]`), `EuropaceApiError`
   - `interface EuropaceClient { validiereKundenangaben(req): Promise<void>; legeVorgangAn(req): Promise<string>; ladeDokumentHoch(input: DokumentUpload): Promise<string>; }`
   - `interface DokumentUpload { vorgangsnummer: string; datei: Buffer; dateiname: string; mimeType: string; anzeigename: string; kategorie: string }`
-  - `function getEuropaceClient(fetchImpl?: typeof fetch): EuropaceClient | null` — `null`, wenn nicht konfiguriert
+  - `function getEuropaceClient(organizationId: string, fetchImpl?: typeof fetch): EuropaceClient | null` — `null`, wenn nicht konfiguriert
   - `function getDatenkontext(): Datenkontext`
+
+**Warum `organizationId`, obwohl sie heute nicht benutzt wird.** BaufiDesk soll ein
+Produkt für viele Vermittler werden, und jeder Vermittler ist bei Europace ein
+eigener Partner. Der saubere SaaS-Weg dafür ist Europaces Authorization-Code-Flow:
+BaufiDesk registriert sich einmalig als Tech-Partner, jeder Vermittler autorisiert
+es per Consent-Seite, und niemand tippt Secrets ab. Das ist ein eigenes Projekt und
+setzt eine Tech-Partner-Registrierung voraus, die es noch nicht gibt.
+
+Damit der spätere Umbau nicht durch den halben Code wandert, nimmt
+`getEuropaceClient` die `organizationId` **jetzt schon** entgegen — und ignoriert
+sie vorerst bewusst. Wenn der SaaS-Weg kommt, ändert sich genau diese eine
+Funktion, kein Aufrufer.
 
 - [ ] **Schritt 1: Den fehlschlagenden Test schreiben**
 
@@ -1429,8 +1441,21 @@ export class HttpEuropaceClient implements EuropaceClient {
   }
 }
 
-/** null, wenn keine Zugangsdaten gesetzt sind – die UI zeigt dann den Hinweis. */
-export function getEuropaceClient(fetchImpl: typeof fetch = fetch): EuropaceClient | null {
+/**
+ * Liefert den Client fuer eine Organisation. null, wenn keine Zugangsdaten
+ * gesetzt sind – die UI zeigt dann den Hinweis statt eines toten Knopfes.
+ *
+ * `organizationId` wird im Pilotbetrieb bewusst NICHT ausgewertet: es gibt genau
+ * einen Europace-Partner, dessen Zugangsdaten in der Umgebung stehen. Der
+ * Parameter ist die Naht fuer den spaeteren SaaS-Betrieb, in dem jeder Vermittler
+ * ein eigener Europace-Partner ist (Authorization-Code-Flow ueber einen
+ * BaufiDesk-Tech-Partner-Client). Dann aendert sich nur diese Funktion.
+ */
+export function getEuropaceClient(
+  organizationId: string,
+  fetchImpl: typeof fetch = fetch
+): EuropaceClient | null {
+  void organizationId;
   const clientId = process.env.EUROPACE_CLIENT_ID;
   const clientSecret = process.env.EUROPACE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -1917,7 +1942,7 @@ export async function europaceVorgangAnlegen(caseId: string): Promise<Uebertragu
   }
 
   const ergebnis = await uebertrageFallNachEuropace(caseId, {
-    client: getEuropaceClient(),
+    client: getEuropaceClient(ctx.organizationId),
     datenkontext: getDatenkontext(),
     ladeCanonical: (id) => caseToCanonical(id),
     ladeVorhandeneNummer: async (id) =>
@@ -2253,11 +2278,11 @@ Am Ende von `src/lib/actions/cases.ts`:
  * Schiebt die akzeptierten Unterlagen an den bestehenden Europace-Vorgang.
  */
 export async function europaceUnterlagenUebertragen(caseId: string): Promise<UnterlagenErgebnis> {
-  await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId);
   const storage = getStorage();
 
   const ergebnis = await uebertrageUnterlagen(caseId, {
-    client: getEuropaceClient(),
+    client: getEuropaceClient(ctx.organizationId),
     ladeVorgangsnummer: async (id) =>
       (
         await prisma.platformMapping.findUnique({
@@ -2486,6 +2511,13 @@ import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/cli
 import { EuropaceUebertragung } from "@/components/case/europace-uebertragung";
 ```
 
+Die Seite ruft heute `await requireCaseAccess(id);` ohne das Ergebnis zu nutzen. Für
+die Organisation brauchen wir es jetzt:
+
+```ts
+const { ctx } = await requireCaseAccess(id);
+```
+
 Und rendere die Komponente innerhalb des Europace-Tabs, direkt über der Feldtabelle:
 
 ```tsx
@@ -2494,7 +2526,7 @@ Und rendere die Komponente innerhalb des Europace-Tabs, direkt über der Feldtab
     caseId={id}
     freigegeben={releasedOf("europace")}
     vorgangsnummer={mappings.find((m) => m.platform === "europace")?.externalId ?? null}
-    konfiguriert={getEuropaceClient() !== null}
+    konfiguriert={getEuropaceClient(ctx.organizationId) !== null}
     datenkontext={getDatenkontext()}
     offeneDokumente={docsOpen}
   />
