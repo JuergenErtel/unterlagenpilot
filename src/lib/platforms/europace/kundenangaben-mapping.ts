@@ -57,6 +57,14 @@ const BESCHAEFTIGUNGSTYP: Record<EmploymentType, string | null> = {
 const MIT_ARBEITGEBER = new Set(["ANGESTELLTER", "BEAMTER"]);
 
 /**
+ * Nur ANGESTELLTER, BEAMTER und SELBSTSTAENDIGER kennen im Schema ein
+ * `beruf`-Feld. RENTNER (Schema: `allOf: [Beschaeftigung]`, keine weiteren
+ * Properties) kennt keins – sonst haette der Vertragstest es akzeptiert, ohne
+ * dass es je bei Europace ankommt.
+ */
+const MIT_BERUF = new Set(["ANGESTELLTER", "BEAMTER", "SELBSTSTAENDIGER"]);
+
+/**
  * Trennt "Hauptstr. 5" in Strasse und Hausnummer. Europace fuehrt beide
  * getrennt, BaufiDesk speichert eine Zeile. Ohne erkennbare Hausnummer wandert
  * alles in `strasse` – lieber unvollstaendig als falsch zerschnitten.
@@ -103,7 +111,7 @@ function beschaeftigung(e: CanonicalEmployment | undefined): EuropaceBeschaeftig
 
   return {
     "@type": typ,
-    ...(e.beruf ? { beruf: e.beruf } : {}),
+    ...(e.beruf && MIT_BERUF.has(typ) ? { beruf: e.beruf } : {}),
     ...(verhaeltnis ? { beschaeftigungsverhaeltnis: verhaeltnis } : {}),
   };
 }

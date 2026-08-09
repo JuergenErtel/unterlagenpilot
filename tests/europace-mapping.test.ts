@@ -110,6 +110,21 @@ describe("canonicalToKundenangaben – Haushalt", () => {
     });
   });
 
+  it("laesst beruf bei Rentnern weg, weil das Schema dort kein beruf-Feld kennt", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        applicants: [{ position: 1, vorname: "Erna", nachname: "Alt" }],
+        employment: [
+          { applicantPosition: 1, beschaeftigungsart: "rentner", beruf: "ehemals Bankkaufmann" },
+        ],
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    expect(r.kundenangaben.haushalte![0]!.kunden![0]!.finanzielles!.beschaeftigung).toEqual({
+      "@type": "RENTNER",
+    });
+  });
+
   it("legt zwei Antragsteller in denselben Haushalt", () => {
     const r = canonicalToKundenangaben(
       fall({
