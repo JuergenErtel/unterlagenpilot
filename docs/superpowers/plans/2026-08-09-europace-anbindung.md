@@ -1146,7 +1146,15 @@ git commit -m "feat(europace): Finanzierungsbedarf und Eigenkapital mappen"
 - Create: `tests/europace-client.test.ts`
 
 **Interfaces:**
-- Consumes: `fetchWithRateLimitRetry(url, init, timeoutMs)` aus `@/lib/ai/http`; `EuropaceKundenangabenRequest`, `Datenkontext` (Task 2)
+- Consumes: `fetchWithRateLimitRetry(url, init, timeoutMs, fetchImpl?)` aus `@/lib/ai/http`; `EuropaceKundenangabenRequest`, `Datenkontext` (Task 2)
+
+**Voraussetzung:** `fetchWithTimeout` und `fetchWithRateLimitRetry` in `src/lib/ai/http.ts`
+brauchen einen optionalen vierten Parameter `fetchImpl: typeof fetch = fetch`, der an
+**beide** internen `fetchWithTimeout`-Aufrufstellen durchgereicht wird (Erstversuch und
+Wiederholungsschleife). Ohne ihn landet das injizierte `fetch` im Client im Leeren, und
+die Tests sprechen in Wahrheit das echte Netz an. Die Änderung ist additiv: bestehende
+Aufrufer (Mistral-OCR, OpenAI-kompatibler Anbieter) übergeben drei Argumente und bleiben
+unverändert.
 - Produces:
   - `class EuropaceAuthError`, `EuropaceValidationError` (Feld `meldungen: string[]`), `EuropaceApiError`
   - `interface EuropaceClient { validiereKundenangaben(req): Promise<void>; legeVorgangAn(req): Promise<string>; ladeDokumentHoch(input: DokumentUpload): Promise<string>; }`
@@ -1364,7 +1372,8 @@ export class HttpEuropaceClient implements EuropaceClient {
           },
           body: new URLSearchParams({ grant_type: "client_credentials", scope: SCOPES }).toString(),
         },
-        TIMEOUT_MS
+        TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       // Keine Details durchreichen – der Basic-Header darf nirgends landen.
@@ -1420,7 +1429,8 @@ export class HttpEuropaceClient implements EuropaceClient {
           },
           body: JSON.stringify(req),
         },
-        TIMEOUT_MS
+        TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
@@ -1470,7 +1480,8 @@ export class HttpEuropaceClient implements EuropaceClient {
       res = await fetchWithRateLimitRetry(
         `${UNTERLAGEN_HOST}/v2/dokumente`,
         { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form },
-        UPLOAD_TIMEOUT_MS
+        UPLOAD_TIMEOUT_MS,
+        this.fetchImpl
       );
     } catch {
       throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
