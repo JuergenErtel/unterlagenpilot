@@ -35,3 +35,24 @@ describe("buildPipeline", () => {
     expect(p.courtageAbgeschlossen).toBe(0);
   });
 });
+
+describe("Detektiv-Anstoss nach der Hintergrundanalyse", () => {
+  it("ist so gebaut, dass ein Detektiv-Fehler die Analyse nicht kippt", async () => {
+    const fs = await import("node:fs/promises");
+    const quelle = await fs.readFile("src/lib/documents/pipeline.ts", "utf-8");
+
+    // Die Aufrufstelle (nicht der Import!) steht NACH dem Dokument-Update und
+    // in einem eigenen try/catch.
+    const idxUpdate = quelle.indexOf("extractionStatus: ext ?");
+    const idxDetektiv = quelle.indexOf("await runReferenceExtraction(");
+    expect(idxUpdate).toBeGreaterThan(-1);
+    expect(idxDetektiv).toBeGreaterThan(idxUpdate);
+    // ... und der Fall wird danach neu abgeglichen, sonst schliesst sich ein
+    // frueherer Befund nie von selbst.
+    expect(quelle.indexOf("await reconcileCase(")).toBeGreaterThan(idxDetektiv);
+
+    const umfeld = quelle.slice(idxDetektiv - 400, idxDetektiv + 400);
+    expect(umfeld).toContain("try");
+    expect(umfeld).toContain("catch");
+  });
+});
