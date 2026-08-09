@@ -33,14 +33,14 @@ function deps(over: Partial<Parameters<typeof uebertrageUnterlagen>[1]> = {}) {
     ladeVorgangsnummer: vi.fn(async () => "YX4MDU" as string | null),
     ladeDokumente: vi.fn(async () => DOKUMENTE),
     ladeDatei: vi.fn(async () => Buffer.from("PDF")),
-    merkeDokumentId: vi.fn(async () => {}),
+    merkeDokumentId: vi.fn(async () => ({ ok: true })),
     protokolliere: vi.fn(async () => {}),
     ...over,
   };
 }
 
 describe("uebertrageUnterlagen", () => {
-  it("laedt jedes akzeptierte Dokument hoch und merkt sich die ID", async () => {
+  it("laedt jedes akzeptierte Dokument hoch, merkt sich die ID und protokolliert den Erfolg", async () => {
     const d = deps();
     const ergebnis = await uebertrageUnterlagen("case-1", d);
 
@@ -54,6 +54,9 @@ describe("uebertrageUnterlagen", () => {
       })
     );
     expect(d.merkeDokumentId).toHaveBeenCalledWith("d1", "ep-dok-1");
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "erfolg" })
+    );
   });
 
   it("ueberspringt bereits uebertragene Dokumente", async () => {
@@ -70,7 +73,7 @@ describe("uebertrageUnterlagen", () => {
     expect(d.client!.ladeDokumentHoch).toHaveBeenCalledOnce();
   });
 
-  it("laedt die uebrigen weiter hoch, wenn eine Datei scheitert", async () => {
+  it("laedt die uebrigen weiter hoch, wenn eine Datei scheitert, und protokolliert den Teilerfolg", async () => {
     const d = deps({
       client: {
         validiereKundenangaben: vi.fn(async () => {}),
@@ -89,15 +92,33 @@ describe("uebertrageUnterlagen", () => {
       { name: "Personalausweis Anna Muster.pdf", grund: "Dokument-Upload fehlgeschlagen (HTTP 500)." },
     ]);
     expect(ergebnis.ok).toBe(false);
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "teilweise" })
+    );
   });
 
-  it("verweigert die Uebertragung ohne Vorgangsnummer", async () => {
+  it("verweigert die Uebertragung ohne verbundenes Europace und protokolliert den Skip", async () => {
+    const d = deps({ client: null });
+    const ergebnis = await uebertrageUnterlagen("case-1", d);
+
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.meldung).toContain("nicht verbunden");
+    expect(d.ladeVorgangsnummer).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "uebersprungen" })
+    );
+  });
+
+  it("verweigert die Uebertragung ohne Vorgangsnummer und protokolliert den Skip", async () => {
     const d = deps({ ladeVorgangsnummer: vi.fn(async () => null) });
     const ergebnis = await uebertrageUnterlagen("case-1", d);
 
     expect(ergebnis.ok).toBe(false);
     expect(ergebnis.meldung).toContain("Vorgang");
     expect(d.client!.ladeDokumentHoch).not.toHaveBeenCalled();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "uebersprungen" })
+    );
   });
 
   it("meldet eine im Speicher fehlende Datei, ohne abzubrechen", async () => {
@@ -106,5 +127,31 @@ describe("uebertrageUnterlagen", () => {
 
     expect(ergebnis.uebertragen).toBe(1);
     expect(ergebnis.fehlgeschlagen[0]!.grund).toContain("Speicher");
+  });
+
+  it("zaehlt ein Dokument als ueberzaehlig, wenn ein ueberlappender Aufruf die ID bereits gespeichert hat", async () => {
+    // merkeDokumentId liefert ok:false fuer d1 -- so, als haette ein
+    // paralleler Aufruf die ID fuer dieses Dokument zwischenzeitlich schon
+    // gespeichert. Der Upload selbst ist trotzdem real passiert (die
+    // Europace-Dokument-ID kommt zurueck), zaehlt aber NICHT als
+    // "uebertragen", weil BaufiDesk die Zuordnung nicht kennt.
+    const d = deps({
+      merkeDokumentId: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false })
+        .mockResolvedValueOnce({ ok: true }),
+    });
+
+    const ergebnis = await uebertrageUnterlagen("case-1", d);
+
+    expect(ergebnis.uebertragen).toBe(1);
+    expect(ergebnis.ueberzaehlig).toEqual([
+      { name: "Personalausweis Anna Muster.pdf", europaceDokumentId: "ep-dok-1" },
+    ]);
+    expect(ergebnis.fehlgeschlagen).toEqual([]);
+    expect(ergebnis.ok).toBe(false);
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({ caseId: "case-1", status: "teilweise" })
+    );
   });
 });

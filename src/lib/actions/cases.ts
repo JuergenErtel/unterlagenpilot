@@ -784,7 +784,17 @@ export async function europaceUnterlagenUebertragen(caseId: string): Promise<Unt
       }),
     ladeDatei: (storageKey) => storage.get(storageKey),
     merkeDokumentId: async (dokumentId, europaceDokumentId) => {
-      await prisma.document.update({ where: { id: dokumentId }, data: { europaceDokumentId } });
+      // Bedingtes Update: schreibt nur, wenn fuer das Dokument noch keine ID
+      // gesetzt ist. Ein ueberlappender Aufruf (Doppelklick, zweiter Tab) hat
+      // sonst die Chance, die zuerst gespeicherte ID kommentarlos zu
+      // ueberschreiben -- die Zuordnung des ersten, ebenfalls real
+      // hochgeladenen Dokuments waere dann verloren, siehe `merkeDokumentId`
+      // in unterlagen.ts.
+      const { count } = await prisma.document.updateMany({
+        where: { id: dokumentId, europaceDokumentId: null },
+        data: { europaceDokumentId },
+      });
+      return { ok: count > 0 };
     },
     protokolliere: async ({ caseId: id, status, meldung }) => {
       await prisma.platformSyncLog.create({

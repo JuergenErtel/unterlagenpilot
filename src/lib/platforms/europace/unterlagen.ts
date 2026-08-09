@@ -17,7 +17,21 @@ export interface UnterlagenErgebnis {
   uebertragen: number;
   uebersprungen: number;
   fehlgeschlagen: Array<{ name: string; grund: string }>;
+  /**
+   * Dokumente, die zwar erfolgreich zu Europace hochgeladen wurden, deren
+   * Europace-Dokument-ID aber NICHT gespeichert werden konnte, weil ein
+   * ueberlappender Aufruf (Doppelklick, zweiter Tab) dasselbe Dokument
+   * zwischenzeitlich bereits selbst hochgeladen und gespeichert hat (siehe
+   * `merkeDokumentId` unten). Das Dokument liegt dann doppelt in Europace;
+   * BaufiDesk kennt nur die zuerst gespeicherte ID. Zaehlt bewusst NICHT als
+   * `uebertragen` -- der Zustand braucht manuelle Pruefung in Europace.
+   */
+  ueberzaehlig: Array<{ name: string; europaceDokumentId: string }>;
   meldung: string;
+}
+
+export interface MerkeDokumentIdErgebnis {
+  ok: boolean;
 }
 
 export interface UnterlagenDeps {
@@ -25,7 +39,16 @@ export interface UnterlagenDeps {
   ladeVorgangsnummer: (caseId: string) => Promise<string | null>;
   ladeDokumente: (caseId: string) => Promise<UnterlagenDokument[]>;
   ladeDatei: (storageKey: string) => Promise<Buffer | null>;
-  merkeDokumentId: (dokumentId: string, europaceDokumentId: string) => Promise<void>;
+  /**
+   * Schreibt die Europace-Dokument-ID NUR, wenn fuer das Dokument noch keine
+   * gespeichert ist (in der Implementierung ein bedingtes `updateMany` mit
+   * `europaceDokumentId: null` und Auswertung von `count`). So bleibt eine
+   * von einem ueberlappenden Aufruf bereits gespeicherte ID unangetastet,
+   * statt kommentarlos ueberschrieben zu werden -- sonst wuerde die zuerst
+   * gespeicherte Zuordnung stillschweigend verloren gehen, obwohl das
+   * Dokument tatsaechlich erfolgreich hochgeladen wurde.
+   */
+  merkeDokumentId: (dokumentId: string, europaceDokumentId: string) => Promise<MerkeDokumentIdErgebnis>;
   protokolliere: (eintrag: { caseId: string; status: string; meldung: string }) => Promise<void>;
 }
 
@@ -48,26 +71,33 @@ export async function uebertrageUnterlagen(
   caseId: string,
   deps: UnterlagenDeps
 ): Promise<UnterlagenErgebnis> {
-  const leer = { uebertragen: 0, uebersprungen: 0, fehlgeschlagen: [] };
+  const leer = { uebertragen: 0, uebersprungen: 0, fehlgeschlagen: [], ueberzaehlig: [] };
 
   if (!deps.client) {
-    return { ok: false, ...leer, meldung: "Europace ist nicht verbunden." };
+    const meldung = "Europace ist nicht verbunden.";
+    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+    return { ok: false, ...leer, meldung };
   }
 
   const vorgangsnummer = await deps.ladeVorgangsnummer(caseId);
   if (!vorgangsnummer) {
-    return {
-      ok: false,
-      ...leer,
-      meldung: "Es gibt noch keinen Europace-Vorgang. Bitte zuerst den Vorgang anlegen.",
-    };
+    const meldung = "Es gibt noch keinen Europace-Vorgang. Bitte zuerst den Vorgang anlegen.";
+    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+    return { ok: false, ...leer, meldung };
   }
 
   const dokumente = await deps.ladeDokumente(caseId);
   let uebertragen = 0;
   let uebersprungen = 0;
   const fehlgeschlagen: Array<{ name: string; grund: string }> = [];
+  const ueberzaehlig: Array<{ name: string; europaceDokumentId: string }> = [];
 
+  // Bewusst sequenziell (kein mapLimit wie andernorts in cases.ts): jede
+  // Datei kann bis zu 100 MB gross sein (Europace-Grenze), im Speicher liegt
+  // dabei jeweils nur eine Datei zurzeit. Parallelisieren wuerde mehrere
+  // Dateien gleichzeitig im Speicher halten und den Speicherbedarf
+  // vervielfachen -- nicht ohne Grund vermeiden, siehe die vorherigen
+  // Speicher-/Pool-Ausfaelle des Projekts.
   for (const d of dokumente) {
     const name = d.generatedName ?? d.originalName;
     if (d.europaceDokumentId) {
@@ -91,19 +121,32 @@ export async function uebertrageUnterlagen(
         kategorie: europaceKategorie(d.documentType),
       });
 
-      await deps.merkeDokumentId(d.id, europaceDokumentId);
+      const merkeErgebnis = await deps.merkeDokumentId(d.id, europaceDokumentId);
+      if (!merkeErgebnis.ok) {
+        // Ein ueberlappender Aufruf war schneller und hat die ID fuer
+        // dasselbe Dokument bereits gespeichert. Der gerade abgeschlossene
+        // Upload ist trotzdem real in Europace passiert -- er zaehlt NICHT
+        // als Erfolg (BaufiDesk kennt seine ID nicht), sondern als
+        // ueberzaehlig und wird gesondert gemeldet.
+        ueberzaehlig.push({ name, europaceDokumentId });
+        continue;
+      }
       uebertragen += 1;
     } catch (e) {
       fehlgeschlagen.push({ name, grund: e instanceof Error ? e.message : "Unbekannter Fehler." });
     }
   }
 
-  const ok = fehlgeschlagen.length === 0;
-  const meldung = ok
-    ? `${uebertragen} Unterlage(n) uebertragen${uebersprungen ? `, ${uebersprungen} bereits vorhanden` : ""}.`
-    : `${uebertragen} uebertragen, ${fehlgeschlagen.length} fehlgeschlagen.`;
+  const ok = fehlgeschlagen.length === 0 && ueberzaehlig.length === 0;
+  const teile = [
+    `${uebertragen} Unterlage(n) uebertragen`,
+    uebersprungen ? `${uebersprungen} bereits vorhanden` : null,
+    fehlgeschlagen.length ? `${fehlgeschlagen.length} fehlgeschlagen` : null,
+    ueberzaehlig.length ? `${ueberzaehlig.length} ueberzaehlig hochgeladen (bitte in Europace pruefen)` : null,
+  ].filter((t): t is string => t !== null);
+  const meldung = `${teile.join(", ")}.`;
 
   await deps.protokolliere({ caseId, status: ok ? "erfolg" : "teilweise", meldung });
 
-  return { ok, uebertragen, uebersprungen, fehlgeschlagen, meldung };
+  return { ok, uebertragen, uebersprungen, fehlgeschlagen, ueberzaehlig, meldung };
 }
