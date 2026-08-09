@@ -35,6 +35,7 @@ import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorb
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
+import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
@@ -99,6 +100,41 @@ export default async function CaseCockpitPage({
     prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
     ladeErstkontaktStand(id),
   ]);
+
+  // Unterlagen-Detektiv: offene und unsichere Befunde plus die bereits
+  // verworfenen (eingeklappt sichtbar, damit eine Fehlentscheidung
+  // zurücknehmbar bleibt).
+  const befunde = await prisma.caseFinding.findMany({
+    where: { caseId: id, status: { in: ["offen", "unsicher", "verworfen"] } },
+    orderBy: [{ severity: "desc" }, { createdAt: "asc" }],
+    include: { sourceDocument: { select: { id: true, generatedName: true, originalName: true } } },
+  });
+  const kandidatenIds = befunde
+    .map((b) => b.matchCandidateId)
+    .filter((x): x is string => x !== null);
+  const kandidatenNamen = new Map(
+    (
+      await prisma.document.findMany({
+        where: { id: { in: kandidatenIds } },
+        select: { id: true, generatedName: true, originalName: true },
+      })
+    ).map((d) => [d.id, d.generatedName ?? d.originalName])
+  );
+  const alsBefundView = (b: (typeof befunde)[number]): FindingView => ({
+    id: b.id,
+    title: b.title,
+    reason: b.reason,
+    status: b.status,
+    sourceDocumentId: b.sourceDocumentId,
+    sourceDocumentName: b.sourceDocument.generatedName ?? b.sourceDocument.originalName,
+    sourcePage: b.sourcePage,
+    sourceQuote: b.sourceQuote,
+    matchCandidateName: b.matchCandidateId ? (kandidatenNamen.get(b.matchCandidateId) ?? null) : null,
+  });
+  // Ein gescheiterter Verweislauf darf nicht wie "nichts gefunden" aussehen.
+  const detektivUngeprueft = documents
+    .filter((d) => d.referenceStatus === "fehler")
+    .map((d) => d.generatedName ?? d.originalName);
   const applicantOptions = caseRow.applicants.map((a) => ({
     position: a.position,
     name: [a.vorname, a.nachname].filter(Boolean).join(" "),
@@ -310,7 +346,21 @@ export default async function CaseCockpitPage({
             </TabsList>
 
             <TabsContent value="fehlt">
-              <Card><CardContent className="pt-6"><MissingDocumentsPanel groups={cockpit.missingGroups} nachforderungHref={`/cases/${id}/messages`} /></CardContent></Card>
+              <div className="space-y-4">
+                {/* Erst die gefundenen Lücken sichten, dann nachfordern –
+                    sonst geht eine Nachforderung raus, der die Hälfte fehlt. */}
+                <Card>
+                  <CardContent className="pt-6">
+                    <FindingsPanel
+                      caseId={id}
+                      findings={befunde.filter((b) => b.status !== "verworfen").map(alsBefundView)}
+                      verworfen={befunde.filter((b) => b.status === "verworfen").map(alsBefundView)}
+                      ungeprueft={detektivUngeprueft}
+                    />
+                  </CardContent>
+                </Card>
+                <Card><CardContent className="pt-6"><MissingDocumentsPanel groups={cockpit.missingGroups} nachforderungHref={`/cases/${id}/messages`} /></CardContent></Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="dokumente">
