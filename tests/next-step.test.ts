@@ -39,6 +39,7 @@ function cockpit(over: {
       criticals: 0,
       docsFehler: 0,
       docsLaufend: 0,
+      offeneBefunde: 0,
       ...over.counts,
     },
     missingCustomerFields: over.missingCustomerFields ?? [],
@@ -225,6 +226,31 @@ describe("computeNextStep – Erstkontakt in der Prioritätsleiter", () => {
 
   it("ohne geladenen Erstkontakt-Stand bleibt die Leiter wie zuvor (z. B. im Dashboard-Batch)", () => {
     const s = computeNextStep(cockpit({ counts: { docsMissing: 3 } }));
+    expect(s.key).toBe("unterlagen_anfordern");
+  });
+});
+
+describe("Stufe: Lücken in den Unterlagen", () => {
+  const versendet = { empfaenger: "a@b.de", vorbereitet: true, versendet: true };
+
+  it("meldet offene Befunde, bevor Unterlagen angefordert werden", () => {
+    const s = computeNextStep(
+      cockpit({ counts: { docsMissing: 3, offeneBefunde: 4 }, erstkontakt: versendet })
+    );
+    expect(s.key).toBe("unterlagen_luecken");
+    expect(s.title).toContain("4");
+    expect(s.cta?.href).toContain("/cases/c1");
+  });
+
+  it("tritt hinter kritische Hinweise zurueck", () => {
+    const s = computeNextStep(
+      cockpit({ counts: { docsMissing: 3, offeneBefunde: 4, criticals: 2 }, erstkontakt: versendet })
+    );
+    expect(s.key).toBe("kritische_hinweise");
+  });
+
+  it("verhaelt sich unveraendert, wenn keine Befunde offen sind", () => {
+    const s = computeNextStep(cockpit({ counts: { docsMissing: 3 }, erstkontakt: versendet }));
     expect(s.key).toBe("unterlagen_anfordern");
   });
 });

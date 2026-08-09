@@ -31,6 +31,8 @@ export interface CockpitData {
     criticals: number;
     docsFehler: number;
     docsLaufend: number;
+    /** Offene Lücken des Unterlagen-Detektivs (offen + unsicher). */
+    offeneBefunde: number;
   };
   missingCustomerFields: string[];
   /** Stand der Selbstauskunft; fehlt, solange kein Link erstellt wurde. */
@@ -82,6 +84,10 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   const docsLaufend = docs.filter((d) => d.classificationStatus === "laeuft").length;
   const warnings = agg.plausibility.filter((p) => p.status !== "ok").length;
   const criticals = agg.plausibility.filter((p) => p.status === "kritisch");
+  // Unterlagen-Detektiv: was der Vermittler noch nicht gesichtet hat.
+  const offeneBefunde = await prisma.caseFinding.count({
+    where: { caseId, status: { in: ["offen", "unsicher"] } },
+  });
 
   const blockers = [
     ...missingCustomerFields.map((f) => `${f} fehlt`),
@@ -172,6 +178,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       criticals: criticals.length,
       docsFehler,
       docsLaufend,
+      offeneBefunde,
     },
     missingCustomerFields,
     selbstauskunft,

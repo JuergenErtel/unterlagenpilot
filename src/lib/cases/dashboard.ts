@@ -120,6 +120,18 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
 
   // Erstkontakt-Stand je Kandidat – ebenfalls in EINER Query, damit das
   // Dashboard dieselbe Prioritätsleiter sieht wie die Fallseite (next-step.ts).
+  // Offene Detektiv-Befunde je Kandidat – EINE groupBy statt einer Abfrage je
+  // Fall, sonst kostet die Dashboard-Liste zwölf zusätzliche Datenbankrunden.
+  const befundeJeFall = new Map(
+    (
+      await prisma.caseFinding.groupBy({
+        by: ["caseId"],
+        where: { caseId: { in: todoCandidates.map((c) => c.id) }, status: { in: ["offen", "unsicher"] } },
+        _count: { _all: true },
+      })
+    ).map((r) => [r.caseId, r._count._all])
+  );
+
   const erstkontaktNachrichten = await prisma.generatedMessage.findMany({
     where: { id: { in: todoCandidates.map((c) => c.erstkontaktMessageId).filter((mid): mid is string => !!mid) } },
     select: { id: true, sent: true },
@@ -143,6 +155,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           criticals: agg.plausibility.filter((p) => p.status === "kritisch").length,
           docsFehler: docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length,
           docsLaufend: docs.filter((d) => d.classificationStatus === "laeuft").length,
+          offeneBefunde: befundeJeFall.get(c.id) ?? 0,
         },
         missingCustomerFields: c.applicants
           .filter((a) => !a.geburtsdatum)
