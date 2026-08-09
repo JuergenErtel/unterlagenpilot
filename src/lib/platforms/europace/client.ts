@@ -1,0 +1,236 @@
+import { fetchWithRateLimitRetry } from "@/lib/ai/http";
+import type { Datenkontext, EuropaceKundenangabenRequest } from "./types";
+
+export class EuropaceNotConfiguredError extends Error {}
+export class EuropaceAuthError extends Error {}
+export class EuropaceApiError extends Error {}
+
+/** Traegt die Feldmeldungen von Europace, damit die UI sie einzeln zeigen kann. */
+export class EuropaceValidationError extends Error {
+  constructor(readonly meldungen: string[]) {
+    super("Europace hat die Kundenangaben abgelehnt.");
+  }
+}
+
+const TOKEN_URL = "https://api.europace.de/auth/token";
+const BAUFI_HOST = "https://baufinanzierung.api.europace.de";
+const UNTERLAGEN_HOST = "https://api.europace2.de";
+
+/** Token laeuft nach 3600 s ab; wir erneuern es eine Minute vorher. */
+const TOKEN_PUFFER_MS = 60_000;
+const TIMEOUT_MS = 30_000;
+/** Der Upload darf laenger dauern – Europace erlaubt bis 100 MB je Datei. */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+const SCOPES = [
+  "baufinanzierung:vorgang:schreiben",
+  "baufinanzierung:vorgang:lesen",
+  "unterlagen:dokument:schreiben",
+  "unterlagen:unterlage:schreiben",
+].join(" ");
+
+export interface DokumentUpload {
+  vorgangsnummer: string;
+  datei: Buffer;
+  dateiname: string;
+  mimeType: string;
+  anzeigename: string;
+  kategorie: string;
+}
+
+export interface EuropaceClient {
+  /** Trockenlauf: prueft den Request, legt nichts an. */
+  validiereKundenangaben(req: EuropaceKundenangabenRequest): Promise<void>;
+  /** Legt den Vorgang an und liefert die Vorgangsnummer. */
+  legeVorgangAn(req: EuropaceKundenangabenRequest): Promise<string>;
+  /** Laedt ein Dokument hoch und liefert die Europace-Dokument-ID. */
+  ladeDokumentHoch(input: DokumentUpload): Promise<string>;
+}
+
+interface EuropaceConfig {
+  clientId: string;
+  clientSecret: string;
+}
+
+export class HttpEuropaceClient implements EuropaceClient {
+  private token: { wert: string; gueltigBis: number } | null = null;
+
+  constructor(
+    private readonly config: EuropaceConfig,
+    private readonly fetchImpl: typeof fetch = fetch
+  ) {}
+
+  private async holeToken(): Promise<string> {
+    if (this.token && Date.now() < this.token.gueltigBis) return this.token.wert;
+
+    const basic = Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64");
+    let res: Response;
+    try {
+      res = await fetchWithRateLimitRetry(
+        TOKEN_URL,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${basic}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ grant_type: "client_credentials", scope: SCOPES }).toString(),
+        },
+        TIMEOUT_MS,
+        this.fetchImpl
+      );
+    } catch {
+      // Keine Details durchreichen – der Basic-Header darf nirgends landen.
+      throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new EuropaceAuthError("Europace-Zugang abgelehnt. Bitte Client-ID und Secret pruefen.");
+    }
+    if (!res.ok) {
+      console.warn(`[europace] Token -> HTTP ${res.status}`);
+      throw new EuropaceApiError(`Europace-Token fehlgeschlagen (HTTP ${res.status}).`);
+    }
+
+    const body = (await res.json()) as { access_token?: string; expires_in?: number };
+    if (!body.access_token) throw new EuropaceApiError("Europace lieferte kein Token.");
+
+    this.token = {
+      wert: body.access_token,
+      gueltigBis: Date.now() + (body.expires_in ?? 3600) * 1000 - TOKEN_PUFFER_MS,
+    };
+    return this.token.wert;
+  }
+
+  /** Zieht die Feldmeldungen aus einer 400-Antwort; Format variiert je Endpunkt. */
+  private static meldungenAus(body: unknown): string[] {
+    const eintraege =
+      (body as { messages?: unknown[] })?.messages ??
+      (body as { errors?: unknown[] })?.errors ??
+      [];
+    const gelesen = (Array.isArray(eintraege) ? eintraege : []).map((e) => {
+      if (typeof e === "string") return e;
+      const o = e as { path?: string; field?: string; message?: string; detail?: string };
+      const pfad = o.path ?? o.field;
+      const text = o.message ?? o.detail ?? JSON.stringify(e);
+      return pfad ? `${pfad}: ${text}` : text;
+    });
+    return gelesen.length ? gelesen : ["Europace nannte keinen Grund."];
+  }
+
+  private async sendeKundenangaben(pfad: string, req: EuropaceKundenangabenRequest): Promise<Response> {
+    const token = await this.holeToken();
+    let res: Response;
+    try {
+      res = await fetchWithRateLimitRetry(
+        `${BAUFI_HOST}${pfad}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json;version=1.0",
+            Accept: "application/json;version=1.0",
+          },
+          body: JSON.stringify(req),
+        },
+        TIMEOUT_MS,
+        this.fetchImpl
+      );
+    } catch {
+      throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new EuropaceAuthError("Europace-Zugang abgelehnt. Bitte Scopes des API-Clients pruefen.");
+    }
+    if (res.status === 400) {
+      throw new EuropaceValidationError(HttpEuropaceClient.meldungenAus(await res.json().catch(() => ({}))));
+    }
+    if (!res.ok) {
+      console.warn(`[europace] POST ${pfad} -> HTTP ${res.status}`);
+      throw new EuropaceApiError(`Europace antwortete mit HTTP ${res.status}.`);
+    }
+    return res;
+  }
+
+  async validiereKundenangaben(req: EuropaceKundenangabenRequest): Promise<void> {
+    await this.sendeKundenangaben("/kundenangaben/body-validation", req);
+  }
+
+  async legeVorgangAn(req: EuropaceKundenangabenRequest): Promise<string> {
+    const res = await this.sendeKundenangaben("/kundenangaben", req);
+    const body = (await res.json()) as { vorgangsnummer?: string };
+    if (!body.vorgangsnummer) {
+      // Ohne Nummer gilt der Fall NICHT als uebertragen.
+      throw new EuropaceApiError("Europace lieferte keine Vorgangsnummer.");
+    }
+    return body.vorgangsnummer;
+  }
+
+  async ladeDokumentHoch(input: DokumentUpload): Promise<string> {
+    const token = await this.holeToken();
+    const form = new FormData();
+    form.append("caseId", input.vorgangsnummer);
+    form.append("displayName", input.anzeigename);
+    form.append("category", input.kategorie);
+    form.append(
+      "file",
+      new Blob([new Uint8Array(input.datei)], { type: input.mimeType }),
+      input.dateiname
+    );
+
+    let res: Response;
+    try {
+      res = await fetchWithRateLimitRetry(
+        `${UNTERLAGEN_HOST}/v2/dokumente`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form },
+        UPLOAD_TIMEOUT_MS,
+        this.fetchImpl
+      );
+    } catch {
+      throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new EuropaceAuthError("Europace-Zugang abgelehnt. Bitte Unterlagen-Scopes pruefen.");
+    }
+    if (!res.ok) {
+      console.warn(`[europace] Dokument-Upload -> HTTP ${res.status}`);
+      throw new EuropaceApiError(`Dokument-Upload fehlgeschlagen (HTTP ${res.status}).`);
+    }
+
+    const body = (await res.json()) as { id?: string; dokumentId?: string };
+    const id = body.id ?? body.dokumentId;
+    if (!id) throw new EuropaceApiError("Europace lieferte keine Dokument-ID.");
+    return id;
+  }
+}
+
+/**
+ * Liefert den Client fuer eine Organisation. null, wenn keine Zugangsdaten
+ * gesetzt sind – die UI zeigt dann den Hinweis statt eines toten Knopfes.
+ *
+ * `organizationId` wird im Pilotbetrieb bewusst NICHT ausgewertet: es gibt genau
+ * einen Europace-Partner, dessen Zugangsdaten in der Umgebung stehen. Der
+ * Parameter ist die Naht fuer den spaeteren SaaS-Betrieb, in dem jeder Vermittler
+ * ein eigener Europace-Partner ist (Authorization-Code-Flow ueber einen
+ * BaufiDesk-Tech-Partner-Client). Dann aendert sich nur diese Funktion.
+ */
+export function getEuropaceClient(
+  organizationId: string,
+  fetchImpl: typeof fetch = fetch
+): EuropaceClient | null {
+  void organizationId;
+  const clientId = process.env.EUROPACE_CLIENT_ID;
+  const clientSecret = process.env.EUROPACE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  return new HttpEuropaceClient({ clientId, clientSecret }, fetchImpl);
+}
+
+/**
+ * Vorgabe ist der Testmodus. Echtgeschaeft muss ausdruecklich gesetzt werden,
+ * damit niemand versehentlich echte Vorgaenge erzeugt.
+ */
+export function getDatenkontext(): Datenkontext {
+  return process.env.EUROPACE_DATENKONTEXT === "ECHT_GESCHAEFT" ? "ECHT_GESCHAEFT" : "TEST_MODUS";
+}
