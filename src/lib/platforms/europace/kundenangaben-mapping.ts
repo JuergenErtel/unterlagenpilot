@@ -3,11 +3,12 @@ import type {
   CanonicalCase,
   CanonicalEmployment,
 } from "@/lib/domain/canonical";
-import type { EmploymentType, MaritalStatus } from "@/lib/domain/enums";
+import type { EmploymentType, MaritalStatus, PropertyType } from "@/lib/domain/enums";
 import type {
   Datenkontext,
   EuropaceAnschrift,
   EuropaceBeschaeftigung,
+  EuropaceFinanzierungsobjekt,
   EuropaceHaushalt,
   EuropaceKunde,
   EuropaceKundenangabenRequest,
@@ -154,6 +155,50 @@ function haushalte(c: CanonicalCase): EuropaceHaushalt[] | undefined {
   return [{ kunden }];
 }
 
+/**
+ * BaufiDesk kennt Objektarten, fuer die Europace keinen eigenen Typ hat
+ * (Grundstueck ist dort BAUGRUNDSTUECK, Gewerbe hat gar kein Gegenstueck).
+ * Ohne Entsprechung faellt es auf IMMOBILIE_OHNE_TYP zurueck – das ist ein
+ * vorgesehener Wert des Schemas, keine Notluege.
+ */
+const OBJEKTART: Record<PropertyType, string> = {
+  einfamilienhaus: "EINFAMILIENHAUS",
+  doppelhaushaelfte: "DOPPELHAUSHAELFTE",
+  reihenhaus: "REIHENHAUS",
+  eigentumswohnung: "EIGENTUMSWOHNUNG",
+  mehrfamilienhaus: "MEHRFAMILIENHAUS",
+  grundstueck: "BAUGRUNDSTUECK",
+  gewerbe: "IMMOBILIE_OHNE_TYP",
+  sonstiges: "IMMOBILIE_OHNE_TYP",
+};
+
+/** Diese Typen kennen keine eigene Grundstuecksgroesse. */
+const OHNE_GRUNDSTUECK = new Set(["EIGENTUMSWOHNUNG", "IMMOBILIE_OHNE_TYP"]);
+
+function finanzierungsobjekt(c: CanonicalCase): EuropaceFinanzierungsobjekt | undefined {
+  const p = c.property;
+  if (!p) return undefined;
+
+  const typ = p.objektart ? OBJEKTART[p.objektart] : "IMMOBILIE_OHNE_TYP";
+  const gebaeude = wegLassenWennLeer({
+    baujahr: p.baujahr,
+    nutzung: p.wohnflaeche ? { wohnen: { gesamtflaeche: p.wohnflaeche } } : undefined,
+  });
+
+  const immobilie = wegLassenWennLeer({
+    adresse: anschriftAufteilen(p.strasse, p.plz, p.ort),
+    typ: {
+      "@type": typ,
+      ...(gebaeude ? { gebaeude } : {}),
+      ...(OHNE_GRUNDSTUECK.has(typ) || !p.grundstuecksflaeche
+        ? {}
+        : { grundstuecksgroesse: p.grundstuecksflaeche }),
+    },
+  });
+
+  return immobilie ? { immobilie } : undefined;
+}
+
 export function canonicalToKundenangaben(
   c: CanonicalCase,
   opts: { datenkontext: Datenkontext }
@@ -166,6 +211,7 @@ export function canonicalToKundenangaben(
     },
     kundenangaben: {
       haushalte: haushalte(c),
+      finanzierungsobjekt: finanzierungsobjekt(c),
     },
   };
 }

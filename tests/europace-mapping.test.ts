@@ -145,3 +145,61 @@ describe("canonicalToKundenangaben – Haushalt", () => {
     expect(validateKundenangabenRequest(r).errors).toEqual([]);
   });
 });
+
+describe("canonicalToKundenangaben – Finanzierungsobjekt", () => {
+  const mitObjekt = fall({
+    property: {
+      objektart: "einfamilienhaus",
+      strasse: "Feldweg 12a",
+      plz: "14467",
+      ort: "Potsdam",
+      wohnflaeche: 142.5,
+      baujahr: 1998,
+      grundstuecksflaeche: 620,
+    },
+  });
+
+  it("mappt die Objektart als @type und die Adresse getrennt", () => {
+    const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
+    const immobilie = r.kundenangaben.finanzierungsobjekt!.immobilie!;
+    expect(immobilie.typ!["@type"]).toBe("EINFAMILIENHAUS");
+    expect(immobilie.adresse).toEqual({
+      strasse: "Feldweg",
+      hausnummer: "12a",
+      plz: "14467",
+      ort: "Potsdam",
+    });
+  });
+
+  it("legt die Wohnflaeche unter gebaeude.nutzung.wohnen.gesamtflaeche ab", () => {
+    const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ.gebaeude).toEqual({
+      baujahr: 1998,
+      nutzung: { wohnen: { gesamtflaeche: 142.5 } },
+    });
+    expect(typ.grundstuecksgroesse).toBe(620);
+  });
+
+  it("nutzt IMMOBILIE_OHNE_TYP fuer Objektarten ohne Europace-Entsprechung", () => {
+    const r = canonicalToKundenangaben(fall({ property: { objektart: "gewerbe" } }), {
+      datenkontext: "TEST_MODUS",
+    });
+    expect(r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!["@type"]).toBe("IMMOBILIE_OHNE_TYP");
+  });
+
+  it("laesst die Eigentumswohnung ohne Grundstuecksgroesse", () => {
+    const r = canonicalToKundenangaben(
+      fall({ property: { objektart: "eigentumswohnung", wohnflaeche: 78, grundstuecksflaeche: 500 } }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const typ = r.kundenangaben.finanzierungsobjekt!.immobilie!.typ!;
+    expect(typ["@type"]).toBe("EIGENTUMSWOHNUNG");
+    expect(typ.grundstuecksgroesse).toBeUndefined();
+  });
+
+  it("bleibt schemakonform", () => {
+    const r = canonicalToKundenangaben(mitObjekt, { datenkontext: "TEST_MODUS" });
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+});
