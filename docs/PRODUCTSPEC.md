@@ -350,9 +350,12 @@ BaufiDesk verarbeitet hochsensible personenbezogene Finanz- und Identitätsdaten
 
 - **Europace-API angebunden (Stand 09.08.2026):** Die Endpunkte sind öffentlich
   dokumentiert und als OpenAPI-Schema eingecheckt (`src/lib/platforms/europace/schema/`).
-  Vorgang anlegen und Unterlagen übertragen sind umgesetzt; es fehlt allein der
-  API-Client-Zugang. **FinLink** ist per Partner-API angebunden. Für **eHyp home**
-  liegen die produktiven Endpunkte weiterhin nicht vor → Adapter/Stub mit
+  Vorgang anlegen und Unterlagen übertragen sind umgesetzt; es fehlt der
+  API-Client-Zugang sowie die Antragsteller-Zuordnung (`assignmentId`) beim
+  Dokumenten-Upload, deren Endpunkt (`moeglicheZuordnungen`) noch nicht verifiziert
+  ist und deshalb bewusst nicht geraten wurde – Dokumente gehen bis dahin ohne
+  Zuordnung an den Vorgang. **FinLink** ist per Partner-API angebunden. Für **eHyp
+  home** liegen die produktiven Endpunkte weiterhin nicht vor → Adapter/Stub mit
   ManualExport-Fallback, keine geratenen Endpunkte.
 - **TODOs:** API-Spezifikationen einholen, Mapping-Tabellen je Plattform finalisieren, Bank-/Plattform-Regelwerke pflegen, KO-Kriterienkatalog erweitern.
 - **Annahme:** Das kanonische Datenmodell ist führend; Plattformformate werden nur an den Connectoren abgebildet.
