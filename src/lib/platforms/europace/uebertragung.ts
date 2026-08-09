@@ -1,7 +1,16 @@
 import type { CanonicalCase } from "@/lib/domain/canonical";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { canonicalToKundenangaben } from "./kundenangaben-mapping";
 import { EuropaceAuthError, EuropaceValidationError, type EuropaceClient } from "./client";
 import type { Datenkontext } from "./types";
+
+/**
+ * Dauer der kurzlebigen Beanspruchung (siehe unten). Bewusst kurz: rate-limit.ts
+ * kennt keine Freigabe vor Fensterende (nur `__resetRateLimits` fuer Tests) --
+ * ein Nutzer, der nach einem gescheiterten Versuch sofort erneut klickt, muss
+ * durchkommen, statt an der eigenen vorherigen Beanspruchung haengenzubleiben.
+ */
+const BEANSPRUCHUNG_FENSTER_SEC = 10;
 
 export interface UebertragungErgebnis {
   ok: boolean;
@@ -49,11 +58,14 @@ export interface UebertragungDeps {
  * Bekannte Grenze: Der Aufruf gegen Europace laesst sich nicht zurueckrollen.
  * Erreichen zwei ueberlappende Aufrufe (Doppelklick, zweiter Tab) beide
  * `legeVorgangAn`, bevor einer fertig ist, entstehen in Europace zwei echte
- * Vorgaenge -- das laesst sich im Nachhinein nicht mehr verhindern. Diese
- * Funktion verhindert dafuer zuverlaessig den schlimmeren Fall: dass die
- * zweite Nummer die erste in der Datenbank still ueberschreibt und der erste
- * Vorgang damit fuer BaufiDesk unsichtbar wird (siehe `speichereNummer`
- * unten und `SpeichernErgebnis`).
+ * Vorgaenge -- das laesst sich im Nachhinein nicht mehr verhindern. Eine
+ * kurzlebige, fallbezogene Beanspruchung (siehe unten, ueber `checkRateLimit`)
+ * verkleinert dieses Zeitfenster in der Praxis, ist aber ohne Upstash keine
+ * instanzuebergreifende Garantie. Diese Funktion verhindert deshalb
+ * zusaetzlich zuverlaessig den schlimmeren Fall: dass die zweite Nummer die
+ * erste in der Datenbank still ueberschreibt und der erste Vorgang damit fuer
+ * BaufiDesk unsichtbar wird (siehe `speichereNummer` unten und
+ * `SpeichernErgebnis`).
  */
 export async function uebertrageFallNachEuropace(
   caseId: string,
@@ -62,6 +74,27 @@ export async function uebertrageFallNachEuropace(
   if (!deps.client) {
     const meldung =
       "Europace ist nicht verbunden. Bitte EUROPACE_CLIENT_ID und EUROPACE_CLIENT_SECRET hinterlegen.";
+    await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
+    return { ok: false, meldung };
+  }
+
+  // Kurzlebige Beanspruchung des kritischen Abschnitts (Pruefung, Trockenlauf,
+  // Anlegen): der bestehende Rate-Limiter wird hier mit max=1 als Mutex
+  // zweckentfremdet, fallbezogen ueber den Case-Key. Das deckt Doppelklick und
+  // zweiten Tab in der Praxis ab -- ist aber KEINE Garantie ueber mehrere
+  // Serverless-Instanzen hinweg, solange kein Upstash Redis konfiguriert ist
+  // (UPSTASH_REDIS_REST_URL/_TOKEN, in Produktion noch nicht gesetzt; ohne das
+  // gilt der Rate-Limiter nur pro Instanz, siehe rate-limit.ts). Der
+  // eigentliche Schutz gegen Datenverlust bleibt das bedingte Schreiben in
+  // speichereNummer weiter unten -- diese Beanspruchung verkleinert nur das
+  // Zeitfenster, in dem ein zweiter Aufruf ueberhaupt erst startet.
+  const beanspruchung = await checkRateLimit(
+    `europace-vorgang:${caseId}`,
+    1,
+    BEANSPRUCHUNG_FENSTER_SEC
+  );
+  if (!beanspruchung.ok) {
+    const meldung = "Fuer diesen Fall laeuft bereits eine Uebertragung.";
     await deps.protokolliere({ caseId, status: "uebersprungen", meldung });
     return { ok: false, meldung };
   }

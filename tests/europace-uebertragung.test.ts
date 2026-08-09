@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { uebertrageFallNachEuropace } from "@/lib/platforms/europace/uebertragung";
 import { EuropaceAuthError, EuropaceValidationError } from "@/lib/platforms/europace/client";
+import { __resetRateLimits } from "@/lib/auth/rate-limit";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 
 const CANONICAL = {
@@ -30,6 +31,14 @@ function deps(over: Partial<Parameters<typeof uebertrageFallNachEuropace>[1]> = 
 }
 
 describe("uebertrageFallNachEuropace", () => {
+  // Die Beanspruchung (checkRateLimit) haelt ihren In-Memory-Zustand ueber
+  // Testfaelle hinweg fest, da mehrere Tests denselben caseId "case-1"
+  // verwenden -- ohne Reset wuerde der zweite Test von der Beanspruchung des
+  // ersten blockiert.
+  beforeEach(() => {
+    __resetRateLimits();
+  });
+
   it("validiert erst, legt dann an und speichert die Nummer (in dieser Reihenfolge)", async () => {
     const reihenfolge: string[] = [];
     const d = deps({
@@ -147,6 +156,31 @@ describe("uebertrageFallNachEuropace", () => {
         caseId: "case-1",
         status: "fehler",
         meldung: expect.stringContaining("PARALLEL1"),
+      })
+    );
+  });
+
+  it("lehnt einen ueberlappenden zweiten Aufruf waehrend einer laufenden Beanspruchung ab, ohne zu validieren oder anzulegen", async () => {
+    const d = deps();
+
+    const erster = await uebertrageFallNachEuropace("case-1", d);
+    expect(erster.ok).toBe(true);
+
+    // Zweiter Aufruf fuer denselben Fall, noch innerhalb des Beanspruchungs-
+    // Fensters (kein __resetRateLimits dazwischen) -- simuliert Doppelklick
+    // oder zweiten Tab.
+    const zweiter = await uebertrageFallNachEuropace("case-1", d);
+
+    expect(zweiter.ok).toBe(false);
+    expect(zweiter.meldung).toContain("laeuft bereits");
+    // Nur der erste Aufruf hat tatsaechlich validiert und angelegt.
+    expect(d.client!.validiereKundenangaben).toHaveBeenCalledOnce();
+    expect(d.client!.legeVorgangAn).toHaveBeenCalledOnce();
+    expect(d.protokolliere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        caseId: "case-1",
+        status: "uebersprungen",
+        meldung: expect.stringContaining("laeuft bereits"),
       })
     );
   });
