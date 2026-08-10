@@ -176,3 +176,15 @@ describe("Aktualitätsprüfung mit unbekanntem Dokumentalter", () => {
     expect(list.find((i) => i.key === "gehaltsabrechnung")?.status).toBe("vorhanden");
   });
 });
+
+describe("Ersetzte Dokumente", () => {
+  it("ein ersetztes Dokument erfüllt keine Checklistenposition mehr", () => {
+    // Nach dem Auftrennen eines Sammel-PDFs steht das Original auf "ersetzt".
+    // Zaehlte es weiter mit, saehe die Checkliste Original UND Teile.
+    const list = buildChecklistForCase(
+      { employmentType: "angestellter", financingType: "kauf" },
+      [{ documentType: "personalausweis", reviewStatus: "ersetzt", readable: true }]
+    );
+    expect(list.find((i) => i.key === "personalausweis")?.status).toBe("offen");
+  });
+});

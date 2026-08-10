@@ -413,6 +413,44 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   }
 }
 
+/**
+ * Startet die Analyse (OCR, Klassifizierung, Extraktion, Nachlauf) fuer ein
+ * bereits gespeichertes Dokument. Wird vom Auftrennen fuer jedes Teildokument
+ * aufgerufen – die Teile sollen dieselbe Behandlung bekommen wie ein normaler
+ * Upload.
+ */
+export async function analysiereDokument(documentId: string): Promise<void> {
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      id: true,
+      caseId: true,
+      applicantId: true,
+      storageKey: true,
+      mimeType: true,
+      sizeBytes: true,
+      originalName: true,
+    },
+  });
+  if (!doc) return;
+
+  const buffer = await getStorage().get(doc.storageKey);
+  if (!buffer) {
+    console.error(`[pipeline] Datei zu Dokument ${documentId} nicht auffindbar`);
+    return;
+  }
+
+  await processOcrAndAi({
+    documentId: doc.id,
+    caseId: doc.caseId,
+    applicantId: doc.applicantId,
+    buffer,
+    stored: { storageKey: doc.storageKey, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes },
+    originalName: doc.originalName,
+    applicantName: null,
+  });
+}
+
 /** Maximale Upload-Größe in MB (für UI-Hinweise). */
 export function maxUploadMb(): number {
   return getEnv().UPLOAD_MAX_MB;

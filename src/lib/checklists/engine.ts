@@ -185,7 +185,13 @@ function resolveStatus(
   applicantCount: number
 ): ResolvedChecklistItem {
   const matches = documents.filter(
-    (d) => d.documentType === def.documentType && d.reviewStatus !== "abgelehnt" && d.reviewStatus !== "duplikat"
+    (d) =>
+      d.documentType === def.documentType &&
+      d.reviewStatus !== "abgelehnt" &&
+      d.reviewStatus !== "duplikat" &&
+      // Ein ersetztes Dokument erfuellt keine Position mehr – sonst zaehlt nach
+      // dem Auftrennen das Original zusaetzlich zu seinen Teilen.
+      d.reviewStatus !== "ersetzt"
   );
   const perPerson = def.requiredCount ?? 1;
   const perApplicant = def.perApplicant === true && applicantCount > 1;
