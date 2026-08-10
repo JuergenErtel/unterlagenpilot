@@ -40,6 +40,7 @@ function cockpit(over: {
       docsFehler: 0,
       docsLaufend: 0,
       offeneBefunde: 0,
+      machbarkeitBlockiert: false,
       ...over.counts,
     },
     missingCustomerFields: over.missingCustomerFields ?? [],
@@ -251,6 +252,35 @@ describe("Stufe: Lücken in den Unterlagen", () => {
 
   it("verhaelt sich unveraendert, wenn keine Befunde offen sind", () => {
     const s = computeNextStep(cockpit({ counts: { docsMissing: 3 }, erstkontakt: versendet }));
+    expect(s.key).toBe("unterlagen_anfordern");
+  });
+});
+
+describe("Stufe: Machbarkeit", () => {
+  const versendet = { empfaenger: "a@b.de", vorbereitet: true, versendet: true };
+
+  it("meldet einen nicht darstellbaren Fall vor allem Unterlagen-Kram", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { docsMissing: 3, offeneBefunde: 2, machbarkeitBlockiert: true },
+        erstkontakt: versendet,
+      })
+    );
+    expect(s.key).toBe("machbarkeit");
+    expect(s.cta?.href).toContain("/machbarkeit");
+  });
+
+  it("tritt hinter kritische Hinweise zurueck", () => {
+    const s = computeNextStep(
+      cockpit({ counts: { criticals: 1, machbarkeitBlockiert: true }, erstkontakt: versendet })
+    );
+    expect(s.key).toBe("kritische_hinweise");
+  });
+
+  it("schweigt, wenn der Fall traegt", () => {
+    const s = computeNextStep(
+      cockpit({ counts: { docsMissing: 3, machbarkeitBlockiert: false }, erstkontakt: versendet })
+    );
     expect(s.key).toBe("unterlagen_anfordern");
   });
 });

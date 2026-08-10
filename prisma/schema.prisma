@@ -322,6 +322,7 @@ model Organization {
   bankRequirements    BankRequirement[]
   auditLogs           AuditLog[]
   leadSyncStates      LeadSyncState[]
+  machbarkeitsAnnahmen MachbarkeitsAnnahmen?
 
   @@map("organizations")
 }
@@ -607,6 +608,8 @@ model Property {
   mieteinnahmenMonatlich   Float?
   nutzung                  UsageType?
   vermieteterAnteilProzent Int?
+  /// Manuell bestaetigtes Bundesland, falls die PLZ mehrdeutig ist.
+  bundesland               String?
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
 
@@ -624,6 +627,9 @@ model FinancingRequest {
   maklerprovisionProzent Float?
   eigenkapital           Float?
   darlehenswunsch        Float?
+  /// Manuell gesetzter Grunderwerbsteuersatz, falls die Ableitung aus PLZ und
+  /// Ort danebenliegt. Sichtbar im Machbarkeits-Ergebnis.
+  grunderwerbsteuerProzent Float?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -1478,4 +1484,27 @@ model CaseFinding {
   @@unique([caseId, fingerprint])
   @@index([caseId, status])
   @@map("case_findings")
+}
+
+/**
+ * Marktannahmen des Vermittlers fuer den Machbarkeits-Solver. Bewusst je
+ * Organisation: Zinsaufschlaege sind Marktkenntnis und aendern sich laufend.
+ * Fehlt der Datensatz, gelten die Vorgabewerte aus VORGABE_ANNAHMEN – die
+ * Mitte dokumentierter Marktspannen, keine Bankkonditionen.
+ */
+model MachbarkeitsAnnahmen {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  basiszinsProzent Float @default(3.5)
+  aufschlagBis80   Float @default(0.1)
+  aufschlagBis90   Float @default(0.3)
+  aufschlagBis100  Float @default(0.6)
+  aufschlagBis110  Float @default(1.2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("machbarkeits_annahmen")
 }

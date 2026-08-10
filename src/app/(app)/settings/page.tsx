@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, BrainCircuit, Database, Lock, MessageSquareText, ChevronRight, Landmark } from "lucide-react";
+import { ShieldCheck, BrainCircuit, Database, Lock, MessageSquareText, ChevronRight, Landmark, Scale } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import {
@@ -68,6 +68,23 @@ export default async function SettingsPage() {
                 <div className="text-sm font-medium">Bankanforderungen</div>
                 <div className="text-xs text-muted-foreground">
                   Zusätzliche Unterlagen je Bank pflegen – erscheinen automatisch in der Checkliste passender Fälle.
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
+
+      <Link href="/settings/machbarkeit" className="block">
+        <Card className="transition-colors hover:border-primary/40">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <Scale className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <div className="text-sm font-medium">Zinsannahmen der Machbarkeitsrechnung</div>
+                <div className="text-xs text-muted-foreground">
+                  Basiszins und Aufschläge je Beleihungsauslauf – womit der Solver rechnet, solange kein Angebot vorliegt.
                 </div>
               </div>
             </div>
