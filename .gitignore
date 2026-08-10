@@ -16,3 +16,6 @@ next-env.d.ts
 
 # Screenshots aus der Gestaltungsarbeit (Playwright-MCP)
 .playwright-mcp/
+
+# Rohdaten-Abzuege (gross, nicht versionieren)
+data/

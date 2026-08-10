@@ -38,6 +38,14 @@ Offener Blocker der Selbstregistrierung: Fremde Organisationen dürfen ohne AVV
 keine Kundendaten in BaufiDesk verarbeiten. Das ist ein juristisches Dokument,
 keine Programmieraufgabe.
 
+### 4. Europace-Inhalte im Banken-Wiki klären
+
+Das Banken-Wiki übernimmt die Finanzierungskriterien aus Europace (664 Banken,
+69 Kriterien). Für den eigenen Gebrauch unbedenklich — Jürgen ist
+Europace-Partner. Sobald BaufiDesk andere Vermittler bedient, werden diese
+Inhalte an Dritte weitergegeben. **Mit Europace klären, bevor das Wiki zum
+Verkaufsargument wird.**
+
 ## Vor dem ersten Fremdnutzer prüfen
 
 - **Zinsannahmen der Machbarkeitsrechnung** (`/settings/machbarkeit`) sind
