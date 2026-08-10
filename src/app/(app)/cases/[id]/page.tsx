@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
 export const maxDuration = 300;
-import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, ClipboardList, Banknote, CalendarClock } from "lucide-react";
+import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
@@ -538,6 +538,7 @@ export default async function CaseCockpitPage({
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/machbarkeit`}><Scale />Machbarkeit</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
             </CardContent>
