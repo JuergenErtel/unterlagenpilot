@@ -29,6 +29,18 @@ const eur = (n: number) => `${Math.round(n).toLocaleString("de-DE")} €`;
 const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits: 0 })} %`;
 
 /**
+ * Bis hierhin gilt ein Lead als unkompliziert platzierbar.
+ *
+ * Nicht die Machbarkeitsgrenze (die liegt bei 110 %), sondern die Grenze fuer
+ * die Farbe: Darueber werden die Nebenkosten mitfinanziert, das ist spuerbar
+ * teurer und die Anbieterauswahl schrumpft.
+ *
+ * Belegt an 200 echten Leads: ohne diese Grenze waeren 83 % der Karten gruen
+ * und die Ampel sortierte nichts mehr.
+ */
+const GRUEN_BIS_AUSLAUF = 100;
+
+/**
  * Verkuerzte Sicht auf den Machbarkeits-Solver fuer eine Kanban-Karte.
  *
  * Rechnet bewusst NICHT alle Hebel durch, sondern nur die zwei Fragen, die im
@@ -62,12 +74,19 @@ export function ampelFuer(c: CanonicalCase, opts: AmpelOptionen, a: Annahmen): A
   const e = eingabe.eingabe;
   const start = bewerte(e, a);
   if (start.machbar) {
+    const grund = `Beleihungsauslauf ${pct(start.auslauf)}, Haushaltsüberschuss ${eur(
+      start.ueberschuss
+    )} bei ${eur(start.rate + start.ratenkreditRate)} Rate.`;
+
+    if (start.auslauf <= GRUEN_BIS_AUSLAUF) {
+      return { farbe: "gruen", text: `trägt · ${pct(start.auslauf)} Auslauf`, grund };
+    }
+    // Traegt, aber die Nebenkosten laufen mit ins Darlehen: machbar, nur nicht
+    // ohne Weiteres – deshalb gelb statt gruen.
     return {
-      farbe: "gruen",
-      text: `trägt · ${pct(start.auslauf)} Auslauf`,
-      grund: `Beleihungsauslauf ${pct(start.auslauf)}, Haushaltsüberschuss ${eur(
-        start.ueberschuss
-      )} bei ${eur(start.rate + start.ratenkreditRate)} Rate.`,
+      farbe: "gelb",
+      text: `trägt · Nebenkosten mitfinanziert (${pct(start.auslauf)})`,
+      grund: `${grund} Über 100 % Auslauf werden die Nebenkosten mitfinanziert – deutlich teurer und nur bei starker Bonität.`,
     };
   }
 

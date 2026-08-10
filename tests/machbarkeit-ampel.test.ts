@@ -38,6 +38,20 @@ describe("Ampel – grün", () => {
   });
 });
 
+describe("Ampel – gelb trotz Machbarkeit", () => {
+  it("meldet gelb, wenn der Fall nur als Vollfinanzierung über 100 % trägt", () => {
+    // Wenig Eigenkapital, aber hohes Einkommen: rechnerisch machbar, der
+    // Auslauf liegt aber ueber 100 % – kein unkomplizierter Fall.
+    const a = ampelFuer(
+      fall({ kaufpreis: 400_000, eigenkapital: 0, netto: 12_000 }),
+      opts,
+      VORGABE_ANNAHMEN
+    );
+    expect(a!.farbe).toBe("gelb");
+    expect(a!.text).toMatch(/Nebenkosten mitfinanziert/);
+  });
+});
+
 describe("Ampel – gelb", () => {
   it("nennt den fehlenden Eigenkapitalbetrag", () => {
     const a = ampelFuer(
