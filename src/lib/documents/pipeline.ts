@@ -11,6 +11,7 @@ import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
 import { matchApplicant } from "@/lib/documents/applicant-match";
 import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
+import { erkenneAufteilung } from "@/lib/aufteilung/service";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
 /**
@@ -401,11 +402,53 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   // Faellt das aus, bleibt die Dokumentanalyse unberuehrt – sichtbar wird der
   // Ausfall ueber referenceStatus.
   try {
+    // Aufteilungserkennung ZUERST: wird gleich darauf aufgetrennt, prueft der
+    // Detektiv ohnehin jedes Teildokument neu – seine Arbeit am Sammel-PDF
+    // waere sonst umsonst.
+    await erkenneAufteilung(documentId);
     await runReferenceExtraction(documentId);
     await reconcileCase(caseId);
   } catch (e) {
-    console.error(`[pipeline] Detektiv-Lauf für Dokument ${documentId} fehlgeschlagen:`, e);
+    console.error(`[pipeline] Nachlauf für Dokument ${documentId} fehlgeschlagen:`, e);
   }
+}
+
+/**
+ * Startet die Analyse (OCR, Klassifizierung, Extraktion, Nachlauf) fuer ein
+ * bereits gespeichertes Dokument. Wird vom Auftrennen fuer jedes Teildokument
+ * aufgerufen – die Teile sollen dieselbe Behandlung bekommen wie ein normaler
+ * Upload.
+ */
+export async function analysiereDokument(documentId: string): Promise<void> {
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      id: true,
+      caseId: true,
+      applicantId: true,
+      storageKey: true,
+      mimeType: true,
+      sizeBytes: true,
+      originalName: true,
+    },
+  });
+  if (!doc) return;
+
+  const buffer = await getStorage().get(doc.storageKey);
+  if (!buffer) {
+    console.error(`[pipeline] Datei zu Dokument ${documentId} nicht auffindbar`);
+    return;
+  }
+
+  await processOcrAndAi({
+    documentId: doc.id,
+    caseId: doc.caseId,
+    applicantId: doc.applicantId,
+    buffer,
+    stored: { storageKey: doc.storageKey, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes },
+    originalName: doc.originalName,
+    applicantName: null,
+  });
 }
 
 /** Maximale Upload-Größe in MB (für UI-Hinweise). */

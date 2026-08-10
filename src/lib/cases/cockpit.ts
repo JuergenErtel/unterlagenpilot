@@ -80,7 +80,13 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
     if (!a.geburtsdatum) missingCustomerFields.push(`Geburtsdatum ${a.vorname ?? `Antragsteller ${a.position}`}`);
   });
 
-  const docsPresent = docs.filter((d) => d.reviewStatus !== "abgelehnt" && d.reviewStatus !== "duplikat").length;
+  const docsPresent = docs.filter(
+    (d) =>
+      d.reviewStatus !== "abgelehnt" &&
+      d.reviewStatus !== "duplikat" &&
+      // Ersetzt = durch Teildokumente abgeloest; sonst Doppelzaehlung.
+      d.reviewStatus !== "ersetzt"
+  ).length;
   const pruefbereit = docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length;
   const docsFehler = docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length;
   const docsLaufend = docs.filter((d) => d.classificationStatus === "laeuft").length;

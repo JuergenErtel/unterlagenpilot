@@ -31,6 +31,7 @@ import { selfEmployedAnalysisSchema, selfEmployedJsonSchema, type SelfEmployedAn
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import { crossDocumentChecks, parseGermanNumber } from "@/lib/ai/cross-checks";
 import { documentReferencesSchema, type DocumentReferencesResult } from "@/lib/detektiv/schema";
+import { dokumentgrenzenSchema, type DokumentgrenzenResult } from "@/lib/aufteilung/schema";
 
 /**
  * AIService – die einzige Schnittstelle für KI-Auswertungen.
@@ -514,6 +515,43 @@ export class AIService {
       ].join(" "),
       `Dokumenttyp: ${documentType ?? "unbekannt"}\n\n${seiten}`,
       { documentType }
+    );
+  }
+
+  /**
+   * Erkennt, ob eine Datei mehrere Dokumente enthaelt.
+   *
+   * Bekommt je Seite nur die ersten Zeichen – bei 60 Seiten rund 5.000 Tokens
+   * statt eines Volltexts. `beginntNeu` markiert Seiten, auf denen ein
+   * Seitenzaehler neu beginnt ("Seite 1 von 3"); das ist ein starker Hinweis
+   * auf einen Dokumentanfang.
+   */
+  async erkenneDokumentgrenzen(
+    seiten: Array<{ pageNumber: number; anfang: string; beginntNeu: boolean }>
+  ): Promise<DokumentgrenzenResult> {
+    if (seiten.length === 0) return { segmente: [] };
+
+    const beschreibung = seiten
+      .map(
+        (s) =>
+          `Seite ${s.pageNumber}${s.beginntNeu ? " [Seitenzaehler beginnt neu]" : ""}: ${s.anfang}`
+      )
+      .join("\n");
+
+    return this.run(
+      "dokumentgrenzen",
+      dokumentgrenzenSchema,
+      [
+        "Du bekommst die Seitenanfaenge einer eingescannten Datei aus einer deutschen Baufinanzierung.",
+        "Bestimme, ob die Datei MEHRERE eigenstaendige Dokumente enthaelt, und wo eines endet und das naechste beginnt.",
+        "Die Segmente muessen das Dokument lueckenlos und ohne Ueberschneidung abdecken: das erste beginnt auf Seite 1, das letzte endet auf der letzten Seite.",
+        "Ein langes Dokument mit Abschnitten (z. B. eine Teilungserklaerung mit Gemeinschaftsordnung) ist EIN Dokument – gib dann ein einziges Segment zurueck.",
+        "Ein Hinweis '[Seitenzaehler beginnt neu]' spricht stark fuer einen Dokumentanfang.",
+        "titel ist eine kurze deutsche Bezeichnung fuer die Anzeige. vermuteterTyp ist null, wenn unklar – nie geraten.",
+        "confidence ist deine Sicherheit fuer GENAU dieses Segment.",
+      ].join(" "),
+      beschreibung,
+      { seiten: seiten.length }
     );
   }
 }

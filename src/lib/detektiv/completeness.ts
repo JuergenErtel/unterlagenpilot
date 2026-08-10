@@ -9,8 +9,13 @@ export interface CompletenessFinding {
   refKey: string;
 }
 
-/** "Seite 12 von 37", "Seite 12/37", "Blatt 3/12" */
-const SEITEN_MUSTER = [
+/**
+ * "Seite 12 von 37", "Seite 12/37", "Blatt 3/12"
+ *
+ * Exportiert, weil die Aufteilungserkennung dieselben Treffer als Hinweis auf
+ * einen Dokumentanfang nutzt – zweimal geschrieben waeren es zwei Wahrheiten.
+ */
+export const SEITEN_MUSTER = [
   /seite\s+\d{1,3}\s*(?:von|\/)\s*(\d{1,3})/gi,
   /blatt\s+\d{1,3}\s*\/\s*(\d{1,3})/gi,
 ];
