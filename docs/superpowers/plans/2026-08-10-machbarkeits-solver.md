@@ -16,7 +16,7 @@
 - **Keine stillen Nullen.** Fehlt Kaufpreis oder Nettoeinkommen, gibt es **kein** Ergebnis, sondern eine Liste fehlender Angaben. Nie mit 0 weiterrechnen.
 - **Beträge werden auf volle 100 € aufgerundet**, nie abgerundet: 14.437 € → 14.500 €. Eine abgerundete Empfehlung unterschreitet die Schwelle, die sie erreichen soll.
 - **Alle Annahmen sind sichtbar und überschreibbar** — dasselbe Muster wie `HaushaltAnnahmen` in `src/lib/haushalt/rechnung.ts`.
-- **Zinsaufschläge sind Platzhalter** und im Ergebnis als „Annahme" auszuweisen, nie als Marktzins.
+- **Zinsaufschläge sind eine Marktspanne, keine Bankkondition.** Vorgaben sind die Mitte der dokumentierten Spannen (80–90 %: 0,1–0,3 Punkte; 90–100 %: 0,3–0,8 Punkte). Im Ergebnis als „Annahme" auszuweisen, nie als Marktzins. **Jedes Hebelergebnis wird zusätzlich am unteren und oberen Rand der Spanne gerechnet und die Bandbreite mit ausgegeben** — die Unbekannte wird beziffert, nicht versteckt.
 - **`berechneHaushalt()` wird unverändert genutzt.** Der Solver füttert nur andere Eingaben hinein.
 - **Deutsch in allem, was der Nutzer sieht.**
 - **Testlauf:** `npx vitest run <datei>` einzeln, `npm test` gesamt. `npm run typecheck` nach jeder Aufgabe. Kein `npm run lint` — das Projekt hat keine ESLint-Konfiguration und der Befehl fragt interaktiv nach.
@@ -448,6 +448,13 @@ export interface Annahmen {
   ratenkreditLaufzeitMonate: number;
   /** Mindesttilgung, unter die der Solver nicht geht. */
   mindestTilgungProzent: number;
+  /**
+   * Unschaerfe der Zinsaufschlaege in Prozentpunkten. Es gibt keinen "richtigen"
+   * Aufschlag – er haengt von Bank, Produkt und Tagesmarkt ab. Der Solver rechnet
+   * jedes Ergebnis zusaetzlich mit +/- diesem Wert und gibt die Bandbreite aus,
+   * statt Praezision vorzutaeuschen.
+   */
+  aufschlagUnschaerfe: number;
 }
 
 export const VORGABE_ANNAHMEN: Annahmen = {
@@ -464,6 +471,7 @@ export const VORGABE_ANNAHMEN: Annahmen = {
   ratenkreditZinsProzent: 8.0,
   ratenkreditLaufzeitMonate: 84,
   mindestTilgungProzent: 1.0,
+  aufschlagUnschaerfe: 0.25,
 };
 
 export interface NebenkostenAufstellung {
@@ -1797,6 +1805,29 @@ describe("Paare", () => {
   });
 });
 
+describe("Bandbreite der Zinsannahme", () => {
+  it("nennt zu einem wirksamen Hebel auch das guenstige und unguenstige Ergebnis", () => {
+    const r = loese(eingabe({ nettoEinkommen: 2_600 }), VORGABE_ANNAHMEN, false);
+    const treffer = r.hebel.find((h) => h.reichtAllein && h.spanne);
+    if (treffer) {
+      expect(treffer.spanne!.guenstig).toBeTruthy();
+      expect(treffer.spanne!.unguenstig).toBeTruthy();
+    }
+  });
+
+  it("laesst die Bandbreite weg, wo der Zinsaufschlag nichts bewegt", () => {
+    // Reiner Auslauf-Fall bei sehr hohem Einkommen: der Haushalt traegt immer,
+    // der Aufschlag ist damit ohne Wirkung auf das Ergebnis.
+    const r = loese(
+      eingabe({ eigenkapital: 0, maklerprovisionProzent: 7, nettoEinkommen: 25_000 }),
+      VORGABE_ANNAHMEN,
+      false
+    );
+    const ek = r.hebel.find((h) => h.key === "eigenkapital");
+    if (ek?.reichtAllein) expect(ek.spanne).toBeUndefined();
+  });
+});
+
 describe("Transparenz", () => {
   it("gibt die verwendeten Annahmen und Nebenkosten mit aus", () => {
     const r = loese(eingabe(), VORGABE_ANNAHMEN, false);
@@ -1837,6 +1868,12 @@ export interface HebelErgebnis {
   vorher: Urteil;
   nachher?: Urteil;
   reichtAllein: boolean;
+  /**
+   * Dasselbe Ergebnis bei guenstigerem und unguenstigerem Zinsaufschlag.
+   * Fehlt, wenn der Aufschlag das Ergebnis nicht bewegt – dann waere die
+   * Angabe nur Rauschen.
+   */
+  spanne?: { guenstig: string; unguenstig: string };
 }
 
 export interface PaarErgebnis {
@@ -1925,6 +1962,7 @@ export function loese(
       vorher: ausgangslage,
       nachher: treffer.urteil,
       reichtAllein: true,
+      spanne: spanneFuer(h, e, a, ziel, treffer.wert),
     };
   });
 
@@ -1948,6 +1986,40 @@ export function loese(
     nebenkosten: ausgangslage.nebenkosten,
     bundeslandUnsicher,
   };
+}
+
+/**
+ * Dasselbe Ergebnis bei guenstigerem und unguenstigerem Zinsaufschlag.
+ *
+ * Es gibt keinen "richtigen" Aufschlag – er haengt von Bank, Produkt und
+ * Tagesmarkt ab. Statt Praezision vorzutaeuschen, beziffert der Solver seine
+ * eigene Unsicherheit. Wo der Aufschlag nichts bewegt (z. B. bei einem Fall,
+ * der rein am Beleihungsauslauf scheitert), bleibt die Angabe weg.
+ */
+function spanneFuer(
+  h: HebelDefinition,
+  e: SolverEingabe,
+  a: Annahmen,
+  ziel: Ziel,
+  mitte: number
+): HebelErgebnis["spanne"] {
+  const d = a.aufschlagUnschaerfe;
+  if (d <= 0) return undefined;
+
+  const variante = (vz: number): Annahmen => ({
+    ...a,
+    aufschlagBis80: Math.max(a.aufschlagBis80 + vz * d, 0),
+    aufschlagBis90: Math.max(a.aufschlagBis90 + vz * d, 0),
+    aufschlagBis100: Math.max(a.aufschlagBis100 + vz * d, 0),
+    aufschlagBis110: Math.max(a.aufschlagBis110 + vz * d, 0),
+  });
+
+  const g = kleinsterWert(h, e, variante(-1), ziel);
+  const u = kleinsterWert(h, e, variante(+1), ziel);
+  if (!g || !u) return undefined;
+  if (g.wert === mitte && u.wert === mitte) return undefined; // bewegt nichts
+
+  return { guenstig: h.formatWert(e, g.wert), unguenstig: h.formatWert(e, u.wert) };
 }
 
 /**

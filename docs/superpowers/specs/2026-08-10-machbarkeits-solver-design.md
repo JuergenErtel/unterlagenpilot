@@ -106,6 +106,34 @@ Liegt am Fall ein konkreter `sollzinsProzent` aus einem Angebot vor, gilt er als
 Basis für das **aktuelle** Band; die übrigen Bänder ergeben sich über die
 Abstände der Aufschlagstabelle.
 
+#### Woher die Aufschläge kommen — und wie mit ihrer Unschärfe umgegangen wird
+
+Es gibt keinen „richtigen" Aufschlag: er hängt von Bank, Produkt und Tagesmarkt
+ab. Den Vermittler nach einer Zahl zu fragen, wäre eine Frage nach etwas, das es
+nicht als eine Zahl gibt.
+
+Deshalb drei Mechanismen statt einer erfundenen Präzision:
+
+1. **Vorgaben aus einer dokumentierten Marktspanne**, nicht aus der Luft:
+   bis 60 % kein Aufschlag, 60–80 % Standard, 80–90 % rund 0,1–0,3 Punkte,
+   90–100 % rund 0,3–0,8 Punkte, darüber deutlich mehr. Die Vorgabewerte sind die
+   Mitte dieser Spannen und werden auch so beschriftet.
+2. **Ein konkreter Sollzins am Fall sticht jede Annahme.** Sobald ein echtes
+   Angebot vorliegt, ist die Annahme aus der Rechnung heraus.
+3. **Der Solver beziffert seine eigene Unsicherheit.** Jedes Hebelergebnis wird
+   zusätzlich am unteren und oberen Rand der Spanne gerechnet und mit
+   ausgegeben:
+
+   > **14.500 € mehr Eigenkapital** — Auslauf 108 % → 100 %
+   > *Bei ungünstigerem Zinsaufschlag: 17.200 €. Bei günstigerem: 12.800 €.*
+
+   Damit ist die Unbekannte sichtbar statt versteckt. Bei einem Fall, der am
+   Beleihungsauslauf scheitert, ist die Spanne ohnehin bedeutungslos — der
+   Aufschlag wirkt nur auf die Haushaltsseite.
+
+Später ließen sich die Aufschläge aus den echten Europace-Ergebnislisten der
+Organisation kalibrieren. Nicht Teil dieser Ausbaustufe.
+
 ### 4.3 Nebenkosten
 
 Muss der Solver selbst rechnen, weil mehrere Hebel sie verändern:
