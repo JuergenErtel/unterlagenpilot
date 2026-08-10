@@ -111,13 +111,7 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
       value: env.OCR_PROVIDER,
       mode: env.OCR_PROVIDER === "mock" ? "demo" : "configured",
     },
-    {
-      key: "virus",
-      label: "Virenscan",
-      value: env.VIRUS_SCANNER === "clamav" && env.CLAMAV_HOST ? "ClamAV (aktiv)" : "Mock (Demo)",
-      mode: env.VIRUS_SCANNER === "clamav" && env.CLAMAV_HOST ? "active" : "demo",
-      hint: env.VIRUS_SCANNER === "clamav" && !env.CLAMAV_HOST ? "ClamAV gewählt, aber CLAMAV_HOST/PORT fehlen." : undefined,
-    },
+    virenscanStatus(env.VIRUS_SCANNER, env.CLAMAV_HOST, env.CLOUDMERSIVE_API_KEY),
     ...(["europace", "finlink", "ehyp_home"] as Platform[]).map((p) => ({
       key: p,
       label: PLATFORM_LABELS[p],
@@ -136,4 +130,50 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
     env.MAILVERSAND !== "kunden";
 
   return { pilot, items };
+}
+
+/**
+ * Wird wirklich gescannt? Der Betreiber muss das sehen, ohne danach zu suchen.
+ *
+ * Bewusst je Anbieter geprueft: Frueher galt nur ClamAV als "aktiv" – mit
+ * Cloudmersive stand hier "Mock (Demo)", obwohl echt gescannt wurde. Eine
+ * Falschmeldung in beide Richtungen macht den Status wertlos.
+ *
+ * Solange der Mock greift, wird JEDE Datei ausser der EICAR-Testdatei als
+ * sauber gemeldet – das ist keine Pruefung, sondern eine Attrappe.
+ */
+function virenscanStatus(
+  gewaehlt: string | undefined,
+  clamavHost: string | undefined,
+  cloudmersiveKey: string | undefined
+): SystemStatusItem {
+  if (gewaehlt === "clamav") {
+    return clamavHost
+      ? { key: "virus", label: "Virenscan", value: "ClamAV (aktiv)", mode: "active" }
+      : {
+          key: "virus",
+          label: "Virenscan",
+          value: "Mock (Demo)",
+          mode: "demo",
+          hint: "ClamAV gewählt, aber CLAMAV_HOST/PORT fehlen.",
+        };
+  }
+  if (gewaehlt === "cloudmersive") {
+    return cloudmersiveKey
+      ? { key: "virus", label: "Virenscan", value: "Cloudmersive (aktiv)", mode: "active" }
+      : {
+          key: "virus",
+          label: "Virenscan",
+          value: "Mock (Demo)",
+          mode: "demo",
+          hint: "Cloudmersive gewählt, aber CLOUDMERSIVE_API_KEY fehlt.",
+        };
+  }
+  return {
+    key: "virus",
+    label: "Virenscan",
+    value: "Mock (Demo)",
+    mode: "demo",
+    hint: "Kein echter Virenscan aktiv – Uploads werden ungeprüft angenommen.",
+  };
 }

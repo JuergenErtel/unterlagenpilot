@@ -93,3 +93,47 @@ describe("Systemstatus: Mailversand-Stufe", () => {
     expect(statusNurIntern.pilot).toBe(true);
   });
 });
+
+/**
+ * Der Betreiber muss sehen, OB ueberhaupt echt gescannt wird. Bisher meldete
+ * der Status nur ClamAV als aktiv – mit Cloudmersive stand dort weiter
+ * "Mock (Demo)", obwohl echt gescannt wurde. Falschmeldung in beide
+ * Richtungen ist gefaehrlich: sie macht den Status wertlos.
+ */
+describe("Systemstatus – Virenscan", () => {
+  const virusEintrag = async () => {
+    const { getSystemStatus } = await import("@/lib/system/status");
+    const status = await getSystemStatus("org-1");
+    return status.items.find((i: SystemStatusItem) => i.key === "virus");
+  };
+
+  it("meldet den Mock als Demo", async () => {
+    env = { ...basisEnv(), VIRUS_SCANNER: "mock" };
+    const v = await virusEintrag();
+    expect(v?.mode).toBe("demo");
+  });
+
+  it("meldet ClamAV mit Host als aktiv", async () => {
+    env = { ...basisEnv(), VIRUS_SCANNER: "clamav", CLAMAV_HOST: "clam.intern" };
+    expect((await virusEintrag())?.mode).toBe("active");
+  });
+
+  it("meldet ClamAV ohne Host als Demo, mit Hinweis", async () => {
+    env = { ...basisEnv(), VIRUS_SCANNER: "clamav", CLAMAV_HOST: undefined };
+    const v = await virusEintrag();
+    expect(v?.mode).toBe("demo");
+    expect(v?.hint).toMatch(/CLAMAV_HOST/);
+  });
+
+  it("meldet Cloudmersive mit Schluessel als aktiv", async () => {
+    env = { ...basisEnv(), VIRUS_SCANNER: "cloudmersive", CLOUDMERSIVE_API_KEY: "geheim" };
+    expect((await virusEintrag())?.mode).toBe("active");
+  });
+
+  it("meldet Cloudmersive ohne Schluessel als Demo, mit Hinweis", async () => {
+    env = { ...basisEnv(), VIRUS_SCANNER: "cloudmersive" };
+    const v = await virusEintrag();
+    expect(v?.mode).toBe("demo");
+    expect(v?.hint).toMatch(/CLOUDMERSIVE_API_KEY/);
+  });
+});
