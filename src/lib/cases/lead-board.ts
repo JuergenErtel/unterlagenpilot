@@ -19,6 +19,11 @@ export interface BoardKarte {
   verlorenGrund: string | null;
   /** Offener Phasenvorschlag oder null. */
   vorschlag: string | null;
+  /**
+   * Machbarkeits-Ampel. null = bewusst keine Anzeige (verloren/abgeschlossen);
+   * das ist etwas anderes als die Farbe "grau", die eine Datenluecke meint.
+   */
+  ampel: { farbe: string; text: string; grund: string } | null;
 }
 
 export interface BoardSpalte {

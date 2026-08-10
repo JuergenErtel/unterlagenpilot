@@ -20,6 +20,14 @@ export interface BoardKarteView {
   vorschlag: string | null;
   /** Anzeigename der Quelle, z. B. "ImmoScout24". */
   quelle: string;
+  /**
+   * Machbarkeits-Ampel. null = bewusst keine Anzeige (verloren/abgeschlossen);
+   * die Farbe "grau" meint dagegen eine Datenluecke.
+   *
+   * Bewusst als schlichtes Objekt statt als Import des Ampel-Typs: Diese Datei
+   * ist eine Client-Komponente und soll keine Server-Module ziehen.
+   */
+  ampel: { farbe: string; text: string; grund: string } | null;
 }
 
 export interface BoardSpalteView {
@@ -32,6 +40,14 @@ export interface BoardSpalteView {
 }
 
 const eur = (n: number) => `${Math.round(n).toLocaleString("de-DE")} €`;
+
+/** Ampelfarben aus dem vorhandenen Ton-System, keine neuen Werte. */
+const AMPEL_PUNKT: Record<string, string> = {
+  gruen: "bg-success",
+  gelb: "bg-warning",
+  rot: "bg-destructive",
+  grau: "bg-muted-foreground/40",
+};
 
 /**
  * Das Kanban der Vertriebsphasen. Karten lassen sich ziehen; weil das auf dem
@@ -144,6 +160,21 @@ export function LeadBoard({
                     {k.liegezeit === 1 ? "Tag" : "Tagen"}
                   </p>
                   <p className="text-xs text-muted-foreground">{k.quelle}</p>
+
+                  {k.ampel && (
+                    <p
+                      className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                      title={k.ampel.grund}
+                    >
+                      <span
+                        aria-hidden
+                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                          AMPEL_PUNKT[k.ampel.farbe] ?? "bg-muted-foreground/40"
+                        }`}
+                      />
+                      {k.ampel.text}
+                    </p>
+                  )}
 
                   {k.wiedervorlage && (
                     <Badge variant="neutral" className="mt-1 gap-1">
