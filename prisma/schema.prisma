@@ -1540,3 +1540,48 @@ model DocumentSplitSegment {
   @@index([documentId])
   @@map("document_split_segments")
 }
+
+/**
+ * Kreditinstitut aus dem Europace-Kriteriencheck. Bewusst OHNE organizationId:
+ * die Kriterien sind fuer alle gleich – Referenzwissen, keine Mandantendaten.
+ */
+model Bank {
+  id               String   @id @default(cuid())
+  /// Europace-Kennung, z. B. "SPK_DIREKT". NICHT mit der Relation bankRefId verwechseln.
+  bankId           String   @unique
+  name             String
+  zuletztGesehenAm DateTime
+
+  kriterien BankKriterium[]
+
+  @@index([name])
+  @@map("banken")
+}
+
+/**
+ * Ein Finanzierungskriterium einer Bank.
+ *
+ * `standAm` ist das Datum, das EUROPACE fuer diese Zeile nennt.
+ * `importiertAm` ist unser Abrufdatum. Die beiden nie verwechseln: Wir koennen
+ * heute geholt haben, waehrend die Bank sich zuletzt im Februar geaeussert hat.
+ */
+model BankKriterium {
+  id        String @id @default(cuid())
+  bankRefId String
+  bank      Bank   @relation(fields: [bankRefId], references: [id], onDelete: Cascade)
+
+  kriterium String
+  kategorie String
+  /// MACHBAR | VORBEHALTLICH | NICHT_MACHBAR | INFORMATION | KEINE_ANGABE
+  /// Bewusst Text statt Enum – ein neuer Wert darf den Import nicht kippen.
+  status    String
+  /// Bereits bereinigtes HTML (siehe src/lib/banken/bereinigen.ts).
+  inhalt    String
+
+  standAm      DateTime?
+  importiertAm DateTime
+
+  @@unique([bankRefId, kriterium])
+  @@index([kriterium, status])
+  @@map("bank_kriterien")
+}
