@@ -16,7 +16,12 @@ import type { DocumentType } from "@/lib/domain/enums";
  * Wert waere schlechter: Er wuerde die Unterlage bei der Bank unter dem
  * falschen Reiter ablegen.
  */
-const KATEGORIE: Record<DocumentType, string> = {
+/**
+ * Exportiert, weil die Rueckrichtung (Europace-Kategorie -> BaufiDesk-Typ) in
+ * src/lib/anforderungen/zuordnung.ts genau diese Tabelle umkehren muss. Zwei
+ * getrennt gepflegte Tabellen wuerden auseinanderlaufen.
+ */
+export const KATEGORIE: Record<DocumentType, string> = {
   personalausweis: "Ausweis",
   gehaltsabrechnung: "Gehaltsabrechnung",
   grundbuchauszug: "Grundbuchauszug",
