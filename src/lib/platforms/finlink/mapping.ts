@@ -95,6 +95,7 @@ export function finlinkToCanonical(dto: FinLinkVorgangDTO): CanonicalCase {
     financing: {
       finanzierungsart,
       kaufpreis: f?.kaufpreis,
+      eigenkapital: f?.eigenkapital,
       darlehenswunsch: f?.darlehenswunsch,
     },
     platformIds: { finlinkId: dto.id },
