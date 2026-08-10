@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   BadgeEuro,
   KanbanSquare,
+  Landmark,
   Settings,
   UserCheck,
   type LucideIcon,
@@ -29,6 +30,7 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
       { href: "/review", label: "Review-Center", icon: ScanSearch },
       { href: "/messages", label: "Nachrichten", icon: Send },
       { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+      { href: "/banken", label: "Banken-Wiki", icon: Landmark },
     ],
   },
   {
