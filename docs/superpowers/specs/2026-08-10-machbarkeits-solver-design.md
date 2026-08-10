@@ -178,6 +178,10 @@ machbar = auslauf <= 110 % (Obergrenze, überschreibbar)
 Jeder Hebel ist eine Funktion „wende Wert X auf den Fall an". Sie zerfallen in
 zwei Sorten, und das bestimmt die Oberfläche.
 
+*Im Code sind es zehn Einträge: „Einnahmen erhöhen" steht mit seinen beiden
+Ausprägungen getrennt, weil sie unterschiedlich rechnen — der weitere
+Darlehensnehmer bringt seine Lebenshaltungspauschale mit.*
+
 ### 5.1 Datengestützte Hebel
 
 Stecken bereits im Fall; werden nur gezeigt, wenn es sie gibt.
