@@ -17,6 +17,7 @@ export interface NextStep {
     | "dokumente_freigeben"
     | "kundendaten"
     | "kritische_hinweise"
+    | "machbarkeit"
     | "unterlagen_luecken"
     | "unterlagen_anfordern"
     | "selbstauskunft_wartet"
@@ -48,6 +49,12 @@ export interface NextStepInput {
     docsLaufend: number;
     /** Offene Lücken des Unterlagen-Detektivs, vom Vermittler noch nicht gesichtet. */
     offeneBefunde: number;
+    /**
+     * Der Solver hatte genug Daten und sagt "nicht darstellbar". Bei dünner
+     * Datenlage bleibt das false – sonst warnt die Leiter vor Fällen, über die
+     * sie nichts weiß.
+     */
+    machbarkeitBlockiert: boolean;
   };
   missingCustomerFields: string[];
   /** Stand der Selbstauskunft; fehlt bei Fällen ohne Link. */
@@ -170,6 +177,19 @@ export function computeNextStep(c: NextStepInput): NextStep {
       reason: "Die Plausibilitätsprüfung hat Widersprüche gefunden, die vor der Einreichung geklärt werden müssen.",
       tone: "blocker",
       cta: { label: "Hinweise ansehen", href: `/cases/${id}?tab=plausibilitaet` },
+    };
+  }
+
+  // Vor allem Unterlagen-Kram: einen Fall, der so nicht darstellbar ist, klärt
+  // man, bevor man weiter Unterlagen einsammelt und den Kunden beschäftigt.
+  if (c.counts.machbarkeitBlockiert) {
+    return {
+      key: "machbarkeit",
+      title: "Fall ist so nicht darstellbar",
+      reason:
+        "Beleihungsauslauf oder Haushalt tragen die Finanzierung in dieser Form nicht. Die Machbarkeitsrechnung zeigt, welche Stellschraube das ändern würde.",
+      tone: "blocker",
+      cta: { label: "Machbarkeit ansehen", href: `/cases/${id}/machbarkeit` },
     };
   }
 

@@ -33,6 +33,8 @@ export interface CockpitData {
     docsLaufend: number;
     /** Offene Lücken des Unterlagen-Detektivs (offen + unsicher). */
     offeneBefunde: number;
+    /** Solver hatte genug Daten und sagt "nicht darstellbar". */
+    machbarkeitBlockiert: boolean;
   };
   missingCustomerFields: string[];
   /** Stand der Selbstauskunft; fehlt, solange kein Link erstellt wurde. */
@@ -88,6 +90,40 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   const offeneBefunde = await prisma.caseFinding.count({
     where: { caseId, status: { in: ["offen", "unsicher"] } },
   });
+
+  // Machbarkeit: nur ein Urteil faellen, wenn die Daten dafuer reichen. Bei
+  // duenner Datenlage bleibt es false – sonst warnt die Leiter vor Faellen,
+  // ueber die sie nichts weiss. Ein Fehler hier darf das Cockpit nie kippen.
+  const machbarkeitBlockiert = await (async (): Promise<boolean> => {
+    try {
+      const [{ baueEingabe }, { ladeAnnahmen }, { bewerte }, { caseToCanonical }] = await Promise.all([
+        import("@/lib/machbarkeit/eingabe"),
+        import("@/lib/machbarkeit/annahmen"),
+        import("@/lib/machbarkeit/bewertung"),
+        import("@/lib/platforms/case-loader"),
+      ]);
+      const fall = await prisma.case.findUniqueOrThrow({
+        where: { id: caseId },
+        select: {
+          organizationId: true,
+          applicants: { select: { anzahlKinder: true }, orderBy: { position: "asc" } },
+          property: { select: { bundesland: true } },
+          financingRequest: { select: { grunderwerbsteuerProzent: true } },
+        },
+      });
+      const e = baueEingabe(await caseToCanonical(caseId), {
+        applicantCount: Math.max(fall.applicants.length, 1),
+        anzahlKinder: fall.applicants[0]?.anzahlKinder ?? 0,
+        grunderwerbsteuerProzentOverride: fall.financingRequest?.grunderwerbsteuerProzent ?? null,
+        bundeslandOverride: (fall.property?.bundesland as never) ?? null,
+      });
+      if (!e.ok) return false;
+      return !bewerte(e.eingabe, await ladeAnnahmen(fall.organizationId)).machbar;
+    } catch (err) {
+      console.error(`[cockpit] Machbarkeitspruefung fuer Fall ${caseId} fehlgeschlagen:`, err);
+      return false;
+    }
+  })();
 
   const blockers = [
     ...missingCustomerFields.map((f) => `${f} fehlt`),
@@ -179,6 +215,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       docsFehler,
       docsLaufend,
       offeneBefunde,
+      machbarkeitBlockiert,
     },
     missingCustomerFields,
     selbstauskunft,

@@ -156,6 +156,11 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           docsFehler: docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length,
           docsLaufend: docs.filter((d) => d.classificationStatus === "laeuft").length,
           offeneBefunde: befundeJeFall.get(c.id) ?? 0,
+          // Bewusst false: der Solver braucht je Fall einen vollstaendigen
+          // caseToCanonical-Lauf. Zwoelf davon wuerden die Dashboard-Liste
+          // spuerbar verlangsamen, und die Warnung steht ohnehin auf der
+          // Fallseite. Kein Versehen.
+          machbarkeitBlockiert: false,
         },
         missingCustomerFields: c.applicants
           .filter((a) => !a.geburtsdatum)
