@@ -203,6 +203,7 @@ etwas gehört. Greift nur bei `bezug.typ === "antragsteller"`.
 export type AbgleichBefund =
   | { art: "deckt_sich"; anforderungId: string; positionKey: string }
   | { art: "neu"; anforderungId: string }
+  | { art: "erledigt"; anforderungId: string }        // liegtVor, ohne Gegenstück
   | { art: "bank_verlangt_nicht"; positionKey: string };
 
 export function gleicheAb(
@@ -211,15 +212,27 @@ export function gleicheAb(
 ): AbgleichBefund[];
 ```
 
-Eine Anforderung **deckt sich** mit einer Position, wenn Dokumenttyp *und*
-Antragstellerbezug übereinstimmen. Hat die Anforderung keinen Dokumenttyp, zählt
-Namensgleichheit nach derselben Faltung (Kleinschreibung, Umlaute aufgelöst), die
-`applicant-match.ts` schon verwendet.
+Eine Anforderung **deckt sich** mit einer Position, wenn der **Dokumenttyp**
+übereinstimmt. Hat die Anforderung keinen Dokumenttyp, zählt Namensgleichheit nach
+derselben Faltung (Kleinschreibung, Umlaute aufgelöst), die `applicant-match.ts`
+schon verwendet.
+
+**Der Antragstellerbezug geht bewusst nicht in die Trefferregel ein.** Eine
+Checklisten-Position ist keine Zeile pro Person: `perApplicant: true` bedeutet eine
+Zeile, deren Sollzahl mit der Antragstellerzahl multipliziert wird
+(`effectiveRequiredCount`). Eine Anforderung für Antragsteller 2 ist damit von
+derselben Position abgedeckt wie eine für Antragsteller 1. Der Bezug wird gespeichert
+und angezeigt — er sagt Jürgen, *wem* die Unterlage gehört —, taugt aber nicht als
+Schlüssel. Folge: Verlangt die Bank etwas nur für eine Person, während wir es von
+allen einsammeln, gilt das als Treffer. Wir fordern dann mehr an als nötig, nie
+weniger — die sichere Richtung.
 
 Regeln:
-- `ausgeblendet === true` → wird übersprungen. Was Jürgen in Europace weggeklickt hat,
-  kommt hier nicht zurück.
-- `liegtVor === true` → erzeugt keine offene Position; die Anforderung gilt als erledigt.
+- `ausgeblendet === true` → wird vollständig übersprungen. Was Jürgen in Europace
+  weggeklickt hat, kommt hier nicht zurück.
+- `liegtVor === true` → nimmt am Abgleich teil (damit unsere Position nicht
+  fälschlich „verlangt die Bank nicht" trägt), erzeugt ohne Gegenstück aber die
+  Art `erledigt` statt `neu` — also keine offene Position.
 - Positionen ohne Gegenstück verschwinden **nie**, sie bekommen nur den Hinweis.
 
 ### Einspeisung in die Checkliste
@@ -235,7 +248,7 @@ entstehen nach dem Muster von `bankRequirementItems()`:
   customerDescription: kurzbezeichnung || text,
   internalDescription: `Anforderung von ${bankName} (Europace).`,
   documentType,            // aus der Zuordnung, ggf. null
-  level: "pflicht",
+  level: "zwingend",
   scope: "bankbezogen",
   platforms: ["europace"],
   bankSpecific: true,
