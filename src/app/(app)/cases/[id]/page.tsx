@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
@@ -35,6 +36,7 @@ import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorb
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
+import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
@@ -85,7 +87,17 @@ export default async function CaseCockpitPage({
     gesendeteNachrichten,
     erstkontaktStand,
   ] = await Promise.all([
-    prisma.document.findMany({ where: { caseId: id }, include: { warnings: true }, orderBy: { createdAt: "asc" } }),
+    prisma.document.findMany({
+      where: { caseId: id },
+      include: {
+        warnings: true,
+        splitSegmente: {
+          orderBy: { reihenfolge: "asc" },
+          select: { vonSeite: true, bisSeite: true, titel: true },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
     prisma.plausibilityCheck.findMany({ where: { caseId: id }, orderBy: { createdAt: "asc" } }),
     listUploadLinks(id, ctx.organizationId),
     // EINE Quelle für den Selbstauskunft-Stand (siehe selbstauskunft-stand.ts):
@@ -395,7 +407,8 @@ export default async function CaseCockpitPage({
                           <TableRow><TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
                         )}
                         {documents.map((d) => (
-                          <TableRow key={d.id}>
+                          <Fragment key={d.id}>
+                          <TableRow>
                             <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
                             <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
                             {mehrereAntragsteller && (
@@ -420,6 +433,14 @@ export default async function CaseCockpitPage({
                               )}
                             </TableCell>
                           </TableRow>
+                          {d.splitSegmente.length >= 2 && (
+                            <TableRow>
+                              <TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="pt-0">
+                                <AufteilungVorschlag caseId={id} documentId={d.id} segmente={d.splitSegmente} />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </Fragment>
                         ))}
                       </TableBody>
                     </Table>
