@@ -11,6 +11,7 @@ import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
 import { matchApplicant } from "@/lib/documents/applicant-match";
 import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
+import { erkenneAufteilung } from "@/lib/aufteilung/service";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
 /**
@@ -401,10 +402,14 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   // Faellt das aus, bleibt die Dokumentanalyse unberuehrt – sichtbar wird der
   // Ausfall ueber referenceStatus.
   try {
+    // Aufteilungserkennung ZUERST: wird gleich darauf aufgetrennt, prueft der
+    // Detektiv ohnehin jedes Teildokument neu – seine Arbeit am Sammel-PDF
+    // waere sonst umsonst.
+    await erkenneAufteilung(documentId);
     await runReferenceExtraction(documentId);
     await reconcileCase(caseId);
   } catch (e) {
-    console.error(`[pipeline] Detektiv-Lauf für Dokument ${documentId} fehlgeschlagen:`, e);
+    console.error(`[pipeline] Nachlauf für Dokument ${documentId} fehlgeschlagen:`, e);
   }
 }
 
