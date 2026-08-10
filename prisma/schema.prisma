@@ -739,6 +739,9 @@ model Document {
   // Lauf des Unterlagen-Detektivs. Eigener Status, damit "nicht geprueft" und
   // "nichts gefunden" im UI unterscheidbar bleiben.
   referenceStatus      ProcessingStatus     @default(ausstehend)
+  // Erkennung, ob die Datei mehrere Dokumente enthaelt. Eigener Status, damit
+  // "nicht geprueft" und "nichts gefunden" unterscheidbar bleiben.
+  splitStatus          ProcessingStatus     @default(ausstehend)
   reviewStatus         DocumentReviewStatus @default(offen)
   // Grund einer Ablehnung. Wird dem Kunden auf der Upload-Seite angezeigt –
   // deshalb kundentauglich formulieren, keine internen Kuerzel.
@@ -780,6 +783,12 @@ model Document {
   aiJobs           AiJob[]
   references       DocumentReference[]
   findings         CaseFinding[]            @relation("FindingSource")
+  splitSegmente    DocumentSplitSegment[]
+
+  /// Herkunftsdatei, falls dieses Dokument aus einer Aufteilung entstand.
+  aufgeteiltAusId String?
+  aufgeteiltAus   Document?  @relation("Aufteilung", fields: [aufgeteiltAusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teildokumente   Document[] @relation("Aufteilung")
 
   @@index([caseId])
   @@index([documentType])
@@ -1507,4 +1516,27 @@ model MachbarkeitsAnnahmen {
   updatedAt DateTime @updatedAt
 
   @@map("machbarkeits_annahmen")
+}
+
+
+/**
+ * Vorgeschlagene Aufteilung einer Sammeldatei. Lebt nur, bis der Vermittler
+ * auftrennt oder verwirft – ausgefuehrt wird sie zu echten Dokumenten.
+ */
+model DocumentSplitSegment {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  reihenfolge   Int
+  vonSeite      Int
+  bisSeite      Int
+  vermuteterTyp DocumentType?
+  titel         String
+  confidence    Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([documentId])
+  @@map("document_split_segments")
 }
