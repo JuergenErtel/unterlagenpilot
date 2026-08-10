@@ -2,7 +2,28 @@
 const ERLAUBT = new Set(["p", "br", "ul", "ol", "li", "strong", "em", "b", "i"]);
 
 /** Elemente, deren INHALT ebenfalls verschwinden muss, nicht nur die Huelle. */
-const MIT_INHALT = "script|style|iframe|object|embed|svg|math";
+const MIT_INHALT = new Set(["script", "style", "iframe", "object", "embed", "svg", "math"]);
+
+/**
+ * Sucht das Ende eines Tags ab Position `i` (auf dem "<").
+ * Zaehlt wie der Browser: ein ">" innerhalb eines Anfuehrungszeichens
+ * beendet den Tag NICHT. Gibt die Position nach dem ">" zurueck, oder -1,
+ * wenn der Tag bis zum Ende der Eingabe offen bleibt.
+ */
+function tagEnde(s: string, i: number): number {
+  let quote: string | null = null;
+  for (let j = i + 1; j < s.length; j++) {
+    const c = s[j]!;
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === ">") {
+      return j + 1;
+    }
+  }
+  return -1;
+}
 
 /**
  * Reduziert fremdes HTML auf einen sicheren Satz.
@@ -11,29 +32,88 @@ const MIT_INHALT = "script|style|iframe|object|embed|svg|math";
  * bereits sauber. In diesem Projekt gab es fuer ungepruefen Fremdinhalt schon
  * einen Stored-XSS-Befund im Review.
  *
+ * ARBEITSWEISE: ein Durchlauf von links nach rechts, der die Eingabe
+ * verbraucht – kein Loeschen per Suchen-und-Ersetzen. Das ist der Kern der
+ * Sicherheit: Ein ersetzender Bereiniger kann aus "<<div>img src=x onerror=…>"
+ * durch Wegwerfen des <div> ein lebendiges <img …> verkleben, das kein
+ * weiterer Durchlauf mehr sieht. Hier wird jedes "<", das keinen erlaubten
+ * Tag eroeffnet, zu "&lt;" – dann bleibt nichts uebrig, was verkleben koennte.
+ *
  * Bewusst ohne Fremdbibliothek: Die Eingabe ist eng umrissen (Europace liefert
- * Absaetze und Listen), und eine eigene, vollstaendig getestete Funktion ist
- * hier weniger Angriffsflaeche als eine weitere Abhaengigkeit.
+ * Absaetze und Listen) und die erlaubte Menge kennt weder Attribute noch
+ * Elemente, die den Auswertungsraum wechseln (kein svg, kein math, kein
+ * style) – genau die Zutaten, aus denen mXSS gebaut wird.
  */
 export function bereinigeHtml(roh: string): string {
   if (!roh) return "";
+  const s = String(roh);
 
-  let s = String(roh);
+  let aus = "";
+  let i = 0;
+  /** Solange gesetzt, wird alles verworfen, bis dieses Element schliesst. */
+  let verwirfBis: string | null = null;
 
-  // 1) Gefaehrliche Elemente samt Inhalt.
-  s = s.replace(new RegExp(`<(${MIT_INHALT})\\b[\\s\\S]*?<\\/\\1\\s*>`, "gi"), "");
-  // 2) Deren unvollstaendige oder selbstschliessende Varianten.
-  s = s.replace(new RegExp(`<\\/?(${MIT_INHALT})\\b[^>]*>`, "gi"), "");
-  // 3) Kommentare – koennen bedingte Auswertung enthalten.
-  s = s.replace(/<!--[\s\S]*?-->/g, "");
+  const schreibe = (t: string) => {
+    if (!verwirfBis) aus += t;
+  };
 
-  // 4) Alle uebrigen Tags: erlaubte OHNE Attribute behalten, Rest entfernen.
-  //    Damit fallen onclick, style, href und alles andere weg.
-  s = s.replace(/<\/?([a-zA-Z0-9-]+)\b[^>]*>/g, (treffer, name: string) => {
-    const tag = name.toLowerCase();
-    if (!ERLAUBT.has(tag)) return "";
-    return treffer.startsWith("</") ? `</${tag}>` : `<${tag}>`;
-  });
+  while (i < s.length) {
+    const c = s[i]!;
 
-  return s.trim();
+    if (c !== "<") {
+      // Ein alleinstehendes ">" kann nichts oeffnen, wird aber maskiert,
+      // damit die Ausgabe eindeutig bleibt.
+      schreibe(c === ">" ? "&gt;" : c);
+      i++;
+      continue;
+    }
+
+    // Kommentare und <!DOCTYPE …>, <?xml …> – vollstaendig verwerfen.
+    if (s.startsWith("<!--", i)) {
+      const e = s.indexOf("-->", i);
+      i = e === -1 ? s.length : e + 3;
+      continue;
+    }
+    if (s.startsWith("<!", i) || s.startsWith("<?", i)) {
+      const e = tagEnde(s, i);
+      i = e === -1 ? s.length : e;
+      continue;
+    }
+
+    const m = /^<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/.exec(s.slice(i));
+    if (!m) {
+      // Kein Tag-Anfang, nur ein Kleiner-als-Zeichen im Text.
+      schreibe("&lt;");
+      i++;
+      continue;
+    }
+
+    const schliessend = m[1] === "/";
+    const name = m[2]!.toLowerCase();
+    const ende = tagEnde(s, i);
+    // Ein Tag ohne ">" reicht bis zum Ende – der Browser verwirft ihn, wir auch.
+    const naechstes = ende === -1 ? s.length : ende;
+
+    if (verwirfBis) {
+      // Innerhalb eines verworfenen Elements zaehlt nur sein Schlusstag.
+      if (schliessend && name === verwirfBis) verwirfBis = null;
+      i = naechstes;
+      continue;
+    }
+
+    if (MIT_INHALT.has(name)) {
+      // Ein Schlusstag ohne Anfang ist ein Rest – einfach schlucken.
+      if (!schliessend) verwirfBis = name;
+      i = naechstes;
+      continue;
+    }
+
+    if (ERLAUBT.has(name) && ende !== -1) {
+      schreibe(schliessend ? `</${name}>` : `<${name}>`);
+    }
+    // Alles andere (und angebrochene erlaubte Tags) faellt ersatzlos weg.
+    i = naechstes;
+  }
+
+  return aus.trim();
 }

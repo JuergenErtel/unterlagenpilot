@@ -56,3 +56,61 @@ describe("HTML-Bereinigung – was NICHT durchkommt", () => {
     expect(bereinigeHtml(null as unknown as string)).toBe("");
   });
 });
+
+/**
+ * Diese Faelle stammen aus einem Sicherheitsbefund: Ein Bereiniger, der nur
+ * EINMAL ueber die Zeichenkette laeuft und Tags loescht, kann zwei Reste zu
+ * einem neuen, lebenden Tag verkleben. Deshalb wird jedes "<", das keinen
+ * erlaubten Tag eroeffnet, zu "&lt;" – dann gibt es nichts zu verkleben.
+ */
+describe("HTML-Bereinigung – Umgehungsversuche", () => {
+  it("verklebt keine Reste zu einem neuen Tag", () => {
+    const r = bereinigeHtml("<<div>img src=x onerror=alert(1)>");
+    expect(r).not.toMatch(/<img/i);
+    expect(r).not.toMatch(/<[a-z]/i);
+  });
+
+  it("verklebt auch bei geschachtelten Resten nicht", () => {
+    const r = bereinigeHtml("<<p>script>alert(1)</<p>script>");
+    expect(r).not.toMatch(/<script/i);
+  });
+
+  it("laesst kein rohes < stehen, das ein Tag eroeffnen koennte", () => {
+    for (const roh of ["a < b", "<x<img src=x onerror=alert(1)>", "<<<img src=x>"]) {
+      const r = bereinigeHtml(roh);
+      expect(r).not.toMatch(/<(?!\/?(p|br|ul|ol|li|strong|em|b|i)>)/i);
+    }
+  });
+
+  it("laesst sich nicht durch ein > im Attributwert austricksen", () => {
+    const r = bereinigeHtml('<img alt="harmlos>" onerror="alert(1)">Text');
+    expect(r).not.toMatch(/onerror|alert/i);
+    expect(r).toContain("Text");
+  });
+
+  it("entfernt unvollstaendige gefaehrliche Tags am Ende", () => {
+    expect(bereinigeHtml("Text <script src=//boese.example/x.js")).not.toMatch(/script/i);
+    expect(bereinigeHtml("Text <script>alert(1)")).not.toMatch(/script|alert/i);
+  });
+
+  it("entfernt svg und math samt Inhalt", () => {
+    const r = bereinigeHtml("<svg><desc><p>drin</p></desc></svg>nachher");
+    expect(r).not.toMatch(/svg|desc|drin/i);
+    expect(r).toContain("nachher");
+  });
+
+  it("entfernt Kommentare und Verarbeitungsanweisungen", () => {
+    expect(bereinigeHtml("A<!-- <script>alert(1)</script> -->B")).toBe("AB");
+    expect(bereinigeHtml("A<!DOCTYPE html>B")).toBe("AB");
+  });
+
+  it("behaelt erlaubte Tags auch mit Attributen, aber ohne die Attribute", () => {
+    const r = bereinigeHtml('<p class="ck" style="x">Text</p>');
+    expect(r).toBe("<p>Text</p>");
+  });
+
+  it("erzeugt bei mehrfacher Anwendung nichts Neues", () => {
+    const einmal = bereinigeHtml("<<div>img src=x onerror=alert(1)>");
+    expect(bereinigeHtml(einmal)).toBe(einmal);
+  });
+});
