@@ -66,6 +66,13 @@ export class MockAIProvider implements AIProvider {
         return req.hints?.precomputed ?? { platform: "europace", groups: [], missingRequiredFields: [] };
       case "generatedMessage":
         return req.hints?.precomputed ?? { channel: "email", subject: "Ihre Unterlagen", body: "" };
+      case "dokumentgrenzen":
+        return {
+          segmente: [
+            { vonSeite: 1, bisSeite: 2, vermuteterTyp: "personalausweis", titel: "Personalausweis", confidence: 0.95 },
+            { vonSeite: 3, bisSeite: 8, vermuteterTyp: "grundbuchauszug", titel: "Grundbuchauszug", confidence: 0.9 },
+          ],
+        };
       case "documentReferences":
         return {
           references: [
