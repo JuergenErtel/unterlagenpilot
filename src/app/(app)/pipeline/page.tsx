@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
+import { ampelFuer } from "@/lib/machbarkeit/ampel";
+import { ladeAnnahmen } from "@/lib/machbarkeit/annahmen";
 import { LeadBoard } from "@/components/pipeline/lead-board";
 import { SyncStatus } from "@/components/pipeline/sync-status";
 import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
@@ -79,8 +81,45 @@ export default async function PipelinePage() {
       abschlussdatum: true,
       darlehensbetrag: true,
       quelle: true,
-      applicants: { orderBy: { position: "asc" }, select: { vorname: true, nachname: true } },
-      financingRequest: { select: { darlehenswunsch: true, kaufpreis: true } },
+      // Die folgenden Relationen speisen die Machbarkeits-Ampel. Sie haengen
+      // bewusst an DIESER Abfrage: ein caseToCanonical je Karte waere eine
+      // Datenbankrunde pro Fall – genau deshalb rechnet das Dashboard den
+      // Solver nicht.
+      financingType: true,
+      applicants: {
+        orderBy: { position: "asc" },
+        select: {
+          vorname: true,
+          nachname: true,
+          anzahlKinder: true,
+          income: { select: { nettoMonatlich: true, sonstigeEinnahmen: true } },
+        },
+      },
+      financingRequest: {
+        select: {
+          darlehenswunsch: true,
+          kaufpreis: true,
+          baukosten: true,
+          modernisierungskosten: true,
+          eigenkapital: true,
+          nebenkosten: true,
+          maklerprovisionProzent: true,
+          grunderwerbsteuerProzent: true,
+        },
+      },
+      property: {
+        select: {
+          // Das Objektmodell heisst zip/city; erst das Canonical-Mapping
+          // uebersetzt das nach plz/ort.
+          zip: true,
+          city: true,
+          wohnflaeche: true,
+          hausgeldMonatlich: true,
+          mieteinnahmenMonatlich: true,
+          bundesland: true,
+        },
+      },
+      liabilities: { select: { art: true, restschuld: true, monatlicheRate: true, abzuloesen: true } },
       _count: { select: { documents: true } },
       generatedMessages: { where: { sent: true }, select: { id: true }, take: 1 },
       selfDisclosures: { select: { currentStep: true }, take: 1, orderBy: { createdAt: "desc" } },
@@ -88,6 +127,9 @@ export default async function PipelinePage() {
     orderBy: { updatedAt: "desc" },
     take: 500,
   });
+
+  // Annahmen EINMAL laden, nicht je Karte.
+  const machbarkeitsAnnahmen = await ladeAnnahmen(ctx.organizationId);
 
   const jetzt = new Date();
   const boardKarten: BoardKarte[] = boardRows.map((c) => ({
@@ -104,6 +146,54 @@ export default async function PipelinePage() {
     wiedervorlage: c.wiedervorlage,
     verlorenAm: c.verlorenAm,
     verlorenGrund: c.verlorenGrund,
+    ampel: ampelFuer(
+      {
+        applicants: c.applicants.map((_a, i) => ({ position: i + 1 })),
+        employment: [],
+        income: c.applicants.flatMap((a) =>
+          a.income.map((i) => ({
+            applicantPosition: 1,
+            nettoMonatlich: i.nettoMonatlich ?? undefined,
+            sonstigeEinnahmen: i.sonstigeEinnahmen ?? undefined,
+          }))
+        ),
+        liabilities: c.liabilities.map((l) => ({
+          art: l.art ?? undefined,
+          restschuld: l.restschuld ?? undefined,
+          monatlicheRate: l.monatlicheRate ?? undefined,
+          abzuloesen: l.abzuloesen,
+        })),
+        assets: [],
+        property: c.property
+          ? {
+              plz: c.property.zip ?? undefined,
+              ort: c.property.city ?? undefined,
+              wohnflaeche: c.property.wohnflaeche ?? undefined,
+              hausgeldMonatlich: c.property.hausgeldMonatlich ?? undefined,
+              mieteinnahmenMonatlich: c.property.mieteinnahmenMonatlich ?? undefined,
+            }
+          : undefined,
+        financing: {
+          kaufpreis: c.financingRequest?.kaufpreis ?? undefined,
+          baukosten: c.financingRequest?.baukosten ?? undefined,
+          modernisierungskosten: c.financingRequest?.modernisierungskosten ?? undefined,
+          eigenkapital: c.financingRequest?.eigenkapital ?? undefined,
+          nebenkosten: c.financingRequest?.nebenkosten ?? undefined,
+          maklerprovisionProzent: c.financingRequest?.maklerprovisionProzent ?? undefined,
+        },
+        financingType: c.financingType ?? undefined,
+        platformIds: {},
+      } as never,
+      {
+        applicantCount: Math.max(c.applicants.length, 1),
+        anzahlKinder: c.applicants[0]?.anzahlKinder ?? 0,
+        verloren: c.verlorenAm != null,
+        abgeschlossen: c.status === "abgeschlossen",
+        grunderwerbsteuerProzentOverride: c.financingRequest?.grunderwerbsteuerProzent ?? null,
+        bundeslandOverride: (c.property?.bundesland as never) ?? null,
+      },
+      machbarkeitsAnnahmen
+    ),
     vorschlag: schlagePhaseVor({
       leadPhase: c.leadPhase,
       verlorenAm: c.verlorenAm,
@@ -148,6 +238,7 @@ export default async function PipelinePage() {
       wiedervorlage: k.wiedervorlage ? k.wiedervorlage.toLocaleDateString("de-DE") : null,
       verlorenGrund: k.verlorenGrund,
       vorschlag: k.vorschlag,
+      ampel: k.ampel,
     })),
   });
 

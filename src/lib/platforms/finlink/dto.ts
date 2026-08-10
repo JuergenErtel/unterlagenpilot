@@ -57,6 +57,7 @@ const finanzierung = z
   .object({
     art: z.string().optional(),
     kaufpreis: z.number().optional(),
+    eigenkapital: z.number().optional(),
     darlehenswunsch: z.number().optional(),
   })
   .optional();
@@ -174,6 +175,13 @@ const apiApplicantMeta = z.object({
   relationship_status: z.string().optional().nullable(),
   employment_status: z.string().optional().nullable(),
   monthly_net_income: numOrStr,
+  /**
+   * Eigenkapital ("Erspartes fuer die Anzahlung"). Kommt in gemischten Typen –
+   * in einer Stichprobe von 200 echten Leads 160-mal als Zeichenkette, 28-mal
+   * als float, 12-mal als int. numOrStr faengt alle drei ab; eine Pruefung auf
+   * typeof === "number" wuerde 80 % der Werte stillschweigend verlieren.
+   */
+  bank_savings_amount_towards_down_payment: numOrStr,
   street_address: z.string().optional().nullable(),
   house_number: z.string().optional().nullable(),
   german_zipcode_number: plzField,
@@ -480,6 +488,7 @@ function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
     finanzierung: {
       art: translate(FINANCE_TYPE_DE, lm?.finance_type ?? undefined),
       kaufpreis: toNumber(pm?.final_sale_price) ?? toNumber(pm?.listed_price),
+      eigenkapital: toNumber(am?.bank_savings_amount_towards_down_payment ?? undefined),
       darlehenswunsch: wishSum > 0 ? wishSum : undefined,
     },
   });

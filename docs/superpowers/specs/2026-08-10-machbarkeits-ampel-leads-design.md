@@ -88,9 +88,21 @@ Verschwendung. Nur die Kette, die im Erstgespräch zählt:
 Also höchstens zwei Hebelsuchen statt zehn, und genau die zwei Fragen, die am
 Telefon gestellt werden.
 
+### Grün endet bei 100 % Auslauf
+
+Nachträglich ergänzt, nachdem die Ampel gegen 200 echte Leads lief: Ohne diese
+Grenze waren **83 % aller Karten grün** — davon 125 von 165 Vollfinanzierungen
+über 90 %. Eine Ampel, die fast alles grün färbt, sortiert nichts.
+
+Mit der Grenze bei 100 % (Jürgens Entscheidung: dort werden die Nebenkosten
+mitfinanziert, das ist der spürbare Bruch) ergeben dieselben 200 Leads
+**51 % grün, 45 % gelb, 5 % grau**. Rot kam in der Stichprobe kein einziges Mal
+vor — es bleibt der Extremfall, und die Unterscheidung trägt Grün gegen Gelb.
+
 | Farbe | Text auf der Karte | Bedeutung |
 |---|---|---|
-| grün | `trägt · 78 % Auslauf` | Mit den erfassten Daten darstellbar |
+| grün | `trägt · 78 % Auslauf` | Trägt und Auslauf ≤ 100 % — ohne Weiteres platzierbar |
+| gelb | `trägt · Nebenkosten mitfinanziert (104 %)` | Trägt, aber über 100 % — teurer, weniger Anbieter |
 | gelb | `braucht 18.500 € mehr EK` | Ein Betrag, nach dem gefragt werden kann |
 | gelb | `Objekt bis 310.000 €` | Wenn auch mehr Eigenkapital nicht reicht |
 | rot | `trägt auch dann nicht` | Der Haushalt schafft die Rate in keiner Konstellation |
