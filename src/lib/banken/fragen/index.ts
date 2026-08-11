@@ -1,6 +1,6 @@
 import { aiService } from "@/lib/ai";
 import { alleKriterien } from "../kategorien";
-import { loeseBank, pruefeKriterien } from "./deuten";
+import { aehnlicheBanken, loeseBank, pruefeKriterien, waehleAusKandidaten } from "./deuten";
 import { buendele, DECKEL, type Zeile } from "./sammeln";
 import {
   BUENDEL_GROESSE,
@@ -82,8 +82,46 @@ export async function beantworteFrage(
   const stichwoerter = deutung.stichwoerter.filter((s) => s.trim().length >= 3);
   const hinweise: string[] = [];
 
-  const aufloesung = loeseBank(deutung.bank, await bestand.bankNamen());
+  const alleBanken = await bestand.bankNamen();
+  let aufloesung = loeseBank(deutung.bank, alleBanken);
+
+  // Abkuerzungen wie "HVB" fuehrt der Bestand als "HypoVereinsbank". Lokal ist
+  // das nicht zu loesen – gegen die echten Namen gemessen trifft "HVB" fuenf
+  // Banken, "KSK" achtundfuenfzig. Deshalb EIN kleiner Auswahl-Aufruf mit den
+  // naechstliegenden Kandidaten, und nur wenn die Aufloesung gescheitert ist.
+  if (aufloesung.unbekannt && deutung.bank) {
+    const kandidaten = aehnlicheBanken(deutung.bank, alleBanken, 8);
+    if (kandidaten.length > 0) {
+      try {
+        const wahl = await aiService.waehleBank(deutung.bank, kandidaten);
+        const bank = waehleAusKandidaten(wahl.bankId, kandidaten);
+        if (bank) {
+          aufloesung = { banken: [bank], unbekannt: false, hinweis: null };
+          hinweise.push(`„${deutung.bank}“ verstanden als ${bank.name}.`);
+        }
+      } catch (err) {
+        console.error(
+          "[banken-fragen] Bankauswahl fehlgeschlagen:",
+          err instanceof Error ? err.message : "unbekannter Fehler"
+        );
+      }
+    }
+  }
+
   if (aufloesung.hinweis) hinweise.push(aufloesung.hinweis);
+
+  // Genannte, aber unbekannte Bank: hier ist Schluss. Frueher lief die Frage
+  // stumm gegen alle 664 Banken weiter – das beantwortet eine ANDERE Frage als
+  // die gestellte, dauert fuenfzehn KI-Aufrufe statt einem und reisst durch
+  // den Deckel noch Texte mit. Eine Rueckfrage ist schneller und ehrlicher.
+  if (aufloesung.unbekannt) {
+    return {
+      ...leereAntwort(text, hinweise),
+      verstanden: deutung.verstanden,
+      kriterien,
+      stichwoerter,
+    };
+  }
 
   if (kriterien.length === 0 && stichwoerter.length > 0) {
     // Wichtig fuer die Ehrlichkeit der Antwort: Ohne Kriterium kommen nur

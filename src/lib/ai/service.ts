@@ -35,8 +35,10 @@ import { dokumentgrenzenSchema, type DokumentgrenzenResult } from "@/lib/aufteil
 import {
   deutungSchema,
   urteileSchema,
+  bankWahlSchema,
   type Deutung,
   type UrteileErgebnis,
+  type BankWahl,
 } from "@/lib/banken/fragen/schema";
 
 /**
@@ -483,7 +485,7 @@ export class AIService {
         "Du ordnest die Frage eines Baufinanzierungsvermittlers dem Katalog der Europace-Finanzierungskriterien zu.",
         "kriterien: hoechstens 3 Namen, WOERTLICH aus dem Katalog. Nichts erfinden, nichts umformulieren.",
         "Das passende Kriterium heisst oft anders als die Frage: 'Dolmetscher' steht unter 'Sprache', 'Ausland arbeiten' unter 'Grenzgaenger'.",
-        "bank: der Name einer Bank, WENN die Frage nach genau einer Bank fragt – sonst null.",
+        "bank: der Name einer Bank, WENN die Frage nach genau einer Bank fragt – sonst null. So, wie er in der Frage steht; nicht in den juristischen Namen uebersetzen.",
         "stichwoerter: hoechstens 5 Woerter, die im Freitext der Banken stehen duerften (Grundformen, keine Fragewoerter).",
         "verstanden: ein Satz, der die Frage in eigenen Worten wiedergibt.",
         "Antworte ausschliesslich als JSON.",
@@ -527,6 +529,37 @@ export class AIService {
       ].join(" "),
       `Frage: ${frage}\n\n${bloecke}`,
       { frage, texte }
+    );
+  }
+
+  /**
+   * Waehlt aus einer vorgegebenen Kandidatenliste die gemeinte Bank.
+   *
+   * Laeuft nur, wenn die deterministische Aufloesung gescheitert ist – etwa
+   * bei "HVB", das der Bestand als "HypoVereinsbank" fuehrt. Eine lokale
+   * Abkuerzungsregel scheidet aus: gegen die echten 664 Namen gemessen trifft
+   * "HVB" fuenf Banken, "KSK" achtundfuenfzig, "SKB" sechsundneunzig.
+   *
+   * Die Auswahl ist eingeschraenkt und wird danach gegen die Liste geprueft –
+   * dasselbe Prinzip wie beim Kriterienkatalog: Die KI darf zeigen, nicht
+   * erfinden.
+   */
+  waehleBank(
+    gesucht: string,
+    kandidaten: Array<{ bankId: string; name: string }>
+  ): Promise<BankWahl> {
+    return this.run(
+      "bankWahl",
+      bankWahlSchema,
+      [
+        "Du ordnest die Bezeichnung einer Bank aus einer Nutzerfrage einem Eintrag aus einer VORGEGEBENEN Liste zu.",
+        "Gelaeufige Abkuerzungen gehoeren dazu: 'HVB' ist die HypoVereinsbank, 'DKB' die Deutsche Kreditbank.",
+        "Gib die bankId GENAU so zurueck, wie sie in der Liste steht.",
+        "Passt keiner der Eintraege, gib null zurueck – rate nicht.",
+        "Antworte ausschliesslich als JSON.",
+      ].join(" "),
+      `Gesucht: ${gesucht}\n\nZur Auswahl:\n${kandidaten.map((k) => `${k.bankId} = ${k.name}`).join("\n")}`,
+      { gesucht, kandidaten }
     );
   }
 

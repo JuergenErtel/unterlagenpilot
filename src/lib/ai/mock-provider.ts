@@ -77,6 +77,10 @@ export class MockAIProvider implements AIProvider {
         return this.deuteBankenFrage(req);
       case "bankenFrageUrteile":
         return this.bewerteBankTexte(req);
+      // Der Mock kennt keine Bankabkuerzungen. Null ist die ehrliche Antwort –
+      // geraten waere schlimmer als nachfragen.
+      case "bankWahl":
+        return { bankId: null };
       case "documentReferences":
         return {
           references: [
@@ -322,7 +326,9 @@ export class MockAIProvider implements AIProvider {
 
     return {
       kriterien: treffer,
-      bank: null,
+      // Grobe Nachbildung dessen, was das echte Modell tut: das
+      // grossgeschriebene Wort hinter "die/der/das" ist der Bankname.
+      bank: /\b(?:die|der|das)\s+([A-ZÄÖÜ][\wäöüß.&-]+)/.exec(frage)?.[1] ?? null,
       stichwoerter: worte.filter((w) => !FRAGEWOERTER.has(w)).slice(0, 5),
       verstanden: frage,
     };

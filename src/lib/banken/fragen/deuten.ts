@@ -33,9 +33,35 @@ export interface BankName {
 }
 
 export interface BankAufloesung {
-  /** Leer heisst: keine Eingrenzung, die Antwort deckt alle Banken ab. */
+  /** Leer heisst: keine Eingrenzung (siehe `unbekannt` fuer den Grund). */
   banken: BankName[];
+  /**
+   * Eine Bank WURDE genannt, liess sich aber nicht aufloesen.
+   *
+   * Der Unterschied zu "keine Bank genannt" ist der ganze Punkt: Wer nach
+   * EINER Bank fragt, will keine Marktuebersicht. Frueher fiel dieser Fall
+   * stumm auf alle 664 Banken zurueck – aus einem KI-Aufruf wurden fuenfzehn,
+   * und der Deckel riss zusaetzlich Texte mit.
+   */
+  unbekannt: boolean;
   hinweis: string | null;
+}
+
+/**
+ * Die Grossbuchstaben eines Banknamens in ihrer Reihenfolge – die Abkuerzung,
+ * unter der die Bank im Alltag laeuft.
+ *
+ * "HypoVereinsbank" ergibt "HV" – nicht "HVB", denn das B kommt aus dem
+ * kleingeschriebenen "bank". Taugt deshalb NICHT als Treffer-Regel, wohl aber
+ * als Hinweis fuer die Vorschlagsliste: "hvb" faengt mit "hv" an.
+ */
+function abkuerzung(name: string): string {
+  return (name.match(/[A-ZÄÖÜ]/g) ?? []).join("").toLowerCase();
+}
+
+/** Nur Buchstaben und Ziffern – "H.V.B." und "HVB" sollen dasselbe sein. */
+function blank(s: string): string {
+  return s.toLowerCase().replace(/[^a-zäöüß0-9]/g, "");
 }
 
 /** Kommt der Name als eigenes Wort im Banknamen vor (nicht mitten drin)? */
@@ -62,7 +88,7 @@ function alsWort(name: string, gesucht: string): boolean {
  */
 export function loeseBank(gesucht: string | null, alle: BankName[]): BankAufloesung {
   const name = (gesucht ?? "").trim();
-  if (!name) return { banken: [], hinweis: null };
+  if (!name) return { banken: [], unbekannt: false, hinweis: null };
 
   const gesuchtNorm = normalisiere(name);
   const stufen = [
@@ -74,16 +100,66 @@ export function loeseBank(gesucht: string | null, alle: BankName[]): BankAufloes
     stufen.map((passt) => alle.filter(passt)).find((t) => t.length > 0) ?? [];
 
   if (treffer.length === 0) {
+    const naehe = aehnlicheBanken(name, alle);
     return {
       banken: [],
-      hinweis: `„${name}“ ist im Wiki nicht bekannt – die Antwort deckt alle Banken ab.`,
+      unbekannt: true,
+      hinweis:
+        `„${name}“ finde ich im Wiki nicht.` +
+        (naehe.length > 0 ? ` Meintest du: ${naehe.map((b) => b.name).join(", ")}?` : "") +
+        " Stell die Frage ohne Banknamen, dann durchsuche ich alle Banken.",
     };
   }
   if (treffer.length === 1) {
-    return { banken: treffer, hinweis: null };
+    return { banken: treffer, unbekannt: false, hinweis: null };
   }
   return {
     banken: treffer,
+    unbekannt: false,
     hinweis: `„${name}“ passt auf ${treffer.length} Banken – die Antwort ist auf diese eingegrenzt.`,
   };
+}
+
+/**
+ * Banken, die dem gesuchten Namen nahekommen – als Vorschlag, wenn die
+ * Aufloesung scheitert.
+ *
+ * Bewusst simpel und ohne Bibliothek: Ein Vorschlag muss nicht perfekt sein,
+ * er muss den naechsten Versuch abkuerzen.
+ */
+export function aehnlicheBanken(gesucht: string, alle: BankName[], max = 4): BankName[] {
+  const g = normalisiere(gesucht);
+  const gk = blank(gesucht);
+  if (gk.length < 2) return [];
+  const worte = g.split(/\s+/).filter((w) => w.length >= 4);
+
+  const punkte = (b: BankName): number => {
+    const n = normalisiere(b.name);
+    const a = abkuerzung(b.name);
+    let p = 0;
+    if (a.length >= 2 && (a.startsWith(gk) || gk.startsWith(a))) p += 4;
+    if (n.startsWith(g.slice(0, 3))) p += 2;
+    for (const w of worte) if (n.includes(w)) p += 3;
+    return p;
+  };
+
+  return alle
+    .map((b) => ({ b, p: punkte(b) }))
+    .filter((x) => x.p > 0)
+    .sort((x, y) => y.p - x.p || x.b.name.localeCompare(y.b.name, "de"))
+    .slice(0, max)
+    .map((x) => x.b);
+}
+
+/**
+ * Nimmt die von der KI gewaehlte bankId nur an, wenn sie wirklich in der
+ * vorgelegten Liste steht. Ohne diese Pruefung koennte die Auswahl eine
+ * Kennung erfinden, und die Antwort liefe gegen eine Bank, die es nicht gibt.
+ */
+export function waehleAusKandidaten(
+  bankId: string | null | undefined,
+  kandidaten: BankName[]
+): BankName | null {
+  if (!bankId) return null;
+  return kandidaten.find((k) => k.bankId === bankId) ?? null;
 }

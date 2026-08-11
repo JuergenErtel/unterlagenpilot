@@ -6,7 +6,7 @@ vi.hoisted(() => {
   process.env.AI_PROVIDER = "mock";
 });
 
-import { pruefeKriterien, loeseBank } from "@/lib/banken/fragen/deuten";
+import { pruefeKriterien, loeseBank, aehnlicheBanken, waehleAusKandidaten } from "@/lib/banken/fragen/deuten";
 import { buendele, DECKEL, type Zeile } from "@/lib/banken/fragen/sammeln";
 import { pruefeBeleg, inBuendel, parallelBegrenzt } from "@/lib/banken/fragen/lesen";
 import { baueGruppen } from "@/lib/banken/fragen/antwort";
@@ -57,7 +57,7 @@ describe("Banknamen aufloesen", () => {
   ];
 
   it("ohne Bankname keine Eingrenzung", () => {
-    expect(loeseBank(null, alle)).toEqual({ banken: [], hinweis: null });
+    expect(loeseBank(null, alle)).toEqual({ banken: [], unbekannt: false, hinweis: null });
   });
 
   it("trifft bei exaktem Namen genau eine Bank – nicht jeden Namen mit 'ing'", () => {
@@ -84,10 +84,11 @@ describe("Banknamen aufloesen", () => {
     expect(r.hinweis).toContain("2 Banken");
   });
 
-  it("unbekannte Bank faellt auf alle zurueck und sagt es", () => {
+  it("meldet eine unbekannte Bank als unbekannt und schlaegt etwas vor", () => {
     const r = loeseBank("Hausbank Entenhausen", alle);
     expect(r.banken).toEqual([]);
-    expect(r.hinweis).toContain("nicht bekannt");
+    expect(r.unbekannt).toBe(true);
+    expect(r.hinweis).toContain("finde ich im Wiki nicht");
   });
 });
 
@@ -411,5 +412,81 @@ describe("Ganze Frage (Mock-KI, ohne Datenbank)", () => {
     const antwort = await beantworteFrage("?", bestand([]));
     expect(antwort.fehlanzeige).toBe(true);
     expect(antwort.hinweise.join(" ")).toContain("zu kurz");
+  });
+});
+
+describe("Bankname als Abkürzung (Bugfix 11.08.)", () => {
+  const alle = [
+    { bankId: "HVB", name: "HypoVereinsbank" },
+    { bankId: "SPK_KOELN", name: "Sparkasse KölnBonn" },
+    { bankId: "BERL", name: "Berliner Sparkasse" },
+    { bankId: "ING", name: "ING" },
+  ];
+
+  it("kann „HVB“ NICHT von sich aus auflösen – und behauptet es auch nicht", () => {
+    // Gegen die echten 664 Namen gemessen ist keine lokale Regel tragfähig:
+    // „HVB“ als Teilfolge trifft fünf Banken, „KSK“ achtundfünfzig, „SKB“
+    // sechsundneunzig. Und die Großbuchstaben von „HypoVereinsbank“ sind „HV“,
+    // nicht „HVB“ – das B kommt aus dem kleingeschriebenen „bank“.
+    const r = loeseBank("HVB", alle);
+    expect(r.banken).toEqual([]);
+    expect(r.unbekannt).toBe(true);
+  });
+
+  it("schlägt stattdessen die richtige Bank vor", () => {
+    expect(aehnlicheBanken("HVB", alle).map((b) => b.bankId)).toContain("HVB");
+  });
+
+  it("meldet eine wirklich unbekannte Bank als unbekannt", () => {
+    const r = loeseBank("Hausbank Entenhausen", alle);
+    expect(r.banken).toEqual([]);
+    expect(r.unbekannt).toBe(true);
+  });
+
+  it("meldet eine nicht genannte Bank NICHT als unbekannt", () => {
+    expect(loeseBank(null, alle).unbekannt).toBe(false);
+  });
+
+  it("nimmt eine erfundene Kennung aus der Bankauswahl nicht an", () => {
+    // Die KI darf aus der Liste zeigen, nicht erfinden.
+    expect(waehleAusKandidaten("GIBTSNICHT", alle)).toBeNull();
+    expect(waehleAusKandidaten(null, alle)).toBeNull();
+    expect(waehleAusKandidaten("HVB", alle)?.name).toBe("HypoVereinsbank");
+  });
+});
+
+describe("Unauflösbare Bank sucht nicht den ganzen Markt ab", () => {
+  it("bricht ab, statt auf alle Banken zurückzufallen", async () => {
+    // Der eigentliche Schaden: Wer nach EINER Bank fragt, will keine
+    // Marktübersicht. Der Rückfall kostete 15 KI-Aufrufe statt einem – und
+    // riss durch den Deckel zusätzlich 57 Texte mit.
+    let gefragt = 0;
+    const antwort = await beantworteFrage("Akzeptiert die Entenbank Grenzgänger?", {
+      bankNamen: async () => [{ bankId: "ING", name: "ING" }],
+      zeilen: async () => {
+        gefragt++;
+        return [];
+      },
+      abzugStand: async () => new Date("2026-08-10T00:00:00Z"),
+    });
+
+    expect(gefragt).toBe(0);
+    expect(antwort.fehlanzeige).toBe(true);
+    expect(antwort.hinweise.join(" ")).toContain("Entenbank");
+  });
+
+  it("durchsucht ohne genannte Bank weiterhin alle Banken", async () => {
+    // Gegenprobe: Die Marktfrage darf der Fix nicht mit abwürgen.
+    let gefragt = 0;
+    const antwort = await beantworteFrage("Welche Banken nehmen Grenzgänger?", {
+      bankNamen: async () => [{ bankId: "ING", name: "ING" }],
+      zeilen: async () => {
+        gefragt++;
+        return [zeile({ bankId: "ING", kriterium: "Grenzgänger", inhalt: "<p>Wird finanziert.</p>" })];
+      },
+      abzugStand: async () => new Date("2026-08-10T00:00:00Z"),
+    });
+    expect(gefragt).toBe(1);
+    expect(antwort.fehlanzeige).toBe(false);
   });
 });
