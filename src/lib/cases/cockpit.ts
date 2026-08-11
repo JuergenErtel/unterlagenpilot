@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getCaseAggregate } from "./service";
+import { getCaseAggregate, type CaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { readinessTone, type Tone } from "@/lib/ui/tone";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
@@ -43,6 +43,8 @@ export interface CockpitData {
     begonnen: boolean;
     erstelltVorTagen: number | null;
   };
+  /** Nur gesetzt, wenn fuer diesen Fall schon Europace-Anforderungen geholt wurden. */
+  anforderungsAbgleich: CaseAggregate["anforderungsAbgleich"];
 }
 
 export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
@@ -225,6 +227,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
     },
     missingCustomerFields,
     selbstauskunft,
+    anforderungsAbgleich: agg.anforderungsAbgleich,
   };
 }
 

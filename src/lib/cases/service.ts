@@ -12,6 +12,9 @@ import { AIService } from "@/lib/ai/service";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import type { DocumentType } from "@/lib/domain/enums";
 import type { ExtractedField, PlausibilityCheck } from "@/lib/domain/ai-schemas";
+import { ladeAktivenAbruf } from "@/lib/anforderungen/speicher";
+import { anforderungsPositionen } from "@/lib/anforderungen/positionen";
+import { gleicheAb, zaehle, type AbgleichZahlen } from "@/lib/anforderungen/abgleich";
 
 const ai = new AIService();
 
@@ -24,6 +27,13 @@ export interface CaseAggregate {
   missing: ResolvedChecklistItem[];
   readiness: ReadinessResult;
   documentCount: number;
+  /** Nur gesetzt, wenn fuer diesen Fall schon Anforderungen geholt wurden. */
+  anforderungsAbgleich: {
+    bankName: string;
+    abgerufenAm: Date;
+    quelle: string;
+    zahlen: AbgleichZahlen;
+  } | null;
 }
 
 /** Vollständige, live berechnete Sicht auf einen Fall. */
@@ -59,6 +69,13 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     })))
   );
 
+  // Vierte Quelle: was die Bank laut Europace tatsaechlich verlangt. Die
+  // einzige verbindliche Quelle – die anderen drei raten.
+  const aktiverAbruf = await ladeAktivenAbruf(caseId);
+  const alleExtras = aktiverAbruf
+    ? [...extraItems, ...anforderungsPositionen(aktiverAbruf)]
+    : extraItems;
+
   const canonical = await caseToCanonical(caseId);
 
   const existing: ExistingDocument[] = documents.map((d) => ({
@@ -72,7 +89,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
   const checklist = buildChecklistForCase(
     checklistEingabeFuerFall(caseRow),
     existing,
-    extraItems
+    alleExtras
   );
 
   const docFields = documents.map((d) => ({
@@ -92,6 +109,17 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     (i) => i.status === "offen" || i.status === "unvollstaendig" || i.status === "nicht_aktuell"
   );
 
+  // Der Abgleich laeuft gegen die FERTIGE Checkliste, damit die Zahlen zu dem
+  // passen, was der Vermittler sieht.
+  const anforderungsAbgleich: CaseAggregate["anforderungsAbgleich"] = aktiverAbruf
+    ? {
+        bankName: aktiverAbruf.bankName,
+        abgerufenAm: aktiverAbruf.abgerufenAm,
+        quelle: aktiverAbruf.quelle,
+        zahlen: zaehle(gleicheAb(aktiverAbruf.anforderungen, checklist)),
+      }
+    : null;
+
   return {
     caseId,
     caseNumber: caseRow.caseNumber,
@@ -101,6 +129,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     missing,
     readiness,
     documentCount: documents.length,
+    anforderungsAbgleich,
   };
 }
 

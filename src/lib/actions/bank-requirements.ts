@@ -5,15 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DOCUMENT_TYPES, REQUIREMENT_LEVELS, type DocumentType, type RequirementLevel } from "@/lib/domain/enums";
-
-function slug(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[äöü]/g, (m) => ({ ä: "ae", ö: "oe", ü: "ue" }[m] ?? m))
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 40);
-}
+import { slug } from "@/lib/rules/schluessel";
 
 /** Legt eine org-spezifische Bankanforderung an. */
 export async function addBankRequirement(formData: FormData): Promise<void> {
