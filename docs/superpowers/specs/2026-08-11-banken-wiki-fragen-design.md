@@ -156,6 +156,35 @@ Alles gegen den Mock-Provider, ohne echte KI:
 - **Restriktivstes Urteil** bei einer Bank in mehreren Kriterien.
 - **Fehlanzeige** statt Rateliste, wenn nichts passt.
 
+## 7a. Nachtrag: was der Lauf gegen die echte KI korrigiert hat
+
+Vor dem Ausliefern lief die ganze Kette gegen den echten Rohabzug und die echte
+Mistral-Anbindung. Vier Dinge, die kein Test mit erfundenen Daten gezeigt hätte:
+
+1. **Der Kriteriumsname muss in den Prompt.** Viele Bestandstexte sind
+   elliptisch. Die klarste Absage der ING lautet vollständig „Wird von der Bank
+   nicht unterstützt." — ohne Subjekt. Durch das Entdoppeln nach Text war der
+   Bezug weg, und die KI urteilte folgerichtig „keine Aussage" statt „nein".
+   Entdoppelt wird seither **je Kriterium**, und das Kriterium steht im Prompt.
+2. **Banknamen dürfen nicht per Teilstring aufgelöst werden.** Die Suche der
+   Bankenliste ist ein Teilstringvergleich — richtig für ein Feld, in dem man
+   den Treffer sieht und anklickt. Automatisch angewandt traf „ING" auch
+   Ingolstadt, Thüringen und Geiselhöring: Eine Frage nach einer Bank wurde
+   gegen 41 beantwortet. Jetzt in drei Stufen: exakter Name, ganzes Wort,
+   zuletzt Teilstring.
+3. **Das gefragte Kriterium wird zuerst gelesen.** Das Stichwort „Einkommen"
+   zog bei der Kurzarbeitergeld-Frage 727 Texte quer durch alle Kriterien
+   herein; der Deckel griff, und ausgerechnet Texte des gefragten Kriteriums
+   blieben ungelesen — 169 Banken ohne Urteil, 77 Sekunden Laufzeit. Mit
+   Vorrang: alle 664 Banken bewertet, 11 Sekunden.
+4. **Die Belegprüfung greift und ist ihr Geld wert.** Von 198 Urteilen trugen
+   35 kein haltbares Zitat. Darunter Sätze wie „Ein Dolmetscher wird nicht
+   akzeptiert." — inhaltlich richtig, aber so nirgends geschrieben. Nach dem
+   Kontext-Fix aus Punkt 1 sank die Quote auf 1 von 199; Zitate mit Auslassung
+   („A … B") werden stückweise und in Reihenfolge geprüft.
+
+Gemessene Laufzeiten: 3–12 Sekunden je Frage, im ausgereizten Fall 11 Sekunden.
+
 ## 8. Offener Punkt außerhalb der Technik
 
 Unverändert der Punkt aus dem Wiki-Design: Europace-Inhalte an dritte
