@@ -1,5 +1,6 @@
 import type { DocumentType } from "@/lib/domain/enums";
 import type { ResolvedChecklistItem } from "@/lib/checklists/engine";
+import { faltenBasis } from "@/lib/text/falten";
 
 export interface AbgleichAnforderung {
   id: string;
@@ -22,15 +23,13 @@ export interface AbgleichZahlen {
   erledigt: number;
 }
 
-/** Kleinschreibung, Umlaute aufgeloest – dieselbe Faltung wie in applicant-match.ts. */
+/**
+ * Basis-Normalisierung mit zusaetzlichem Strippen aller Sonderzeichen. Nutzt dieselbe
+ * Faltung wie die Namensmatcher (faltenBasis), fuegt aber .replace(/[^a-z0-9]/g, "")
+ * an – weil hier komplette Labels miteinander verglichen werden, nicht tokenisiert.
+ */
 function falte(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/ß/g, "ss")
-    .replace(/[^a-z0-9]/g, "");
+  return faltenBasis(s).replace(/[^a-z0-9]/g, "");
 }
 
 /**

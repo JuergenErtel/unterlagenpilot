@@ -59,6 +59,16 @@ describe("Abgleich", () => {
     expect(b.some((x) => x.art === "deckt_sich")).toBe(true);
   });
 
+  it("gleicht Namen mit Akzenten ab (Café, naiv, etc.)", () => {
+    // Nach NFD-Normalisierung und Akzent-Entfernung sollte "Café" zu "Cafe"
+    // werden und passen auf "Cafe Nachweis".
+    const b = gleicheAb(
+      [anforderung("r1", "Café-Nachweis", null)],
+      [position("tpl.cafe", "Cafe Nachweis", null)]
+    );
+    expect(b).toContainEqual({ art: "deckt_sich", anforderungId: "r1", positionKey: "tpl.cafe" });
+  });
+
   it("meldet eine Anforderung ohne Gegenstueck als neu", () => {
     const b = gleicheAb(
       [anforderung("r1", "Nachweis Eigenkapital", "eigenkapitalnachweis")],
