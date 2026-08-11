@@ -31,22 +31,28 @@ export function BankAnforderungenAuswahl({ caseId }: { caseId: string }) {
       }
     });
 
-  if (!ergebnis) {
-    return (
-      <Button onClick={laden} disabled={laeuft} size="sm" variant="outline">
-        <Download />
-        {laeuft ? "Lädt …" : "Angebote aus Europace laden"}
-      </Button>
-    );
-  }
+  const hatFehler = ergebnis && "fehler" in ergebnis && ergebnis.fehler;
 
   return (
     <div className="space-y-2">
-      {"fehler" in ergebnis && ergebnis.fehler ? (
-        <p className="text-sm text-muted-foreground">{ergebnis.fehler}</p>
-      ) : null}
+      {hatFehler && (
+        <>
+          <p className="text-sm text-muted-foreground">{ergebnis.fehler}</p>
+          <Button onClick={laden} disabled={laeuft} size="sm" variant="outline">
+            <Download />
+            {laeuft ? "Lädt …" : "Erneut versuchen"}
+          </Button>
+        </>
+      )}
 
-      {"auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length > 0 ? (
+      {!ergebnis && (
+        <Button onClick={laden} disabled={laeuft} size="sm" variant="outline">
+          <Download />
+          {laeuft ? "Lädt …" : "Angebote aus Europace laden"}
+        </Button>
+      )}
+
+      {ergebnis && "auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length > 0 ? (
         <div className="space-y-2">
           {ergebnis.auswahl.map((a) => (
             <form
@@ -74,7 +80,7 @@ export function BankAnforderungenAuswahl({ caseId }: { caseId: string }) {
         </div>
       ) : null}
 
-      {"auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length === 0 ? (
+      {ergebnis && "auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Europace nennt zu diesem Vorgang weder Anträge noch Finanzierungsvorschläge.
         </p>
