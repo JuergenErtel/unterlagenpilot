@@ -73,9 +73,14 @@ export function gleicheAb(
   }
 
   for (const p of positionen) {
-    if (!getroffenePositionen.has(p.key)) {
-      befunde.push({ art: "bank_verlangt_nicht", positionKey: p.key });
-    }
+    if (getroffenePositionen.has(p.key)) continue;
+    // Nur zwingende Positionen zaehlen als "verlangt die Bank nicht" – die
+    // Aussage ist "das jagst du als Pflicht, aber diese Bank will es nicht".
+    // spaeter/optional/bankabhaengig verfolgt der Vermittler ohnehin nicht
+    // aktiv; die mitzuzaehlen blaeht die Zahl von der Handvoll aus dem Design
+    // auf 20-30 auf und macht die Meldung wertlos.
+    if (p.level !== "zwingend") continue;
+    befunde.push({ art: "bank_verlangt_nicht", positionKey: p.key });
   }
 
   return befunde;

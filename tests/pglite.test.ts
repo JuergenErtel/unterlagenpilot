@@ -100,6 +100,70 @@ describe.runIf(RUN)("End-to-End gegen echte Postgres (PGlite)", () => {
   );
 
   it(
+    "Europace-Anforderungen: 'neu' ist nicht strukturell 0, keine Dublette bei Deckung",
+    async () => {
+      const { speichereAbruf } = await import("@/lib/anforderungen/speicher");
+      const { getCaseAggregate } = await import("@/lib/cases/service");
+      const fall = await g.prisma.case.findFirstOrThrow();
+
+      // Zwei Anforderungen: eine deckt sich mit der vorhandenen
+      // "personalausweis"-Vorlage (Kategorie "Ausweis"), die andere
+      // ("Gebaeudeversicherung" -> versicherungsnachweis) taucht in KEINER
+      // Checklisten-Vorlage auf (templates.ts). Bei der alten, zirkulaeren
+      // Verdrahtung (Abgleich gegen die FERTIGE Checkliste inklusive der neu
+      // erzeugten Europace-Positionen) waere "neu" IMMER 0 gewesen, weil jede
+      // offene Anforderung sich vorher selbst eine passende Position gebaut
+      // haette.
+      await speichereAbruf({
+        caseId: fall.id,
+        quelle: "antrag",
+        vorgangsNummer: "CH-TEST",
+        bezugsId: "A-TEST",
+        bankId: "TEST_BANK",
+        bankName: "Testbank",
+        anforderungen: [
+          {
+            id: "deckt-1",
+            code: "PA01",
+            text: "Ausweisdokument",
+            kurzbezeichnung: "Perso",
+            erfuellungskategorien: ["Ausweis"],
+            liegtVor: false,
+            ausgeblendet: false,
+          },
+          {
+            id: "neu-1",
+            code: "VN01",
+            text: "Nachweis Gebaeudeversicherung",
+            kurzbezeichnung: "Gebaeudeversicherung",
+            erfuellungskategorien: ["Gebaeudeversicherung"],
+            liegtVor: false,
+            ausgeblendet: false,
+          },
+        ],
+      });
+
+      const agg = await getCaseAggregate(fall.id);
+
+      expect(agg.anforderungsAbgleich).not.toBeNull();
+      expect(agg.anforderungsAbgleich?.zahlen.neu).toBeGreaterThanOrEqual(1);
+      expect(agg.anforderungsAbgleich?.zahlen.decktSich).toBeGreaterThanOrEqual(1);
+
+      // Kein Dublett: die vorhandene "personalausweis"-Zeile aus der Vorlage
+      // bleibt die einzige, die deckende Bank-Anforderung erzeugt KEINE zweite.
+      const persoZeilen = agg.checklist.filter((i) => i.key === "personalausweis");
+      expect(persoZeilen).toHaveLength(1);
+
+      // Fuer die neue Anforderung entsteht genau eine Position.
+      const versicherungZeilen = agg.checklist.filter(
+        (i) => i.documentType === "versicherungsnachweis"
+      );
+      expect(versicherungZeilen).toHaveLength(1);
+    },
+    60_000
+  );
+
+  it(
     "Plattform-Mapping (kanonisch) erzeugt Felder für Europace",
     async () => {
       const { caseToCanonical } = await import("@/lib/platforms/case-loader");

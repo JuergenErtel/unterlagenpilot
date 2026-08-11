@@ -72,9 +72,6 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
   // Vierte Quelle: was die Bank laut Europace tatsaechlich verlangt. Die
   // einzige verbindliche Quelle – die anderen drei raten.
   const aktiverAbruf = await ladeAktivenAbruf(caseId);
-  const alleExtras = aktiverAbruf
-    ? [...extraItems, ...anforderungsPositionen(aktiverAbruf)]
-    : extraItems;
 
   const canonical = await caseToCanonical(caseId);
 
@@ -86,11 +83,36 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     applicantId: d.applicantId,
   }));
 
-  const checklist = buildChecklistForCase(
-    checklistEingabeFuerFall(caseRow),
-    existing,
-    alleExtras
+  // Der Abgleich MUSS gegen eine Basis-Checkliste ohne die Europace-Positionen
+  // laufen. Baut man die Checkliste zuerst inklusive dieser Positionen und
+  // gleicht dann ab, hat jede Anforderung, die ueberhaupt "neu" sein koennte,
+  // durch anforderungsPositionen() bereits eine eigene Zeile mit demselben
+  // Dokumenttyp (oder Namen) bekommen – gleicheAb findet dann IMMER ein
+  // Gegenstueck. "neu" waere strukturell immer 0: die Anforderungen wuerden
+  // gegen sich selbst verglichen. Der Basis-Checkliste-Umweg ist der einzige
+  // Weg zu einer ehrlichen Zahl.
+  const checklistEingabe = checklistEingabeFuerFall(caseRow);
+  const basisCheckliste = buildChecklistForCase(checklistEingabe, existing, extraItems);
+
+  const befunde = aktiverAbruf ? gleicheAb(aktiverAbruf.anforderungen, basisCheckliste) : [];
+
+  // Nur fuer "neu"-Befunde entstehen Positionen. Was sich laut Schritt oben
+  // schon deckt, bekommt in der Anzeige nur die Markierung "auch laut Bank" –
+  // keine zweite Zeile mit demselben Dokumenttyp (Design: "Positionen mit
+  // Gegenstueck erzeugen keine neue Zeile — das ist der Kern: keine Dubletten").
+  const neuIds = new Set(
+    befunde.filter((b): b is Extract<typeof b, { art: "neu" }> => b.art === "neu").map((b) => b.anforderungId)
   );
+  const neuePositionen = aktiverAbruf
+    ? anforderungsPositionen({
+        ...aktiverAbruf,
+        anforderungen: aktiverAbruf.anforderungen.filter((a) => neuIds.has(a.id)),
+      })
+    : [];
+
+  const alleExtras = [...extraItems, ...neuePositionen];
+
+  const checklist = buildChecklistForCase(checklistEingabe, existing, alleExtras);
 
   const docFields = documents.map((d) => ({
     documentType: d.documentType as DocumentType | null,
@@ -109,14 +131,16 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     (i) => i.status === "offen" || i.status === "unvollstaendig" || i.status === "nicht_aktuell"
   );
 
-  // Der Abgleich laeuft gegen die FERTIGE Checkliste, damit die Zahlen zu dem
-  // passen, was der Vermittler sieht.
+  // Zahlen aus dem Abgleich gegen die BASIS-Checkliste (oben), nicht aus einem
+  // zweiten Abgleich gegen die fertige Checkliste – die enthaelt inzwischen
+  // die neuen Positionen selbst und wuerde wieder auf die zirkulaere Zahl
+  // hinauslaufen, die dieser Umbau beheben soll.
   const anforderungsAbgleich: CaseAggregate["anforderungsAbgleich"] = aktiverAbruf
     ? {
         bankName: aktiverAbruf.bankName,
         abgerufenAm: aktiverAbruf.abgerufenAm,
         quelle: aktiverAbruf.quelle,
-        zahlen: zaehle(gleicheAb(aktiverAbruf.anforderungen, checklist)),
+        zahlen: zaehle(befunde),
       }
     : null;
 

@@ -5,13 +5,14 @@ import type { ResolvedChecklistItem } from "@/lib/checklists/engine";
 const position = (
   key: string,
   name: string,
-  documentType: ResolvedChecklistItem["documentType"]
+  documentType: ResolvedChecklistItem["documentType"],
+  level: ResolvedChecklistItem["level"] = "zwingend"
 ): ResolvedChecklistItem => ({
   key,
   name,
   customerDescription: name,
   documentType,
-  level: "zwingend",
+  level,
   scope: "allgemein",
   platforms: ["europace"],
   status: "offen",
@@ -86,6 +87,21 @@ describe("Abgleich", () => {
       ]
     );
     expect(b).toContainEqual({ art: "bank_verlangt_nicht", positionKey: "tpl.gb" });
+  });
+
+  it("meldet eine nicht-zwingende Position ohne Gegenstueck NICHT als 'verlangt die Bank nicht'", () => {
+    // spaeter/optional/bankabhaengig verfolgt der Vermittler ohnehin nicht als
+    // Pflicht -- die Meldung "verlangt die Bank nicht" waere hier Rauschen,
+    // keine Erkenntnis.
+    const b = gleicheAb(
+      [anforderung("r1", "Ausweisdokument", "personalausweis")],
+      [
+        position("tpl.perso", "Personalausweis", "personalausweis"),
+        position("tpl.spaeter", "Nachweis fuer spaeter", "grundbuchauszug", "spaeter"),
+        position("tpl.optional", "Optionaler Nachweis", "bwa", "optional"),
+      ]
+    );
+    expect(b.some((x) => x.art === "bank_verlangt_nicht")).toBe(false);
   });
 
   it("ueberspringt Ausgeblendetes vollstaendig", () => {
