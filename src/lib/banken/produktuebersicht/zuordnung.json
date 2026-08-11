@@ -1,0 +1,37 @@
+{
+  "geholtAm": "2026-08-11",
+  "quelle": "Europace Wiki (Zendesk), Artikel '<Bank> - Produktübersicht'",
+  "hinweis": "Von Hand geprüfte Zuordnung der 28 Artikelnamen auf die Banknamen des Kriterienchecks. Bewusst keine automatische Namensähnlichkeit: Ein Teilstringvergleich ordnete 'Hannoversche' (der Versicherer) der 'Hannoversche Volksbank' zu und 'L-Bank' 356 Banken. Bei 28 Einträgen ist Handarbeit billiger als jede Heuristik.",
+  "aufVorhandeneBank": {
+    "Allianz": "Allianz",
+    "Alte Leipziger Bauspar AG": "Alte Leipziger Bauspar",
+    "AXA": "AXA",
+    "BHW": "BHW Bausparkasse",
+    "BKM - Bausparkasse Mainz AG": "BKM",
+    "Commerzbank": "Commerzbank",
+    "Consors Finanz": "Consors Finanz",
+    "Deutsche Bank": "Deutsche Bank",
+    "DEVK": "DEVK",
+    "ERGO": "ERGO",
+    "Hanseatic Bank": "Hanseatic Bank",
+    "HUK Coburg": "HUK-COBURG",
+    "HypoVereinsbank": "HypoVereinsbank",
+    "ING": "ING",
+    "Oldenburgische Landesbank": "OLB",
+    "PSD Bank Nürnberg eG": "PSD Nürnberg",
+    "Sächsische Aufbaubank": "Sächsische Aufbaubank",
+    "Signal Iduna": "Signal Iduna",
+    "uniVersa": "uniVersa",
+    "Volkswohlbund": "Volkswohl Bund",
+    "Wüstenrot": "Bausparkasse Wüstenrot"
+  },
+  "neueBank": [
+    "Hannoversche",
+    "IB.SH",
+    "KfW",
+    "L-Bank",
+    "NRW.Bank",
+    "Sparda-Bank Hessen eG",
+    "Versicherungskammer Bayern"
+  ]
+}

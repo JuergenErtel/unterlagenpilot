@@ -546,3 +546,24 @@ describe("Stichwörter notfalls aus der Frage", () => {
     expect(stichwoerterAusFrage("Welche Banken nehmen?")).toEqual([]);
   });
 });
+
+describe("Zuordnung der Produktübersichten", () => {
+  it("deckt jeden Artikel ab, ohne Dubletten und ohne Erfindungen", async () => {
+    // Bei 28 Einträgen ist Handarbeit billiger als jede Heuristik – aber sie
+    // muss geprüft sein. Ein Teilstringvergleich hatte „Hannoversche“ (den
+    // Versicherer) der „Hannoversche Volksbank“ zugeordnet.
+    const z = (await import("@/lib/banken/produktuebersicht/zuordnung.json")).default;
+    const auf = Object.keys(z.aufVorhandeneBank);
+    const alle = [...auf, ...z.neueBank];
+
+    expect(new Set(alle).size).toBe(alle.length); // kein Artikel doppelt
+    const ziele = Object.values(z.aufVorhandeneBank);
+    expect(new Set(ziele).size).toBe(ziele.length); // kein Ziel doppelt
+    expect(alle).toHaveLength(28);
+    // Keine leeren Namen auf beiden Seiten.
+    for (const [artikel, bank] of Object.entries(z.aufVorhandeneBank)) {
+      expect(artikel.trim().length).toBeGreaterThan(1);
+      expect(String(bank).trim().length).toBeGreaterThan(1);
+    }
+  });
+});
