@@ -1,6 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { HttpEuropaceClient } from "@/lib/platforms/europace/client";
 import { auswahlAus } from "@/lib/platforms/europace/anforderungen";
+
+const UNTERLAGEN_SWAGGER_PATH = "src/lib/platforms/europace/schema/unterlagen-swagger.yaml";
+
+/**
+ * Liest die Basis-URL aus dem `servers:`-Block der eingecheckten Spezifikation,
+ * statt sie im Test fest abzutippen. Ein von Hand eingetragenes "/v1" haette
+ * genau die Luecke, die Critical 1 verursacht hat, nicht geschlossen: der Test
+ * waere gruen geblieben, obwohl der Client eine andere Version anspricht als
+ * die Spezifikation vorschreibt.
+ */
+function unterlagenServerUrl(): string {
+  const swagger = readFileSync(UNTERLAGEN_SWAGGER_PATH, "utf-8");
+  const match = swagger.match(/^servers:\s*\n\s*-\s*url:\s*(\S+)/m);
+  if (!match) throw new Error("Kein servers:-Block in unterlagen-swagger.yaml gefunden.");
+  return match[1]!;
+}
 
 /** Antwortet auf den Token-Aufruf und danach mit der uebergebenen Nutzlast. */
 function fetchMitAntwort(nutzlast: unknown, status = 200) {
@@ -34,6 +51,7 @@ describe("Anforderungen lesen", () => {
     const aufgerufen = String((f as unknown as ReturnType<typeof vi.fn>).mock.calls[1]![0]);
     expect(aufgerufen).toContain("/dokumente/antrag/anforderungen");
     expect(aufgerufen).toContain("antragsNummer=A-1");
+    expect(aufgerufen.startsWith(unterlagenServerUrl())).toBe(true);
   });
 
   it("liest die Anforderungen eines Finanzierungsvorschlags mit beiden Parametern", async () => {
@@ -47,6 +65,7 @@ describe("Anforderungen lesen", () => {
     expect(aufgerufen).toContain("/dokumente/anforderungen");
     expect(aufgerufen).toContain("vorgangsNummer=CH6407");
     expect(aufgerufen).toContain("finanzierungsvorschlagsId=FV-9");
+    expect(aufgerufen.startsWith(unterlagenServerUrl())).toBe(true);
   });
 
   it("nennt beim Antrags-Weg den Scope unterlagen:freigabe:lesen, nicht irgendeinen anderen", async () => {
@@ -156,8 +175,6 @@ describe("Auswahlliste", () => {
     expect(auswahlAus([{ produktAnbieter: { id: "X" } }], [{ sollZins: 1 }])).toEqual([]);
   });
 });
-
-import { readFileSync } from "node:fs";
 
 describe("Vertrag gegen die eingecheckte Spezifikation", () => {
   const swagger = readFileSync("src/lib/platforms/europace/schema/unterlagen-swagger.yaml", "utf-8");

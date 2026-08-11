@@ -311,10 +311,15 @@ export class HttpEuropaceClient implements EuropaceClient {
     vorgangsNummer: string;
     bezugsId: string;
   }): Promise<Unterlagenanforderung[]> {
+    // Versionssegment aus dem `servers:`-Block von unterlagen-swagger.yaml
+    // (https://api.europace2.de/v1) -- NICHT dasselbe /v2 wie beim
+    // Dokument-Upload oben (ladeDokumentHoch): der Upload stammt aus einer
+    // anderen Spezifikation mit eigener Versionierung. Beide Wege teilen sich
+    // nur den Host, nicht die Version.
     const url =
       p.quelle === "antrag"
-        ? `${UNTERLAGEN_HOST}/dokumente/antrag/anforderungen?antragsNummer=${encodeURIComponent(p.bezugsId)}`
-        : `${UNTERLAGEN_HOST}/dokumente/anforderungen?vorgangsNummer=${encodeURIComponent(p.vorgangsNummer)}&finanzierungsvorschlagsId=${encodeURIComponent(p.bezugsId)}`;
+        ? `${UNTERLAGEN_HOST}/v1/dokumente/antrag/anforderungen?antragsNummer=${encodeURIComponent(p.bezugsId)}`
+        : `${UNTERLAGEN_HOST}/v1/dokumente/anforderungen?vorgangsNummer=${encodeURIComponent(p.vorgangsNummer)}&finanzierungsvorschlagsId=${encodeURIComponent(p.bezugsId)}`;
     // Laut unterlagen-swagger.yaml traegt jede Route ihren EIGENEN Scope:
     // der Antrags-Weg unterlagen:freigabe:lesen, der Vorschlags-Weg
     // unterlagen:unterlage:lesen.
