@@ -47,14 +47,25 @@ export interface Gruppierung {
 export function baueGruppen(
   bloecke: Textblock[],
   urteile: Map<number, { urteil: Urteil; beleg: string | null }>,
-  ohneAussage: Zeile[]
+  ohneAussage: Zeile[],
+  /**
+   * Die Kriterien, die zur Frage gedeutet wurden. Bei gleichem Urteil gewinnt
+   * eine Zeile daraus – sonst belegt die Antwort ein Nein mit einem Nebensatz
+   * aus einem Kriterium, das nur ueber das Stichwort-Auffangnetz hereinkam.
+   */
+  primaerKriterien: string[] = []
 ): Gruppierung {
+  const primaer = new Set(primaerKriterien);
   const beste = new Map<string, { urteil: Urteil; eintrag: BankUrteil }>();
   const ungelesen: Zeile[] = [];
 
+  /** Je hoeher, desto eher zeigt die Antwort diese Zeile. */
+  const gewicht = (urteil: Urteil, eintrag: BankUrteil): number =>
+    RANG[urteil] * 4 + (primaer.has(eintrag.kriterium) ? 2 : 0) + (eintrag.beleg ? 1 : 0);
+
   const merke = (urteil: Urteil, eintrag: BankUrteil) => {
     const bisher = beste.get(eintrag.bankId);
-    if (bisher && RANG[bisher.urteil] >= RANG[urteil]) return;
+    if (bisher && gewicht(bisher.urteil, bisher.eintrag) >= gewicht(urteil, eintrag)) return;
     beste.set(eintrag.bankId, { urteil, eintrag });
   };
 

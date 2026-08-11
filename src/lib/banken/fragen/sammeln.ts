@@ -11,9 +11,18 @@ export interface Zeile {
   inhalt: string;
 }
 
-/** Ein Freitext und alle Banken, die genau diesen Text tragen. */
+/**
+ * Ein Freitext unter EINEM Kriterium und alle Banken, die ihn tragen.
+ *
+ * Das Kriterium gehoert zwingend dazu: Viele Bestandstexte sind elliptisch
+ * ("Wird von der Bank nicht unterstuetzt.", "deutsch"). Ohne den Namen des
+ * Kriteriums laesst sich nicht sagen, WAS nicht unterstuetzt wird – gegen die
+ * echte KI gemessen fiel genau so die klarste Absage der ING durch, weil der
+ * Satz ohne Kontext nichts aussagt.
+ */
 export interface Textblock {
   id: number;
+  kriterium: string;
   text: string;
   banken: Zeile[];
 }
@@ -58,10 +67,20 @@ const KEINE_AUSSAGE = "KEINE_ANGABE";
 export function buendele(
   zeilen: Zeile[],
   stichwoerter: string[] = [],
-  deckel = DECKEL
+  deckel = DECKEL,
+  /**
+   * Die zur Frage gedeuteten Kriterien. Ihre Texte werden ZUERST gelesen.
+   *
+   * Ohne diesen Vorrang frisst das Stichwort-Auffangnetz den Deckel auf: Die
+   * Frage nach Kurzarbeitergeld zog ueber das Wort "Einkommen" 721 Texte quer
+   * durch alle Kriterien herein, und ausgerechnet Texte des gefragten
+   * Kriteriums blieben ungelesen.
+   */
+  primaerKriterien: string[] = []
 ): Sammlung {
+  const primaer = new Set(primaerKriterien);
   const ohneAussage: Zeile[] = [];
-  const nachText = new Map<string, { text: string; banken: Zeile[] }>();
+  const nachText = new Map<string, { kriterium: string; text: string; banken: Zeile[] }>();
 
   for (const z of zeilen) {
     const text = nurText(z.inhalt);
@@ -70,10 +89,12 @@ export function buendele(
       ohneAussage.push(z);
       continue;
     }
-    const schluessel = normalisiere(text);
+    // Zusammengefasst wird je Kriterium: derselbe Satz bedeutet unter einem
+    // anderen Kriterium etwas anderes.
+    const schluessel = `${z.kriterium}\u0000${normalisiere(text)}`;
     const vorhanden = nachText.get(schluessel);
     if (vorhanden) vorhanden.banken.push(z);
-    else nachText.set(schluessel, { text, banken: [z] });
+    else nachText.set(schluessel, { kriterium: z.kriterium, text, banken: [z] });
   }
 
   const worte = stichwoerter
@@ -83,12 +104,15 @@ export function buendele(
   const sortiert = [...nachText.entries()]
     .map(([schluessel, eintrag]) => ({
       ...eintrag,
+      istPrimaer: primaer.has(eintrag.kriterium),
       naehe: worte.filter((w) => schluessel.includes(w)).length,
     }))
-    // Stichworttreffer zuerst, dann die Texte, die viele Banken tragen.
-    // Der Textvergleich am Ende macht die Reihenfolge reproduzierbar.
+    // Gefragtes Kriterium zuerst, dann Stichworttreffer, dann die Texte, die
+    // viele Banken tragen. Der Textvergleich am Ende macht die Reihenfolge
+    // reproduzierbar.
     .sort(
       (a, b) =>
+        Number(b.istPrimaer) - Number(a.istPrimaer) ||
         b.naehe - a.naehe ||
         b.banken.length - a.banken.length ||
         a.text.localeCompare(b.text, "de")
@@ -98,7 +122,12 @@ export function buendele(
   const ungelesen = sortiert.slice(behalten.length).flatMap((e) => e.banken);
 
   return {
-    bloecke: behalten.map((e, i) => ({ id: i + 1, text: e.text, banken: e.banken })),
+    bloecke: behalten.map((e, i) => ({
+      id: i + 1,
+      kriterium: e.kriterium,
+      text: e.text,
+      banken: e.banken,
+    })),
     ohneAussage,
     ungelesen,
     gesamtBloecke: sortiert.length,

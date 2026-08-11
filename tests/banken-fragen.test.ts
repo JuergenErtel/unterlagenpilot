@@ -48,21 +48,38 @@ describe("Banknamen aufloesen", () => {
   const alle = [
     { bankId: "ING", name: "ING" },
     { bankId: "SPK_KOELN", name: "Sparkasse KölnBonn" },
+    { bankId: "SPK_MS", name: "Sparkasse Musterstadt" },
     { bankId: "SPK_MUC", name: "Stadtsparkasse München" },
+    // Die Stolpersteine aus dem echten Bestand: "ing" steckt in allen dreien.
+    { bankId: "SPK_IN", name: "Spk Ingolstadt Eichstätt" },
+    { bankId: "VB_TH", name: "Voba Thüringen Mitte" },
+    { bankId: "RB_GEI", name: "Raiffeisenbank Geiselhöring-Pfaffenberg" },
   ];
 
   it("ohne Bankname keine Eingrenzung", () => {
     expect(loeseBank(null, alle)).toEqual({ banken: [], hinweis: null });
   });
 
-  it("eine Bank grenzt ohne Hinweis ein", () => {
+  it("trifft bei exaktem Namen genau eine Bank – nicht jeden Namen mit 'ing'", () => {
     const r = loeseBank("ING", alle);
     expect(r.banken.map((b) => b.bankId)).toEqual(["ING"]);
     expect(r.hinweis).toBeNull();
   });
 
+  it("nimmt das ganze Wort, bevor es zum Teilstring greift", () => {
+    // "Sparkasse" ist ein eigenes Wort in "Sparkasse KölnBonn", steckt aber
+    // auch in "Stadtsparkasse München". Das ganze Wort gewinnt.
+    const r = loeseBank("Sparkasse", alle);
+    expect(r.banken.map((b) => b.bankId)).toEqual(["SPK_KOELN", "SPK_MS"]);
+  });
+
+  it("faellt auf den Teilstring zurueck, wenn kein ganzes Wort passt", () => {
+    const r = loeseBank("koelnbonn", alle);
+    expect(r.banken.map((b) => b.bankId)).toEqual(["SPK_KOELN"]);
+  });
+
   it("mehrere Treffer grenzen ein und sagen es", () => {
-    const r = loeseBank("sparkasse", alle);
+    const r = loeseBank("Sparkasse", alle);
     expect(r.banken).toHaveLength(2);
     expect(r.hinweis).toContain("2 Banken");
   });
@@ -125,6 +142,25 @@ describe("Buendeln", () => {
   it("nimmt im Regelfall alles unter dem Deckel", () => {
     expect(DECKEL).toBeGreaterThanOrEqual(300);
   });
+
+  it("liest das gefragte Kriterium zuerst, auch wenn das Stichwort woanders trifft", () => {
+    const s = buendele(
+      [
+        zeile({ bankId: "A", kriterium: "Wohnsitz", inhalt: "<p>Einkommen aus dem Ausland.</p>" }),
+        zeile({
+          bankId: "B",
+          kriterium: "Kurzarbeitergeld",
+          inhalt: "<p>Wird nicht angerechnet.</p>",
+        }),
+      ],
+      ["Einkommen"],
+      1,
+      ["Kurzarbeitergeld"]
+    );
+    expect(s.bloecke).toHaveLength(1);
+    expect(s.bloecke[0]!.kriterium).toBe("Kurzarbeitergeld");
+    expect(s.ungelesen.map((z) => z.bankId)).toEqual(["A"]);
+  });
 });
 
 describe("Belegpruefung", () => {
@@ -148,6 +184,30 @@ describe("Belegpruefung", () => {
     expect(pruefeBeleg("", quelle)).toBeNull();
     expect(pruefeBeleg("Ein", quelle)).toBeNull();
   });
+
+  it("nimmt ein Zitat mit Auslassung an, wenn alle Teile woertlich vorkommen", () => {
+    const lang =
+      "Deutsche Sprachkenntnisse sind erforderlich. Bei Bedarf wird ein vereidigter Dolmetscher beim Notar und bei Unterzeichnung hinzugezogen.";
+    expect(pruefeBeleg("Bei Bedarf wird ein vereidigter Dolmetscher … hinzugezogen", lang)).not.toBeNull();
+    expect(pruefeBeleg("Bei Bedarf wird ein vereidigter Dolmetscher ... hinzugezogen", lang)).not.toBeNull();
+  });
+
+  it("verwirft eine Auslassung, die die Reihenfolge verdreht", () => {
+    const lang = "Ein Dolmetscher ist zulässig. Deutschkenntnisse sind nicht nötig.";
+    expect(pruefeBeleg("Deutschkenntnisse sind nicht nötig … Ein Dolmetscher ist zulässig", lang)).toBeNull();
+  });
+
+  it("verwirft eine Auslassung mit belanglosem Bruchstueck", () => {
+    expect(pruefeBeleg("Ein Dolmetscher … zum", quelle)).toBeNull();
+  });
+
+  it("verwirft eine treffende, aber erfundene Zusammenfassung", () => {
+    // Genau der Fall aus dem echten Bestand: das Urteil stimmt, der Satz stand
+    // so aber nirgends.
+    const original =
+      "Wird im Rahmen der Beurkundung des Kaufvertrags ein Dolmetscher hinzugezogen, ist keine Finanzierung möglich.";
+    expect(pruefeBeleg("Ein Dolmetscher wird nicht akzeptiert.", original)).toBeNull();
+  });
 });
 
 describe("Buendelung und Gleichzeitigkeit", () => {
@@ -167,6 +227,7 @@ describe("Buendelung und Gleichzeitigkeit", () => {
 describe("Gruppieren", () => {
   const block = (id: number, bankIds: string[], kriterium = "Sprache") => ({
     id,
+    kriterium,
     text: "Ein Dolmetscher kann hinzugezogen werden.",
     banken: bankIds.map((b) => zeile({ bankId: b, kriterium })),
   });
@@ -197,6 +258,40 @@ describe("Gruppieren", () => {
     const nein = gruppen.find((g) => g.urteil === "nein")!.banken;
     expect(nein).toHaveLength(1);
     expect(nein[0]!.kriterium).toBe("Legitimation");
+  });
+
+  it("belegt bei gleichem Urteil aus dem gefragten Kriterium", () => {
+    // Der echte Fall: Die ING sagt unter "Einkommen in Fremdwährung" klar Nein,
+    // unter "Grenzgänger" ebenfalls – gezeigt werden muss das gefragte.
+    const { gruppen } = baueGruppen(
+      [
+        { ...block(1, ["ING"], "Grenzgänger"), text: "Das Einkommen wird in Deutschland versteuert." },
+        { ...block(2, ["ING"], "Einkommen in Fremdwährung"), text: "Wird von der Bank nicht unterstützt." },
+      ],
+      new Map([
+        [1, { urteil: "nein" as Urteil, beleg: "Das Einkommen wird" }],
+        [2, { urteil: "nein" as Urteil, beleg: "Wird von der Bank nicht unterstützt." }],
+      ]),
+      [],
+      ["Einkommen in Fremdwährung"]
+    );
+    const nein = gruppen.find((g) => g.urteil === "nein")!.banken;
+    expect(nein).toHaveLength(1);
+    expect(nein[0]!.kriterium).toBe("Einkommen in Fremdwährung");
+  });
+
+  it("zieht ein Nein aus einem Nebenkriterium einem Ja aus dem Hauptkriterium vor", () => {
+    const { gruppen } = baueGruppen(
+      [block(1, ["A"], "Sprache"), block(2, ["A"], "Legitimation")],
+      new Map([
+        [1, { urteil: "ja" as Urteil, beleg: "Ein Dolmetscher" }],
+        [2, { urteil: "nein" as Urteil, beleg: "kann hinzugezogen" }],
+      ]),
+      [],
+      ["Sprache"]
+    );
+    expect(gruppen.find((g) => g.urteil === "nein")!.banken).toHaveLength(1);
+    expect(gruppen.find((g) => g.urteil === "ja")!.banken).toHaveLength(0);
   });
 
   it("zaehlt eine Bank ohne Aussage nie als Nein", () => {

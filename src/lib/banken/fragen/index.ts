@@ -115,18 +115,13 @@ export async function beantworteFrage(
     };
   }
 
-  const sammlung = buendele(zeilen, stichwoerter);
-  if (sammlung.gesamtBloecke > sammlung.bloecke.length) {
-    hinweise.push(
-      `${sammlung.bloecke.length} von ${sammlung.gesamtBloecke} verschiedenen Texten gelesen (Deckel bei ${DECKEL}). Eine engere Frage liest den Rest.`
-    );
-  }
+  const sammlung = buendele(zeilen, stichwoerter, DECKEL, kriterien);
 
   const buendel = inBuendel(sammlung.bloecke, BUENDEL_GROESSE);
   const ergebnisse = await parallelBegrenzt(buendel, GLEICHZEITIG, (gruppe) =>
     aiService.bewerteBankTexte(
       text,
-      gruppe.map((b) => ({ id: b.id, text: fuerPrompt(b.text) }))
+      gruppe.map((b) => ({ id: b.id, kriterium: b.kriterium, text: fuerPrompt(b.text) }))
     )
   );
   if (ergebnisse.some((e) => e === null)) {
@@ -148,8 +143,20 @@ export async function beantworteFrage(
   const { gruppen, ungelesen } = baueGruppen(
     sammlung.bloecke,
     urteile,
-    sammlung.ohneAussage
+    sammlung.ohneAussage,
+    kriterien
   );
+
+  const nichtGelesen = zaehleFehlende(gruppen, [...sammlung.ungelesen, ...ungelesen]);
+  if (sammlung.gesamtBloecke > sammlung.bloecke.length) {
+    // Der Unterschied zaehlt: Wurde nur Beifang aus anderen Kriterien
+    // liegengelassen, oder fehlen wirklich Banken in der Antwort?
+    hinweise.push(
+      nichtGelesen === 0
+        ? `Alle Banken sind bewertet. ${sammlung.gesamtBloecke - sammlung.bloecke.length} weitere Fundstellen aus anderen Kriterien wurden nicht mehr gelesen (Deckel bei ${DECKEL}).`
+        : `${sammlung.bloecke.length} von ${sammlung.gesamtBloecke} verschiedenen Texten gelesen (Deckel bei ${DECKEL}) – ${nichtGelesen} Banken fehlen dadurch. Eine engere Frage liest den Rest.`
+    );
+  }
 
   return {
     frage: text,
@@ -160,7 +167,7 @@ export async function beantworteFrage(
     gruppen,
     gelesen: sammlung.bloecke.length,
     gesamt: sammlung.gesamtBloecke,
-    nichtGelesen: zaehleFehlende(gruppen, [...sammlung.ungelesen, ...ungelesen]),
+    nichtGelesen,
     hinweise,
     fehlanzeige: false,
   };

@@ -502,21 +502,27 @@ export class AIService {
    */
   bewerteBankTexte(
     frage: string,
-    texte: Array<{ id: number; text: string }>
+    texte: Array<{ id: number; kriterium: string; text: string }>
   ): Promise<UrteileErgebnis> {
-    const bloecke = texte.map((t) => `### Text ${t.id}\n${t.text}`).join("\n\n");
+    // Das Kriterium MUSS mit: Viele Bestandstexte sind elliptisch ("Wird von
+    // der Bank nicht unterstuetzt."). Ohne den Namen laesst sich nicht sagen,
+    // worauf sich der Satz bezieht.
+    const bloecke = texte
+      .map((t) => `### Text ${t.id}\nKriterium: ${t.kriterium}\nAussage der Bank: ${t.text}`)
+      .join("\n\n");
     return this.run(
       "bankenFrageUrteile",
       urteileSchema,
       [
         "Du liest Aussagen deutscher Banken zu ihren Finanzierungskriterien und pruefst sie gegen EINE Frage.",
+        "Jeder Text steht unter einem Kriterium – die Aussage bezieht sich immer darauf. 'Wird von der Bank nicht unterstuetzt' unter dem Kriterium 'Einkommen in Fremdwaehrung' heisst: Fremdwaehrungseinkommen geht nicht.",
         "Gib fuer JEDEN Text genau einen Eintrag mit seiner id zurueck.",
         "urteil=ja: der Text sagt zu, worum die Frage geht.",
         "urteil=bedingt: er sagt zu, aber nur unter Bedingungen (Nachweis, Form, Grenze).",
         "urteil=nein: er schliesst es aus.",
         "urteil=keine_aussage: der Text beruehrt die Frage nicht oder sagt ausdruecklich, dass dazu nichts festgelegt ist.",
         "Im Zweifel keine_aussage – lieber offen lassen als etwas behaupten.",
-        "beleg: ein WOERTLICHES Zitat aus genau diesem Text, hoechstens 200 Zeichen. Nichts umformulieren, nichts erfinden. Bei keine_aussage darf beleg leer sein.",
+        "beleg: ein WOERTLICHES Zitat aus der Aussage der Bank (nicht aus der Kriteriumszeile), hoechstens 200 Zeichen. Nichts umformulieren, nichts erfinden. Bei keine_aussage darf beleg leer sein.",
         "Antworte ausschliesslich als JSON.",
       ].join(" "),
       `Frage: ${frage}\n\n${bloecke}`,

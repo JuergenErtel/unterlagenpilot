@@ -26,6 +26,26 @@ export default async function BankenPage({
         subtitle="Finanzierungskriterien der Kreditinstitute – nachschlagen, bevor du einreichst."
       />
 
+      {/*
+        Die Frage steht bewusst VOR der Namenssuche und in einer eigenen Karte:
+        Zwei Eingabefelder nebeneinander wuerden dazu fuehren, dass die Frage
+        in der Bankensuche landet – und dort findet sie nichts.
+      */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+          <div className="text-sm">
+            <p className="font-medium">Frag das Wiki</p>
+            <p className="text-muted-foreground">
+              „Welche Banken akzeptieren einen Dolmetscher beim Notartermin?“ – eine
+              Frage in eigenen Worten, belegt beantwortet über alle Banken.
+            </p>
+          </div>
+          <Link href="/banken/fragen" className="feld h-9 px-4 text-sm leading-9">
+            Frage stellen
+          </Link>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="pt-6">
           <form method="get" className="flex flex-wrap items-end gap-2">

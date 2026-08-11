@@ -38,6 +38,11 @@ export async function sucheBanken(q: string, limit = 50): Promise<BankTreffer[]>
     .map((b) => ({ bankId: b.bankId, name: b.name, urteile: proBank.get(b.id) ?? 0 }));
 }
 
+/** Wieviele Banken im Wiki stehen – fuer Ueberschriften und Fortschritt. */
+export async function zaehleBanken(): Promise<number> {
+  return prisma.bank.count();
+}
+
 export interface BankDetail {
   name: string;
   /** Wann WIR den Abzug geholt haben – nicht zu verwechseln mit standAm. */
