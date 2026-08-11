@@ -111,9 +111,17 @@ export async function speichereAbruf(
 
     // Was die Bank nicht mehr nennt, faellt weg – sonst bliebe eine Anforderung
     // ewig stehen, die zurueckgezogen wurde.
-    await tx.bankAnforderung.deleteMany({
-      where: { abrufId: abruf.id, externeId: { notIn: behalten } },
-    });
+    //
+    // Prisma rendert ein leeres notIn als NOT IN (NULL) – das trifft KEINE Zeile.
+    // Ohne die Fallunterscheidung ueberlebt eine komplett zurueckgezogene
+    // Anforderungsliste stumm in der Datenbank.
+    if (behalten.length > 0) {
+      await tx.bankAnforderung.deleteMany({
+        where: { abrufId: abruf.id, externeId: { notIn: behalten } },
+      });
+    } else {
+      await tx.bankAnforderung.deleteMany({ where: { abrufId: abruf.id } });
+    }
 
     return { abrufId: abruf.id, zeilen: e.anforderungen.length };
   });

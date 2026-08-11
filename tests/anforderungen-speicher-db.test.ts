@@ -156,4 +156,38 @@ describe.runIf(RUN)("Abruf speichern (PGlite)", () => {
     });
     expect(await ladeAktivenAbruf(leer.id)).toBeNull();
   });
+
+  it("entfernt alle Anforderungen, wenn die Bank eine leere Liste meldet", async () => {
+    // Regressionsschutz: Prisma rendert notIn: [] als "NOT IN (NULL)", das
+    // trifft KEINE Zeile – ohne Fallunterscheidung ueberlebt eine komplett
+    // zurueckgezogene Anforderungsliste stumm in der Datenbank.
+    await speichereAbruf(eingabe());
+    const r = await speichereAbruf(eingabe({ anforderungen: [] }));
+    expect(r.zeilen).toBe(0);
+
+    const abruf = await prisma.bankAnforderungsAbruf.findFirst({
+      where: { caseId, bezugsId: "A-1" },
+      include: { anforderungen: true },
+    });
+    expect(abruf).toBeTruthy();
+    expect(abruf.anforderungen).toHaveLength(0);
+  });
+
+  it("laesst den aktiven Abruf eines anderen Falls unangetastet", async () => {
+    const orgB = await prisma.organization.create({
+      data: { name: "Zweitfall", slug: "zweitfall-anforderungen-speicher" },
+    });
+    const fallB = await prisma.case.create({
+      data: { organizationId: orgB.id, caseNumber: "UP-TEST-0003" },
+    });
+    const caseIdB = fallB.id;
+
+    await speichereAbruf(eingabe());
+    await speichereAbruf({ ...eingabe(), caseId: caseIdB, bezugsId: "B-1" });
+
+    const abrufA = await prisma.bankAnforderungsAbruf.findFirst({
+      where: { caseId, bezugsId: "A-1" },
+    });
+    expect(abrufA.aktiv).toBe(true);
+  });
 });
