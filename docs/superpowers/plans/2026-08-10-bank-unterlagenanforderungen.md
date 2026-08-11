@@ -922,7 +922,7 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
    * der URL unterscheiden – und damit die Fehlermeldungen an EINER Stelle
    * stehen und nicht dreimal auseinanderdriften.
    */
-  private async hole<T>(url: string, was: string): Promise<T> {
+  private async hole<T>(url: string, was: string, scope: string): Promise<T> {
     const token = await this.holeToken();
     let res: Response;
     try {
@@ -943,9 +943,11 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
     }
 
     if (res.status === 401 || res.status === 403) {
+      // Den Scope nennen, der WIRKLICH fuer diesen Aufruf gilt. Die Vorgaenge-API
+      // haengt an baufinanzierung:vorgang:lesen, nicht an den Unterlagen-Scopes –
+      // ein pauschaler Hinweis schickt beim Debuggen an die falsche Stelle.
       throw new EuropaceAuthError(
-        `Europace verweigert ${was}. Fehlt der Scope unterlagen:unterlage:lesen ` +
-          `bzw. unterlagen:freigabe:lesen im Zugang?`
+        `Europace verweigert ${was}. Fehlt der Scope ${scope} im Zugang?`
       );
     }
     if (res.status === 404) {
@@ -961,9 +963,11 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
   async holeAntraege(vorgangsNummer: string): Promise<EuropaceAntrag[]> {
     const body = await this.hole<{ antraege?: EuropaceAntrag[] } | EuropaceAntrag[]>(
       `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/antraege`,
-      `Antraege zu Vorgang ${vorgangsNummer}`
+      `Antraege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
     );
-    // Die Vorgaenge-API liefert je nach Endpunkt eine Liste oder eine Huelle.
+    // Die Spezifikation umhuellt die Liste immer; der Array-Zweig ist reine
+    // Absicherung gegen eine Formaenderung, kein dokumentierter Fall.
     return Array.isArray(body) ? body : (body.antraege ?? []);
   }
 
@@ -974,7 +978,8 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
       { finanzierungsvorschlaege?: EuropaceFinanzierungsvorschlag[] } | EuropaceFinanzierungsvorschlag[]
     >(
       `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/finanzierungsvorschlaege`,
-      `Finanzierungsvorschlaege zu Vorgang ${vorgangsNummer}`
+      `Finanzierungsvorschlaege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
     );
     return Array.isArray(body) ? body : (body.finanzierungsvorschlaege ?? []);
   }
@@ -989,7 +994,10 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
         ? `${UNTERLAGEN_HOST}/dokumente/antrag/anforderungen?antragsNummer=${encodeURIComponent(p.bezugsId)}`
         : `${UNTERLAGEN_HOST}/dokumente/anforderungen?vorgangsNummer=${encodeURIComponent(p.vorgangsNummer)}&finanzierungsvorschlagsId=${encodeURIComponent(p.bezugsId)}`;
 
-    const body = await this.hole<Unterlagenanforderung[]>(url, "Unterlagenanforderungen");
+    // Die beiden Routen haengen an unterschiedlichen Scopes.
+    const scope =
+      p.quelle === "antrag" ? "unterlagen:freigabe:lesen" : "unterlagen:unterlage:lesen";
+    const body = await this.hole<Unterlagenanforderung[]>(url, "Unterlagenanforderungen", scope);
     return Array.isArray(body) ? body : [];
   }
 ```
