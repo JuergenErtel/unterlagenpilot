@@ -27,6 +27,7 @@ function cockpit(over: {
     scoreTone: "review",
     scoreLabel: "Teilweise vollständig",
     blockers: [],
+    machbarkeit: null,
     platformReadiness: [],
     roadmap: [],
     nextActions: [],

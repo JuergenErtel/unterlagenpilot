@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getCaseAggregate, type CaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { readinessTone, type Tone } from "@/lib/ui/tone";
+import type { Auslaufband } from "@/lib/machbarkeit/bewertung";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
 import { ladeSelbstauskunftStand } from "./selbstauskunft-stand";
 
@@ -37,6 +38,14 @@ export interface CockpitData {
     machbarkeitBlockiert: boolean;
   };
   missingCustomerFields: string[];
+  /**
+   * Das vollstaendige Machbarkeitsurteil, wenn die Daten dafuer reichten.
+   *
+   * `null` heisst "nicht berechenbar", NICHT "nicht machbar" – die Anzeige muss
+   * das unterscheiden. Wird aus derselben Berechnung gefuellt wie
+   * `counts.machbarkeitBlockiert`, damit der Solver nicht zweimal laeuft.
+   */
+  machbarkeit: { auslauf: number; band: Auslaufband; ueberschuss: number; machbar: boolean } | null;
   /** Stand der Selbstauskunft; fehlt, solange kein Link erstellt wurde. */
   selbstauskunft?: {
     eingegangen: boolean;
@@ -102,7 +111,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   // Machbarkeit: nur ein Urteil faellen, wenn die Daten dafuer reichen. Bei
   // duenner Datenlage bleibt es false – sonst warnt die Leiter vor Faellen,
   // ueber die sie nichts weiss. Ein Fehler hier darf das Cockpit nie kippen.
-  const machbarkeitBlockiert = await (async (): Promise<boolean> => {
+  const machbarkeitUrteil = await (async (): Promise<CockpitData["machbarkeit"]> => {
     try {
       const [{ baueEingabe }, { ladeAnnahmen }, { bewerte }, { caseToCanonical }] = await Promise.all([
         import("@/lib/machbarkeit/eingabe"),
@@ -125,13 +134,18 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
         grunderwerbsteuerProzentOverride: fall.financingRequest?.grunderwerbsteuerProzent ?? null,
         bundeslandOverride: (fall.property?.bundesland as never) ?? null,
       });
-      if (!e.ok) return false;
-      return !bewerte(e.eingabe, await ladeAnnahmen(fall.organizationId)).machbar;
+      if (!e.ok) return null;
+      const u = bewerte(e.eingabe, await ladeAnnahmen(fall.organizationId));
+      return { auslauf: u.auslauf, band: u.band, ueberschuss: u.ueberschuss, machbar: u.machbar };
     } catch (err) {
       console.error(`[cockpit] Machbarkeitspruefung fuer Fall ${caseId} fehlgeschlagen:`, err);
-      return false;
+      return null;
     }
   })();
+
+  // Ohne Urteil bleibt es bei "nicht blockiert": Die Leiter darf nicht vor
+  // Faellen warnen, ueber die sie nichts weiss (siehe Machbarkeits-Ampel).
+  const machbarkeitBlockiert = machbarkeitUrteil ? !machbarkeitUrteil.machbar : false;
 
   const blockers = [
     ...missingCustomerFields.map((f) => `${f} fehlt`),
@@ -226,6 +240,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       machbarkeitBlockiert,
     },
     missingCustomerFields,
+    machbarkeit: machbarkeitUrteil,
     selbstauskunft,
     anforderungsAbgleich: agg.anforderungsAbgleich,
   };
