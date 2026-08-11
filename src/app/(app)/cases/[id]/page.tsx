@@ -29,6 +29,8 @@ import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { Pruefleiste, type PruefSegment } from "@/components/ui/pruefleiste";
 import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
+import { FallbildAnsicht } from "@/components/case/fallbild";
+import { baueFallbild } from "@/lib/cases/fallbild";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
@@ -112,6 +114,14 @@ export default async function CaseCockpitPage({
     // Fallseite eine andere Phase vor als das Board.
     prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
     ladeErstkontaktStand(id),
+  ]);
+
+  // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
+  // "geprueft" von "steht so im Exposé", die offenen Anfragen sind das, was
+  // beim Kunden gerade wirklich aussteht.
+  const [wohnflaecheFreigegeben, offeneAnfragen] = await Promise.all([
+    prisma.wohnflaechenBerechnung.count({ where: { caseId: id, released: true } }),
+    prisma.missingDocumentRequest.count({ where: { caseId: id, resolved: false } }),
   ]);
 
   // Unterlagen-Detektiv: offene und unsichere Befunde plus die bereits
@@ -339,13 +349,45 @@ export default async function CaseCockpitPage({
           ) : step.key === "erstkontakt_vorbereiten" ? (
             <ErstkontaktVorbereitenButton caseId={id} />
           ) : undefined;
-        return <NextStepCard step={step} actionSlot={actionSlot} />;
+        const bild = baueFallbild({
+          cockpit,
+          schritt: step,
+          erstkontakt: {
+            empfaenger: erstkontaktStand.empfaenger,
+            vorbereitet: Boolean(erstkontaktStand.messageId),
+            versendet: erstkontaktStand.versendet,
+          },
+          objekt: {
+            objektart: caseRow.property?.objektart ?? null,
+            ort: caseRow.property?.city ?? null,
+            wohnflaeche: caseRow.property?.wohnflaeche ?? null,
+            berechnungFreigegeben: wohnflaecheFreigegeben > 0,
+          },
+          finanzierung: { kaufpreis: caseRow.financingRequest?.kaufpreis ?? null },
+          offeneAnfragen,
+        });
+        return (
+          <>
+            {/* Ab lg das Fallbild – darunter bleibt es bei der Liste. Eine
+                radiale Anordnung braucht Breite; auf ein Telefon gequetscht
+                erzeugt sie genau die unleserliche Ansicht, die hier
+                abgeschafft werden soll. */}
+            <div className="hidden lg:block">
+              <FallbildAnsicht bild={bild} aktionSlot={actionSlot} />
+            </div>
+            <div className="lg:hidden">
+              <NextStepCard step={step} actionSlot={actionSlot} />
+            </div>
+          </>
+        );
       })()}
 
       {/* Hauptbereich: Roadmap + Tabs | Sidebar */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card>
+          {/* Der Weg steht ab lg im Fallbild oben; hier bleibt er fuer schmale
+              Bildschirme als Liste. */}
+          <Card className="lg:hidden">
             <CardHeader className="pb-2"><CardTitle className="text-base">Weg zur Einreichung</CardTitle></CardHeader>
             <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
           </Card>
