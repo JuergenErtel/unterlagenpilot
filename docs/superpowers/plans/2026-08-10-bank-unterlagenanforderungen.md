@@ -1472,9 +1472,12 @@ export async function speichereAbruf(
     // Was die Bank nicht mehr nennt, faellt weg – sonst bliebe eine Anforderung
     // ewig stehen, die zurueckgezogen wurde.
     //
-    // Die Fallunterscheidung ist noetig: Prisma rendert ein leeres notIn als
-    // SQL "NOT IN (NULL)", und das trifft KEINE Zeile. Ohne den else-Zweig
-    // ueberlebt eine komplett zurueckgezogene Anforderungsliste stumm.
+    // Die Fallunterscheidung haengt nicht an einer Zusicherung, sondern macht
+    // sich von einer Prisma-Interna unabhaengig: Wie ein leeres notIn uebersetzt
+    // wird, ist nirgends garantiert (gemessen an Prisma 6.2.1: "1=1", also
+    // alles loeschen – was hier zufaellig das Gewuenschte ist). Die Gegenrichtung
+    // "NOT IN (NULL)" traefe keine Zeile und liesse eine komplett zurueckgezogene
+    // Anforderungsliste stumm ueberleben. Der else-Zweig sagt, was gemeint ist.
     if (behalten.length > 0) {
       await tx.bankAnforderung.deleteMany({
         where: { abrufId: abruf.id, externeId: { notIn: behalten } },
