@@ -1471,9 +1471,17 @@ export async function speichereAbruf(
 
     // Was die Bank nicht mehr nennt, faellt weg – sonst bliebe eine Anforderung
     // ewig stehen, die zurueckgezogen wurde.
-    await tx.bankAnforderung.deleteMany({
-      where: { abrufId: abruf.id, externeId: { notIn: behalten } },
-    });
+    //
+    // Die Fallunterscheidung ist noetig: Prisma rendert ein leeres notIn als
+    // SQL "NOT IN (NULL)", und das trifft KEINE Zeile. Ohne den else-Zweig
+    // ueberlebt eine komplett zurueckgezogene Anforderungsliste stumm.
+    if (behalten.length > 0) {
+      await tx.bankAnforderung.deleteMany({
+        where: { abrufId: abruf.id, externeId: { notIn: behalten } },
+      });
+    } else {
+      await tx.bankAnforderung.deleteMany({ where: { abrufId: abruf.id } });
+    }
 
     return { abrufId: abruf.id, zeilen: e.anforderungen.length };
   });
