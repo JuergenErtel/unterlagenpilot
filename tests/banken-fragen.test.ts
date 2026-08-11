@@ -6,7 +6,13 @@ vi.hoisted(() => {
   process.env.AI_PROVIDER = "mock";
 });
 
-import { pruefeKriterien, loeseBank, aehnlicheBanken, waehleAusKandidaten } from "@/lib/banken/fragen/deuten";
+import {
+  pruefeKriterien,
+  loeseBank,
+  aehnlicheBanken,
+  stichwoerterAusFrage,
+  waehleAusKandidaten,
+} from "@/lib/banken/fragen/deuten";
 import { buendele, DECKEL, type Zeile } from "@/lib/banken/fragen/sammeln";
 import { pruefeBeleg, inBuendel, parallelBegrenzt } from "@/lib/banken/fragen/lesen";
 import { baueGruppen } from "@/lib/banken/fragen/antwort";
@@ -364,8 +370,8 @@ describe("Ganze Frage (Mock-KI, ohne Datenbank)", () => {
       bestand([zeile({ bankId: "A", inhalt: "<p>Ein Dolmetscher ist zulässig.</p>" })])
     );
     expect(antwort.kriterien).toEqual([]);
-    expect(antwort.hinweise.join(" ")).toContain("nur im Freitext");
-    expect(antwort.hinweise.join(" ")).toContain("fehlen in dieser Antwort");
+    expect(antwort.hinweise.join(" ")).toContain("kein Kriterium zu diesem Thema");
+    expect(antwort.hinweise.join(" ")).toContain("fehlen ganz");
   });
 
   it("liefert bei erkanntem Kriterium auch die schweigenden Banken", async () => {
@@ -488,5 +494,55 @@ describe("Unauflösbare Bank sucht nicht den ganzen Markt ab", () => {
     });
     expect(gefragt).toBe(1);
     expect(antwort.fehlanzeige).toBe(false);
+  });
+});
+
+describe("Thema fehlt im Kriterienkatalog (Bugfix 11.08.)", () => {
+  it("sagt es, wenn der Katalog zum Thema gar kein Kriterium hat", async () => {
+    // Der gemeldete Fall: Die Frage nach der befristeten Aufenthaltsgenehmigung
+    // landete unter „Wohnsitz“ – dort geht es um Expatriates. Es gibt im
+    // ganzen Katalog kein Kriterium zu Staatsangehörigkeit oder Aufenthalts-
+    // titel. Die Antwort las sich wie ein Schweigen der Bank, war aber eine
+    // Lücke im Katalog. Der Mock erkennt hier kein Kriterium – genau der Fall.
+    const antwort = await beantworteFrage("Akzeptiert die Bank eine befristete Aufenthaltsgenehmigung?", {
+      bankNamen: async () => [{ bankId: "HVB", name: "HypoVereinsbank" }],
+      zeilen: async () => [
+        zeile({
+          bankId: "HVB",
+          name: "HypoVereinsbank",
+          kriterium: "Wohnsitz",
+          inhalt: "<p>Deutschland. Expatriates: deutsche Staatsangehörige im Auslandseinsatz.</p>",
+        }),
+      ],
+      abzugStand: async () => new Date("2026-08-10T00:00:00Z"),
+    });
+    expect(antwort.kriterien).toEqual([]);
+    const hinweis = antwort.hinweise.join(" ");
+    expect(hinweis).toContain("kein Kriterium zu diesem Thema");
+    expect(hinweis).toContain("können etwas anderes meinen");
+    expect(hinweis).toContain("fehlen ganz");
+  });
+
+  it("warnt NICHT, wenn ein Kriterium wirklich passt", async () => {
+    const antwort = await beantworteFrage("Wer akzeptiert Kurzarbeitergeld?", {
+      bankNamen: async () => [{ bankId: "A", name: "Testbank" }],
+      zeilen: async () => [
+        zeile({ bankId: "A", kriterium: "Kurzarbeitergeld", inhalt: "<p>Wird nicht angerechnet.</p>" }),
+      ],
+      abzugStand: async () => new Date("2026-08-10T00:00:00Z"),
+    });
+    expect(antwort.kriterien).toEqual(["Kurzarbeitergeld"]);
+    expect(antwort.hinweise.join(" ")).not.toContain("kein Kriterium zu diesem Thema");
+  });
+});
+
+describe("Stichwörter notfalls aus der Frage", () => {
+  it("lässt Fragewörter weg und behält die Sache", () => {
+    expect(stichwoerterAusFrage("Welche Banken akzeptieren eine befristete Aufenthaltsgenehmigung?"))
+      .toEqual(["befristete", "Aufenthaltsgenehmigung"]);
+  });
+
+  it("liefert nichts, wenn die Frage nur aus Fragewörtern besteht", () => {
+    expect(stichwoerterAusFrage("Welche Banken nehmen?")).toEqual([]);
   });
 });

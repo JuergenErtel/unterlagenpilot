@@ -1,6 +1,12 @@
 import { aiService } from "@/lib/ai";
 import { alleKriterien } from "../kategorien";
-import { aehnlicheBanken, loeseBank, pruefeKriterien, waehleAusKandidaten } from "./deuten";
+import {
+  aehnlicheBanken,
+  loeseBank,
+  pruefeKriterien,
+  stichwoerterAusFrage,
+  waehleAusKandidaten,
+} from "./deuten";
 import { buendele, DECKEL, type Zeile } from "./sammeln";
 import {
   BUENDEL_GROESSE,
@@ -79,7 +85,11 @@ export async function beantworteFrage(
 
   const deutung = await aiService.deuteBankenFrage(text, alleKriterien());
   const kriterien = pruefeKriterien(deutung.kriterien);
-  const stichwoerter = deutung.stichwoerter.filter((s) => s.trim().length >= 3);
+  // Ohne Kriterium sind die Stichwoerter die einzige Spur – und das Modell
+  // liefert sie nicht zuverlaessig. Dann werden sie aus der Frage abgeleitet,
+  // statt die Suche ohne Ansatzpunkt loslaufen zu lassen.
+  const ausKi = deutung.stichwoerter.filter((s) => s.trim().length >= 3);
+  const stichwoerter = ausKi.length > 0 ? ausKi : stichwoerterAusFrage(text);
   const hinweise: string[] = [];
 
   const alleBanken = await bestand.bankNamen();
@@ -124,14 +134,19 @@ export async function beantworteFrage(
   }
 
   if (kriterien.length === 0 && stichwoerter.length > 0) {
-    // Wichtig fuer die Ehrlichkeit der Antwort: Ohne Kriterium kommen nur
-    // Zeilen zurueck, in denen das Stichwort woertlich vorkommt. Banken, die
-    // sich zu dem Thema gar nicht geaeussert haben, tauchen dann nirgends auf
-    // – die Antwort deckt also NICHT den ganzen Markt ab, auch wenn sie so
-    // aussieht.
+    // Das Wiki hat fuer dieses Thema kein Fach. Genau daran ist die Frage nach
+    // der befristeten Aufenthaltsgenehmigung aufgelaufen: Der Katalog kennt
+    // kein Kriterium zu Staatsangehoerigkeit oder Aufenthaltstitel, also
+    // stuetzte sich die Antwort auf "Wohnsitz" – wo es um Expatriates geht.
+    //
+    // Zwei Dinge muessen deshalb hier stehen, und zwar beide:
+    // dass ohne Kriterium nur nach Woertern gesucht wurde (die Treffer koennen
+    // ein anderes Thema betreffen), und dass die schweigenden Banken deshalb
+    // ganz fehlen. "Keine Aussage" heisst hier nicht "abgelehnt".
     hinweise.push(
-      `Kein Kriterium erkannt – gesucht wurde nur im Freitext nach: ${stichwoerter.join(", ")}. ` +
-        "Banken, die sich dazu nicht geäußert haben, fehlen in dieser Antwort."
+      `Das Wiki führt kein Kriterium zu diesem Thema. Gesucht wurde nur im Freitext nach ${stichwoerter
+        .map((s) => `„${s}“`)
+        .join(", ")} — die Treffer können etwas anderes meinen, und Banken, die sich dazu nicht geäußert haben, fehlen ganz.`
     );
   }
 

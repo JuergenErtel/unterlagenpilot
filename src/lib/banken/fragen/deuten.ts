@@ -163,3 +163,34 @@ export function waehleAusKandidaten(
   if (!bankId) return null;
   return kandidaten.find((k) => k.bankId === bankId) ?? null;
 }
+
+/** Wörter, die in einer Frage stehen, aber nie im Freitext einer Bank helfen. */
+const FRAGEWOERTER = new Set([
+  "welche", "welcher", "welches", "banken", "bank", "nimmt", "nehmen",
+  "akzeptiert", "akzeptieren", "finanziert", "finanzieren", "erlaubt",
+  "moeglich", "geht", "gibt", "eine", "einen", "einem", "eines", "wird",
+  "werden", "kann", "koennen", "auch", "noch", "beim", "unter", "ihrer",
+  "ihre", "dieser", "diese", "sein", "sind", "hat", "haben",
+]);
+
+/**
+ * Stichwoerter aus der Frage ableiten – deterministisch, ohne KI.
+ *
+ * Notwendig, weil das Modell die Stichwoerter mal liefert und mal nicht: Die
+ * Marktfrage nach der befristeten Aufenthaltsgenehmigung kam ohne zurueck, und
+ * ohne Kriterium UND ohne Stichwort hatte die Suche gar keinen Ansatzpunkt –
+ * "dazu steht nichts im Bestand", obwohl 86 Banken das Thema erwaehnen.
+ */
+export function stichwoerterAusFrage(frage: string, max = 5): string[] {
+  const gesehen = new Set<string>();
+  const raus: string[] = [];
+  for (const wort of (frage ?? "").split(/[^A-Za-zÄÖÜäöüß0-9-]+/)) {
+    if (wort.length < 5) continue;
+    const schluessel = normalisiere(wort);
+    if (FRAGEWOERTER.has(schluessel) || gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    raus.push(wort);
+    if (raus.length >= max) break;
+  }
+  return raus;
+}
