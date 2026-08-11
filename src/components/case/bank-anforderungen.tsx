@@ -3,14 +3,21 @@ import { prisma } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { anforderungenAbrufen, auswahlLaden, vorgangsnummerSetzen } from "@/lib/actions/anforderungen";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { vorgangsnummerSetzen } from "@/lib/actions/anforderungen";
+import { BankAnforderungenAuswahl } from "@/components/case/bank-anforderungen-auswahl";
 import type { AbgleichZahlen } from "@/lib/anforderungen/abgleich";
 
 const datum = (d: Date) => d.toLocaleDateString("de-DE");
+const zeitpunkt = (d: Date) => d.toLocaleString("de-DE");
 
 /**
- * Die Karte im Fall. Server Component: Die Auswahl wird beim Rendern geholt,
- * damit kein Zwischenklick noetig ist.
+ * Die Karte im Fall. Server Component: Sie liest nur, was schon in der DB
+ * steht (Vorgangsnummer, letzter Protokolleintrag, Abgleichzahlen). Der
+ * Europace-Aufruf selbst passiert NICHT hier – der sitzt hinter dem Knopf in
+ * `BankAnforderungenAuswahl`, ausgeloest erst auf Klick. Andernfalls wuerde
+ * jedes Oeffnen des Falls zwei Europace-Aufrufe mit je bis zu 30 s Timeout
+ * feuern, sobald echte Zugangsdaten stehen.
  */
 export async function BankAnforderungen({
   caseId,
@@ -24,10 +31,22 @@ export async function BankAnforderungen({
     zahlen: AbgleichZahlen;
   } | null;
 }) {
-  const mapping = await prisma.platformMapping.findUnique({
-    where: { caseId_platform: { caseId, platform: "europace" } },
-    select: { externalId: true },
-  });
+  const [mapping, letzterLauf] = await Promise.all([
+    prisma.platformMapping.findUnique({
+      where: { caseId_platform: { caseId, platform: "europace" } },
+      select: { externalId: true },
+    }),
+    // Juengster Protokolleintrag dieses Falls -- die einzige Stelle, an der
+    // der Vermittler sieht, ob sein letzter Klick auf "Liste schärfen"
+    // ueberhaupt etwas bewirkt hat. Ohne das ist ein Ergebnis mit "leer" oder
+    // "fehler" von einem Klick, der gar nicht registriert wurde, nicht zu
+    // unterscheiden.
+    prisma.platformSyncLog.findFirst({
+      where: { caseId, platform: "europace", direction: "import" },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, message: true, createdAt: true },
+    }),
+  ]);
 
   if (!mapping?.externalId) {
     return (
@@ -47,16 +66,14 @@ export async function BankAnforderungen({
               <span className="mb-1 block text-muted-foreground">Vorgangsnummer</span>
               <Input name="vorgangsnummer" placeholder="z. B. CH6407" required />
             </label>
-            <button type="submit" className="feld h-9 px-4 text-sm">
+            <SubmitButton size="sm" pendingLabel="Merkt …">
               Merken
-            </button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
     );
   }
-
-  const ergebnis = await auswahlLaden(caseId);
 
   return (
     <Card>
@@ -82,43 +99,14 @@ export async function BankAnforderungen({
           </div>
         )}
 
-        {"fehler" in ergebnis && ergebnis.fehler ? (
-          <p className="text-sm text-muted-foreground">{ergebnis.fehler}</p>
-        ) : null}
-
-        {"auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length > 0 ? (
-          <div className="space-y-2">
-            {ergebnis.auswahl.map((a) => (
-              <form
-                key={`${a.quelle}-${a.bezugsId}`}
-                action={anforderungenAbrufen}
-                className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
-              >
-                <input type="hidden" name="caseId" value={caseId} />
-                <input type="hidden" name="quelle" value={a.quelle} />
-                <input type="hidden" name="bezugsId" value={a.bezugsId} />
-                <input type="hidden" name="bankId" value={a.bankId ?? ""} />
-                <input type="hidden" name="bankName" value={a.bankName} />
-                <div className="text-sm">
-                  <p className="font-medium">{a.bankName}</p>
-                  <p className="text-muted-foreground">
-                    {a.quelle === "antrag" ? "Antrag" : "Vorschlag"} {a.bezugsId}
-                    {a.hinweis ? ` · ${a.hinweis}` : ""}
-                  </p>
-                </div>
-                <button type="submit" className="feld h-8 shrink-0 px-3 text-sm">
-                  Liste schärfen
-                </button>
-              </form>
-            ))}
-          </div>
-        ) : null}
-
-        {"auswahl" in ergebnis && ergebnis.auswahl && ergebnis.auswahl.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Europace nennt zu diesem Vorgang weder Anträge noch Finanzierungsvorschläge.
+        {letzterLauf && (
+          <p className="text-xs text-muted-foreground">
+            Letzter Abruf ({zeitpunkt(letzterLauf.createdAt)}):{" "}
+            {letzterLauf.message ?? letzterLauf.status}
           </p>
-        ) : null}
+        )}
+
+        <BankAnforderungenAuswahl caseId={caseId} />
       </CardContent>
     </Card>
   );
