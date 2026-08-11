@@ -49,11 +49,23 @@ describe("Anforderungen lesen", () => {
     expect(aufgerufen).toContain("finanzierungsvorschlagsId=FV-9");
   });
 
-  it("nennt einen fehlenden Scope beim Namen", async () => {
+  it("nennt beim Antrags-Weg den Scope unterlagen:freigabe:lesen, nicht irgendeinen anderen", async () => {
+    // Der Antrags-Weg (/dokumente/antrag/anforderungen) verlangt laut
+    // unterlagen-swagger.yaml GENAU diesen Scope -- eine falsche Nennung
+    // schickt den Fehlersuchenden auf die falsche Faehrte.
     const f = fetchMitAntwort({ message: "forbidden" }, 403);
     await expect(
       client(f).holeAnforderungen({ quelle: "antrag", vorgangsNummer: "X", bezugsId: "A-1" })
-    ).rejects.toThrow(/Scope|Zugang/i);
+    ).rejects.toThrow(/unterlagen:freigabe:lesen/);
+  });
+
+  it("nennt beim Vorschlags-Weg den Scope unterlagen:unterlage:lesen, nicht irgendeinen anderen", async () => {
+    // Der Vorschlags-Weg (/dokumente/anforderungen) verlangt laut
+    // unterlagen-swagger.yaml den JEWEILS ANDEREN Scope als der Antrags-Weg.
+    const f = fetchMitAntwort({ message: "forbidden" }, 403);
+    await expect(
+      client(f).holeAnforderungen({ quelle: "vorschlag", vorgangsNummer: "X", bezugsId: "FV-9" })
+    ).rejects.toThrow(/unterlagen:unterlage:lesen/);
   });
 
   it("liefert eine leere Liste, wenn Europace nichts zurueckgibt", async () => {
@@ -64,6 +76,46 @@ describe("Anforderungen lesen", () => {
       bezugsId: "A-1",
     });
     expect(r).toEqual([]);
+  });
+});
+
+describe("Antraege und Finanzierungsvorschlaege lesen", () => {
+  it("liest die Antraege eines Vorgangs aus der Huelle", async () => {
+    const f = fetchMitAntwort({
+      antraege: [{ antragsNummer: "A-1", produktAnbieter: { id: "ING_DIBA", bezeichnung: "ING" } }],
+    });
+    const r = await client(f).holeAntraege("CH6407");
+    expect(r).toHaveLength(1);
+    expect(r[0]!.antragsNummer).toBe("A-1");
+
+    const aufgerufen = String((f as unknown as ReturnType<typeof vi.fn>).mock.calls[1]![0]);
+    expect(aufgerufen).toContain("/v3/vorgaenge/CH6407/antraege");
+  });
+
+  it("nennt bei den Antraegen den Scope baufinanzierung:vorgang:lesen, nicht die Unterlagen-Scopes", async () => {
+    // holeAntraege spricht die Vorgaenge-API an, nicht die Unterlagen-API --
+    // ein 403 hier hat nichts mit unterlagen:unterlage:lesen zu tun.
+    const f = fetchMitAntwort({ message: "forbidden" }, 403);
+    await expect(client(f).holeAntraege("X")).rejects.toThrow(/baufinanzierung:vorgang:lesen/);
+  });
+
+  it("liest die Finanzierungsvorschlaege eines Vorgangs aus der Huelle", async () => {
+    const f = fetchMitAntwort({
+      finanzierungsvorschlaege: [{ id: "FV-9", sollZins: 1.5 }],
+    });
+    const r = await client(f).holeFinanzierungsvorschlaege("CH6407");
+    expect(r).toHaveLength(1);
+    expect(r[0]!.id).toBe("FV-9");
+
+    const aufgerufen = String((f as unknown as ReturnType<typeof vi.fn>).mock.calls[1]![0]);
+    expect(aufgerufen).toContain("/v3/vorgaenge/CH6407/finanzierungsvorschlaege");
+  });
+
+  it("nennt bei den Finanzierungsvorschlaegen den Scope baufinanzierung:vorgang:lesen, nicht die Unterlagen-Scopes", async () => {
+    const f = fetchMitAntwort({ message: "forbidden" }, 403);
+    await expect(client(f).holeFinanzierungsvorschlaege("X")).rejects.toThrow(
+      /baufinanzierung:vorgang:lesen/
+    );
   });
 });
 
