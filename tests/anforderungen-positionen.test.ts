@@ -84,4 +84,49 @@ describe("Anforderungen als Checklisten-Positionen", () => {
     );
     expect(p[0]!.internalDescription).toContain("Erika Musterfrau");
   });
+
+  it("fasst gleiche Anforderungen mehrerer Antragsteller zu einer Position mit passender Anzahl zusammen", () => {
+    const p = anforderungsPositionen(
+      abruf([
+        a("r1", "Gehaltsnachweis", { code: "EK01", applicantId: "app1", bezugName: "Max Mustermann" }),
+        a("r2", "Gehaltsnachweis", { code: "EK01", applicantId: "app2", bezugName: "Erika Musterfrau" }),
+      ])
+    );
+    expect(p).toHaveLength(1);
+    expect(p[0]!.requiredCount).toBe(2);
+  });
+
+  it("nennt bei einer mehrfach verlangten Position beide Personen in der internen Beschreibung", () => {
+    const p = anforderungsPositionen(
+      abruf([
+        a("r1", "Gehaltsnachweis", { code: "EK01", applicantId: "app1", bezugName: "Max Mustermann" }),
+        a("r2", "Gehaltsnachweis", { code: "EK01", applicantId: "app2", bezugName: "Erika Musterfrau" }),
+      ])
+    );
+    expect(p[0]!.internalDescription).toContain("Max Mustermann");
+    expect(p[0]!.internalDescription).toContain("Erika Musterfrau");
+  });
+
+  it("zaehlt auch zwei Anforderungen desselben Antragstellers mit gleichem Code", () => {
+    const p = anforderungsPositionen(
+      abruf([
+        a("r1", "Gehaltsnachweis", { code: "EK01", applicantId: "app1" }),
+        a("r2", "Gehaltsnachweis", { code: "EK01", applicantId: "app1" }),
+      ])
+    );
+    expect(p).toHaveLength(1);
+    expect(p[0]!.requiredCount).toBe(2);
+  });
+
+  it("haelt unterschiedliche Codes als getrennte Positionen in Eingabereihenfolge", () => {
+    const p = anforderungsPositionen(
+      abruf([
+        a("r1", "Nachweis A", { code: "A1" }),
+        a("r2", "Nachweis B", { code: "B1" }),
+      ])
+    );
+    expect(p).toHaveLength(2);
+    expect(p[0]!.name).toBe("Nachweis A");
+    expect(p[1]!.name).toBe("Nachweis B");
+  });
 });
