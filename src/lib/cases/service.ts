@@ -97,9 +97,10 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
   const befunde = aktiverAbruf ? gleicheAb(aktiverAbruf.anforderungen, basisCheckliste) : [];
 
   // Nur fuer "neu"-Befunde entstehen Positionen. Was sich laut Schritt oben
-  // schon deckt, bekommt in der Anzeige nur die Markierung "auch laut Bank" –
-  // keine zweite Zeile mit demselben Dokumenttyp (Design: "Positionen mit
-  // Gegenstueck erzeugen keine neue Zeile — das ist der Kern: keine Dubletten").
+  // schon deckt, erzeugt keine zweite Zeile mit demselben Dokumenttyp
+  // (Design: "Positionen mit Gegenstueck erzeugen keine neue Zeile — das ist
+  // der Kern: keine Dubletten"). Sichtbare Markierung dieser Positionen in der
+  // Checkliste ist noch offen.
   const neuIds = new Set(
     befunde.filter((b): b is Extract<typeof b, { art: "neu" }> => b.art === "neu").map((b) => b.anforderungId)
   );
