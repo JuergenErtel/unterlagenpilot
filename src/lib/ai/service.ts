@@ -484,7 +484,7 @@ export class AIService {
       [
         "Du ordnest die Frage eines Baufinanzierungsvermittlers dem Katalog der Europace-Finanzierungskriterien zu.",
         "kriterien: hoechstens 3 Namen, WOERTLICH aus dem Katalog. Nichts erfinden, nichts umformulieren.",
-        "Deckt KEIN Kriterium das Thema der Frage ab, gib eine LEERE Liste zurueck. Nicht das naechstbeste raten: Der Katalog hat zum Beispiel kein Kriterium zu Staatsangehoerigkeit oder Aufenthaltstitel.",
+        "Deckt KEIN Kriterium das Thema der Frage ab, gib eine LEERE Liste zurueck – der Katalog ist nicht vollstaendig. Nicht das naechstbeste raten: ein grob passendes Kriterium liefert eine Antwort zum falschen Thema.",
         "Das passende Kriterium heisst oft anders als die Frage: 'Dolmetscher' steht unter 'Sprache', 'Ausland arbeiten' unter 'Grenzgaenger'.",
         "bank: der Name einer Bank, WENN die Frage nach genau einer Bank fragt – sonst null. So, wie er in der Frage steht; nicht in den juristischen Namen uebersetzen.",
         "stichwoerter: hoechstens 5 Woerter, die im Freitext der Banken stehen duerften (Grundformen, keine Fragewoerter). IMMER liefern, gerade auch wenn die Kriterienliste leer bleibt – sie sind dann die einzige Spur.",
