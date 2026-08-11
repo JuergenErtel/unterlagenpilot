@@ -19,6 +19,16 @@ const ZUORDNUNG: Record<string, string> = (() => {
   return m;
 })();
 
+/**
+ * Alle bekannten Kriteriennamen in Katalogreihenfolge.
+ *
+ * Das ist die Liste, die der KI beim Deuten einer Frage vorgelegt wird – und
+ * zugleich der Pruefstein danach: Was nicht hier steht, hat sie erfunden.
+ */
+export function alleKriterien(): string[] {
+  return Object.keys(ZUORDNUNG);
+}
+
 /** Reihenfolge der Abschnitte auf der Bankseite. */
 export const KATEGORIE_REIHENFOLGE = [
   "Antragsteller",

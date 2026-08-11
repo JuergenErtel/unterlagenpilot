@@ -26,6 +26,30 @@ function tagEnde(s: string, i: number): number {
 }
 
 /**
+ * Macht aus dem bereits bereinigten HTML reinen Fliesstext.
+ *
+ * Gebraucht ueberall dort, wo der Inhalt gelesen statt angezeigt wird: in
+ * einem KI-Prompt haben Tags nichts verloren, und ein woertliches Zitat laesst
+ * sich nur gegen Klartext pruefen.
+ *
+ * Erwartet die Ausgabe von `bereinigeHtml` – dort sind Tags auf eine kurze,
+ * attributlose Liste beschraenkt, weshalb hier ein einfacher Durchlauf reicht.
+ */
+export function nurText(html: string): string {
+  if (!html) return "";
+  return String(html)
+    .replace(/<(?:br|\/p|\/li|\/ul|\/ol|\/div)\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&gt;/gi, ">")
+    .replace(/&lt;/gi, "<")
+    .replace(/&quot;/gi, '"')
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Reduziert fremdes HTML auf einen sicheren Satz.
  *
  * Laeuft beim IMPORT, nicht beim Anzeigen: Was in der Datenbank steht, ist
