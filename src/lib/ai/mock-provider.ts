@@ -315,7 +315,7 @@ export class MockAIProvider implements AIProvider {
   private deuteBankenFrage(req: AICompletionRequest) {
     const frage = String(req.hints?.frage ?? "");
     const katalog = Array.isArray(req.hints?.katalog) ? (req.hints.katalog as string[]) : [];
-    const worte = zerlege(frage);
+    const worte = zerlege(frage).filter((w) => !FRAGEWOERTER.has(w));
 
     const treffer = katalog
       .map((k) => ({ k, punkte: zerlege(k).filter((w) => worte.includes(w)).length }))
@@ -329,7 +329,7 @@ export class MockAIProvider implements AIProvider {
       // Grobe Nachbildung dessen, was das echte Modell tut: das
       // grossgeschriebene Wort hinter "die/der/das" ist der Bankname.
       bank: /\b(?:die|der|das)\s+([A-ZÄÖÜ][\wäöüß.&-]+)/.exec(frage)?.[1] ?? null,
-      stichwoerter: worte.filter((w) => !FRAGEWOERTER.has(w)).slice(0, 5),
+      stichwoerter: worte.slice(0, 5),
       verstanden: frage,
     };
   }
