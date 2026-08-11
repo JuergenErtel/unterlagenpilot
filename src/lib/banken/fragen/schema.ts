@@ -36,3 +36,9 @@ export const urteileSchema = z.object({
     .default([]),
 });
 export type UrteileErgebnis = z.infer<typeof urteileSchema>;
+
+/** Auswahl aus einer vorgegebenen Bankenliste. `null` heisst: passt keine. */
+export const bankWahlSchema = z.object({
+  bankId: z.string().nullable().default(null),
+});
+export type BankWahl = z.infer<typeof bankWahlSchema>;
