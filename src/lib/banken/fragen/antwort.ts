@@ -1,0 +1,100 @@
+import { URTEILE, type Urteil } from "./schema";
+import type { Textblock, Zeile } from "./sammeln";
+
+export interface BankUrteil {
+  bankId: string;
+  name: string;
+  /** Aus welchem Kriterium das Urteil stammt – der Unterschied bleibt sichtbar. */
+  kriterium: string;
+  /** Geprueftes woertliches Zitat, oder null. */
+  beleg: string | null;
+  /** Textanfang als Ersatz, wenn kein geprueftes Zitat vorliegt. */
+  auszug: string;
+}
+
+export interface Gruppe {
+  urteil: Urteil;
+  banken: BankUrteil[];
+}
+
+/**
+ * Welches Urteil gewinnt, wenn eine Bank ueber mehrere Kriterien verschieden
+ * antwortet. Ein Nein an einer Stelle bleibt ein Nein – die Antwort soll den
+ * Vermittler nicht in ein Gespraech schicken, das an anderer Stelle scheitert.
+ */
+const RANG: Record<Urteil, number> = { nein: 3, bedingt: 2, ja: 1, keine_aussage: 0 };
+
+const AUSZUG_LAENGE = 200;
+
+function auszugAus(text: string): string {
+  return text.length <= AUSZUG_LAENGE ? text : text.slice(0, AUSZUG_LAENGE).trimEnd() + "…";
+}
+
+export interface Gruppierung {
+  gruppen: Gruppe[];
+  /** Zeilen, deren Text kein Urteil bekommen hat (KI-Buendel fehlgeschlagen). */
+  ungelesen: Zeile[];
+}
+
+/**
+ * Bildet die Urteile je Text auf die Banken zurueck und sortiert sie in die
+ * vier Gruppen.
+ *
+ * Jede Bank erscheint genau einmal – sonst zaehlt die Ueberschrift "12 Banken"
+ * Zeilen statt Instituten und die Antwort wird groesser, als der Bestand
+ * hergibt.
+ */
+export function baueGruppen(
+  bloecke: Textblock[],
+  urteile: Map<number, { urteil: Urteil; beleg: string | null }>,
+  ohneAussage: Zeile[]
+): Gruppierung {
+  const beste = new Map<string, { urteil: Urteil; eintrag: BankUrteil }>();
+  const ungelesen: Zeile[] = [];
+
+  const merke = (urteil: Urteil, eintrag: BankUrteil) => {
+    const bisher = beste.get(eintrag.bankId);
+    if (bisher && RANG[bisher.urteil] >= RANG[urteil]) return;
+    beste.set(eintrag.bankId, { urteil, eintrag });
+  };
+
+  for (const block of bloecke) {
+    const bewertung = urteile.get(block.id);
+    if (!bewertung) {
+      // Das Buendel ist nicht durchgelaufen. Nicht als "keine Aussage"
+      // ausgeben – die Bank hat etwas gesagt, wir haben es nur nicht gelesen.
+      ungelesen.push(...block.banken);
+      continue;
+    }
+    for (const z of block.banken) {
+      merke(bewertung.urteil, {
+        bankId: z.bankId,
+        name: z.name,
+        kriterium: z.kriterium,
+        beleg: bewertung.beleg,
+        auszug: auszugAus(block.text),
+      });
+    }
+  }
+
+  for (const z of ohneAussage) {
+    merke("keine_aussage", {
+      bankId: z.bankId,
+      name: z.name,
+      kriterium: z.kriterium,
+      beleg: null,
+      auszug: "",
+    });
+  }
+
+  return {
+    gruppen: URTEILE.map((urteil) => ({
+      urteil,
+      banken: [...beste.values()]
+        .filter((b) => b.urteil === urteil)
+        .map((b) => b.eintrag)
+        .sort((a, b) => a.name.localeCompare(b.name, "de")),
+    })),
+    ungelesen,
+  };
+}

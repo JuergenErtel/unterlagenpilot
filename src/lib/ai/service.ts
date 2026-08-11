@@ -32,6 +32,12 @@ import type { CanonicalCase } from "@/lib/domain/canonical";
 import { crossDocumentChecks, parseGermanNumber } from "@/lib/ai/cross-checks";
 import { documentReferencesSchema, type DocumentReferencesResult } from "@/lib/detektiv/schema";
 import { dokumentgrenzenSchema, type DokumentgrenzenResult } from "@/lib/aufteilung/schema";
+import {
+  deutungSchema,
+  urteileSchema,
+  type Deutung,
+  type UrteileErgebnis,
+} from "@/lib/banken/fragen/schema";
 
 /**
  * AIService – die einzige Schnittstelle für KI-Auswertungen.
@@ -458,6 +464,64 @@ export class AIService {
   ): Promise<PlatformMappingResult> {
     const { buildPlatformMapping } = await import("@/lib/platforms/mapping");
     return platformMappingSchema.parse(buildPlatformMapping(caseData, platform));
+  }
+
+  // ---------------- Banken-Wiki ----------------
+
+  /**
+   * Ordnet eine Alltagsfrage dem Katalog der Finanzierungskriterien zu.
+   *
+   * Klein und billig: rein geht die Frage plus 69 Kriteriennamen. Die Antwort
+   * wird anschliessend gegen den Katalog geprueft – erfundene Namen fliegen
+   * raus, dafuer gibt es die Stichwoerter als Auffangnetz.
+   */
+  deuteBankenFrage(frage: string, katalog: string[]): Promise<Deutung> {
+    return this.run(
+      "bankenFrageDeutung",
+      deutungSchema,
+      [
+        "Du ordnest die Frage eines Baufinanzierungsvermittlers dem Katalog der Europace-Finanzierungskriterien zu.",
+        "kriterien: hoechstens 3 Namen, WOERTLICH aus dem Katalog. Nichts erfinden, nichts umformulieren.",
+        "Das passende Kriterium heisst oft anders als die Frage: 'Dolmetscher' steht unter 'Sprache', 'Ausland arbeiten' unter 'Grenzgaenger'.",
+        "bank: der Name einer Bank, WENN die Frage nach genau einer Bank fragt – sonst null.",
+        "stichwoerter: hoechstens 5 Woerter, die im Freitext der Banken stehen duerften (Grundformen, keine Fragewoerter).",
+        "verstanden: ein Satz, der die Frage in eigenen Worten wiedergibt.",
+        "Antworte ausschliesslich als JSON.",
+      ].join(" "),
+      `Frage: ${frage}\n\nKatalog:\n${katalog.join("\n")}`,
+      { frage, katalog }
+    );
+  }
+
+  /**
+   * Bewertet Freitexte von Banken gegen eine Frage – ein Urteil je TEXT, nicht
+   * je Bank (gleiche Texte werden vorher zusammengefasst).
+   *
+   * Das Zitat wird danach gegen den Quelltext geprueft (`pruefeBeleg`); die
+   * Anweisung hier ist nur die halbe Miete.
+   */
+  bewerteBankTexte(
+    frage: string,
+    texte: Array<{ id: number; text: string }>
+  ): Promise<UrteileErgebnis> {
+    const bloecke = texte.map((t) => `### Text ${t.id}\n${t.text}`).join("\n\n");
+    return this.run(
+      "bankenFrageUrteile",
+      urteileSchema,
+      [
+        "Du liest Aussagen deutscher Banken zu ihren Finanzierungskriterien und pruefst sie gegen EINE Frage.",
+        "Gib fuer JEDEN Text genau einen Eintrag mit seiner id zurueck.",
+        "urteil=ja: der Text sagt zu, worum die Frage geht.",
+        "urteil=bedingt: er sagt zu, aber nur unter Bedingungen (Nachweis, Form, Grenze).",
+        "urteil=nein: er schliesst es aus.",
+        "urteil=keine_aussage: der Text beruehrt die Frage nicht oder sagt ausdruecklich, dass dazu nichts festgelegt ist.",
+        "Im Zweifel keine_aussage – lieber offen lassen als etwas behaupten.",
+        "beleg: ein WOERTLICHES Zitat aus genau diesem Text, hoechstens 200 Zeichen. Nichts umformulieren, nichts erfinden. Bei keine_aussage darf beleg leer sein.",
+        "Antworte ausschliesslich als JSON.",
+      ].join(" "),
+      `Frage: ${frage}\n\n${bloecke}`,
+      { frage, texte }
+    );
   }
 
   // ---------------- Nachrichten ----------------

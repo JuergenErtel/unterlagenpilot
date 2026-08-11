@@ -73,6 +73,10 @@ export class MockAIProvider implements AIProvider {
             { vonSeite: 3, bisSeite: 8, vermuteterTyp: "grundbuchauszug", titel: "Grundbuchauszug", confidence: 0.9 },
           ],
         };
+      case "bankenFrageDeutung":
+        return this.deuteBankenFrage(req);
+      case "bankenFrageUrteile":
+        return this.bewerteBankTexte(req);
       case "documentReferences":
         return {
           references: [
@@ -294,6 +298,84 @@ export class MockAIProvider implements AIProvider {
       offenePunkte: [],
     };
   }
+
+  /**
+   * Banken-Wiki, Deutung einer Frage – bewusst stumpf: reine Wortueberschneidung
+   * mit dem Kriterienkatalog.
+   *
+   * Der Mock findet damit "Grenzgänger" in "Nimmt die Bank Grenzgänger?", aber
+   * NICHT "Sprache" in "Wer akzeptiert einen Dolmetscher?". Genau richtig so:
+   * dass diese Frage trotzdem beantwortet wird, ist die Leistung des
+   * Stichwort-Auffangnetzes – und die soll ein Test auch pruefen koennen.
+   */
+  private deuteBankenFrage(req: AICompletionRequest) {
+    const frage = String(req.hints?.frage ?? "");
+    const katalog = Array.isArray(req.hints?.katalog) ? (req.hints.katalog as string[]) : [];
+    const worte = zerlege(frage);
+
+    const treffer = katalog
+      .map((k) => ({ k, punkte: zerlege(k).filter((w) => worte.includes(w)).length }))
+      .filter((e) => e.punkte > 0)
+      .sort((a, b) => b.punkte - a.punkte || a.k.localeCompare(b.k, "de"))
+      .slice(0, 3)
+      .map((e) => e.k);
+
+    return {
+      kriterien: treffer,
+      bank: null,
+      stichwoerter: worte.filter((w) => !FRAGEWOERTER.has(w)).slice(0, 5),
+      verstanden: frage,
+    };
+  }
+
+  /** Banken-Wiki, Urteil je Text – Heuristik auf dem Freitext. */
+  private bewerteBankTexte(req: AICompletionRequest) {
+    const texte = Array.isArray(req.hints?.texte)
+      ? (req.hints.texte as Array<{ id: number; text: string }>)
+      : [];
+
+    return {
+      urteile: texte.map(({ id, text }) => {
+        const t = (text ?? "").toLowerCase();
+        const urteil = /keine aussage|keine information|nicht festgelegt/.test(t)
+          ? "keine_aussage"
+          : /\bnicht\b|\bkein\b|\bkeine\b|ausgeschlossen/.test(t)
+            ? "nein"
+            : /\bnur\b|sofern|voraussetzung|sofern|wenn\b|muss\b/.test(t)
+              ? "bedingt"
+              : "ja";
+        // Erster Satz als Beleg – woertlich, damit die Belegpruefung greift.
+        const satz = (text ?? "").split(/(?<=[.!?])\s/)[0] ?? "";
+        return { id, urteil, beleg: urteil === "keine_aussage" ? "" : satz.slice(0, 200) };
+      }),
+    };
+  }
+}
+
+/** Fragewoerter taugen nicht als Stichwort im Freitext einer Bank. */
+const FRAGEWOERTER = new Set([
+  "welche",
+  "welcher",
+  "welches",
+  "banken",
+  "bank",
+  "nimmt",
+  "akzeptiert",
+  "akzeptieren",
+  "beim",
+  "eine",
+  "einen",
+  "einem",
+  "wird",
+  "wer",
+]);
+
+/** Woerter ab vier Zeichen, kleingeschrieben – die Vergleichsbasis des Mocks. */
+function zerlege(s: string): string[] {
+  return (s ?? "")
+    .toLowerCase()
+    .split(/[^a-zäöüß0-9]+/)
+    .filter((w) => w.length >= 4);
 }
 
 function jaccard(a: string, b: string): number {
