@@ -20,6 +20,9 @@ function deps(over: Partial<Parameters<typeof uebertrageFallNachEuropace>[1]> = 
       validiereKundenangaben: vi.fn(async () => {}),
       legeVorgangAn: vi.fn(async () => "YX4MDU"),
       ladeDokumentHoch: vi.fn(async () => "dok-1"),
+      holeAntraege: vi.fn(async () => []),
+      holeFinanzierungsvorschlaege: vi.fn(async () => []),
+      holeAnforderungen: vi.fn(async () => []),
     },
     datenkontext: "TEST_MODUS" as const,
     ladeCanonical: vi.fn(async () => CANONICAL),
@@ -51,6 +54,11 @@ describe("uebertrageFallNachEuropace", () => {
           return "YX4MDU";
         }),
         ladeDokumentHoch: vi.fn(async () => "dok-1"),
+        // Lesemethoden werden von uebertrageFallNachEuropace nicht genutzt --
+        // trotzdem noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
     const ergebnis = await uebertrageFallNachEuropace("case-1", d);
@@ -73,6 +81,11 @@ describe("uebertrageFallNachEuropace", () => {
         }),
         legeVorgangAn: vi.fn(async () => "SOLLTE-NICHT-PASSIEREN"),
         ladeDokumentHoch: vi.fn(async () => "dok-1"),
+        // Lesemethoden werden von uebertrageFallNachEuropace nicht genutzt --
+        // trotzdem noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
 
@@ -153,6 +166,11 @@ describe("uebertrageFallNachEuropace", () => {
         }),
         legeVorgangAn: vi.fn(async () => "X"),
         ladeDokumentHoch: vi.fn(async () => "dok-1"),
+        // Lesemethoden werden von uebertrageFallNachEuropace nicht genutzt --
+        // trotzdem noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
 
@@ -217,6 +235,11 @@ describe("uebertrageFallNachEuropace", () => {
         }),
         legeVorgangAn: vi.fn(async () => "YX4MDU"),
         ladeDokumentHoch: vi.fn(async () => "dok-1"),
+        // Lesemethoden werden von uebertrageFallNachEuropace nicht genutzt --
+        // trotzdem noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
 
@@ -273,6 +296,11 @@ describe("uebertrageFallNachEuropace", () => {
         }),
         legeVorgangAn: vi.fn(async () => "YX4MDU"),
         ladeDokumentHoch: vi.fn(async () => "dok-1"),
+        // Lesemethoden werden von uebertrageFallNachEuropace nicht genutzt --
+        // trotzdem noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
 
