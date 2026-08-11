@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { vorgangsnummerSetzen } from "@/lib/actions/anforderungen";
 import { BankAnforderungenAuswahl } from "@/components/case/bank-anforderungen-auswahl";
+import { TONE, type Tone } from "@/lib/ui/tone";
 import type { AbgleichZahlen } from "@/lib/anforderungen/abgleich";
 
 const datum = (d: Date) => d.toLocaleDateString("de-DE");
@@ -99,12 +100,19 @@ export async function BankAnforderungen({
           </div>
         )}
 
-        {letzterLauf && (
-          <p className="text-xs text-muted-foreground">
-            Letzter Abruf ({zeitpunkt(letzterLauf.createdAt)}):{" "}
-            {letzterLauf.message ?? letzterLauf.status}
-          </p>
-        )}
+        {letzterLauf && (() => {
+          const statusTone = (
+            letzterLauf.status === "fehler" ? "blocker" :
+            letzterLauf.status === "leer" ? "review" :
+            letzterLauf.status === "erfolg" ? "ready" :
+            "neutral"
+          ) as Tone;
+          return (
+            <p className={`text-xs ${TONE[statusTone].text}`}>
+              Letzter Abruf ({zeitpunkt(letzterLauf.createdAt)}): {letzterLauf.status} · {letzterLauf.message}
+            </p>
+          );
+        })()}
 
         <BankAnforderungenAuswahl caseId={caseId} />
       </CardContent>
