@@ -1,5 +1,11 @@
 import { fetchWithRateLimitRetry } from "@/lib/ai/http";
-import type { Datenkontext, EuropaceKundenangabenRequest } from "./types";
+import type {
+  Datenkontext,
+  EuropaceAntrag,
+  EuropaceFinanzierungsvorschlag,
+  EuropaceKundenangabenRequest,
+  Unterlagenanforderung,
+} from "./types";
 
 export class EuropaceNotConfiguredError extends Error {}
 export class EuropaceAuthError extends Error {}
@@ -30,6 +36,13 @@ const SCOPES = [
   "baufinanzierung:vorgang:lesen",
   "unterlagen:dokument:schreiben",
   "unterlagen:unterlage:schreiben",
+  // Lesend fuer die Unterlagenanforderungen:
+  //   unterlagen:unterlage:lesen  -> GET /dokumente/anforderungen
+  //   unterlagen:freigabe:lesen   -> GET /dokumente/antrag/anforderungen
+  // Beide muessen im Zugangsantrag bei Europace stehen, sonst kommt der Zugang,
+  // aber die Anforderungen bleiben unlesbar.
+  "unterlagen:unterlage:lesen",
+  "unterlagen:freigabe:lesen",
 ].join(" ");
 
 export interface DokumentUpload {
@@ -48,6 +61,16 @@ export interface EuropaceClient {
   legeVorgangAn(req: EuropaceKundenangabenRequest): Promise<string>;
   /** Laedt ein Dokument hoch und liefert die Europace-Dokument-ID. */
   ladeDokumentHoch(input: DokumentUpload): Promise<string>;
+  /** Alle Antraege zum Vorgang (verbindlich, weil bereits eingereicht). */
+  holeAntraege(vorgangsNummer: string): Promise<EuropaceAntrag[]>;
+  /** Alle ausgehaendigten Finanzierungsvorschlaege zum Vorgang. */
+  holeFinanzierungsvorschlaege(vorgangsNummer: string): Promise<EuropaceFinanzierungsvorschlag[]>;
+  /** Die Unterlagenanforderungen zu einem Antrag oder Vorschlag. */
+  holeAnforderungen(p: {
+    quelle: "antrag" | "vorschlag";
+    vorgangsNummer: string;
+    bezugsId: string;
+  }): Promise<Unterlagenanforderung[]>;
 }
 
 interface EuropaceConfig {
@@ -215,6 +238,95 @@ export class HttpEuropaceClient implements EuropaceClient {
     const id = body.id ?? body.dokumentId;
     if (!id) throw new EuropaceApiError("Europace lieferte keine Dokument-ID.");
     return id;
+  }
+
+  /**
+   * Gemeinsamer GET-Weg. Eigene Methode, weil sich die drei Leseaufrufe nur in
+   * der URL unterscheiden – und damit die Fehlermeldungen an EINER Stelle
+   * stehen und nicht dreimal auseinanderdriften.
+   *
+   * `scope` ist der Scope, der laut Europace-Spezifikation GENAU diesen
+   * Endpunkt freischaltet (nicht irgendeiner der drei Lese-Scopes) – sonst
+   * schickt eine 403 den Fehlersuchenden auf die falsche Fährte.
+   */
+  private async hole<T>(url: string, was: string, scope: string): Promise<T> {
+    const token = await this.holeToken();
+    let res: Response;
+    try {
+      res = await fetchWithRateLimitRetry(
+        url,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        },
+        TIMEOUT_MS,
+        this.fetchImpl
+      );
+    } catch {
+      throw new EuropaceApiError("Europace nicht erreichbar (Netzwerkfehler).");
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new EuropaceAuthError(`Europace verweigert ${was}. Fehlt der Scope ${scope} im Zugang?`);
+    }
+    if (res.status === 404) {
+      throw new EuropaceApiError(`${was}: in Europace nicht auffindbar.`);
+    }
+    if (!res.ok) {
+      console.warn(`[europace] ${was} -> HTTP ${res.status}`);
+      throw new EuropaceApiError(`${was} fehlgeschlagen (HTTP ${res.status}).`);
+    }
+    return (await res.json()) as T;
+  }
+
+  async holeAntraege(vorgangsNummer: string): Promise<EuropaceAntrag[]> {
+    const body = await this.hole<{ antraege?: EuropaceAntrag[] } | EuropaceAntrag[]>(
+      `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/antraege`,
+      `Antraege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
+    );
+    // Die Spezifikation huellt die Antraege IMMER in ein Objekt ({ antraege: [...] });
+    // die Array-Verzweigung ist rein defensiv gegen eine kuenftige Formaenderung.
+    return Array.isArray(body) ? body : (body.antraege ?? []);
+  }
+
+  async holeFinanzierungsvorschlaege(
+    vorgangsNummer: string
+  ): Promise<EuropaceFinanzierungsvorschlag[]> {
+    const body = await this.hole<
+      { finanzierungsvorschlaege?: EuropaceFinanzierungsvorschlag[] } | EuropaceFinanzierungsvorschlag[]
+    >(
+      `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/finanzierungsvorschlaege`,
+      `Finanzierungsvorschlaege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
+    );
+    return Array.isArray(body) ? body : (body.finanzierungsvorschlaege ?? []);
+  }
+
+  async holeAnforderungen(p: {
+    quelle: "antrag" | "vorschlag";
+    vorgangsNummer: string;
+    bezugsId: string;
+  }): Promise<Unterlagenanforderung[]> {
+    // Versionssegment aus dem `servers:`-Block von unterlagen-swagger.yaml
+    // (https://api.europace2.de/v1) -- NICHT dasselbe /v2 wie beim
+    // Dokument-Upload oben (ladeDokumentHoch): der Upload stammt aus einer
+    // anderen Spezifikation mit eigener Versionierung. Beide Wege teilen sich
+    // nur den Host, nicht die Version.
+    const url =
+      p.quelle === "antrag"
+        ? `${UNTERLAGEN_HOST}/v1/dokumente/antrag/anforderungen?antragsNummer=${encodeURIComponent(p.bezugsId)}`
+        : `${UNTERLAGEN_HOST}/v1/dokumente/anforderungen?vorgangsNummer=${encodeURIComponent(p.vorgangsNummer)}&finanzierungsvorschlagsId=${encodeURIComponent(p.bezugsId)}`;
+    // Laut unterlagen-swagger.yaml traegt jede Route ihren EIGENEN Scope:
+    // der Antrags-Weg unterlagen:freigabe:lesen, der Vorschlags-Weg
+    // unterlagen:unterlage:lesen.
+    const scope = p.quelle === "antrag" ? "unterlagen:freigabe:lesen" : "unterlagen:unterlage:lesen";
+
+    const body = await this.hole<Unterlagenanforderung[]>(url, "Unterlagenanforderungen", scope);
+    return Array.isArray(body) ? body : [];
   }
 }
 

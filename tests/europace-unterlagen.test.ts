@@ -29,6 +29,11 @@ function deps(over: Partial<Parameters<typeof uebertrageUnterlagen>[1]> = {}) {
       validiereKundenangaben: vi.fn(async () => {}),
       legeVorgangAn: vi.fn(async () => "YX4MDU"),
       ladeDokumentHoch: vi.fn(async () => "ep-dok-1"),
+      // Lesemethoden werden von uebertrageUnterlagen nicht genutzt -- trotzdem
+      // noetig, weil das Interface EuropaceClient sie jetzt verlangt.
+      holeAntraege: vi.fn(async () => []),
+      holeFinanzierungsvorschlaege: vi.fn(async () => []),
+      holeAnforderungen: vi.fn(async () => []),
     },
     ladeVorgangsnummer: vi.fn(async () => "YX4MDU" as string | null),
     ladeDokumente: vi.fn(async () => DOKUMENTE),
@@ -82,6 +87,9 @@ describe("uebertrageUnterlagen", () => {
           .fn()
           .mockRejectedValueOnce(new EuropaceApiError("Dokument-Upload fehlgeschlagen (HTTP 500)."))
           .mockResolvedValueOnce("ep-dok-2"),
+        holeAntraege: vi.fn(async () => []),
+        holeFinanzierungsvorschlaege: vi.fn(async () => []),
+        holeAnforderungen: vi.fn(async () => []),
       },
     });
 

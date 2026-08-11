@@ -106,6 +106,12 @@ Die Anwendung läuft anschließend standardmäßig unter `http://localhost:3000`
 
 > Hinweis: Plattform- und KI-Variablen sind optional, solange die jeweiligen Provider auf `mock`/Stub stehen.
 
+> **Scopes im Zugangsantrag:** Neben `baufinanzierung:vorgang:schreiben|lesen`,
+> `unterlagen:dokument:schreiben` und `unterlagen:unterlage:schreiben` müssen
+> **`unterlagen:unterlage:lesen`** und **`unterlagen:freigabe:lesen`** beantragt
+> werden. Ohne sie kommt der Zugang, aber die Unterlagenanforderungen der Bank
+> bleiben unlesbar.
+
 ---
 
 ## NPM-Scripts
@@ -138,7 +144,7 @@ Die Anwendung läuft anschließend standardmäßig unter `http://localhost:3000`
 
 Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein internes kanonisches Datenmodell.
 
-- **Europace** (höchste Priorität): Anbindung via **OAuth/API** (`EUROPACE_CLIENT_ID`, `EUROPACE_CLIENT_SECRET`), Hosts fest im Client hinterlegt. Die Endpunkte sind öffentlich dokumentiert und als OpenAPI-Schema eingecheckt (`src/lib/platforms/europace/schema/`). Vorgang anlegen und Unterlagen übertragen sind umgesetzt; es fehlen die echten Zugangsdaten und der Rückkanal (Vorgang aus Europace laden) sowie die Antragsteller-Zuordnung (`assignmentId`) beim Dokumenten-Upload.
+- **Europace** (höchste Priorität): Anbindung via **OAuth/API** (`EUROPACE_CLIENT_ID`, `EUROPACE_CLIENT_SECRET`), Hosts fest im Client hinterlegt. Die Endpunkte sind öffentlich dokumentiert und als OpenAPI-Schema eingecheckt (`src/lib/platforms/europace/schema/`). Vorgang anlegen und Unterlagen übertragen sind umgesetzt; der Rückkanal existiert inzwischen lesend für Anträge, Finanzierungsvorschläge und die Unterlagenanforderungen der Bank (schärft die Fall-Checkliste, Abruf per Klick) – das Zurückschreiben an Europace (z. B. der Bearbeitungsstatus einer Anforderung) ist bewusst nicht umgesetzt. Es fehlen weiterhin die echten Zugangsdaten sowie die Antragsteller-Zuordnung (`assignmentId`) beim Dokumenten-Upload.
 - **FinLink:** Anbindung via **API-Key** (`FINLINK_API_KEY`) und konfigurierbarer **Base URL** (`FINLINK_BASE_URL`).
 - **eHyp home:** Zugang über das **Developer Studio** – **API-Key**, **Client-ID**, **Client-Secret** und **Firmen-ID** (`EHYP_API_KEY`, `EHYP_CLIENT_ID`, `EHYP_CLIENT_SECRET`, `EHYP_COMPANY_ID`).
 
@@ -156,6 +162,7 @@ Alle Connectoren folgen dem **PlatformConnector-Pattern** und mappen über ein i
 | **Datei-Storage** | **echt** | Supabase Storage, privater Bucket. |
 | **Demo-Fall Mustermann** | **Demo-Daten** | Geseedet (3 Dokumente, 4 fehlende Unterlagen, Warnungen, Nachrichten, Audit-Ereignisse), damit alle Screens mit Inhalt wirken. |
 | **Europace Übertragung** | **echt (API)** | Vorgang anlegen + Unterlagen übertragen über die echte API; wartet nur noch auf echte Zugangsdaten (`EUROPACE_CLIENT_ID`/`EUROPACE_CLIENT_SECRET`). Rückkanal (Vorgang aus Europace laden) noch nicht umgesetzt. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
+| **Bank-Unterlagenanforderungen** | **echt (API)** | Liest `GET /dokumente/anforderungen` bzw. `/dokumente/antrag/anforderungen` und schärft damit die Fall-Checkliste. Wartet auf echte Zugangsdaten. Abruf nur auf Knopfdruck. |
 | **FinLink / eHyp home Übertragung** | **Stub** | API-Adapter vorbereitet; produktiv über Export/Kopiermaske/JSON. Keine automatische Übertragung – **manuelle Freigabe Pflicht**. |
 | **Browser-Assist** | **Konzept/deaktiviert** | Nur als späterer optionaler Assistenz-Fallback vorgesehen. |
 | **Auth** | **echt (umschaltbar)** | `AUTH_MODE=session`: Login-Pflicht, scrypt-Passwörter, signiertes Session-Cookie, Rollen, CSRF, Login-Rate-Limit. `AUTH_MODE=demo`: ohne Login (nur Dev/Demo). |

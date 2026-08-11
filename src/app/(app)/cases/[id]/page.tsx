@@ -38,6 +38,7 @@ import { NextBestAction } from "@/components/case/next-best-action";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
+import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
@@ -521,6 +522,7 @@ export default async function CaseCockpitPage({
             status={selbstauskunftStand.label}
             aktiverLinkId={aktiverSelbstauskunftLink}
           />
+          <BankAnforderungen caseId={id} abgleich={cockpit.anforderungsAbgleich} />
           {uebernahme && (
             <SelfDisclosureInbox
               caseId={id}

@@ -1,3 +1,5 @@
+import { faltenBasis } from "@/lib/text/falten";
+
 /**
  * Zuordnung von Dokumenten zu Antragstellern anhand des von der KI erkannten
  * Namens (`Document.detectedApplicant`).
@@ -20,16 +22,7 @@ export interface ApplicantCandidate {
 
 /** Kleinschreibung, Umlaute/ß aufgelöst, Diakritika entfernt. */
 function fold(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/ß/g, "ss")
-    .normalize("NFD")
-    // Kombinierende Akzente (é, ñ, …) entfernen. Bewusst als Escape-Bereich
-    // notiert – literale Kombinationszeichen im Quelltext sind unlesbar.
-    .replace(/[\u0300-\u036f]/g, "");
+  return faltenBasis(value);
 }
 
 /**

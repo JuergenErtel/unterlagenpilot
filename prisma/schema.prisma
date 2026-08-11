@@ -310,18 +310,18 @@ model Organization {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  users               User[]
-  customers           Customer[]
-  cases               Case[]
-  checklistTemplates  ChecklistTemplate[]
-  platformConnections PlatformConnection[]
-  messageTemplates    MessageTemplate[]
-  subscription        Subscription?
-  featureFlags        FeatureFlag[]
-  whiteLabelSettings  WhiteLabelSettings?
-  bankRequirements    BankRequirement[]
-  auditLogs           AuditLog[]
-  leadSyncStates      LeadSyncState[]
+  users                User[]
+  customers            Customer[]
+  cases                Case[]
+  checklistTemplates   ChecklistTemplate[]
+  platformConnections  PlatformConnection[]
+  messageTemplates     MessageTemplate[]
+  subscription         Subscription?
+  featureFlags         FeatureFlag[]
+  whiteLabelSettings   WhiteLabelSettings?
+  bankRequirements     BankRequirement[]
+  auditLogs            AuditLog[]
+  leadSyncStates       LeadSyncState[]
   machbarkeitsAnnahmen MachbarkeitsAnnahmen?
 
   @@map("organizations")
@@ -520,6 +520,7 @@ model Case {
   deadlines           CaseDeadline[]
   documentReferences  DocumentReference[]
   findings            CaseFinding[]
+  anforderungsAbrufe  BankAnforderungsAbruf[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -617,21 +618,21 @@ model Property {
 }
 
 model FinancingRequest {
-  id                     String   @id @default(cuid())
-  caseId                 String   @unique
-  case                   Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  kaufpreis              Float?
-  baukosten              Float?
-  modernisierungskosten  Float?
-  nebenkosten            Float?
-  maklerprovisionProzent Float?
-  eigenkapital           Float?
-  darlehenswunsch        Float?
+  id                       String   @id @default(cuid())
+  caseId                   String   @unique
+  case                     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kaufpreis                Float?
+  baukosten                Float?
+  modernisierungskosten    Float?
+  nebenkosten              Float?
+  maklerprovisionProzent   Float?
+  eigenkapital             Float?
+  darlehenswunsch          Float?
   /// Manuell gesetzter Grunderwerbsteuersatz, falls die Ableitung aus PLZ und
   /// Ort danebenliegt. Sichtbar im Machbarkeits-Ergebnis.
   grunderwerbsteuerProzent Float?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@map("financing_requests")
 }
@@ -748,16 +749,16 @@ model Document {
   reviewNote           String?
   confidence           Float?
 
-  detectedApplicant String?
+  detectedApplicant  String?
   /// Von Europace vergebene Dokument-ID. Gesetzt = bereits uebertragen.
   europaceDokumentId String?
   /// Herkunft der Antragsteller-Zuordnung: "auto" (Namensabgleich) oder
   /// "manuell" (Vermittler). null = Bestandsdaten unbekannter Herkunft; diese
   /// werden wie "manuell" behandelt, solange sie eine Zuordnung tragen.
-  applicantSource   String?
-  propertyRef       String?
-  period            String? // Zeitraum, z.B. 2026-05
-  issuer            String? // Aussteller
+  applicantSource    String?
+  propertyRef        String?
+  period             String? // Zeitraum, z.B. 2026-05
+  issuer             String? // Aussteller
 
   // Qualitaet / Duplikat
   readable      Boolean?
@@ -1518,7 +1519,6 @@ model MachbarkeitsAnnahmen {
   @@map("machbarkeits_annahmen")
 }
 
-
 /**
  * Vorgeschlagene Aufteilung einer Sammeldatei. Lebt nur, bis der Vermittler
  * auftrennt oder verwirft – ausgefuehrt wird sie zu echten Dokumenten.
@@ -1560,7 +1560,6 @@ model Bank {
 
 /**
  * Ein Finanzierungskriterium einer Bank.
- *
  * `standAm` ist das Datum, das EUROPACE fuer diese Zeile nennt.
  * `importiertAm` ist unser Abrufdatum. Die beiden nie verwechseln: Wir koennen
  * heute geholt haben, waehrend die Bank sich zuletzt im Februar geaeussert hat.
@@ -1584,4 +1583,51 @@ model BankKriterium {
   @@unique([bankRefId, kriterium])
   @@index([kriterium, status])
   @@map("bank_kriterien")
+}
+
+/// Ein Abruf der Unterlagenanforderungen fuer GENAU EINE Bank.
+/// Bankwechsel ist deshalb eine Frage von `aktiv`, keine Loeschung: Was fuer
+/// Bank A geholt wurde, bleibt als Verlauf liegen.
+model BankAnforderungsAbruf {
+  id             String            @id @default(cuid())
+  caseId         String
+  case           Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  /// Europace-Produktanbieter-Id (z. B. ING_DIBA), wenn ermittelbar.
+  bankId         String?
+  bankName       String
+  /// "antrag" (verbindlich) | "vorschlag" (vor der Einreichung)
+  quelle         String
+  vorgangsNummer String
+  /// antragsNummer oder finanzierungsvorschlagsId
+  bezugsId       String
+  abgerufenAm    DateTime
+  aktiv          Boolean           @default(true)
+  anforderungen  BankAnforderung[]
+
+  @@unique([caseId, quelle, bezugsId])
+  @@index([caseId, aktiv])
+  @@map("bank_anforderungs_abrufe")
+}
+
+model BankAnforderung {
+  id                    String                @id @default(cuid())
+  abrufId               String
+  abruf                 BankAnforderungsAbruf @relation(fields: [abrufId], references: [id], onDelete: Cascade)
+  /// Unterlagenanforderung.id aus Europace
+  externeId             String
+  code                  String
+  text                  String
+  kurzbezeichnung       String
+  erfuellungskategorien String[]              @default([])
+  bezugTyp              String?
+  bezugName             String?
+  bezugRolle            String?
+  liegtVor              Boolean               @default(false)
+  ausgeblendet          Boolean               @default(false)
+  /// Beim Abruf aufgeloest und abgelegt, nicht bei jeder Anzeige neu gerechnet.
+  documentType          DocumentType?
+  applicantId           String?
+
+  @@unique([abrufId, externeId])
+  @@map("bank_anforderungen")
 }

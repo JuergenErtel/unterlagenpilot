@@ -46,6 +46,7 @@ function cockpit(over: {
     missingCustomerFields: over.missingCustomerFields ?? [],
     selbstauskunft: over.selbstauskunft,
     erstkontakt: over.erstkontakt,
+    anforderungsAbgleich: null,
   };
 }
 

@@ -922,7 +922,7 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
    * der URL unterscheiden – und damit die Fehlermeldungen an EINER Stelle
    * stehen und nicht dreimal auseinanderdriften.
    */
-  private async hole<T>(url: string, was: string): Promise<T> {
+  private async hole<T>(url: string, was: string, scope: string): Promise<T> {
     const token = await this.holeToken();
     let res: Response;
     try {
@@ -943,9 +943,11 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
     }
 
     if (res.status === 401 || res.status === 403) {
+      // Den Scope nennen, der WIRKLICH fuer diesen Aufruf gilt. Die Vorgaenge-API
+      // haengt an baufinanzierung:vorgang:lesen, nicht an den Unterlagen-Scopes –
+      // ein pauschaler Hinweis schickt beim Debuggen an die falsche Stelle.
       throw new EuropaceAuthError(
-        `Europace verweigert ${was}. Fehlt der Scope unterlagen:unterlage:lesen ` +
-          `bzw. unterlagen:freigabe:lesen im Zugang?`
+        `Europace verweigert ${was}. Fehlt der Scope ${scope} im Zugang?`
       );
     }
     if (res.status === 404) {
@@ -961,9 +963,11 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
   async holeAntraege(vorgangsNummer: string): Promise<EuropaceAntrag[]> {
     const body = await this.hole<{ antraege?: EuropaceAntrag[] } | EuropaceAntrag[]>(
       `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/antraege`,
-      `Antraege zu Vorgang ${vorgangsNummer}`
+      `Antraege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
     );
-    // Die Vorgaenge-API liefert je nach Endpunkt eine Liste oder eine Huelle.
+    // Die Spezifikation umhuellt die Liste immer; der Array-Zweig ist reine
+    // Absicherung gegen eine Formaenderung, kein dokumentierter Fall.
     return Array.isArray(body) ? body : (body.antraege ?? []);
   }
 
@@ -974,7 +978,8 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
       { finanzierungsvorschlaege?: EuropaceFinanzierungsvorschlag[] } | EuropaceFinanzierungsvorschlag[]
     >(
       `${BAUFI_HOST}/v3/vorgaenge/${encodeURIComponent(vorgangsNummer)}/finanzierungsvorschlaege`,
-      `Finanzierungsvorschlaege zu Vorgang ${vorgangsNummer}`
+      `Finanzierungsvorschlaege zu Vorgang ${vorgangsNummer}`,
+      "baufinanzierung:vorgang:lesen"
     );
     return Array.isArray(body) ? body : (body.finanzierungsvorschlaege ?? []);
   }
@@ -989,7 +994,10 @@ In `HttpEuropaceClient` diese Methoden ergänzen (vor der schliessenden Klammer 
         ? `${UNTERLAGEN_HOST}/dokumente/antrag/anforderungen?antragsNummer=${encodeURIComponent(p.bezugsId)}`
         : `${UNTERLAGEN_HOST}/dokumente/anforderungen?vorgangsNummer=${encodeURIComponent(p.vorgangsNummer)}&finanzierungsvorschlagsId=${encodeURIComponent(p.bezugsId)}`;
 
-    const body = await this.hole<Unterlagenanforderung[]>(url, "Unterlagenanforderungen");
+    // Die beiden Routen haengen an unterschiedlichen Scopes.
+    const scope =
+      p.quelle === "antrag" ? "unterlagen:freigabe:lesen" : "unterlagen:unterlage:lesen";
+    const body = await this.hole<Unterlagenanforderung[]>(url, "Unterlagenanforderungen", scope);
     return Array.isArray(body) ? body : [];
   }
 ```
@@ -1463,9 +1471,20 @@ export async function speichereAbruf(
 
     // Was die Bank nicht mehr nennt, faellt weg – sonst bliebe eine Anforderung
     // ewig stehen, die zurueckgezogen wurde.
-    await tx.bankAnforderung.deleteMany({
-      where: { abrufId: abruf.id, externeId: { notIn: behalten } },
-    });
+    //
+    // Die Fallunterscheidung haengt nicht an einer Zusicherung, sondern macht
+    // sich von einer Prisma-Interna unabhaengig: Wie ein leeres notIn uebersetzt
+    // wird, ist nirgends garantiert (gemessen an Prisma 6.2.1: "1=1", also
+    // alles loeschen – was hier zufaellig das Gewuenschte ist). Die Gegenrichtung
+    // "NOT IN (NULL)" traefe keine Zeile und liesse eine komplett zurueckgezogene
+    // Anforderungsliste stumm ueberleben. Der else-Zweig sagt, was gemeint ist.
+    if (behalten.length > 0) {
+      await tx.bankAnforderung.deleteMany({
+        where: { abrufId: abruf.id, externeId: { notIn: behalten } },
+      });
+    } else {
+      await tx.bankAnforderung.deleteMany({ where: { abrufId: abruf.id } });
+    }
 
     return { abrufId: abruf.id, zeilen: e.anforderungen.length };
   });
@@ -1693,6 +1712,17 @@ import type { AktiverAbruf } from "./speicher";
 export function anforderungsPositionen(abruf: AktiverAbruf): ChecklistItemDef[] {
   const bank = abruf.bankId ?? slug(abruf.bankName);
 
+  // Europace schickt EINE Zeile JE ANTRAGSTELLER – denselben Nachweis von
+  // beiden Personen also zweimal, mit gleichem Code. Die Checklisten-Engine
+  // dedupliziert nach `key` und wirft die zweite Zeile still weg. Ohne das
+  // Zaehlen hier gaelte die Position nach einem einzigen Dokument als erfuellt,
+  // waehrend die Bank noch auf das zweite wartet.
+  //
+  // Der Antragsteller darf NICHT in den Schluessel: abgleich.ts trifft bewusst
+  // nur ueber den Dokumenttyp, eine zweite Position gleichen Typs bliebe dort
+  // ungetroffen und wuerde faelschlich als "verlangt die Bank nicht" gemeldet.
+  // `perApplicant` scheidet ebenfalls aus – es multipliziert mit der
+  // Antragstellerzahl des FALLS, nicht mit dem, was die Bank verlangt.
   return abruf.anforderungen
     // Ausgeblendetes hat der Vermittler in Europace weggeklickt; was bereits
     // vorliegt, braucht keine offene Position.
@@ -1714,6 +1744,13 @@ export function anforderungsPositionen(abruf: AktiverAbruf): ChecklistItemDef[] 
     }));
 }
 ```
+
+**Gruppierung (verbindlich):** Die obige `.map()`-Form ist die Grundgestalt.
+Sie muss um eine Gruppierung nach `key` ergaenzt werden, bevor die Positionen
+entstehen: je Schluessel genau EINE Position, `requiredCount` = Anzahl der
+Anforderungen in der Gruppe, Reihenfolge nach erstem Auftreten. Bei mehr als
+einem Mitglied nennt `internalDescription` zusaetzlich die `bezugName`-Werte
+der Gruppe, damit sichtbar bleibt, wem welche Kopie gehoert.
 
 - [ ] **Step 5: Tests laufen lassen**
 

@@ -132,3 +132,54 @@ export interface EuropaceKundenangabenRequest {
     finanzierungsbedarf?: EuropaceFinanzierungsbedarf;
   };
 }
+
+/**
+ * Antwortformen der Europace-Unterlagen-API (GET /dokumente/anforderungen und
+ * GET /dokumente/antrag/anforderungen). Quelle: europace/unterlagen-api,
+ * swagger.yaml, Schema "Unterlagenanforderung".
+ *
+ * Fast alles ist optional: Die Spezifikation kennzeichnet kein Feld als
+ * required. Wer hier Pflichtfelder annimmt, baut sich einen Absturz bei der
+ * ersten Bank, die ein Feld weglaesst.
+ */
+export interface Produktanbieter {
+  id?: string;
+  bezeichnung?: string;
+}
+
+export interface Bezugskategorie {
+  /** antragsteller | immobilie | vorhaben | ratenkredit */
+  typ?: string;
+  id?: string;
+  name?: string;
+  rolle?: { typ?: string; name?: string };
+}
+
+export interface Unterlagenanforderung {
+  id: string;
+  code?: string;
+  text?: string;
+  kurzbezeichnung?: string;
+  erfuellungskategorien?: string[];
+  produktanbieter?: Produktanbieter;
+  bezug?: Bezugskategorie;
+  liegtVor?: boolean;
+  ausgeblendet?: boolean;
+}
+
+/** Auszug aus GET /v3/vorgaenge/{nr}/antraege (Vorgaenge-API v3). */
+export interface EuropaceAntrag {
+  antragsNummer?: string;
+  produktAnbieter?: Produktanbieter;
+  status?: { name?: string } | string;
+}
+
+/** Auszug aus GET /v3/vorgaenge/{nr}/finanzierungsvorschlaege (Vorgaenge-API v3). */
+export interface EuropaceFinanzierungsvorschlag {
+  id?: string;
+  darlehensSumme?: number;
+  rateMonatlich?: number;
+  sollZins?: number;
+  effektivZins?: number;
+  darlehen?: Array<{ produktAnbieter?: Produktanbieter }>;
+}
