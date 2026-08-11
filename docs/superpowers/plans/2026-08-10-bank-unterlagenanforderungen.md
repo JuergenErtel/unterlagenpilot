@@ -1712,6 +1712,17 @@ import type { AktiverAbruf } from "./speicher";
 export function anforderungsPositionen(abruf: AktiverAbruf): ChecklistItemDef[] {
   const bank = abruf.bankId ?? slug(abruf.bankName);
 
+  // Europace schickt EINE Zeile JE ANTRAGSTELLER – denselben Nachweis von
+  // beiden Personen also zweimal, mit gleichem Code. Die Checklisten-Engine
+  // dedupliziert nach `key` und wirft die zweite Zeile still weg. Ohne das
+  // Zaehlen hier gaelte die Position nach einem einzigen Dokument als erfuellt,
+  // waehrend die Bank noch auf das zweite wartet.
+  //
+  // Der Antragsteller darf NICHT in den Schluessel: abgleich.ts trifft bewusst
+  // nur ueber den Dokumenttyp, eine zweite Position gleichen Typs bliebe dort
+  // ungetroffen und wuerde faelschlich als "verlangt die Bank nicht" gemeldet.
+  // `perApplicant` scheidet ebenfalls aus – es multipliziert mit der
+  // Antragstellerzahl des FALLS, nicht mit dem, was die Bank verlangt.
   return abruf.anforderungen
     // Ausgeblendetes hat der Vermittler in Europace weggeklickt; was bereits
     // vorliegt, braucht keine offene Position.
@@ -1733,6 +1744,13 @@ export function anforderungsPositionen(abruf: AktiverAbruf): ChecklistItemDef[] 
     }));
 }
 ```
+
+**Gruppierung (verbindlich):** Die obige `.map()`-Form ist die Grundgestalt.
+Sie muss um eine Gruppierung nach `key` ergaenzt werden, bevor die Positionen
+entstehen: je Schluessel genau EINE Position, `requiredCount` = Anzahl der
+Anforderungen in der Gruppe, Reihenfolge nach erstem Auftreten. Bei mehr als
+einem Mitglied nennt `internalDescription` zusaetzlich die `bezugName`-Werte
+der Gruppe, damit sichtbar bleibt, wem welche Kopie gehoert.
 
 - [ ] **Step 5: Tests laufen lassen**
 
