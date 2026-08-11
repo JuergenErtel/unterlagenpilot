@@ -158,9 +158,14 @@ describe.runIf(RUN)("Abruf speichern (PGlite)", () => {
   });
 
   it("entfernt alle Anforderungen, wenn die Bank eine leere Liste meldet", async () => {
-    // Regressionsschutz: Prisma rendert notIn: [] als "NOT IN (NULL)", das
-    // trifft KEINE Zeile – ohne Fallunterscheidung ueberlebt eine komplett
-    // zurueckgezogene Anforderungsliste stumm in der Datenbank.
+    // Pinnt das gewuenschte Verhalten fest: eine auf null Anforderungen
+    // geschrumpfte Meldung darf keine BankAnforderung-Zeile stehen lassen,
+    // der Abruf selbst bleibt aber erhalten. Auf der gemessenen Prisma-
+    // Version (6.2.1) ist dieser Test NICHT scharf – notIn: [] kompiliert
+    // dort bereits zu "1=1" und loescht auch ohne den else-Zweig in
+    // speicher.ts alles. Der Wert liegt darin, das Verhalten gegen eine
+    // kuenftige Prisma-Version festzuschreiben, nicht darin, hier aktuell
+    // einen Fehler zu faengen.
     await speichereAbruf(eingabe());
     const r = await speichereAbruf(eingabe({ anforderungen: [] }));
     expect(r.zeilen).toBe(0);
