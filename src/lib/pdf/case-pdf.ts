@@ -135,6 +135,9 @@ export async function buildHandoverData(
 
   const haushalt = berechneHaushalt({
     income: c.income,
+    // Auch im Bank-PDF je Verdiener ausweisen: Die Bank rechnet mit der Summe,
+    // will aber sehen, woraus sie entsteht.
+    applicants: c.applicants,
     liabilities: c.liabilities,
     property: c.property,
     financing: c.financing,

@@ -66,6 +66,8 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export function berechneHaushalt(
   caseData: Pick<CanonicalCase, "income" | "liabilities" | "property" | "financing"> & {
+    /** Nur fuer die Beschriftung der Einnahmezeilen; fehlt sie, zaehlt die Position. */
+    applicants?: Array<{ position: number; vorname?: string; nachname?: string }>;
     applicantCount?: number;
     anzahlKinder?: number;
   },
@@ -81,9 +83,27 @@ export function berechneHaushalt(
   const mieteIncome = sum((caseData.income ?? []).map((i) => i.mieteinnahmen ?? 0));
   const mieteObjekt = caseData.property?.mieteinnahmenMonatlich ?? 0;
 
-  const einnahmen: HaushaltPosition[] = [
-    { label: "Nettoeinkommen (alle Antragsteller)", betrag: round2(netto) },
-  ];
+  // Je Verdiener eine Zeile, sobald mehrere beitragen. Die Summe aendert sich
+  // dadurch nicht – wohl aber die Nachvollziehbarkeit: Bei einer einzigen
+  // Sammelzeile liess sich nicht sehen, wer welchen Anteil traegt, und ein
+  // fehlendes Gehalt fiel gar nicht auf.
+  const nettoZeilen = (caseData.income ?? []).filter((i) => (i.nettoMonatlich ?? 0) > 0);
+  const nameFuer = (position: number): string => {
+    const a = (caseData.applicants ?? []).find((x) => x.position === position);
+    const name = [a?.vorname, a?.nachname].filter(Boolean).join(" ").trim();
+    return name || `Antragsteller ${position}`;
+  };
+
+  const einnahmen: HaushaltPosition[] =
+    nettoZeilen.length > 1
+      ? nettoZeilen
+          .slice()
+          .sort((x, y) => x.applicantPosition - y.applicantPosition)
+          .map((i) => ({
+            label: `Nettoeinkommen ${nameFuer(i.applicantPosition)}`,
+            betrag: round2(i.nettoMonatlich ?? 0),
+          }))
+      : [{ label: "Nettoeinkommen (alle Antragsteller)", betrag: round2(netto) }];
   if (sonstige > 0) einnahmen.push({ label: "Sonstige regelmäßige Einnahmen", betrag: round2(sonstige) });
   const mieteGesamt = mieteIncome + mieteObjekt;
   if (mieteGesamt > 0) {

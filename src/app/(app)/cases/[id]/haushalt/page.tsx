@@ -29,6 +29,7 @@ export default async function HaushaltPage({ params }: { params: Promise<{ id: s
 
   const r = berechneHaushalt({
     income: canonical.income,
+    applicants: canonical.applicants,
     liabilities: canonical.liabilities,
     property: canonical.property,
     financing: canonical.financing,
