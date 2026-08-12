@@ -122,7 +122,7 @@ const EMPLOYMENT_DE: Record<string, string> = {
   employed_unlimited: "angestellter",
   worker: "angestellter", // Arbeiter:in (nichtselbständig)
   self_employed: "selbststaendiger",
-  freelancer: "selbststaendiger",
+  freelancer: "freiberufler", // eigene Kategorie: Europace fuehrt FREIBERUFLER getrennt
   civil_servant: "beamter",
   other: "sonstiges",
   // plausibel, noch nicht beobachtet:

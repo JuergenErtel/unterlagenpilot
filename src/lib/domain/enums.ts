@@ -212,6 +212,7 @@ export const FINANCING_TYPE_LABELS: Record<FinancingType, string> = {
 export const EMPLOYMENT_TYPES = [
   "angestellter",
   "selbststaendiger",
+  "freiberufler",
   "beamter",
   "rentner",
   "geschaeftsfuehrer",
@@ -223,6 +224,7 @@ export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
   angestellter: "Angestellte:r",
   selbststaendiger: "Selbstständige:r",
+  freiberufler: "Freiberufler:in",
   beamter: "Beamt:in",
   rentner: "Rentner:in",
   geschaeftsfuehrer: "Geschäftsführer:in",

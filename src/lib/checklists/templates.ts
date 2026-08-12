@@ -291,7 +291,7 @@ const I = {
   }),
 };
 
-// ---- Die 16 fixen Checklisten ----
+// ---- Die 17 fixen Checklisten ----
 export const CHECKLIST_TEMPLATES: ChecklistTemplateDef[] = [
   {
     key: "angestellter_kauf",
@@ -304,6 +304,14 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplateDef[] = [
     name: "Selbstständiger + Kauf",
     description: "Kauf durch selbstständige/freiberufliche Antragsteller.",
     items: [I.ausweis, I.estBescheid, I.estErklaerung, I.bwa, I.susa, I.jahresabschluss, I.euer, I.eigenkapital, I.grundbuch, I.expose],
+  },
+  {
+    key: "freiberufler_kauf",
+    name: "Freiberufler + Kauf",
+    description: "Kauf durch freiberuflich taetige Antragsteller.",
+    // Ein Freiberufler ermittelt den Gewinn per Einnahmen-Ueberschuss-Rechnung,
+    // nicht per Bilanz: kein Jahresabschluss, keine Summen-/Saldenliste.
+    items: [I.ausweis, I.estBescheid, I.estErklaerung, I.euer, I.bwa, I.eigenkapital, I.grundbuch, I.expose],
   },
   {
     key: "neubau",

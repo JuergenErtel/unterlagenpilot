@@ -94,6 +94,14 @@ describe("Antragsteller-Detaildaten aus /loan_applications/{id}/applicants", () 
     expect(parseFinLinkLeadLoanApplicationIds(body)).toEqual(["LA-1", "LA-2"]);
     expect(parseFinLinkLeadLoanApplicationIds({ data: { id: "L-1" } })).toEqual([]);
   });
+
+  it("uebersetzt freelancer auf die eigene Kategorie, nicht auf selbststaendig", () => {
+    const body = {
+      data: [{ id: "as-1", attributes: { first_name: "Mo", employment_status: "freelancer" } }],
+    };
+    const [a] = parseFinLinkApplicantsResponse(body);
+    expect(a!.beschaeftigung?.art).toBe("freiberufler");
+  });
 });
 
 describe("user_meta-Fallback (576 von 905 Bestands-Leads haben Namen NUR dort)", () => {

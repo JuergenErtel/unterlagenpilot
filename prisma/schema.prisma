@@ -102,6 +102,7 @@ enum FinancingType {
 enum EmploymentType {
   angestellter
   selbststaendiger
+  freiberufler
   beamter
   rentner
   geschaeftsfuehrer

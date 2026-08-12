@@ -254,3 +254,21 @@ describe("Gemischtes Paar: selbstständig + angestellt", () => {
     expect(list.find((p) => p.key === "gehaltsabrechnung")).toBeDefined();
   });
 });
+
+describe("Freiberufler", () => {
+  it("verlangt vom Freiberufler EUER statt Bilanz", () => {
+    const eingabe = {
+      financingType: "kauf" as const,
+      applicantCount: 1,
+      applicantIds: ["a1"],
+      applicants: [{ id: "a1", employmentType: "freiberufler" as const }],
+    };
+    const list = buildChecklistForCase(eingabe, []);
+    const schluessel = list.map((p) => p.key);
+    expect(schluessel).toContain("euer");
+    expect(schluessel).toContain("bwa");
+    expect(schluessel).not.toContain("jahresabschluss");
+    expect(schluessel).not.toContain("susa");
+    expect(schluessel).not.toContain("gehaltsabrechnung");
+  });
+});

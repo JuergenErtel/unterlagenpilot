@@ -388,3 +388,17 @@ describe("canonicalToKundenangaben – Finanzierungsbedarf", () => {
     }
   );
 });
+
+describe("canonicalToKundenangaben – Freiberufler", () => {
+  it("sendet FREIBERUFLER als eigenen Typ – das Schema kennt ihn", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        applicants: [{ position: 1, vorname: "Mo", nachname: "Lahwani" }],
+        employment: [{ applicantPosition: 1, beschaeftigungsart: "freiberufler" }],
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    const kunde = r.kundenangaben.haushalte![0]!.kunden![0]!;
+    expect(kunde.finanzielles?.beschaeftigung?.["@type"]).toBe("FREIBERUFLER");
+  });
+});

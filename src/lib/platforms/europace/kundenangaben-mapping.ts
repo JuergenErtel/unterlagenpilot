@@ -49,6 +49,7 @@ const BESCHAEFTIGUNGSTYP: Record<EmploymentType, string | null> = {
   angestellter: "ANGESTELLTER",
   beamter: "BEAMTER",
   selbststaendiger: "SELBSTSTAENDIGER",
+  freiberufler: "FREIBERUFLER",
   geschaeftsfuehrer: "SELBSTSTAENDIGER",
   gesellschafter: "SELBSTSTAENDIGER",
   rentner: "RENTNER",

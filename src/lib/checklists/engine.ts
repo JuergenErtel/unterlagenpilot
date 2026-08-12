@@ -74,6 +74,9 @@ export function selectTemplateKeys(input: CaseChecklistInput): string[] {
       case "selbststaendiger":
         keys.add("selbststaendiger_kauf");
         break;
+      case "freiberufler":
+        keys.add("freiberufler_kauf");
+        break;
       case "beamter":
         keys.add("beamter");
         break;
