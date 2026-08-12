@@ -56,9 +56,11 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import {
   CASE_STATUS_LABELS,
   DOCUMENT_REVIEW_STATUS_LABELS,
+  EMPLOYMENT_TYPE_LABELS,
   LOCKED_CASE_STATUSES,
   type CaseStatus,
   type DocumentReviewStatus,
+  type EmploymentType,
   type DocumentType,
   type Severity,
 } from "@/lib/domain/enums";
@@ -76,7 +78,20 @@ export default async function CaseCockpitPage({
 
   const caseRow = await prisma.case.findFirst({
     where: { id, organizationId: ctx.organizationId },
-    include: { applicants: { orderBy: { position: "asc" } }, property: true, financingRequest: true },
+    include: {
+      // Beschaeftigung und Einkommen gehoeren mit an die Antragsteller-Karte:
+      // Sie standen bisher NUR als Haushaltssumme in der Rechnung, das Gehalt
+      // einer einzelnen Person war im ganzen Fall nirgends zu sehen.
+      applicants: {
+        orderBy: { position: "asc" },
+        include: {
+          employment: { orderBy: { createdAt: "asc" } },
+          income: { orderBy: { createdAt: "asc" } },
+        },
+      },
+      property: true,
+      financingRequest: true,
+    },
   });
   if (!caseRow) notFound();
 
@@ -551,15 +566,58 @@ export default async function CaseCockpitPage({
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-base">Antragsteller</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    {caseRow.applicants.map((a) => (
-                      <div key={a.id} className="rounded-md border p-3">
-                        <div className="flex items-center gap-2 font-medium">
-                          {[a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`}
-                          {!a.geburtsdatum && <Badge variant="destructive">Geburtsdatum fehlt</Badge>}
+                    {caseRow.applicants.map((a) => {
+                      const besch = a.employment[0];
+                      const eink = a.income[0];
+                      const beruf = [besch?.beruf, besch?.arbeitgeber].filter(Boolean).join(" bei ");
+                      return (
+                        <div key={a.id} className="rounded-md border p-3">
+                          <div className="flex items-center gap-2 font-medium">
+                            {[a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`}
+                            {!a.geburtsdatum && <Badge variant="destructive">Geburtsdatum fehlt</Badge>}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{[a.city, a.familienstand ?? undefined].filter(Boolean).join(" · ")}</div>
+                          {(besch || eink) && (
+                            <div className="mt-2 space-y-0.5 border-t pt-2 text-xs">
+                              {besch?.beschaeftigungsart && (
+                                <div>
+                                  <span className="text-muted-foreground">Beschäftigung: </span>
+                                  {EMPLOYMENT_TYPE_LABELS[besch.beschaeftigungsart as EmploymentType] ??
+                                    besch.beschaeftigungsart}
+                                  {besch.inProbezeit && <Badge variant="warning" className="ml-1.5">Probezeit</Badge>}
+                                </div>
+                              )}
+                              {beruf && (
+                                <div>
+                                  <span className="text-muted-foreground">Tätigkeit: </span>
+                                  {beruf}
+                                </div>
+                              )}
+                              {besch?.eintrittsdatum && (
+                                <div>
+                                  <span className="text-muted-foreground">Beschäftigt seit: </span>
+                                  {besch.eintrittsdatum.toLocaleDateString("de-DE")}
+                                  {besch.befristetBis &&
+                                    ` · befristet bis ${besch.befristetBis.toLocaleDateString("de-DE")}`}
+                                </div>
+                              )}
+                              {/* Das Gehalt JE PERSON – bis hierher gab es im
+                                  ganzen Fall nur die Haushaltssumme. */}
+                              <div>
+                                <span className="text-muted-foreground">Netto monatlich: </span>
+                                {eink?.nettoMonatlich != null ? (
+                                  <span className="font-medium tabular-nums">
+                                    {Math.round(eink.nettoMonatlich).toLocaleString("de-DE")} €
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">nicht erfasst</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground">{[a.city, a.familienstand ?? undefined].filter(Boolean).join(" · ")}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </CardContent>
                 </Card>
               </div>
