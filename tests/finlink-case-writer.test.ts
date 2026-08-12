@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync } from "node:child_process";
+import { sauberName } from "@/lib/platforms/case-writer";
 
 const RUN = process.env.RUN_DB_IT === "1";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,5 +149,22 @@ describe.runIf(RUN)("createCaseFromCanonical (PGlite)", () => {
     expect(second.caseId).toBe(first.caseId);
     const count = await prisma.case.count({ where: { organizationId: orgId, finlinkId: "FL-DUP" } });
     expect(count).toBe(1);
+  });
+});
+
+describe("Namen aus fremden Systemen", () => {
+  it("schneidet Leerraum ab – FinLink liefert 'Mohammad ' mit angehaengtem Leerzeichen", () => {
+    // Gemessen am Fall UP-2026-0007: vorname "[Mohammad ]", nachname
+    // "[Lahwani ]". Die Anrede baut "Hallo ${Name}," – daraus wurde
+    // "Hallo Mohammad  Lahwani ,". Betrifft Anrede, Dateinamen und Bank-PDFs.
+    expect(sauberName("Mohammad ")).toBe("Mohammad");
+    expect(sauberName("  Lahwani  ")).toBe("Lahwani");
+    expect(sauberName("Anna  Lena")).toBe("Anna Lena");
+  });
+
+  it("macht aus einem reinen Leerzeichen-Namen null statt eines leeren Namens", () => {
+    expect(sauberName("   ")).toBeNull();
+    expect(sauberName(null)).toBeNull();
+    expect(sauberName(undefined)).toBeNull();
   });
 });

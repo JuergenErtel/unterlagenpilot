@@ -13,6 +13,21 @@ export interface WriteResult {
   deduped: boolean;
 }
 
+/**
+ * Bereinigt einen Namen aus einem Fremdsystem: Leerraum aussen weg, mehrfache
+ * Leerzeichen innen zu einem. Nur Leerraum wird zu null.
+ *
+ * FinLink liefert Namen mit angehaengtem Leerzeichen ("Mohammad ", "Lahwani "
+ * im Fall UP-2026-0007). Das faellt erst spaet auf, weil es nirgends kracht –
+ * es steht dann in der Anrede ("Hallo Mohammad  Lahwani ,"), im erzeugten
+ * Dateinamen und in der Bankzusammenfassung. Der Namensabgleich fuer
+ * Dokumente ist nicht betroffen, der zerlegt in Woerter.
+ */
+export function sauberName(wert: string | null | undefined): string | null {
+  const s = (wert ?? "").replace(/\s+/g, " ").trim();
+  return s === "" ? null : s;
+}
+
 /** true bei Prisma-Unique-Constraint-Verletzung (P2002). */
 function isUniqueViolation(e: unknown): boolean {
   return typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002";
@@ -54,8 +69,8 @@ export async function createCaseFromCanonical(
     const inc = canonical.income.filter((i) => i.applicantPosition === a.position);
     return {
       position: a.position,
-      vorname: a.vorname ?? null,
-      nachname: a.nachname ?? null,
+      vorname: sauberName(a.vorname),
+      nachname: sauberName(a.nachname),
       geburtsdatum: a.geburtsdatum ? new Date(a.geburtsdatum) : null,
       geburtsort: a.geburtsort ?? null,
       staatsangehoerigkeit: a.staatsangehoerigkeit ?? null,
@@ -155,8 +170,8 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
           data: {
             caseId: c.id,
             position: a.position,
-            vorname: a.vorname ?? null,
-            nachname: a.nachname ?? null,
+            vorname: sauberName(a.vorname),
+            nachname: sauberName(a.nachname),
             geburtsdatum: a.geburtsdatum ? new Date(a.geburtsdatum) : null,
             geburtsort: a.geburtsort ?? null,
             staatsangehoerigkeit: a.staatsangehoerigkeit ?? null,
@@ -184,8 +199,8 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
           filledFields.push(`${feld} (Antragsteller ${a.position})`);
         }
       };
-      fill("vorname", existing.vorname, a.vorname);
-      fill("nachname", existing.nachname, a.nachname);
+      fill("vorname", existing.vorname, sauberName(a.vorname));
+      fill("nachname", existing.nachname, sauberName(a.nachname));
       fill("geburtsdatum", existing.geburtsdatum, a.geburtsdatum ? new Date(a.geburtsdatum) : undefined);
       fill("geburtsort", existing.geburtsort, a.geburtsort);
       fill("staatsangehoerigkeit", existing.staatsangehoerigkeit, a.staatsangehoerigkeit);
