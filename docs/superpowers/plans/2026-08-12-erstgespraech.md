@@ -182,6 +182,16 @@ SQL
 scripts/supabase-sql.sh /tmp/freiberufler.sql
 ```
 
+**Wenn das scheitert:** `scripts/supabase-sql.sh` faehrt jede Datei in einer
+Transaktion. Aeltere Postgres-Versionen verweigern `ALTER TYPE … ADD VALUE`
+darin ("cannot run inside a transaction block"). Kommt dieser Fehler, den
+Befehl einmalig ohne Transaktion absetzen — NICHT das Skript umbauen, andere
+Aufgaben verlassen sich auf dessen Rollback-Verhalten:
+
+```bash
+npx tsx --env-file=.env -e 'import{PrismaClient}from"@prisma/client";const p=new PrismaClient();await p.$executeRawUnsafe(`ALTER TYPE unterlagenpilot."EmploymentType" ADD VALUE IF NOT EXISTS '"'"'freiberufler'"'"'`);await p.$disconnect()'
+```
+
 Gegenprüfen:
 
 ```bash
@@ -805,7 +815,33 @@ describe("Erstgespraech: ein Feld speichern", () => {
 Ausführen: `npx vitest run tests/erstgespraech-action.test.ts`
 Erwartung: FAIL — Modul nicht gefunden.
 
-- [ ] **Schritt 3: Server Action schreiben**
+- [ ] **Schritt 3: Zuerst den Katalog um die Konditionsfragen erweitern**
+
+Muss VOR der Server Action passieren: Deren Positivliste erlaubter Zielfelder
+entsteht aus dem Katalog. Fehlen die drei Felder dort, weist sie die eigenen
+Eingaben ab.
+
+In `src/lib/self-disclosure/catalog.ts` einen Abschnitt ergaenzen — die
+vorhandenen Eintraege als Muster nehmen:
+
+```ts
+  {
+    id: "kondition",
+    abschnitt: "vorhaben",
+    frage: "Wie soll die Finanzierung aussehen?",
+    felder: [
+      { id: "zinsbindung", label: "Zinsbindung in Jahren", typ: "zahl", ziel: { entitaet: "financingRequest", feld: "zinsbindungJahre" } },
+      { id: "sondertilgung", label: "Sondertilgung gewünscht?", typ: "janein", ziel: { entitaet: "financingRequest", feld: "sondertilgungGewuenscht" } },
+      { id: "wunschrate", label: "Wunschrate monatlich", typ: "betrag", ziel: { entitaet: "financingRequest", feld: "wunschrateMonatlich" } },
+    ],
+  },
+```
+
+Pruefen, ob der Feldtyp `janein` im Kundenmodus vorhanden ist
+(`src/lib/self-disclosure/types.ts`); fehlt er, den vorhandenen Auswahltyp
+verwenden statt einen neuen zu erfinden.
+
+- [ ] **Schritt 4: Server Action schreiben**
 
 `src/lib/actions/erstgespraech.ts`:
 
@@ -850,31 +886,10 @@ export async function speichereGespraechsfeld(
 }
 ```
 
-**Hinweis:** Die drei neuen Konditionsfelder stehen noch nicht im Katalog. Sie müssen dort als eigener Abschnitt ergänzt werden (siehe Schritt 5), sonst weist die Prüfung sie ab.
-
-- [ ] **Schritt 4: Tests laufen lassen — sie müssen bestehen**
+- [ ] **Schritt 5: Tests laufen lassen — sie müssen bestehen**
 
 Ausführen: `npx vitest run tests/erstgespraech-action.test.ts`
 Erwartung: PASS.
-
-- [ ] **Schritt 5: Katalog um die Konditionsfragen erweitern**
-
-In `src/lib/self-disclosure/catalog.ts` einen Abschnitt `kondition` ergänzen — die vorhandenen Einträge als Muster nehmen:
-
-```ts
-  {
-    id: "kondition",
-    abschnitt: "vorhaben",
-    frage: "Wie soll die Finanzierung aussehen?",
-    felder: [
-      { id: "zinsbindung", label: "Zinsbindung in Jahren", typ: "zahl", ziel: { entitaet: "financingRequest", feld: "zinsbindungJahre" } },
-      { id: "sondertilgung", label: "Sondertilgung gewünscht?", typ: "janein", ziel: { entitaet: "financingRequest", feld: "sondertilgungGewuenscht" } },
-      { id: "wunschrate", label: "Wunschrate monatlich", typ: "betrag", ziel: { entitaet: "financingRequest", feld: "wunschrateMonatlich" } },
-    ],
-  },
-```
-
-Prüfen, ob der Feldtyp `janein` im Kundenmodus vorhanden ist (`src/lib/self-disclosure/types.ts`); fehlt er, den vorhandenen Auswahltyp verwenden statt einen neuen zu erfinden.
 
 - [ ] **Schritt 6: Seite und Bauteile schreiben**
 
