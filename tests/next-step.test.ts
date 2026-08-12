@@ -51,6 +51,56 @@ function cockpit(over: {
   };
 }
 
+describe("computeNextStep – wartende Schritte", () => {
+  it("verliert die Dokumentfreigabe nicht, wenn ein höherer Schritt sie verdrängt", () => {
+    // Genau der Fall UP-2026-0007: Exposé ausgewertet und freigabebereit,
+    // aber der Erstkontakt steht darüber – die Freigabe war dadurch unsichtbar.
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 1 },
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_vorbereiten");
+    expect(s.wartet).toEqual([
+      { label: "1 Dokument prüfen & freigeben", href: "/review?case=c1" },
+    ]);
+  });
+
+  it("nennt die Freigabe nicht doppelt, wenn sie selbst der Hauptschritt ist", () => {
+    const s = computeNextStep(cockpit({ counts: { pruefbereit: 2 } }));
+    expect(s.key).toBe("dokumente_freigeben");
+    expect(s.wartet).toBeUndefined();
+  });
+
+  it("meldet nichts Wartendes, solange kein Dokument freigabebereit ist", () => {
+    const s = computeNextStep(
+      cockpit({
+        missingCustomerFields: ["Geburtsdatum Anna"],
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+      })
+    );
+    expect(s.wartet).toBeUndefined();
+  });
+
+  it("zählt mehrere wartende Dokumente im Plural", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 3 },
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: false },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+    expect(s.wartet?.[0]!.label).toBe("3 Dokumente prüfen & freigeben");
+  });
+
+  it("meldet während des KI-Laufs nichts Wartendes (die Dokumente sind noch nicht bereit)", () => {
+    const s = computeNextStep(cockpit({ status: "ki_pruefung_laeuft", counts: { pruefbereit: 2, docsLaufend: 2 } }));
+    expect(s.key).toBe("ki_laeuft");
+    expect(s.wartet).toBeUndefined();
+  });
+});
+
 describe("computeNextStep – Prioritätsleiter", () => {
   it("KI läuft schlägt alles", () => {
     const s = computeNextStep(

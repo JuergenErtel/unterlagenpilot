@@ -44,6 +44,22 @@ export function NextStepCard({ step, actionSlot }: { step: NextStep; actionSlot?
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nächster Schritt</div>
           <div className="text-lg font-semibold leading-snug">{step.title}</div>
           <p className="mt-0.5 text-sm text-muted-foreground">{step.reason}</p>
+          {/* Verdrängte Schritte: als Zeile, nicht als zweiter Knopf – sonst
+              stünden zwei Hauptaktionen nebeneinander und die Leiter verlöre
+              ihren Sinn. */}
+          {step.wartet && step.wartet.length > 0 && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Wartet außerdem:</span>{" "}
+              {step.wartet.map((w, i) => (
+                <span key={`${w.href}|${w.label}`}>
+                  {i > 0 && ", "}
+                  <Link href={w.href} className="text-primary underline underline-offset-2">
+                    {w.label}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto">
           {actionSlot}

@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { listUploadLinks } from "@/lib/security/upload-link";
-import { runAiCheck } from "@/lib/actions/cases";
+import { runAiCheck, acceptDocument } from "@/lib/actions/cases";
 import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
 import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
@@ -466,7 +466,28 @@ export default async function CaseCockpitPage({
                               {d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
                                 <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
                               ) : d.reviewStatus === "offen" ? (
-                                <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
+                                // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
+                                // stand nur ein passives Abzeichen, und der einzige Weg zur
+                                // Uebernahme lag im Review-Center - darauf kam niemand, der
+                                // es nicht ohnehin wusste. Erst wenn die KI fertig ist, sonst
+                                // gaebe man ein Dokument ohne erkannte Daten frei.
+                                d.classificationStatus === "fertig" ? (
+                                  <div className="flex items-center gap-2">
+                                    <form action={acceptDocument.bind(null, d.id)}>
+                                      <SubmitButton size="sm" pendingLabel="Wird übernommen …">
+                                        Freigeben
+                                      </SubmitButton>
+                                    </form>
+                                    <Link
+                                      href={`/review?case=${id}`}
+                                      className="whitespace-nowrap text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                    >
+                                      Felder ansehen
+                                    </Link>
+                                  </div>
+                                ) : (
+                                  <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
+                                )
                               ) : d.reviewStatus === "akzeptiert" ? (
                                 <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
                               ) : (

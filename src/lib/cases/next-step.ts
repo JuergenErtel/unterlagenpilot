@@ -32,6 +32,14 @@ export interface NextStep {
    */
   cta?: { label: string; href: string };
   secondary?: Array<{ label: string; href: string }>;
+  /**
+   * Schritte, die bereit wären, aber von einem höher stehenden verdrängt
+   * wurden. Die Leiter bleibt bewusst "ein Hauptschritt" – ohne diesen Hinweis
+   * verschwand die Dokumentfreigabe jedoch spurlos, sobald irgendetwas darüber
+   * rankte, und mit ihr der einzige Weg, die erkannten Daten in die Akte zu
+   * bekommen (Fall UP-2026-0007). Nur Wegweiser, nie die Hauptaktion.
+   */
+  wartet?: Array<{ label: string; href: string }>;
 }
 
 /**
@@ -83,6 +91,30 @@ export interface NextStepInput {
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
+  const schritt = ermittleSchritt(c);
+  const wartet = ermittleWartende(c, schritt);
+  return wartet.length > 0 ? { ...schritt, wartet } : schritt;
+}
+
+/**
+ * Verdrängte, aber sofort erledigbare Schritte. Bewusst kurz gehalten: Der
+ * Hinweis soll die eine Hauptaufgabe nicht zerreden.
+ */
+function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: string; href: string }> {
+  const wartet: Array<{ label: string; href: string }> = [];
+  // Während des KI-Laufs ist "freigabebereit" nur ein Zwischenstand – die
+  // Dokumente tauchen gleich wieder auf, ein Hinweis wäre irreführend.
+  const kiLaeuft = schritt.key === "ki_laeuft";
+  if (!kiLaeuft && schritt.key !== "dokumente_freigeben" && c.counts.pruefbereit > 0) {
+    wartet.push({
+      label: `${c.counts.pruefbereit} Dokument${c.counts.pruefbereit === 1 ? "" : "e"} prüfen & freigeben`,
+      href: `/review?case=${c.caseId}`,
+    });
+  }
+  return wartet;
+}
+
+function ermittleSchritt(c: NextStepInput): NextStep {
   const id = c.caseId;
 
   if (c.status === "ki_pruefung_laeuft" || c.counts.docsLaufend > 0) {
