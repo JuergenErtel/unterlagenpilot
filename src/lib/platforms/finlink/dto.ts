@@ -17,6 +17,9 @@ const beschaeftigung = z
     art: z.string().optional(),
     beruf: z.string().optional(),
     arbeitgeber: z.string().optional(),
+    eintrittsdatum: z.string().optional(),
+    befristetBis: z.string().nullable().optional(),
+    inProbezeit: z.boolean().optional(),
   })
   .optional();
 
@@ -424,15 +427,104 @@ const apiLoanApplicantSchema = z.object({
 
 type Antragsteller = FinLinkVorgangDTO["antragsteller"][number];
 
+/**
+ * Arbeitgebersaetze aus dem `included`-Block einer JSON:API-Antwort, nach ID.
+ *
+ * Die Partner-API liefert `attributes.employer_meta` in Echtdaten als NULL und
+ * stellt den Arbeitgeber stattdessen als eigene Ressource bereit, verknuepft
+ * ueber `relationships.employers`. Gemessen am Lead des Falls UP-2026-0007
+ * (12.08.2026) hingen dort Arbeitgeber, Berufsbezeichnung, Eintrittsdatum,
+ * Probezeit UND das Nettogehalt der zweiten Antragstellerin – all das fehlte
+ * im Fall, weil nur `employer_meta` gelesen wurde.
+ */
+const employerSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  attributes: z
+    .object({
+      name: z.string().optional().nullable(),
+      role_title: z.string().optional().nullable(),
+      current_employer: z.boolean().optional().nullable(),
+      in_probation_period: z.boolean().optional().nullable(),
+      limited_contract: z.boolean().optional().nullable(),
+      monthly_net_salary: numOrStr,
+      start_date: z.string().optional().nullable(),
+      end_date: z.string().optional().nullable(),
+    })
+    .passthrough(),
+});
+
+type Employer = z.infer<typeof employerSchema>;
+
+function arbeitgeberVerzeichnis(body: unknown): Map<string, Employer> {
+  const parsed = z
+    .object({ included: z.array(z.unknown()).optional().nullable() })
+    .safeParse(body);
+  const verzeichnis = new Map<string, Employer>();
+  for (const eintrag of parsed.success ? (parsed.data.included ?? []) : []) {
+    const e = employerSchema.safeParse(eintrag);
+    if (e.success && e.data.type === "employer") verzeichnis.set(e.data.id, e.data);
+  }
+  return verzeichnis;
+}
+
+/** Der aktuelle Arbeitgeber; sonst der erste verknuepfte. */
+function aktuellerArbeitgeber(
+  ap: { relationships?: { employers?: { data?: Array<{ id: string }> | null } | null } | null },
+  verzeichnis: Map<string, Employer>
+): Employer | undefined {
+  const verknuepft = (ap.relationships?.employers?.data ?? [])
+    .map((r) => verzeichnis.get(r.id))
+    .filter((e): e is Employer => e !== undefined);
+  return verknuepft.find((e) => e.attributes.current_employer) ?? verknuepft[0];
+}
+
+/** "2024-11-01T00:00:00.000+01:00" -> "2024-11-01"; alles andere -> undefined. */
+function alsDatum(wert: string | null | undefined): string | undefined {
+  const m = /^\d{4}-\d{2}-\d{2}/.exec((wert ?? "").trim());
+  return m ? m[0] : undefined;
+}
+
 export function parseFinLinkApplicantsResponse(body: unknown): Antragsteller[] {
   const parsed = z.object({ data: z.array(apiLoanApplicantSchema) }).parse(body);
-  return parsed.data.map((ap) => {
+  const verzeichnis = arbeitgeberVerzeichnis(body);
+  const verknuepfung = z
+    .object({
+      data: z.array(
+        z
+          .object({
+            relationships: z
+              .object({
+                employers: z
+                  .object({ data: z.array(z.object({ id: z.string() })).optional().nullable() })
+                  .optional()
+                  .nullable(),
+              })
+              .passthrough()
+              .optional()
+              .nullable(),
+          })
+          .passthrough()
+      ),
+    })
+    .safeParse(body);
+
+  return parsed.data.map((ap, index) => {
     const at = ap.attributes;
     const kinder = toNumber(at.number_of_dependants);
     const beschaeftigungsart = translate(EMPLOYMENT_DE, at.employment_status ?? undefined);
-    const arbeitgeber = at.employer_meta?.name ?? undefined;
-    const beruf = at.employer_meta?.role_title ?? undefined;
-    const netto = toNumber(at.monthly_net_income);
+    const roh = verknuepfung.success ? verknuepfung.data.data[index] : undefined;
+    const emp = roh ? aktuellerArbeitgeber(roh, verzeichnis) : undefined;
+    // employer_meta bleibt als Quelle bestehen: Es ist heute leer, aber ein
+    // gefuellter Wert dort waere naeher am Antragsteller als die Relation.
+    const arbeitgeber = at.employer_meta?.name ?? emp?.attributes.name ?? undefined;
+    const beruf = at.employer_meta?.role_title ?? emp?.attributes.role_title ?? undefined;
+    const eintrittsdatum = alsDatum(emp?.attributes.start_date);
+    const befristetBis = alsDatum(emp?.attributes.end_date) ?? null;
+    const inProbezeit = emp?.attributes.in_probation_period ?? undefined;
+    // Das Gehalt am Arbeitgebersatz ist der Rueckfall: Bei der zweiten
+    // Antragstellerin des Falls UP-2026-0007 stand das Einkommen NUR dort.
+    const netto = toNumber(at.monthly_net_income) ?? toNumber(emp?.attributes.monthly_net_salary);
     return {
       vorname: at.first_name ?? undefined,
       nachname: at.last_name ?? undefined,
@@ -447,7 +539,9 @@ export function parseFinLinkApplicantsResponse(body: unknown): Antragsteller[] {
       email: at.email_address ?? undefined,
       telefon: at.phone_number ?? undefined,
       beschaeftigung:
-        beschaeftigungsart || beruf || arbeitgeber ? { art: beschaeftigungsart, beruf, arbeitgeber } : undefined,
+        beschaeftigungsart || beruf || arbeitgeber || eintrittsdatum || inProbezeit != null
+          ? { art: beschaeftigungsart, beruf, arbeitgeber, eintrittsdatum, befristetBis, inProbezeit }
+          : undefined,
       einkommen: netto != null ? { nettoMonatlich: netto } : undefined,
     };
   });

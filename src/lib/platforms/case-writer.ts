@@ -86,6 +86,9 @@ export async function createCaseFromCanonical(
           beschaeftigungsart: e.beschaeftigungsart ?? null,
           beruf: e.beruf ?? null,
           arbeitgeber: e.arbeitgeber ?? null,
+          eintrittsdatum: e.eintrittsdatum ? new Date(e.eintrittsdatum) : null,
+          befristetBis: e.befristetBis ? new Date(e.befristetBis) : null,
+          inProbezeit: e.inProbezeit ?? false,
         })),
       },
       income: {
@@ -183,7 +186,18 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
             email: a.email ?? null,
             phone: a.telefon ?? null,
             employment: emp
-              ? { create: [{ beschaeftigungsart: emp.beschaeftigungsart ?? null, beruf: emp.beruf ?? null, arbeitgeber: emp.arbeitgeber ?? null }] }
+              ? {
+                  create: [
+                    {
+                      beschaeftigungsart: emp.beschaeftigungsart ?? null,
+                      beruf: emp.beruf ?? null,
+                      arbeitgeber: emp.arbeitgeber ?? null,
+                      eintrittsdatum: emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : null,
+                      befristetBis: emp.befristetBis ? new Date(emp.befristetBis) : null,
+                      inProbezeit: emp.inProbezeit ?? false,
+                    },
+                  ],
+                }
               : undefined,
             income: inc?.nettoMonatlich != null ? { create: [{ nettoMonatlich: inc.nettoMonatlich }] } : undefined,
           },
@@ -220,9 +234,34 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
             beschaeftigungsart: emp.beschaeftigungsart ?? null,
             beruf: emp.beruf ?? null,
             arbeitgeber: emp.arbeitgeber ?? null,
+            eintrittsdatum: emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : null,
+            befristetBis: emp.befristetBis ? new Date(emp.befristetBis) : null,
+            inProbezeit: emp.inProbezeit ?? false,
           },
         });
         filledFields.push(`Beschäftigung (Antragsteller ${a.position})`);
+      } else if (emp && existing.employment[0]) {
+        // Ein vorhandener Datensatz ist nicht dasselbe wie ein gefuellter:
+        // Der FinLink-Import legte bisher nur die Beschaeftigungsart an, Beruf
+        // und Arbeitgeber blieben leer. Wer hier auf "Datensatz existiert"
+        // prueft, traegt sie nie nach – die Regel lautet "leere FELDER
+        // fuellen", nicht "leere Datensaetze fuellen".
+        const vorhanden = existing.employment[0];
+        const nach: Record<string, unknown> = {};
+        const fuelle = (feld: string, alt: unknown, neu: unknown) => {
+          if ((alt == null || alt === "") && neu != null && neu !== "") nach[feld] = neu;
+        };
+        fuelle("beschaeftigungsart", vorhanden.beschaeftigungsart, emp.beschaeftigungsart);
+        fuelle("beruf", vorhanden.beruf, emp.beruf);
+        fuelle("arbeitgeber", vorhanden.arbeitgeber, emp.arbeitgeber);
+        fuelle("eintrittsdatum", vorhanden.eintrittsdatum, emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : undefined);
+        fuelle("befristetBis", vorhanden.befristetBis, emp.befristetBis ? new Date(emp.befristetBis) : undefined);
+        if (Object.keys(nach).length > 0) {
+          await tx.employmentRecord.update({ where: { id: vorhanden.id }, data: nach });
+          filledFields.push(
+            ...Object.keys(nach).map((f) => `${f} (Antragsteller ${a.position})`)
+          );
+        }
       }
       if (existing.income.length === 0 && inc?.nettoMonatlich != null) {
         await tx.incomeRecord.create({ data: { applicantId: existing.id, nettoMonatlich: inc.nettoMonatlich } });

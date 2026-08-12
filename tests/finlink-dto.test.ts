@@ -338,3 +338,90 @@ describe("parseFinLinkLeadQuelle", () => {
     expect(parseFinLinkLeadQuelle(null)).toEqual({ sourceType: null, source: null });
   });
 });
+
+describe("Arbeitgeber aus den included-Ressourcen", () => {
+  /**
+   * Gemessen am echten Lead des Falls UP-2026-0007 (12.08.2026): Die
+   * Partner-API liefert `attributes.employer_meta` als NULL und stellt den
+   * Arbeitgeber stattdessen als eigene JSON:API-Ressource unter `included`
+   * bereit, verknuepft ueber `relationships.employers`. Der Parser las nur
+   * `employer_meta` – Arbeitgeber, Beruf, Eintrittsdatum und bei der zweiten
+   * Antragstellerin das ganze Einkommen (2.750 EUR) gingen verloren.
+   */
+  const antwort = {
+    data: [
+      {
+        id: "as-1",
+        attributes: {
+          first_name: "Hanaa",
+          last_name: "Naamneh",
+          employment_status: "employed_unlimited",
+          employer_meta: null,
+        },
+        relationships: { employers: { data: [{ id: "emp-1", type: "employer" }] } },
+      },
+    ],
+    included: [
+      {
+        id: "emp-1",
+        type: "employer",
+        attributes: {
+          name: "Lahwani Mihammad",
+          role_title: "Praxis Managerin",
+          current_employer: true,
+          in_probation_period: false,
+          limited_contract: false,
+          monthly_net_salary: "2750.0",
+          start_date: "2024-11-01T00:00:00.000+01:00",
+        },
+      },
+    ],
+  };
+
+  it("liest Arbeitgeber, Beruf, Eintritt und Probezeit aus der verknuepften Ressource", () => {
+    const [a] = parseFinLinkApplicantsResponse(antwort);
+    expect(a!.beschaeftigung?.arbeitgeber).toBe("Lahwani Mihammad");
+    expect(a!.beschaeftigung?.beruf).toBe("Praxis Managerin");
+    expect(a!.beschaeftigung?.eintrittsdatum).toBe("2024-11-01");
+    expect(a!.beschaeftigung?.inProbezeit).toBe(false);
+  });
+
+  it("uebernimmt das Gehalt des Arbeitgebersatzes, wenn der Antragsteller keines traegt", () => {
+    const [a] = parseFinLinkApplicantsResponse(antwort);
+    expect(a!.einkommen?.nettoMonatlich).toBe(2750);
+  });
+
+  it("laesst ein am Antragsteller gepflegtes Einkommen unangetastet", () => {
+    const eigenes = structuredClone(antwort);
+    (eigenes.data[0]!.attributes as Record<string, unknown>).monthly_net_income = 3200;
+    const [a] = parseFinLinkApplicantsResponse(eigenes);
+    expect(a!.einkommen?.nettoMonatlich).toBe(3200);
+  });
+
+  it("nimmt den aktuellen Arbeitgeber, wenn mehrere verknuepft sind", () => {
+    const mehrere = structuredClone(antwort);
+    mehrere.data[0]!.relationships.employers.data.unshift({ id: "emp-alt", type: "employer" });
+    mehrere.included.unshift({
+      id: "emp-alt",
+      type: "employer",
+      attributes: {
+        name: "Alter Arbeitgeber",
+        role_title: "Frueher",
+        current_employer: false,
+        in_probation_period: false,
+        limited_contract: false,
+        monthly_net_salary: "1000.0",
+        start_date: "2019-01-01T00:00:00.000+01:00",
+      },
+    });
+    const [a] = parseFinLinkApplicantsResponse(mehrere);
+    expect(a!.beschaeftigung?.arbeitgeber).toBe("Lahwani Mihammad");
+  });
+
+  it("kommt ohne included aus – ein leerer Arbeitgebersatz erfindet nichts", () => {
+    const ohne = { data: [{ id: "as-9", attributes: { first_name: "Leer", employer_meta: null } }] };
+    const [a] = parseFinLinkApplicantsResponse(ohne);
+    expect(a!.beschaeftigung).toBeUndefined();
+    expect(a!.einkommen).toBeUndefined();
+  });
+});

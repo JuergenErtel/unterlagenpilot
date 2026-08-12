@@ -51,12 +51,15 @@ export function finlinkToCanonical(dto: FinLinkVorgangDTO): CanonicalCase {
   const income: CanonicalIncome[] = [];
   dto.antragsteller.forEach((a, i) => {
     const b = a.beschaeftigung;
-    if (b && (b.art || b.beruf || b.arbeitgeber)) {
+    if (b && (b.art || b.beruf || b.arbeitgeber || b.eintrittsdatum || b.inProbezeit != null)) {
       employment.push({
         applicantPosition: i + 1,
         beschaeftigungsart: toEnum<EmploymentType>(EMPLOYMENT_TYPES, b.art),
         beruf: b.beruf,
         arbeitgeber: b.arbeitgeber,
+        eintrittsdatum: b.eintrittsdatum,
+        befristetBis: b.befristetBis ?? null,
+        inProbezeit: b.inProbezeit,
       });
     }
     const e = a.einkommen;
