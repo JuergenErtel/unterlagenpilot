@@ -91,7 +91,11 @@ export async function erstkontaktVorbereitenAction(
   // sagt, was schiefging und dass er es erneut versuchen kann.
   let ergebnis;
   try {
-    ergebnis = await bereiteErstkontaktVor(caseId, { actorUserId: ctx.userId });
+    ergebnis = await bereiteErstkontaktVor(caseId, {
+      actorUserId: ctx.userId,
+      // Der Knopf "Entwurf neu erzeugen" schickt dieses Feld mit.
+      erneuern: formData.get("erneuern") === "1",
+    });
   } catch (e) {
     console.error("[erstkontakt] Vorbereitung fehlgeschlagen:", e);
     return {
@@ -113,6 +117,13 @@ export async function erstkontaktVorbereitenAction(
   }
   if (ergebnis.status === "schon_vorbereitet") {
     return { success: "Der Erstkontakt war bereits vorbereitet." };
+  }
+  if (ergebnis.status === "schon_versendet") {
+    return {
+      error:
+        "Diese Nachricht ist bereits versendet – ein versendeter Entwurf wird nicht überschrieben." +
+        " Für eine Nachfassung eine neue Nachricht erzeugen.",
+    };
   }
   return { success: "Erstkontakt vorbereitet – der Entwurf liegt zum Prüfen bereit." };
 }

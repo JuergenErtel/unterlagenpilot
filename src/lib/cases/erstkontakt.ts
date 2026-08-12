@@ -27,6 +27,7 @@ import { createSecureUploadLink } from "@/lib/security/upload-link";
 export type ErstkontaktErgebnis =
   | { status: "vorbereitet"; messageId: string; uploadUrl: string; selbstauskunftUrl: string }
   | { status: "schon_vorbereitet" }
+  | { status: "schon_versendet" }
   | { status: "kein_empfaenger" };
 
 /** Gueltigkeit der beiden Links beim Erstkontakt. */
@@ -34,7 +35,11 @@ const GUELTIG_TAGE = 21;
 
 export async function bereiteErstkontaktVor(
   caseId: string,
-  opts: { actorUserId?: string | null } = {}
+  opts: {
+    actorUserId?: string | null;
+    /** Vorhandenen, NICHT versendeten Entwurf verwerfen und neu erzeugen. */
+    erneuern?: boolean;
+  } = {}
 ): Promise<ErstkontaktErgebnis> {
   const fall = await prisma.case.findUnique({
     where: { id: caseId },
@@ -53,6 +58,32 @@ export async function bereiteErstkontaktVor(
     },
   });
   if (!fall) return { status: "kein_empfaenger" };
+
+  // Erneuern: Ein Entwurf friert den Datenstand seiner Entstehung ein. Aendern
+  // sich danach die Falldaten – ein nachgetragenes Einkommen, eine korrigierte
+  // Beschaeftigungsart –, stimmt die Unterlagenliste nicht mehr, und es gab
+  // keinen Weg zurueck (Praxistest 12.08.2026: Der Entwurf von 21:24 zeigte
+  // weiter die alte Liste). Ein VERSENDETER Entwurf bleibt unantastbar.
+  if (opts.erneuern) {
+    const bisher = fall.erstkontaktMessageId
+      ? await prisma.generatedMessage.findUnique({
+          where: { id: fall.erstkontaktMessageId },
+          select: { id: true, sent: true },
+        })
+      : null;
+    if (bisher?.sent) return { status: "schon_versendet" };
+    if (bisher) await prisma.generatedMessage.delete({ where: { id: bisher.id } });
+    // Sperre loesen, damit der regulaere Weg unten wieder greift. Die alten
+    // Links bleiben bestehen: Ihre Klartext-URL ist nur beim Erzeugen bekannt
+    // (gehashte Speicherung), ein Weiterverwenden ist technisch unmoeglich.
+    // Verschickt wurden sie nie, also kennt sie auch niemand.
+    await prisma.case.update({
+      where: { id: fall.id },
+      data: { erstkontaktVorbereitetAm: null, erstkontaktMessageId: null },
+    });
+    fall.erstkontaktVorbereitetAm = null;
+  }
+
   if (fall.erstkontaktVorbereitetAm) return { status: "schon_vorbereitet" };
 
   const empfaenger = fall.applicants.find(

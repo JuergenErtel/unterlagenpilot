@@ -186,7 +186,21 @@ describe("Erstkontakt vorbereiten (Action)", () => {
     vorbereiten.mockResolvedValue({ status: "vorbereitet", messageId: "msg1" });
     const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
     await erstkontaktVorbereitenAction({}, form({ caseId: "c1" }));
-    expect(vorbereiten).toHaveBeenCalledWith("c1", { actorUserId: "u1" });
+    expect(vorbereiten).toHaveBeenCalledWith("c1", { actorUserId: "u1", erneuern: false });
+  });
+
+  it("reicht den Erneuern-Wunsch weiter", async () => {
+    vorbereiten.mockResolvedValue({ status: "vorbereitet", messageId: "msg2" });
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+    await erstkontaktVorbereitenAction({}, form({ caseId: "c1", erneuern: "1" }));
+    expect(vorbereiten).toHaveBeenCalledWith("c1", { actorUserId: "u1", erneuern: true });
+  });
+
+  it("meldet einen bereits versendeten Entwurf als Fehler", async () => {
+    vorbereiten.mockResolvedValue({ status: "schon_versendet" });
+    const { erstkontaktVorbereitenAction } = await import("@/lib/actions/erstkontakt-actions");
+    const r = await erstkontaktVorbereitenAction({}, form({ caseId: "c1", erneuern: "1" }));
+    expect(r.error).toMatch(/versendet/i);
   });
 
   it("tut ohne caseId nichts", async () => {

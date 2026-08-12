@@ -363,6 +363,13 @@ export default async function CaseCockpitPage({
             </form>
           ) : step.key === "erstkontakt_vorbereiten" ? (
             <ErstkontaktVorbereitenButton caseId={id} />
+          ) : step.key === "erstkontakt_entwurf" ? (
+            // Der Entwurf friert den Datenstand seiner Entstehung ein. Wer
+            // danach Daten korrigiert – ein nachgetragenes Einkommen, eine
+            // Beschaeftigungsart –, braucht einen Weg zum neuen Text. Ohne
+            // ihn blieb die alte Unterlagenliste stehen, ohne dass man es der
+            // Karte ansah.
+            <ErstkontaktVorbereitenButton caseId={id} erneuern />
           ) : undefined;
         const bild = baueFallbild({
           cockpit,

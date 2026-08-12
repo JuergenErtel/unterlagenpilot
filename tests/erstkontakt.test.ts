@@ -71,6 +71,9 @@ vi.mock("@/lib/db", () => ({
     document: { findMany: vi.fn(async () => []) },
     generatedMessage: {
       create: vi.fn(async ({ data }: any) => ({ id: "msg1", ...data })),
+      // Fuer das Erneuern eines Entwurfs: Der alte wird gelesen und geloescht.
+      findUnique: vi.fn(async () => null),
+      delete: vi.fn(async () => ({})),
     },
   },
 }));
@@ -294,5 +297,45 @@ describe("Erstkontakt vorbereiten", () => {
   it("meldet einen unbekannten Fall statt zu werfen", async () => {
     const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
     await expect(bereiteErstkontaktVor("gibtsnicht")).resolves.toEqual({ status: "kein_empfaenger" });
+  });
+});
+
+describe("Entwurf erneuern", () => {
+  /**
+   * Praxistest 12.08.2026: Der Entwurf entstand um 21:24, die Korrekturen an
+   * Anrede und Unterlagenliste kamen um 22:33 – und es gab keinen Weg, den
+   * Text neu erzeugen zu lassen. `bereiteErstkontaktVor` steigt bei gesetztem
+   * `erstkontaktVorbereitetAm` sofort aus.
+   */
+  it("verwirft einen nicht versendeten Entwurf und erzeugt ihn neu", async () => {
+    faelle.c1 = fall({ erstkontaktVorbereitetAm: new Date(), erstkontaktMessageId: "m-alt" });
+    const { prisma } = await import("@/lib/db");
+    (prisma.generatedMessage.findUnique as any).mockResolvedValue({ id: "m-alt", sent: false });
+
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    const r = await bereiteErstkontaktVor("c1", { erneuern: true });
+
+    expect(r.status).toBe("vorbereitet");
+    expect(prisma.generatedMessage.delete).toHaveBeenCalledWith({ where: { id: "m-alt" } });
+    expect(prisma.generatedMessage.create).toHaveBeenCalled();
+  });
+
+  it("ruehrt einen VERSENDETEN Entwurf nicht an", async () => {
+    faelle.c1 = fall({ erstkontaktVorbereitetAm: new Date(), erstkontaktMessageId: "m-weg" });
+    const { prisma } = await import("@/lib/db");
+    (prisma.generatedMessage.findUnique as any).mockResolvedValue({ id: "m-weg", sent: true });
+
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    const r = await bereiteErstkontaktVor("c1", { erneuern: true });
+
+    expect(r.status).toBe("schon_versendet");
+    expect(prisma.generatedMessage.delete).not.toHaveBeenCalled();
+    expect(prisma.generatedMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("steigt ohne erneuern weiterhin aus, wenn schon vorbereitet wurde", async () => {
+    faelle.c1 = fall({ erstkontaktVorbereitetAm: new Date(), erstkontaktMessageId: "m-alt" });
+    const { bereiteErstkontaktVor } = await import("@/lib/cases/erstkontakt");
+    expect((await bereiteErstkontaktVor("c1")).status).toBe("schon_vorbereitet");
   });
 });
