@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  parseFinLinkLeadQuelle,
   parseFinLinkVorgang,
   parseFinLinkLeadsResponse,
   parseFinLinkLeadsSummaries,
@@ -312,5 +313,28 @@ describe("parseFinLinkLeadsResponse", () => {
     const dto = parseFinLinkLeadsResponse({ data: [lead] }, "lead-4711");
     expect(dto!.finanzierung?.kaufpreis).toBe(460000);
     expect(dto!.antragsteller[0]!.einkommen).toBeUndefined();
+  });
+});
+
+describe("parseFinLinkLeadQuelle", () => {
+  const body = (extras: unknown) => ({
+    data: { id: "lead-1", type: "lead", attributes: { extras_meta: extras } },
+  });
+
+  it("liest source_type und source aus extras_meta der /leads/{id}-Antwort", () => {
+    expect(parseFinLinkLeadQuelle(body({ source_type: "ImmoscoutLead", source: "Leadshop" }))).toEqual({
+      sourceType: "ImmoscoutLead",
+      source: "Leadshop",
+    });
+  });
+
+  it("liefert leere Werte, wenn extras_meta fehlt oder null ist (kommt in Echtdaten vor)", () => {
+    expect(parseFinLinkLeadQuelle(body(null))).toEqual({ sourceType: null, source: null });
+    expect(parseFinLinkLeadQuelle({ data: { attributes: {} } })).toEqual({ sourceType: null, source: null });
+  });
+
+  it("wirft nie – ein unerwarteter Body kostet die Quelle, nicht den Import", () => {
+    expect(parseFinLinkLeadQuelle({ kaputt: true })).toEqual({ sourceType: null, source: null });
+    expect(parseFinLinkLeadQuelle(null)).toEqual({ sourceType: null, source: null });
   });
 });

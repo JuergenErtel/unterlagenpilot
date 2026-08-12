@@ -2,6 +2,7 @@ import {
   mergeAntragstellerDetails,
   parseFinLinkApplicantsResponse,
   parseFinLinkLeadLoanApplicationIds,
+  parseFinLinkLeadQuelle,
   parseFinLinkLeadsRoh,
   parseFinLinkLeadsSummaries,
   parseFinLinkSalesStates,
@@ -154,6 +155,10 @@ export class HttpFinLinkClient implements FinLinkClient {
       console.warn(`[finlink] /leads/{id}-Antwort unparsebar: ${e instanceof Error ? e.message : String(e)}`);
       throw new FinLinkApiError("FinLink-Antwort hat ein unerwartetes Format.");
     }
+
+    // Herkunft aus derselben Antwort mitnehmen. Muss VOR den Rückgaben unten
+    // stehen: mergeAntragstellerDetails spreizt das DTO, trägt sie also weiter.
+    dto.quelle = parseFinLinkLeadQuelle(body);
 
     // Anreicherung: /loan_applications/{id}/applicants liefert Geburtsdatum,
     // E-Mail, Familienstand, Kinder UND Mit-Antragsteller, die am Lead fehlen.

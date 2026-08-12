@@ -5,6 +5,7 @@ import { buildPlatformMapping } from "./mapping";
 import { getFinLinkClient, type FinLinkClient, FinLinkNotFoundError, FinLinkAuthError } from "./finlink/client";
 import { finlinkToCanonical } from "./finlink/mapping";
 import { createCaseFromCanonical } from "./case-writer";
+import { leiteQuelleAb } from "./finlink/source";
 import type {
   ConnectionStatus,
   ImportResult,
@@ -154,6 +155,20 @@ export class FinLinkConnector extends BaseConnector {
       const dto = await client.fetchVorgang(externalId);
       const canonical = finlinkToCanonical(dto);
       const { caseId, deduped } = await createCaseFromCanonical(ctx, canonical);
+
+      // Herkunft nachtragen – wie im Cron-Lauf (finlink/sync.ts). Ohne diesen
+      // Schritt blieb jeder von Hand importierte Lead auf dem Schema-Standard
+      // "unbekannt" stehen, auch wenn FinLink ihn klar als ImmoScout-Lead
+      // auswies. Best effort: ein Fehler hier darf den Import nicht kippen.
+      if (!deduped) {
+        try {
+          const { quelle, detail } = leiteQuelleAb(dto.quelle ?? {});
+          await prisma.case.update({ where: { id: caseId }, data: { quelle, quelleDetail: detail } });
+        } catch (e) {
+          console.error(`[finlink] Quelle für ${caseId} nicht gesetzt:`, e);
+        }
+      }
+
       return {
         ok: true,
         importedCaseIds: [caseId],

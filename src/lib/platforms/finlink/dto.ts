@@ -67,6 +67,14 @@ export const finlinkVorgangSchema = z.object({
   antragsteller: z.array(antragsteller).default([]),
   objekt,
   finanzierung,
+  /**
+   * Rohwerte der Herkunft aus `extras_meta`. Bewusst NICHT im Canonical-Modell:
+   * Die Quelle ist plattformspezifisch, das Canonical plattformneutral. Der
+   * Import liest sie direkt vom DTO und schreibt sie in den Fall.
+   */
+  quelle: z
+    .object({ sourceType: z.string().nullable(), source: z.string().nullable() })
+    .optional(),
 });
 
 export type FinLinkVorgangDTO = z.infer<typeof finlinkVorgangSchema>;
@@ -346,6 +354,40 @@ export function parseFinLinkLeadLoanApplicationIds(body: unknown): string[] {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return [];
   return (parsed.data.data.relationships?.loan_applications?.data ?? []).map((d) => d.id);
+}
+
+/**
+ * Quellenfelder aus der /leads/{id}-Antwort. Sie stehen in `extras_meta` –
+ * demselben Ort, aus dem der Cron sie beim Listenabruf liest. Ohne diesen
+ * Parser kannte nur der Cron die Herkunft, und jeder von Hand importierte
+ * Lead landete als "unbekannt" im Fall (Fall UP-2026-0007 war ein
+ * ImmoScout-Lead und trug trotzdem "unbekannt").
+ *
+ * Wirft nie: Eine unerwartete Antwort darf die Quelle kosten, nicht den Import.
+ */
+export function parseFinLinkLeadQuelle(body: unknown): { sourceType: string | null; source: string | null } {
+  const schema = z.object({
+    data: z
+      .object({
+        attributes: z
+          .object({
+            extras_meta: z
+              .object({
+                source: z.string().optional().nullable(),
+                source_type: z.string().optional().nullable(),
+              })
+              .passthrough()
+              .optional()
+              .nullable(),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return { sourceType: null, source: null };
+  const e = parsed.data.data.attributes.extras_meta ?? {};
+  return { sourceType: e.source_type ?? null, source: e.source ?? null };
 }
 
 /**

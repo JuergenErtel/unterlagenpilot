@@ -211,6 +211,9 @@ describe("HttpFinLinkClient.listLeads", () => {
   });
 });
 
+const caseUpdate = vi.fn();
+vi.mock("@/lib/db", () => ({ prisma: { case: { update: (...a: unknown[]) => caseUpdate(...a) } } }));
+
 vi.mock("@/lib/platforms/case-writer", () => ({
   createCaseFromCanonical: vi.fn(async (_ctx, canonical) => ({
     caseId: "case-123",
@@ -236,6 +239,59 @@ describe("FinLinkConnector.importCaseById", () => {
     const res = await connector.importCaseById("FL-1", ctx, { client });
     expect(res.ok).toBe(true);
     expect(res.importedCaseIds).toEqual(["case-123"]);
+  });
+
+  it("traegt die Herkunft in den Fall ein (sonst bleibt jeder Handimport 'unbekannt')", async () => {
+    caseUpdate.mockClear();
+    const connector = new FinLinkConnector();
+    const client = clientReturning({
+      id: "FL-1",
+      antragsteller: [{ vorname: "Anna" }],
+      quelle: { sourceType: "ImmoscoutLead", source: null },
+    });
+    await connector.importCaseById("FL-1", ctx, { client });
+    expect(caseUpdate).toHaveBeenCalledWith({
+      where: { id: "case-123" },
+      data: { quelle: "immoscout24", quelleDetail: "ImmoscoutLead" },
+    });
+  });
+
+  it("schreibt 'unbekannt', wenn FinLink keine Herkunft liefert – ohne den Import zu kippen", async () => {
+    caseUpdate.mockClear();
+    const connector = new FinLinkConnector();
+    const client = clientReturning({ id: "FL-2", antragsteller: [{ vorname: "Bea" }] });
+    const res = await connector.importCaseById("FL-2", ctx, { client });
+    expect(res.ok).toBe(true);
+    expect(caseUpdate).toHaveBeenCalledWith({
+      where: { id: "case-123" },
+      data: { quelle: "unbekannt", quelleDetail: null },
+    });
+  });
+
+  it("fasst einen bereits importierten Vorgang nicht an (deduped)", async () => {
+    // Die Quelle des Bestandsfalls darf ein erneuter Import nicht ueberschreiben.
+    caseUpdate.mockClear();
+    const { createCaseFromCanonical } = await import("@/lib/platforms/case-writer");
+    vi.mocked(createCaseFromCanonical).mockResolvedValueOnce({
+      caseId: "case-123",
+      caseNumber: "UP-2026-0001",
+      deduped: true,
+    });
+    const connector = new FinLinkConnector();
+    const client = clientReturning({ id: "FL-3", antragsteller: [] });
+    await connector.importCaseById("FL-3", ctx, { client });
+    expect(caseUpdate).not.toHaveBeenCalled();
+  });
+
+  it("laesst den Import gelingen, wenn das Setzen der Quelle scheitert", async () => {
+    caseUpdate.mockClear();
+    caseUpdate.mockRejectedValueOnce(new Error("DB weg"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const connector = new FinLinkConnector();
+    const client = clientReturning({ id: "FL-4", antragsteller: [{ vorname: "Cem" }] });
+    const res = await connector.importCaseById("FL-4", ctx, { client });
+    expect(res.ok).toBe(true);
+    errSpy.mockRestore();
   });
 
   it("meldet 'nicht konfiguriert', wenn kein Client vorhanden ist", async () => {
