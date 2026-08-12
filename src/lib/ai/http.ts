@@ -39,6 +39,22 @@ const RATE_LIMIT_BACKOFF_MS = [5_000, 20_000, 35_000];
 /** Obergrenze für Retry-After des Anbieters, damit ein Ausreißer-Header den Lauf nicht blockiert. */
 const RATE_LIMIT_MAX_WAIT_MS = 60_000;
 
+/**
+ * Wartezeiten (ms) bei vorübergehender Überlast (502/503/504). Deutlich kürzer
+ * als beim Kontingent: Hier ist kein Minutenfenster abzuwarten, der Anbieter
+ * ist schlicht gerade voll.
+ *
+ * Gemessen am 12.08.2026 im Banken-Wiki: Drei Bündel fielen mit HTTP 503
+ * ("Service temporarily unavailable due to high load, please retry") aus und
+ * wurden NICHT wiederholt – die Banken dieser Bündel fehlten stumm in der
+ * Antwort. Ein Ausfall des Anbieters darf keine Bank aus einer Auskunft
+ * tilgen, die der Vermittler für vollständig hält.
+ */
+const UEBERLAST_BACKOFF_MS = [1_000, 4_000, 10_000];
+
+/** Vorübergehende Fehler, bei denen ein zweiter Versuch sinnvoll ist. */
+const UEBERLAST_STATUS = new Set([502, 503, 504]);
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -55,13 +71,18 @@ export async function fetchWithRateLimitRetry(
   fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
   let res = await fetchWithTimeout(url, init, timeoutMs, fetchImpl);
-  for (const backoffMs of RATE_LIMIT_BACKOFF_MS) {
-    if (res.status !== 429) return res;
+  for (let versuch = 0; versuch < RATE_LIMIT_BACKOFF_MS.length; versuch++) {
+    const ueberlast = UEBERLAST_STATUS.has(res.status);
+    if (res.status !== 429 && !ueberlast) return res;
+
     const retryAfterSeconds = Number(res.headers?.get?.("retry-after"));
+    const grundwartezeit = ueberlast
+      ? UEBERLAST_BACKOFF_MS[versuch]!
+      : RATE_LIMIT_BACKOFF_MS[versuch]!;
     const waitMs =
       Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
         ? Math.min(retryAfterSeconds * 1000, RATE_LIMIT_MAX_WAIT_MS)
-        : backoffMs;
+        : grundwartezeit;
     await sleep(waitMs + Math.random() * 2_000);
     res = await fetchWithTimeout(url, init, timeoutMs, fetchImpl);
   }

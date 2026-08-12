@@ -20,6 +20,16 @@ const rateLimited = (retryAfterSeconds?: number) =>
     text: async () => '{"message":"Rate limit exceeded"}',
   }) as unknown as Response;
 
+/** Mistral unter Last: 503 mit ausdruecklicher Bitte um Wiederholung. */
+const ueberlastet = () =>
+  ({
+    ok: false,
+    status: 503,
+    headers: new Headers(),
+    text: async () =>
+      '{"message":"Service temporarily unavailable due to high load, please retry.","code":"3505"}',
+  }) as unknown as Response;
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -62,6 +72,63 @@ describe("fetchWithRateLimitRetry", () => {
 
     const res = await promise;
     expect(res.status).toBe(200);
+  });
+
+  it("wiederholt auch bei 503 – der Anbieter bittet dabei ausdrücklich darum", async () => {
+    // Gemessen am 12.08.2026: Beim Banken-Wiki fielen drei Buendel mit
+    // "Service temporarily unavailable due to high load, please retry" aus.
+    // Sie wurden nicht wiederholt, und die Banken dieser Buendel fehlten in
+    // der Antwort. 503 ist Last, kein Kontingent – deshalb kuerzere Wartezeit.
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValueOnce(ueberlastet()).mockResolvedValueOnce(ok());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRateLimitRetry("https://api.example.test/v1/chat", { method: "POST" }, 60_000);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("wartet bei Ueberlast kuerzer als bei einem Kontingent-Limit", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValueOnce(ueberlastet()).mockResolvedValueOnce(ok());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRateLimitRetry("https://api.example.test/v1/chat", { method: "POST" }, 60_000);
+    // Ein 429 wartet mindestens 5s; bei 503 muss der zweite Versuch frueher kommen.
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await promise;
+  });
+
+  it("wiederholt auch bei 502 und 504 (vorgelagerte Fehler, keine Aussage des Modells)", async () => {
+    for (const status of [502, 504]) {
+      vi.useFakeTimers();
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status, headers: new Headers() } as unknown as Response)
+        .mockResolvedValueOnce(ok());
+      vi.stubGlobal("fetch", fetchMock);
+      const promise = fetchWithRateLimitRetry("https://x.test/v1/chat", { method: "POST" }, 60_000);
+      await vi.runAllTimersAsync();
+      expect((await promise).status).toBe(200);
+      vi.useRealTimers();
+    }
+  });
+
+  it("wiederholt NICHT bei 400 – ein fehlerhafter Aufruf wird beim zweiten Mal nicht besser", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 400, headers: new Headers() } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRateLimitRetry("https://x.test/v1/chat", { method: "POST" }, 60_000);
+    await vi.runAllTimersAsync();
+    expect((await promise).status).toBe(400);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("gibt nach erschöpften Versuchen die letzte 429-Antwort zurück (Aufrufer wirft regulär)", async () => {
