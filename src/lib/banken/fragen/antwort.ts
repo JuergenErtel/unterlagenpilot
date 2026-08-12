@@ -88,7 +88,18 @@ export function baueGruppen(
     }
   }
 
+  // "Hat sich nicht geaeussert" ist nur unter einem GEFRAGTEN Kriterium eine
+  // Aussage. Eine Zeile ohne Inhalt traegt kein Wort, an dem sich Bezug zur
+  // Frage pruefen liesse – ihr Kriterium ist der einzige Anhaltspunkt.
+  //
+  // Ohne diese Sperre fuellte die Gruppe sich mit Beifang: Bei der Frage nach
+  // der befristeten Aufenthaltsgenehmigung standen dort Banken zum Merkmal
+  // "befristete Arbeitsvertraege" – hereingekommen ueber die BEZEICHNUNG des
+  // Produktmerkmals, nicht ueber einen Text zum Thema. Wurde kein Kriterium
+  // gedeutet, bleibt die Gruppe leer; der Hinweis sagt dann ausdruecklich,
+  // dass schweigende Banken ganz fehlen.
   for (const z of ohneAussage) {
+    if (!primaer.has(z.kriterium)) continue;
     merke("keine_aussage", {
       bankId: z.bankId,
       name: z.name,

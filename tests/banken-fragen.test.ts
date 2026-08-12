@@ -171,6 +171,79 @@ describe("Buendeln", () => {
   });
 });
 
+describe("Trennschaerfe der Stichwoerter", () => {
+  /**
+   * Nachgebaut aus dem gemessenen Fall „befristete Aufenthaltsgenehmigung"
+   * (12.08.2026): Die KI lieferte die Stichwoerter Aufenthaltsgenehmigung,
+   * befristet und Wohnsitz. Im echten Bestand traf „Wohnsitz" 715 von 901
+   * Bloecken, „Aufenthaltsgenehmigung" zehn.
+   */
+  function bestand(): Zeile[] {
+    const zeilen: Zeile[] = [];
+    // 60 Bloecke, in denen nur das breite Wort steht – anderes Thema.
+    for (let i = 0; i < 60; i++) {
+      zeilen.push(
+        zeile({ bankId: `W${i}`, kriterium: "Wohnsitz", inhalt: `<p>Wohnsitz im Ausland, Fall ${i}.</p>` })
+      );
+    }
+    // 5 Bloecke zum eigentlichen Thema.
+    for (let i = 0; i < 5; i++) {
+      zeilen.push(
+        zeile({
+          bankId: `A${i}`,
+          kriterium: "Wohnsitz",
+          inhalt: `<p>Eine Aufenthaltsgenehmigung ist vorzulegen, Variante ${i}.</p>`,
+        })
+      );
+    }
+    return zeilen;
+  }
+
+  it("liest nur die Texte zum trennschaerfsten Wort, nicht das ganze Thema", () => {
+    const s = buendele(bestand(), ["Aufenthaltsgenehmigung", "Wohnsitz"], DECKEL, []);
+    expect(s.leitwort).toBe("aufenthaltsgenehmigung");
+    expect(s.bloecke).toHaveLength(5);
+    expect(s.bloecke.every((b) => b.text.includes("Aufenthaltsgenehmigung"))).toBe(true);
+    expect(s.abgewiesen).toBe(60);
+  });
+
+  it("meldet uebergangene Fundstellen NICHT als fehlende Banken", () => {
+    // Abgewiesen heisst "anderes Thema", nicht "wurde verschwiegen" – sonst
+    // behauptet die Antwort, 60 Banken fehlten ihr.
+    const s = buendele(bestand(), ["Aufenthaltsgenehmigung", "Wohnsitz"], DECKEL, []);
+    expect(s.ungelesen).toHaveLength(0);
+  });
+
+  it("faellt auf das naechste Wort zurueck, wenn das trennschaerfste nichts trifft", () => {
+    const s = buendele(bestand(), ["Aufenthaltstitel", "Wohnsitz"], DECKEL, []);
+    // "Aufenthaltstitel" kommt im Bestand nicht vor, "Wohnsitz" ueberall.
+    // Lieber die breite Menge als gar keine Antwort.
+    expect(s.leitwort).toBeNull();
+    expect(s.bloecke.length).toBeGreaterThan(60);
+  });
+
+  it("laesst das gefragte Kriterium unangetastet – dort zaehlt kein Stichwort", () => {
+    const zeilen = [
+      ...bestand(),
+      zeile({ bankId: "K1", kriterium: "Sprache", inhalt: "<p>Ein Dolmetscher ist zulässig.</p>" }),
+    ];
+    const s = buendele(zeilen, ["Aufenthaltsgenehmigung", "Wohnsitz"], DECKEL, ["Sprache"]);
+    expect(s.bloecke.some((b) => b.kriterium === "Sprache")).toBe(true);
+  });
+
+  it("greift bei wenigen Bloecken nicht ein (zu wenig fuer eine Aussage ueber Haeufigkeit)", () => {
+    const s = buendele(
+      [
+        zeile({ bankId: "A", inhalt: "<p>Zum Baujahr gibt es Vorgaben.</p>" }),
+        zeile({ bankId: "B", inhalt: "<p>Ein Dolmetscher ist zulässig.</p>" }),
+      ],
+      ["Dolmetscher"]
+    );
+    expect(s.bloecke).toHaveLength(2);
+    expect(s.abgewiesen).toBe(0);
+  });
+});
+
 describe("Belegpruefung", () => {
   const quelle = "Ein Dolmetscher kann zum Notartermin hinzugezogen werden.";
 
@@ -247,10 +320,26 @@ describe("Gruppieren", () => {
         [1, { urteil: "ja" as Urteil, beleg: "Ein Dolmetscher" }],
         [2, { urteil: "nein" as Urteil, beleg: null }],
       ]),
-      [zeile({ bankId: "D", status: "KEINE_ANGABE" })]
+      [zeile({ bankId: "D", status: "KEINE_ANGABE", kriterium: "Sprache" })],
+      ["Sprache"]
     );
     const zahl = Object.fromEntries(gruppen.map((g) => [g.urteil, g.banken.length]));
     expect(zahl).toEqual({ ja: 2, bedingt: 0, nein: 1, keine_aussage: 1 });
+  });
+
+  it("zeigt 'hat sich nicht geaeussert' nur unter einem gefragten Kriterium", () => {
+    // Gemessener Beifang (12.08.2026): Bei der Frage nach der befristeten
+    // Aufenthaltsgenehmigung landeten Banken zum Merkmal "befristete
+    // Arbeitsvertraege" in dieser Gruppe – ueber die Bezeichnung eingesammelt,
+    // ohne einen einzigen Satz zum Thema.
+    const ohne = [
+      zeile({ bankId: "D", status: "KEINE_ANGABE", kriterium: "befristete Arbeitsverträge" }),
+    ];
+    const nurFreitext = baueGruppen([], new Map(), ohne, []);
+    expect(nurFreitext.gruppen.find((g) => g.urteil === "keine_aussage")!.banken).toHaveLength(0);
+
+    const mitKriterium = baueGruppen([], new Map(), ohne, ["befristete Arbeitsverträge"]);
+    expect(mitKriterium.gruppen.find((g) => g.urteil === "keine_aussage")!.banken).toHaveLength(1);
   });
 
   it("laesst bei mehreren Kriterien das restriktivste Urteil gewinnen", () => {
@@ -303,9 +392,12 @@ describe("Gruppieren", () => {
   });
 
   it("zaehlt eine Bank ohne Aussage nie als Nein", () => {
-    const { gruppen } = baueGruppen([], new Map(), [
-      zeile({ bankId: "A", status: "KEINE_ANGABE" }),
-    ]);
+    const { gruppen } = baueGruppen(
+      [],
+      new Map(),
+      [zeile({ bankId: "A", status: "KEINE_ANGABE" })],
+      ["Sprache"]
+    );
     expect(gruppen.find((g) => g.urteil === "nein")!.banken).toHaveLength(0);
     expect(gruppen.find((g) => g.urteil === "keine_aussage")!.banken).toHaveLength(1);
   });

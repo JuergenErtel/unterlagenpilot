@@ -1,5 +1,6 @@
 import { aiService } from "@/lib/ai";
 import { alleKriterien } from "../kategorien";
+import { normalisiere } from "../suche";
 import {
   aehnlicheBanken,
   loeseBank,
@@ -144,9 +145,7 @@ export async function beantworteFrage(
     // ein anderes Thema betreffen), und dass die schweigenden Banken deshalb
     // ganz fehlen. "Keine Aussage" heisst hier nicht "abgelehnt".
     hinweise.push(
-      `Das Wiki führt kein Kriterium zu diesem Thema. Gesucht wurde nur im Freitext nach ${stichwoerter
-        .map((s) => `„${s}“`)
-        .join(", ")} — die Treffer können etwas anderes meinen, und Banken, die sich dazu nicht geäußert haben, fehlen ganz.`
+      "Das Wiki führt kein Kriterium zu diesem Thema — gesucht wurde nur im Freitext. Die Treffer können etwas anderes meinen, und Banken, die sich dazu nicht geäußert haben, fehlen ganz."
     );
   }
 
@@ -169,6 +168,21 @@ export async function beantworteFrage(
   }
 
   const sammlung = buendele(zeilen, stichwoerter, DECKEL, kriterien);
+
+  // Beifang benennen, nicht verschweigen – aber auch nicht als Luecke
+  // ausgeben: Diese Texte gehoeren zu einem anderen Thema, der Antwort fehlt
+  // dadurch nichts. (Fall "befristete Aufenthaltsgenehmigung": Ueber das Wort
+  // "Wohnsitz" kamen 700 Texte ueber Expatriates herein.)
+  if (sammlung.leitwort && sammlung.abgewiesen > 0) {
+    // Das Leitwort ist normalisiert (klein, ohne Umlaute). Angezeigt wird das
+    // Stichwort, wie es die Deutung geliefert hat – sonst steht dort
+    // "auslaendische" statt "ausländische".
+    const anzeige =
+      stichwoerter.find((s) => normalisiere(s) === sammlung.leitwort) ?? sammlung.leitwort;
+    hinweise.push(
+      `Im Freitext wurde nach dem eindeutigsten Wort der Frage gesucht („${anzeige}“). ${sammlung.abgewiesen} weitere Fundstellen zu allgemeineren Wörtern betreffen andere Themen und wurden übergangen.`
+    );
+  }
 
   const buendel = inBuendel(sammlung.bloecke, BUENDEL_GROESSE);
   const ergebnisse = await parallelBegrenzt(buendel, GLEICHZEITIG, (gruppe) =>
