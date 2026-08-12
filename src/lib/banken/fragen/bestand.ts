@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { istOhneAussage } from "../produktuebersicht/import";
 import type { BankName } from "./deuten";
 import type { Zeile } from "./sammeln";
 
@@ -62,13 +63,55 @@ export const prismaBestand: Bestand = {
       take: MAX_ZEILEN,
     });
 
-    return zeilen.map((z) => ({
-      bankId: z.bank.bankId,
-      name: z.bank.name,
-      kriterium: z.kriterium,
-      status: z.status,
-      inhalt: z.inhalt,
-    }));
+    // Zweite Quelle: die Produktuebersichten aus dem Europace-Wiki. Sie fuehren
+    // Angaben, die der Kriteriencheck nicht kennt – die Frage nach der
+    // befristeten Aufenthaltsgenehmigung ist genau daran gescheitert, weil sie
+    // dort unter "Bluecard" steht und nicht unter einem der 69 Kriterien.
+    const merkmale = await prisma.bankProduktMerkmal.findMany({
+      where: {
+        OR: [
+          ...(kriterien.length > 0 ? [{ bezeichnung: { in: kriterien } }] : []),
+          ...stichwoerter
+            .map(suchwort)
+            .filter((w) => w.length >= 4)
+            .slice(0, 5)
+            .flatMap((wort) => [
+              { bezeichnung: { contains: wort, mode: "insensitive" as const } },
+              { wert: { contains: wort, mode: "insensitive" as const } },
+            ]),
+        ],
+        ...(bankIds && bankIds.length > 0 ? { bank: { bankId: { in: bankIds } } } : {}),
+      },
+      select: {
+        abschnitt: true,
+        bezeichnung: true,
+        wert: true,
+        bank: { select: { bankId: true, name: true } },
+      },
+      orderBy: [{ bezeichnung: "asc" }, { bankRefId: "asc" }],
+      take: MAX_ZEILEN,
+    });
+
+    return [
+      ...zeilen.map((z) => ({
+        bankId: z.bank.bankId,
+        name: z.bank.name,
+        kriterium: z.kriterium,
+        status: z.status,
+        inhalt: z.inhalt,
+      })),
+      ...merkmale.map((m) => ({
+        bankId: m.bank.bankId,
+        name: m.bank.name,
+        // Der Abschnitt gehoert in den Namen: "Bluecard" allein sagt nicht, aus
+        // welcher Ecke der Akte die Aussage kommt.
+        kriterium: `${m.bezeichnung} (Produktübersicht, ${m.abschnitt})`,
+        // "keine Angabe" ist auch hier keine Ablehnung – gleiche Regel wie im
+        // Kriteriencheck, damit die Zeile die KI gar nicht erst erreicht.
+        status: istOhneAussage(m.wert) ? "KEINE_ANGABE" : "INFORMATION",
+        inhalt: m.wert,
+      })),
+    ];
   },
 
   async abzugStand() {
