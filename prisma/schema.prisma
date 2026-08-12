@@ -1552,7 +1552,8 @@ model Bank {
   name             String
   zuletztGesehenAm DateTime
 
-  kriterien BankKriterium[]
+  kriterien       BankKriterium[]
+  produktMerkmale BankProduktMerkmal[]
 
   @@index([name])
   @@map("banken")
@@ -1583,6 +1584,43 @@ model BankKriterium {
   @@unique([bankRefId, kriterium])
   @@index([kriterium, status])
   @@map("bank_kriterien")
+}
+
+/// Eine Zeile aus der Produktuebersicht des Europace-Wikis.
+///
+/// BEWUSST eine eigene Tabelle und keine Erweiterung von BankKriterium: Die
+/// Zeilen haben eine andere Gestalt (kein Status, kein Stand je Zeile, eigene
+/// Gliederung), und die Namen ueberschneiden sich – "Grenzgaenger" steht in
+/// beiden Tabellen mit verschiedenem Inhalt.
+///
+/// Nur 28 der 685 Wiki-Artikel fuehren diese Tabelle, dafuer die
+/// ueberregionalen Anbieter. Quelle und Zuordnung:
+/// docs/superpowers/specs/2026-08-11-produktuebersicht-design.md
+model BankProduktMerkmal {
+  id        String @id @default(cuid())
+  bankRefId String
+  bank      Bank   @relation(fields: [bankRefId], references: [id], onDelete: Cascade)
+
+  /// Antragsteller | Immobilie | Finanzierungsloesung | Prolongation | Hinweise zum Prozess | ...
+  abschnitt      String
+  /// Feinere Gliederung, z. B. "Allgemein", "KfW", "Legitimation". Oft leer –
+  /// dann leerer Text und NICHT null: Postgres zaehlt NULL im eindeutigen Index
+  /// als jeweils verschieden, ein zweiter Import wuerde Dubletten anlegen.
+  unterabschnitt String @default("")
+  bezeichnung    String
+  /// Reiner Text, kein HTML. "keine Angabe" ist ein haeufiger, echter Wert –
+  /// er darf NIE als Ablehnung gelesen werden.
+  wert           String
+
+  /// Zendesk-Artikel, aus dem die Zeile stammt.
+  artikelId    String
+  /// Wann Europace den Artikel zuletzt geaendert hat.
+  standAm      DateTime?
+  importiertAm DateTime
+
+  @@unique([bankRefId, abschnitt, unterabschnitt, bezeichnung])
+  @@index([bezeichnung])
+  @@map("bank_produkt_merkmale")
 }
 
 /// Ein Abruf der Unterlagenanforderungen fuer GENAU EINE Bank.

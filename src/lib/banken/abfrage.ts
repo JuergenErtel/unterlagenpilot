@@ -43,6 +43,13 @@ export async function zaehleBanken(): Promise<number> {
   return prisma.bank.count();
 }
 
+export interface ProduktMerkmal {
+  abschnitt: string;
+  unterabschnitt: string;
+  bezeichnung: string;
+  wert: string;
+}
+
 export interface BankDetail {
   name: string;
   /** Wann WIR den Abzug geholt haben – nicht zu verwechseln mit standAm. */
@@ -54,12 +61,23 @@ export interface BankDetail {
     inhalt: string;
     standAm: Date | null;
   }>;
+  /**
+   * Zeilen aus der Produktuebersicht des Europace-Wikis – eine ZWEITE Quelle
+   * neben dem Kriteriencheck. Nur 28 Banken haben sie; bei allen anderen bleibt
+   * die Liste leer, und die Seite zeigt den Abschnitt dann gar nicht.
+   */
+  merkmale: ProduktMerkmal[];
+  /** Wann Europace den Wiki-Artikel zuletzt geaendert hat. */
+  merkmaleStandAm: Date | null;
 }
 
 export async function ladeBank(bankId: string): Promise<BankDetail | null> {
   const bank = await prisma.bank.findUnique({
     where: { bankId },
-    include: { kriterien: { orderBy: { kriterium: "asc" } } },
+    include: {
+      kriterien: { orderBy: { kriterium: "asc" } },
+      produktMerkmale: { orderBy: [{ abschnitt: "asc" }, { unterabschnitt: "asc" }, { bezeichnung: "asc" }] },
+    },
   });
   if (!bank) return null;
 
@@ -73,5 +91,12 @@ export async function ladeBank(bankId: string): Promise<BankDetail | null> {
       inhalt: k.inhalt,
       standAm: k.standAm,
     })),
+    merkmale: bank.produktMerkmale.map((m) => ({
+      abschnitt: m.abschnitt,
+      unterabschnitt: m.unterabschnitt,
+      bezeichnung: m.bezeichnung,
+      wert: m.wert,
+    })),
+    merkmaleStandAm: bank.produktMerkmale[0]?.standAm ?? null,
   };
 }

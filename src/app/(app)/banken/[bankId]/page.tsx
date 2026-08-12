@@ -23,6 +23,32 @@ const BADGE: Record<Tone, "success" | "warning" | "destructive" | "ai" | "neutra
 
 const datum = (d: Date | null) => (d ? d.toLocaleDateString("de-DE") : "—");
 
+/** Reihenfolge der Abschnitte wie im Europace-Wiki; Unbekanntes hinten dran. */
+const ABSCHNITT_REIHENFOLGE = [
+  "Antragsteller",
+  "Immobilie",
+  "Finanzierungslösung",
+  "Prolongation",
+  "Hinweise zum Prozess",
+  "Hinweise zur Einreichung",
+  "Hinweise zur Abbildung auf der Plattform",
+];
+
+function MERKMAL_ABSCHNITTE(
+  merkmale: Array<{ abschnitt: string; unterabschnitt: string; bezeichnung: string; wert: string }>
+) {
+  const nach = new Map<string, typeof merkmale>();
+  for (const m of merkmale) {
+    const liste = nach.get(m.abschnitt) ?? [];
+    liste.push(m);
+    nach.set(m.abschnitt, liste);
+  }
+  return [...nach.entries()].sort(
+    (a, b) =>
+      (ABSCHNITT_REIHENFOLGE.indexOf(a[0]) + 1 || 99) - (ABSCHNITT_REIHENFOLGE.indexOf(b[0]) + 1 || 99)
+  );
+}
+
 export default async function BankPage({
   params,
   searchParams,
@@ -59,7 +85,11 @@ export default async function BankPage({
       <PageHeader
         eyebrow="Banken-Wiki"
         title={bank.name}
-        subtitle={`${ausschluesse} harte Ausschlüsse · ${vorbehalte} unter Vorbehalt · Abzug vom ${datum(bank.importiertAm)}`}
+        subtitle={
+          bank.kriterien.length === 0
+            ? "Für diese Bank liegt kein Europace-Kriteriencheck vor – nur die Produktübersicht aus dem Europace-Wiki."
+            : `${ausschluesse} harte Ausschlüsse · ${vorbehalte} unter Vorbehalt · Abzug vom ${datum(bank.importiertAm)}`
+        }
       />
 
       {KATEGORIE_REIHENFOLGE.map((kat) => {
@@ -94,6 +124,37 @@ export default async function BankPage({
           </section>
         );
       })}
+
+      {bank.merkmale.length > 0 && (
+        <section className="space-y-2">
+          <div className="border-t pt-5">
+            <h2 className="text-sm font-semibold">Produktübersicht</h2>
+            <p className="text-sm text-muted-foreground">
+              Aus dem Europace-Wiki – eine zweite Quelle neben dem Kriteriencheck, die nur für
+              überregionale Anbieter geführt wird. Stand {datum(bank.merkmaleStandAm)}.
+            </p>
+          </div>
+          {MERKMAL_ABSCHNITTE(bank.merkmale).map(([abschnitt, zeilen]) => (
+            <div key={abschnitt} className="space-y-2">
+              <h3 className="pt-2 text-sm font-medium text-muted-foreground">{abschnitt}</h3>
+              {zeilen.map((m) => (
+                <Card key={`${m.unterabschnitt}|${m.bezeichnung}`}>
+                  <CardContent className="pt-6">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{m.bezeichnung}</p>
+                      {m.unterabschnitt && <Badge variant="neutral">{m.unterabschnitt}</Badge>}
+                    </div>
+                    {/* Reiner Text aus dem Wiki – bewusst NICHT als HTML gerendert. */}
+                    <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+                      {m.wert.trim() || "keine Angabe"}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
 
       {!zeigeAlle && unbeantwortet > 0 && (
         <Link

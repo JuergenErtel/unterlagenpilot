@@ -20,6 +20,7 @@ import type { Urteil } from "@/lib/banken/fragen/schema";
 import { beantworteFrage } from "@/lib/banken/fragen";
 import type { Bestand } from "@/lib/banken/fragen/bestand";
 import { nurText } from "@/lib/banken/bereinigen";
+import { entdoppele, istOhneAussage, neueBankId } from "@/lib/banken/produktuebersicht/import";
 
 const zeile = (o: Partial<Zeile> & { bankId: string }): Zeile => ({
   name: o.name ?? o.bankId,
@@ -565,5 +566,40 @@ describe("Zuordnung der Produktübersichten", () => {
       expect(artikel.trim().length).toBeGreaterThan(1);
       expect(String(bank).trim().length).toBeGreaterThan(1);
     }
+  });
+});
+
+describe("Produktübersicht: Import-Regeln", () => {
+  it("behält bei doppelter Zeile die längere Fassung und meldet es", () => {
+    // Die Deutsche Bank führt „Selbstständige“ zweimal – einmal „ja“, einmal
+    // mit Erläuterung. Ohne diesen Schritt entschiede die Reihenfolge, und zwar
+    // stillschweigend.
+    const { merkmale, zusammengefasst } = entdoppele([
+      { abschnitt: "Antragsteller", unterabschnitt: null, bezeichnung: "Selbstständige", wert: "ja" },
+      {
+        abschnitt: "Antragsteller", unterabschnitt: null, bezeichnung: "Selbstständige",
+        wert: "ja; angestellte Geschäftsführer gelten ab 10 % Beteiligung als selbstständig",
+      },
+      { abschnitt: "Immobilie", unterabschnitt: null, bezeichnung: "Erbbaurecht", wert: "nein" },
+    ]);
+    expect(merkmale).toHaveLength(2);
+    expect(merkmale.find((m) => m.bezeichnung === "Selbstständige")!.wert).toContain("Geschäftsführer");
+    expect(zusammengefasst).toEqual(["Antragsteller||Selbstständige"]);
+  });
+
+  it("erkennt „keine Angabe“ als fehlende Aussage – nicht als Nein", () => {
+    // 279 der 1.380 Werte lauten wörtlich „keine Angabe“.
+    expect(istOhneAussage("keine Angabe")).toBe(true);
+    expect(istOhneAussage("  ")).toBe(true);
+    expect(istOhneAussage("—")).toBe(true);
+    expect(istOhneAussage("nein")).toBe(false);
+    expect(istOhneAussage("ja, Blue Card möglich")).toBe(false);
+  });
+
+  it("kennzeichnet neu angelegte Banken als aus dem Wiki stammend", () => {
+    // Eine erfundene Europace-Kennung wäre eine Behauptung über deren Bestand.
+    expect(neueBankId("NRW.Bank")).toBe("WIKI_NRW_BANK");
+    expect(neueBankId("Sparda-Bank Hessen eG")).toBe("WIKI_SPARDA_BANK_HESSEN_EG");
+    expect(neueBankId("Versicherungskammer Bayern")).toBe("WIKI_VERSICHERUNGSKAMMER_BAYERN");
   });
 });
