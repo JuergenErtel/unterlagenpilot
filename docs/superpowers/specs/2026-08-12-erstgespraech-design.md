@@ -72,42 +72,88 @@ Die Pflichtmenge muss deshalb aus der Sache kommen: **Was braucht eine Bank,
 um einen Zins zu nennen?** Vorschlag, abgeleitet aus dem, was das
 Europace-Modell überhaupt transportieren kann:
 
-### Angebotsrelevant (18)
+### Angebotsrelevant (26) — von Jürgen am 12.08.2026 ergänzt
 
 **Je Antragsteller (× 2 bei Paaren):**
 1. Vorname, Nachname
 2. Geburtsdatum
-3. Beschäftigungsart
-4. Nettoeinkommen monatlich
+3. **Staatsangehörigkeit** ¹
+4. Beschäftigungsart
+5. **Probezeit?** ¹
+6. **Befristung?** ¹
+7. Nettoeinkommen monatlich
+8. **Weitere Einkünfte (Nebenjob, sonstige)** ¹
 
 **Einmal je Haushalt:**
-5. Anschrift (Straße, PLZ, Ort)
-6. Familienstand
-7. Anzahl Kinder
-8. Bestehende Verbindlichkeiten (Raten)
-9. Eigenkapital
+9. Anschrift (Straße, PLZ, Ort)
+10. Familienstand
+11. Anzahl Kinder
+12. Bestehende Verbindlichkeiten (Raten)
+13. Eigenkapital
 
 **Objekt:**
-10. Objektart
-11. Anschrift des Objekts (mindestens PLZ/Ort — steuert Grunderwerbsteuer)
-12. Wohnfläche
-13. Baujahr
-14. Nutzung (Eigennutzung/Vermietung)
+14. Objektart
+15. Anschrift des Objekts (mindestens PLZ/Ort — steuert Grunderwerbsteuer)
+16. Wohnfläche
+17. **Grundstücksgröße** ¹
+18. Baujahr
+19. Nutzung (Eigennutzung/Vermietung)
 
-**Vorhaben:**
-15. Finanzierungsart (Kauf/Neubau/Anschluss …)
-16. Kaufpreis bzw. Bau-/Grundstückskosten
-17. Maklerprovision
-18. Darlehenswunsch
+**Vorhaben und Konditionswunsch:**
+20. Finanzierungsart (Kauf/Neubau/Anschluss …)
+21. Kaufpreis bzw. Bau-/Grundstückskosten
+22. Maklerprovision
+23. Darlehenswunsch
+24. **Zinsbindung** ²
+25. **Sondertilgungsoption gewünscht?** ²
+26. **Wunschrate monatlich** ²
+
+¹ Fragt der Katalog bereits, war nur nicht als angebotsrelevant markiert.
+² **Neues Feld** — existiert weder im Katalog noch im Datenmodell.
+
+### Nebenkosten: rechnen statt fragen
+
+Sobald Kaufpreis, Objekt-PLZ und Maklerprovision stehen, zeigt das Interview
+die Nebenkosten sofort aufgeschlüsselt an — Grunderwerbsteuer (Satz nach
+Bundesland), Notar/Grundbuch, Maklergebühr, Summe.
+
+Die Rechnung existiert bereits und wird wiederverwendet:
+`berechneNebenkosten` in `src/lib/machbarkeit/nebenkosten.ts`, Steuersätze in
+`bundesland.ts`. Zwei Eigenschaften von dort gelten weiter: Ein am Fall
+**erfasster** Nebenkostenbetrag gewinnt gegen die Rechnung (nie beides
+addieren), und ein unsicherer Steuersatz (Bundesland unbekannt) wird als
+solcher ausgewiesen statt stillschweigend geschätzt.
+
+Das ist mehr als Bequemlichkeit: Nebenkosten sind nicht beleihbar. Wer sie
+im Gespräch sieht, erkennt sofort, ob das Eigenkapital trägt.
 
 ### Nützlich, aber nicht angebotskritisch
 
-Geburtsort, Staatsangehörigkeit, Arbeitgeber, Beruf, beschäftigt seit,
-Probezeit, Grundstücksfläche, Zimmer, Stellplätze, Hausgeld, Mieteinnahmen,
-sonstige Einnahmen, Einmalzahlungen.
+Geburtsort, Arbeitgeber, Beruf, beschäftigt seit, Zimmer, Stellplätze,
+Hausgeld, Mieteinnahmen, Einmalzahlungen.
 
-**Jürgens Prüfung:** Fehlt in der ersten Liste etwas, ohne das du in Europace
-nicht rechnen kannst? Steht dort etwas, das du im Erstgespräch nie erfragst?
+## Schemaänderung
+
+Drei neue Spalten an `FinancingRequest` — es sind Konditionswünsche des
+Kunden, keine Objekt- oder Personendaten:
+
+```prisma
+/// Gewuenschte Zinsbindung in Jahren (5/10/15/20/30 sind die ueblichen).
+zinsbindungJahre        Int?
+/// Wunsch nach jaehrlicher Sondertilgungsoption. null = nicht gefragt.
+sondertilgungGewuenscht Boolean?
+/// Monatliche Wunschrate des Kunden. Grenze fuer den Machbarkeits-Solver.
+wunschrateMonatlich     Float?
+```
+
+Anwendung gegen PROD über `scripts/supabase-sql.sh` mit gezieltem
+`ALTER TABLE` — **nie** der volle `migrate diff` (siehe
+[[supabase-management-api-zugriff]]).
+
+**Nebenwirkung, die wir wollen:** Die Wunschrate ist eine natürliche
+Nebenbedingung für den [[machbarkeits-solver]]. Bisher rechnet er gegen die
+tragbare Rate aus der Haushaltsrechnung; mit einer genannten Wunschrate kann
+er sagen, ob der Kunde *sein* Ziel erreicht, nicht nur ob die Bank mitgeht.
 
 ## Was der Katalog noch nicht kann
 
@@ -133,7 +179,12 @@ ergänzt (Enum, Labels, Checklisten-Vorlage, FinLink-Übersetzung von
 
 ## Offene Punkte
 
-1. Pflichtmenge bestätigen oder korrigieren (siehe oben).
+1. ~~Pflichtmenge bestätigen~~ — am 12.08.2026 von Jürgen um neun Angaben
+   ergänzt, jetzt 26 plus die gerechneten Nebenkosten.
 2. Soll die Kategorie „Freiberufler" im selben Zug kommen oder getrennt?
 3. Reihenfolge der Abschnitte im Vermittlermodus — die Katalogreihenfolge ist
    für den Kunden gedacht (Vorhaben zuerst). Passt sie zum Telefonat?
+4. **Zinsbindung als Auswahl oder freie Zahl?** Üblich sind 5/10/15/20/30
+   Jahre. Eine Auswahl ist am Telefon schneller, eine freie Zahl deckt
+   Sonderfälle. Vorschlag: Auswahl mit den fünf üblichen Werten plus Feld
+   „andere".
