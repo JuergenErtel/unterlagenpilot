@@ -99,6 +99,12 @@ export interface CanonicalFinancing {
   sollzinsProzent?: number;
   kapitalanlage?: boolean;
   selbstnutzung?: boolean;
+  /** Gewuenschte Zinsbindung in Jahren, aus dem Erstgespraech. */
+  zinsbindungJahre?: number;
+  /** Wunsch nach jaehrlicher Sondertilgungsoption. */
+  sondertilgungGewuenscht?: boolean;
+  /** Monatliche Wunschrate des Kunden – Nebenbedingung fuer den Machbarkeits-Solver. */
+  wunschrateMonatlich?: number;
 }
 
 /** Plattform-Vorgangs-IDs */

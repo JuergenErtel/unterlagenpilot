@@ -632,6 +632,15 @@ model FinancingRequest {
   /// Manuell gesetzter Grunderwerbsteuersatz, falls die Ableitung aus PLZ und
   /// Ort danebenliegt. Sichtbar im Machbarkeits-Ergebnis.
   grunderwerbsteuerProzent Float?
+  /// Gewuenschte Zinsbindung in Jahren. Freie Zahl, keine Auswahlliste:
+  /// 5/10/15/20/30 sind ueblich, aber nicht die einzigen Werte.
+  zinsbindungJahre         Int?
+  /// Wunsch nach jaehrlicher Sondertilgungsoption. null = nicht gefragt,
+  /// false = ausdruecklich nicht gewuenscht.
+  sondertilgungGewuenscht  Boolean?
+  /// Monatliche Wunschrate des Kunden. Nebenbedingung fuer den
+  /// Machbarkeits-Solver: Er rechnet sonst nur gegen die TRAGBARE Rate.
+  wunschrateMonatlich      Float?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
