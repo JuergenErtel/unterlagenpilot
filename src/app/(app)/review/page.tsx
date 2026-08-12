@@ -173,6 +173,19 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                     {d.case.caseNumber} · {name}
                   </Link>
                   <Badge variant="neutral" className="font-mono tabular">Konfidenz {formatConfidence(d.confidence)}</Badge>
+                  {/*
+                    Die Hauptaktion gehoert an den Kopf des Dokuments. Unterhalb
+                    von lg stapeln sich die drei Spalten der Karte, und die
+                    Aktionsspalte ist die dritte: Bei einem Expose mit ~37
+                    erkannten Feldern lag der Freigabe-Knopf rund zwei
+                    Bildschirmhoehen unter dem Kartenkopf und war schlicht nicht
+                    auffindbar. Hier steht er immer im Blick, bei jeder Breite.
+                  */}
+                  <form action={acceptDocument.bind(null, d.id)}>
+                    <SubmitButton size="sm" pendingLabel="Wird übernommen …">
+                      Freigeben
+                    </SubmitButton>
+                  </form>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-0 p-0 lg:grid-cols-[1fr_1.3fr_1fr]">

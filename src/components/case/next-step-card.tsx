@@ -48,17 +48,22 @@ export function NextStepCard({ step, actionSlot }: { step: NextStep; actionSlot?
               stünden zwei Hauptaktionen nebeneinander und die Leiter verlöre
               ihren Sinn. */}
           {step.wartet && step.wartet.length > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Wartet außerdem:</span>{" "}
-              {step.wartet.map((w, i) => (
-                <span key={`${w.href}|${w.label}`}>
-                  {i > 0 && ", "}
-                  <Link href={w.href} className="text-primary underline underline-offset-2">
-                    {w.label}
-                  </Link>
-                </span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Wartet außerdem
+              </span>
+              {step.wartet.map((w) => (
+                <Link
+                  key={`${w.href}|${w.label}`}
+                  href={w.href}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-ai/40 bg-card px-3 py-1 text-sm font-medium text-foreground transition-colors hover:border-ai hover:bg-ai/10"
+                >
+                  <ScanSearch className="h-3.5 w-3.5 text-ai" />
+                  {w.label}
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </Link>
               ))}
-            </p>
+            </div>
           )}
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto">
