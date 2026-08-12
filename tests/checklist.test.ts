@@ -188,3 +188,69 @@ describe("Ersetzte Dokumente", () => {
     expect(list.find((i) => i.key === "personalausweis")?.status).toBe("offen");
   });
 });
+
+describe("Gemischtes Paar: selbstständig + angestellt", () => {
+  /**
+   * Juergen im Praxistest (12.08.2026): "es fehlen die Anforderungen für
+   * Selbständige. Es werden Gehaltsabrechnungen gefordert, die er gar nicht
+   * hat." Fall UP-2026-0007: Er selbststaendig (Arzt), sie angestellt in
+   * seiner Praxis. Bis dahin kannte der Fall genau EINE Beschaeftigungsart –
+   * eine der beiden Listen musste falsch sein.
+   */
+  const paar = {
+    financingType: "kauf" as const,
+    propertyType: "einfamilienhaus" as const,
+    applicantCount: 2,
+    applicantIds: ["a1", "a2"],
+    applicants: [
+      { id: "a1", employmentType: "selbststaendiger" as const },
+      { id: "a2", employmentType: "angestellter" as const },
+    ],
+  };
+
+  it("waehlt die Vorlagen BEIDER Beschaeftigungsarten", () => {
+    const keys = selectTemplateKeys(paar);
+    expect(keys).toContain("selbststaendiger_kauf");
+    expect(keys).toContain("angestellter_kauf");
+  });
+
+  it("verlangt Gehaltsabrechnungen nur von der Angestellten", () => {
+    const list = buildChecklistForCase(paar, []);
+    const gehalt = list.find((p) => p.key === "gehaltsabrechnung");
+    expect(gehalt).toBeDefined();
+    // Eine Person, nicht zwei – er hat keine Gehaltsabrechnungen.
+    expect(gehalt!.effectiveRequiredCount).toBe(3);
+  });
+
+  it("verlangt BWA und Jahresabschluss, die vorher ganz fehlten", () => {
+    const list = buildChecklistForCase(paar, []);
+    for (const key of ["bwa", "jahresabschluss"]) {
+      expect(list.find((p) => p.key === key), `Position ${key} fehlt`).toBeDefined();
+    }
+  });
+
+  it("verlangt den Ausweis weiterhin von beiden", () => {
+    const list = buildChecklistForCase(paar, []);
+    const ausweis = list.find((p) => p.key === "personalausweis");
+    expect(ausweis!.effectiveRequiredCount).toBe(2);
+  });
+
+  it("laesst eine Position ganz weg, wenn sie auf niemanden zutrifft", () => {
+    const nurSelbststaendig = {
+      ...paar,
+      applicantCount: 1,
+      applicantIds: ["a1"],
+      applicants: [{ id: "a1", employmentType: "selbststaendiger" as const }],
+    };
+    const list = buildChecklistForCase(nurSelbststaendig, []);
+    expect(list.find((p) => p.key === "gehaltsabrechnung")).toBeUndefined();
+  });
+
+  it("bleibt ohne Angabe zur Beschaeftigung beim bisherigen Verhalten", () => {
+    const list = buildChecklistForCase(
+      { financingType: "kauf", applicantCount: 2, applicantIds: ["a1", "a2"] },
+      []
+    );
+    expect(list.find((p) => p.key === "gehaltsabrechnung")).toBeDefined();
+  });
+});

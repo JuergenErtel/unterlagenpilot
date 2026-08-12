@@ -41,7 +41,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
   const [caseRow, documents] = await Promise.all([
     prisma.case.findUniqueOrThrow({
       where: { id: caseId },
-      include: { applicants: true, property: true },
+      include: { applicants: { include: { employment: true } }, property: true },
     }),
     prisma.document.findMany({
       where: { caseId },

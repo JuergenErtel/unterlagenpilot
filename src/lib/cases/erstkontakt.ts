@@ -45,7 +45,12 @@ export async function bereiteErstkontaktVor(
     // Erstkontakt-Karte sortieren ebenso. Ohne dieselbe Reihenfolge kann im
     // Entwurf "Hallo Bernd Beispiel," stehen, waehrend die Mail an anna@…
     // hinausgeht.
-    include: { applicants: { orderBy: { position: "asc" } }, property: true },
+    include: {
+      // employment mitladen: Die Unterlagenliste haengt an der
+      // Beschaeftigungsart JE ANTRAGSTELLER, nicht am Fall.
+      applicants: { orderBy: { position: "asc" }, include: { employment: true } },
+      property: true,
+    },
   });
   if (!fall) return { status: "kein_empfaenger" };
   if (fall.erstkontaktVorbereitetAm) return { status: "schon_vorbereitet" };
@@ -83,7 +88,17 @@ export async function bereiteErstkontaktVor(
       actorUserId: opts.actorUserId ?? null,
     });
 
-    const name = [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim();
+    // ALLE Antragsteller ansprechen, nicht nur den Mailempfaenger. Bei einem
+    // Paar geht die Nachricht zwar an eine Adresse, gemeint sind aber beide –
+    // eine Anrede, die die Mitantragstellerin uebergeht, faellt sofort auf
+    // ("in der Mail wird nur er angesprochen", Praxistest 12.08.2026).
+    const namen = fall.applicants
+      .map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ").trim())
+      .filter((n) => n.length > 0);
+    const name =
+      namen.length > 1
+        ? `${namen.slice(0, -1).join(", ")} und ${namen[namen.length - 1]}`
+        : (namen[0] ?? [empfaenger.vorname, empfaenger.nachname].filter(Boolean).join(" ").trim());
 
     // Derselbe Weg wie `generateMessage` (src/lib/actions/cases.ts): Signatur
     // aus den Organisationsdaten, Vorlage der Organisation vor Standardvorlage.

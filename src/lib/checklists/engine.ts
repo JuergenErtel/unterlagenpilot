@@ -24,6 +24,19 @@ export interface CaseChecklistInput {
    * Gehaltsabrechnung) je Person statt fallweit zu prüfen.
    */
   applicantIds?: string[];
+  /**
+   * Antragsteller MIT ihrer Beschaeftigungsart.
+   *
+   * `employmentType` weiter oben gilt fuer den ganzen Fall und kann ein Paar
+   * aus Selbststaendigem und Angestellter nicht abbilden – eine der beiden
+   * Unterlagenlisten war dann zwangslaeufig falsch. Genau daran ist der Fall
+   * UP-2026-0007 aufgelaufen: Vom selbststaendigen Arzt wurden
+   * Gehaltsabrechnungen verlangt, BWA und Jahresabschluss fehlten ganz.
+   *
+   * Ist diese Liste gesetzt, entscheidet sie ueber Vorlagenauswahl und
+   * personenbezogene Positionen; sonst bleibt es beim fallweiten Wert.
+   */
+  applicants?: Array<{ id: string; employmentType?: EmploymentType }>;
 }
 
 export interface ResolvedChecklistItem extends ChecklistItemDef {
@@ -45,23 +58,35 @@ export interface ResolvedChecklistItem extends ChecklistItemDef {
 export function selectTemplateKeys(input: CaseChecklistInput): string[] {
   const keys = new Set<string>();
 
-  // Beschäftigungs-/Kundentyp + Finanzierungsart
-  switch (input.employmentType) {
-    case "selbststaendiger":
-      keys.add("selbststaendiger_kauf");
-      break;
-    case "beamter":
-      keys.add("beamter");
-      break;
-    case "rentner":
-      keys.add("rentner");
-      break;
-    case "geschaeftsfuehrer":
-    case "gesellschafter":
-      keys.add("gf_gesellschafter");
-      break;
-    default:
-      keys.add("angestellter_kauf");
+  // Beschäftigungs-/Kundentyp + Finanzierungsart.
+  // Jede im Fall vertretene Beschaeftigungsart bringt ihre Vorlage mit: Bei
+  // einem Paar aus Selbststaendigem und Angestellter braucht es BEIDE Listen,
+  // nicht die des "fuehrenden" Antragstellers.
+  // Nur BEKANNTE Beschaeftigungsarten der Personen zaehlen. Sind sie alle
+  // unbekannt, bleibt der fallweite Wert massgeblich – eine Luecke in den
+  // Personendaten darf eine gepflegte Fallangabe nicht ueberstimmen.
+  const bekannte = (input.applicants ?? [])
+    .map((a) => a.employmentType)
+    .filter((t): t is EmploymentType => t !== undefined);
+  const arten = bekannte.length > 0 ? bekannte : [input.employmentType];
+  for (const art of arten) {
+    switch (art) {
+      case "selbststaendiger":
+        keys.add("selbststaendiger_kauf");
+        break;
+      case "beamter":
+        keys.add("beamter");
+        break;
+      case "rentner":
+        keys.add("rentner");
+        break;
+      case "geschaeftsfuehrer":
+      case "gesellschafter":
+        keys.add("gf_gesellschafter");
+        break;
+      default:
+        keys.add("angestellter_kauf");
+    }
   }
 
   switch (input.financingType) {
@@ -153,7 +178,27 @@ export function buildChecklistForCase(
 
   return [...merged.values()]
     .sort((a, b) => rank(b.level) - rank(a.level))
-    .map((def) => resolveStatus(def, documents, applicantIds, applicantCount));
+    .map((def) => {
+      const betroffen = betroffeneAntragsteller(def, input, applicantIds);
+      return { def, betroffen };
+    })
+    // Trifft eine personenbezogene Position auf niemanden zu, entfaellt sie:
+    // Eine Gehaltsabrechnung von einem reinen Selbststaendigen-Haushalt zu
+    // verlangen ist keine offene Position, sondern ein Fehler in der Liste.
+    // Nur wenn die Beschaeftigungsarten ueberhaupt bekannt sind – ohne sie
+    // bleibt die Liste wie bisher vollstaendig.
+    .filter(
+      ({ def, betroffen }) =>
+        !def.nurBeiBeschaeftigung || !input.applicants?.length || betroffen.length > 0
+    )
+    .map(({ def, betroffen }) =>
+      resolveStatus(
+        def,
+        documents,
+        betroffen,
+        def.nurBeiBeschaeftigung && input.applicants ? betroffen.length : applicantCount
+      )
+    );
 }
 
 /** Zählt lesbare, hinreichend aktuelle Treffer und bewertet eine Teilmenge. */
@@ -176,6 +221,27 @@ function evaluateMatches(
     tooOld = dated.length > 0 && dated.every((m) => m.ageDays! > def.recencyDays!);
   }
   return { fulfilled, tooOld };
+}
+
+/**
+ * Auf welche Antragsteller eine Position zutrifft.
+ *
+ * Ohne `nurBeiBeschaeftigung` auf alle. Eine unbekannte Beschaeftigungsart
+ * zaehlt mit: Solange die Angabe fehlt, soll eine Position lieber zu viel
+ * verlangt werden als still zu verschwinden.
+ */
+function betroffeneAntragsteller(
+  def: ChecklistItemDef,
+  input: CaseChecklistInput,
+  applicantIds: string[]
+): string[] {
+  if (!def.nurBeiBeschaeftigung || !input.applicants || input.applicants.length === 0) {
+    return applicantIds;
+  }
+  const erlaubt = new Set(def.nurBeiBeschaeftigung);
+  return input.applicants
+    .filter((a) => a.employmentType === undefined || erlaubt.has(a.employmentType))
+    .map((a) => a.id);
 }
 
 function resolveStatus(

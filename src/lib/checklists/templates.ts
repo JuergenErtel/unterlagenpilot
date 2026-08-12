@@ -1,5 +1,6 @@
 import type {
   DocumentType,
+  EmploymentType,
   Platform,
   RequirementLevel,
   RequirementScope,
@@ -29,6 +30,15 @@ export interface ChecklistItemDef {
    * einmal pro Fall. `requiredCount` gilt dann PRO PERSON.
    */
   perApplicant?: boolean;
+  /**
+   * Position gilt nur fuer Antragsteller MIT einer dieser Beschaeftigungsarten.
+   *
+   * Ohne diese Einschraenkung verlangte eine `perApplicant`-Position von JEDER
+   * Person dasselbe – vom selbststaendigen Arzt also Gehaltsabrechnungen, die
+   * er nicht hat, und von seiner angestellten Frau eine BWA. Trifft die
+   * Einschraenkung auf niemanden zu, entfaellt die Position ganz.
+   */
+  nurBeiBeschaeftigung?: EmploymentType[];
   example?: string;
 }
 
@@ -80,6 +90,11 @@ const I = {
     requiredCount: 3,
     recencyDays: 120,
     perApplicant: true,
+    // Wer nicht angestellt ist, hat keine Gehaltsabrechnungen. Bewusst als
+    // Positivliste OHNE "selbststaendiger" und "rentner"; eine unbekannte
+    // Beschaeftigungsart zaehlt weiter mit, damit die Position nicht still
+    // verschwindet, solange die Angabe fehlt.
+    nurBeiBeschaeftigung: ["angestellter", "beamter", "geschaeftsfuehrer", "gesellschafter", "sonstiges"],
     example: "Gehaltsabrechnung_Max_Mustermann_2026-05.pdf",
   }),
   estBescheid: item({

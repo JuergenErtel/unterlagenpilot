@@ -161,10 +161,11 @@ describe("Erstkontakt vorbereiten", () => {
     expect(body).toContain("Anna");
   });
 
-  it("gruesst den Antragsteller, an den die Mail spaeter tatsaechlich geht", async () => {
-    // `sendMessageByEmail` und die Erstkontakt-Karte sortieren nach position.
-    // Ohne dieselbe Sortierung hier stuende im schlechten Fall "Hallo Bernd
-    // Beispiel," in einer Mail an anna@…
+  it("gruesst BEIDE Antragsteller, in der Reihenfolge ihrer Position", async () => {
+    // Bis 12.08.2026 wurde nur der Mailempfaenger gegruesst – Juergen im
+    // Praxistest: "in der mail wird nur er angesprochen". Die Nachricht geht
+    // zwar an eine Adresse, gemeint sind aber beide. Die Reihenfolge folgt
+    // weiterhin `position`, damit die Anrede nicht wechselt.
     faelle.c1 = fall({
       applicants: [
         { id: "a2", position: 2, vorname: "Bernd", nachname: "Beispiel", email: "bernd@example.de" },
@@ -175,11 +176,12 @@ describe("Erstkontakt vorbereiten", () => {
     await bereiteErstkontaktVor("c1");
     const { prisma } = await import("@/lib/db");
     const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
-    expect(body).toContain("Hallo Anna Beispiel,");
-    expect(body).not.toContain("Bernd");
+    expect(body).toContain("Hallo Anna Beispiel und Bernd Beispiel,");
   });
 
-  it("gruesst den Mitantragsteller, wenn der erste keine Adresse hat", async () => {
+  it("gruesst beide auch dann, wenn nur einer eine Adresse hat", async () => {
+    // Hanaa Naamneh (Fall UP-2026-0007) hat keine Mailadresse – uebergangen
+    // werden darf sie deswegen nicht.
     faelle.c1 = fall({
       applicants: [
         { id: "a2", position: 2, vorname: "Bernd", nachname: "Beispiel", email: "bernd@example.de" },
@@ -190,7 +192,7 @@ describe("Erstkontakt vorbereiten", () => {
     await bereiteErstkontaktVor("c1");
     const { prisma } = await import("@/lib/db");
     const body = (prisma.generatedMessage.create as any).mock.calls[0][0].data.body as string;
-    expect(body).toContain("Hallo Bernd Beispiel,");
+    expect(body).toContain("Hallo Anna Beispiel und Bernd Beispiel,");
   });
 
   it("verlangt genau die Unterlagen, die der Kunde spaeter auf der Upload-Seite sieht", async () => {

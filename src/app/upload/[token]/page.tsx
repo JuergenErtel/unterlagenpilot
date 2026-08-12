@@ -44,7 +44,7 @@ export default async function PublicUploadPage({
           case: {
             include: {
               organization: { select: { name: true } },
-              applicants: true,
+              applicants: { include: { employment: true } },
               property: true,
               documents: true,
               customerForm: true,

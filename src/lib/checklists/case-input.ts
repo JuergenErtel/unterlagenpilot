@@ -27,7 +27,16 @@ export interface FallFuerCheckliste {
   kapitalanlage: boolean;
   /** Objektdaten, soweit vorhanden. Steuern Objektart- und Nutzungspositionen. */
   property?: { objektart: string | null; nutzung: string | null } | null;
-  applicants: Array<{ id: string; position: number }>;
+  /**
+   * Antragsteller samt Beschaeftigung. `employment` ist optional, damit
+   * bestehende Aufrufer nicht brechen – fehlt es, verhaelt sich die Liste wie
+   * vor dem 12.08.2026 und stuetzt sich allein auf `primaryEmploymentType`.
+   */
+  applicants: Array<{
+    id: string;
+    position: number;
+    employment?: Array<{ beschaeftigungsart: string | null }>;
+  }>;
 }
 
 export function checklistEingabeFuerFall(fall: FallFuerCheckliste): CaseChecklistInput {
@@ -44,5 +53,17 @@ export function checklistEingabeFuerFall(fall: FallFuerCheckliste): CaseChecklis
       .slice()
       .sort((a, b) => a.position - b.position)
       .map((a) => a.id),
+    // Beschaeftigung JE PERSON. Der fallweite `primaryEmploymentType` kann ein
+    // Paar aus Selbststaendigem und Angestellter nicht abbilden – dann ist
+    // eine der beiden Unterlagenlisten zwangslaeufig falsch (Fall
+    // UP-2026-0007: Gehaltsabrechnungen vom Arzt verlangt, BWA fehlte).
+    applicants: fall.applicants
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((a) => ({
+        id: a.id,
+        employmentType:
+          (a.employment?.[0]?.beschaeftigungsart as EmploymentType | undefined) ?? undefined,
+      })),
   };
 }
