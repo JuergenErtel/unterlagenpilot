@@ -15,6 +15,7 @@ import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager
 import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
+import { brauchtSelbststaendigenEinkommensnachweis } from "@/lib/checklists/case-input";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
 import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
 import { ladeSelbstauskunftStand } from "@/lib/cases/selbstauskunft-stand";
@@ -220,10 +221,7 @@ export default async function CaseCockpitPage({
     id: a.id,
     name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
   }));
-  const istSelbststaendig =
-    caseRow.primaryEmploymentType === "selbststaendiger" ||
-    caseRow.primaryEmploymentType === "geschaeftsfuehrer" ||
-    caseRow.primaryEmploymentType === "gesellschafter";
+  const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
 
   /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten

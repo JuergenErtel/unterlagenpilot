@@ -202,6 +202,19 @@ describe("uebernehmen", () => {
     expect(arg.data.beschaeftigungsart).toBe("selbststaendiger");
   });
 
+  it("bildet die Option 'freiberufler' auf die eigene Kategorie ab, nicht auf selbststaendig", async () => {
+    disclosureFindFirst.mockResolvedValue({
+      id: "sd-1",
+      caseId: "case-A",
+      answers: { "p1.beruf_art.art": "freiberufler" },
+    });
+    await uebernehmen("case-A", ["p1.beruf_art.art"]);
+    const arg = employmentCreate.mock.calls[0]![0] as {
+      data: { beschaeftigungsart: string };
+    };
+    expect(arg.data.beschaeftigungsart).toBe("freiberufler");
+  });
+
   it("verweigert die Übernahme bei gesperrtem Fall", async () => {
     caseFindUnique.mockResolvedValue({ status: "exportiert", financingType: null });
     const res = await uebernehmen("case-A", ["p1.person_name.vorname"]);

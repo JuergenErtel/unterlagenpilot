@@ -59,6 +59,7 @@ const FALLTYP_KEYS = [
 const KUNDENTYP_KEYS = [
   "angestellter",
   "selbststaendiger",
+  "freiberufler",
   "beamter",
   "rentner",
   "gf",

@@ -166,7 +166,7 @@ const BESCHAEFTIGUNG: Record<string, string> = {
   arbeiter: "angestellter",
   selbststaendiger: "selbststaendiger",
   handwerker: "selbststaendiger",
-  freiberufler: "selbststaendiger",
+  freiberufler: "freiberufler",
   beamter: "beamter",
   privatier: "sonstiges",
   rentner: "rentner",

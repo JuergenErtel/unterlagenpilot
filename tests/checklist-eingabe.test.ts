@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { checklistEingabeFuerFall } from "@/lib/checklists/case-input";
+import {
+  checklistEingabeFuerFall,
+  brauchtSelbststaendigenEinkommensnachweis,
+} from "@/lib/checklists/case-input";
 import { buildChecklistForCase } from "@/lib/checklists/engine";
 
 /**
@@ -64,4 +67,22 @@ describe("Gemeinsame Checklisten-Eingabe eines Falls", () => {
     expect(eingabe.propertyType).toBeUndefined();
     expect(eingabe.usage).toBeUndefined();
   });
+});
+
+describe("brauchtSelbststaendigenEinkommensnachweis", () => {
+  // Steuert den Button "Selbständigen-Einkommen (PDF)" auf der Fallseite – das
+  // Werkzeug ist EÜR-basiert und passt fachlich fuer alle vier Arten.
+  it.each(["selbststaendiger", "freiberufler", "geschaeftsfuehrer", "gesellschafter"] as const)(
+    "gilt fuer '%s'",
+    (art) => {
+      expect(brauchtSelbststaendigenEinkommensnachweis(art)).toBe(true);
+    }
+  );
+
+  it.each(["angestellter", "beamter", "rentner", "sonstiges", null, undefined] as const)(
+    "gilt NICHT fuer '%s'",
+    (art) => {
+      expect(brauchtSelbststaendigenEinkommensnachweis(art)).toBe(false);
+    }
+  );
 });

@@ -39,6 +39,33 @@ export interface FallFuerCheckliste {
   }>;
 }
 
+/**
+ * Beschaeftigungsarten, die ihr Einkommen selbst erwirtschaften statt per
+ * Gehalt zu beziehen und es deshalb per EÜR/Bilanz statt Gehaltsabrechnung
+ * belegen. Europace fasst "geschaeftsfuehrer" und "gesellschafter" fachlich
+ * ebenfalls als Selbststaendige (siehe kundenangaben-mapping.ts,
+ * BESCHAEFTIGUNGSTYP).
+ *
+ * Zentrale Stelle bewusst hier statt inline auf der Fallseite: Genau als
+ * inline-Bedingung stand sie vorher dort und vergass "freiberufler", als die
+ * Kategorie am 12.08.2026 dazukam – das EÜR-basierte
+ * Selbststaendigen-Einkommens-Werkzeug blieb fuer Freiberufler unsichtbar,
+ * obwohl es fachlich exakt zu ihnen passt.
+ */
+const EUER_BASIERTE_BESCHAEFTIGUNG = new Set<EmploymentType>([
+  "selbststaendiger",
+  "freiberufler",
+  "geschaeftsfuehrer",
+  "gesellschafter",
+]);
+
+/** Ob das Selbststaendigen-Einkommens-Werkzeug (EÜR-basiert) zum Fall passt. */
+export function brauchtSelbststaendigenEinkommensnachweis(
+  employmentType: EmploymentType | null | undefined
+): boolean {
+  return employmentType != null && EUER_BASIERTE_BESCHAEFTIGUNG.has(employmentType);
+}
+
 export function checklistEingabeFuerFall(fall: FallFuerCheckliste): CaseChecklistInput {
   return {
     financingType: (fall.financingType as FinancingType) ?? undefined,
