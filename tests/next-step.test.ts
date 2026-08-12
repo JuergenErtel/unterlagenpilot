@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { CASE_STATUSES } from "@/lib/domain/enums";
 import { computeNextStep } from "@/lib/cases/next-step";
 import type { NextStepInput } from "@/lib/cases/next-step";
 import type { CockpitData } from "@/lib/cases/cockpit";
@@ -50,6 +52,55 @@ function cockpit(over: {
     anforderungsAbgleich: null,
   };
 }
+
+describe("computeNextStep – Fälle nach der Einreichung", () => {
+  /**
+   * Die Stufe prüfte auf den Status "eingereicht" – den es in `CaseStatus`
+   * nie gab (gültig ist `uebertragen`, beschriftet „Bei Bank eingereicht").
+   * Der Zweig war damit toter Code: Ein an die Bank übergebener Fall bekam
+   * die Anweisung „Einreichung vorbereiten", die er längst hinter sich hat.
+   */
+  it("verfolgt Fristen, sobald der Fall bei der Bank liegt", () => {
+    const s = computeNextStep(
+      cockpit({
+        status: "uebertragen",
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+      })
+    );
+    expect(s.key).toBe("fristen");
+  });
+
+  it("verfolgt Fristen auch bei einer Bank-Nachforderung", () => {
+    const s = computeNextStep(
+      cockpit({
+        status: "bank_nachforderung",
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+      })
+    );
+    expect(s.key).toBe("fristen");
+  });
+
+  it("schickt einen abgeschlossenen Fall nicht in die Einreichung", () => {
+    // Die Fallseite berechnet den Schritt für JEDEN Fall, auch für erledigte –
+    // anders als das Dashboard, das terminale Status herausfiltert.
+    for (const status of ["abgeschlossen", "archiviert"] as const) {
+      const s = computeNextStep(
+        cockpit({
+          status,
+          erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        })
+      );
+      expect(s.key).toBe("erledigt");
+      expect(s.cta).toBeUndefined();
+    }
+  });
+
+  it("meldet auch bei einem erledigten Fall keine wartenden Schritte", () => {
+    const s = computeNextStep(cockpit({ status: "abgeschlossen", counts: { pruefbereit: 2 } }));
+    expect(s.key).toBe("erledigt");
+    expect(s.wartet).toBeUndefined();
+  });
+});
 
 describe("computeNextStep – wartende Schritte", () => {
   it("verliert die Dokumentfreigabe nicht, wenn ein höherer Schritt sie verdrängt", () => {
@@ -182,8 +233,20 @@ describe("computeNextStep – Prioritätsleiter", () => {
   });
 
   it("eingereichter Fall verweist auf Fristen/Verwaltung", () => {
-    const s = computeNextStep(cockpit({ status: "eingereicht" }));
+    // Bis 12.08.2026 stand hier "eingereicht" – ein Wert, den CASE_STATUSES
+    // nicht kennt. Der Test bestaetigte damit dieselbe Erfindung wie der Code
+    // und hielt den toten Zweig am Leben. Gueltig ist "uebertragen".
+    const s = computeNextStep(cockpit({ status: "uebertragen" }));
     expect(s.key).toBe("fristen");
+  });
+
+  it("kennt nur Status, die es wirklich gibt", () => {
+    // Wachhund gegen die Wiederholung: Jeder Statuswert, auf den die Leiter
+    // prueft, muss im Enum stehen.
+    const quelle = readFileSync(new URL("../src/lib/cases/next-step.ts", import.meta.url), "utf8");
+    const geprueft = [...quelle.matchAll(/c\.status === "([a-z_]+)"/g)].map((m) => m[1]!);
+    expect(geprueft.length).toBeGreaterThan(0);
+    for (const s of geprueft) expect(CASE_STATUSES).toContain(s);
   });
 
   it("leerer, sauberer Fall endet bei der Einreichung", () => {

@@ -22,6 +22,7 @@ export interface NextStep {
     | "unterlagen_anfordern"
     | "selbstauskunft_wartet"
     | "fristen"
+    | "erledigt"
     | "einreichung";
   title: string;
   reason: string;
@@ -103,9 +104,11 @@ export function computeNextStep(c: NextStepInput): NextStep {
 function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: string; href: string }> {
   const wartet: Array<{ label: string; href: string }> = [];
   // Während des KI-Laufs ist "freigabebereit" nur ein Zwischenstand – die
-  // Dokumente tauchen gleich wieder auf, ein Hinweis wäre irreführend.
-  const kiLaeuft = schritt.key === "ki_laeuft";
-  if (!kiLaeuft && schritt.key !== "dokumente_freigeben" && c.counts.pruefbereit > 0) {
+  // Dokumente tauchen gleich wieder auf, ein Hinweis wäre irreführend. Bei
+  // einem erledigten Fall ist ohnehin nichts mehr zu tun; dort wäre eine
+  // offene Freigabe ein Hinweis auf Arbeit, die niemand mehr braucht.
+  const stumm = schritt.key === "ki_laeuft" || schritt.key === "erledigt";
+  if (!stumm && schritt.key !== "dokumente_freigeben" && c.counts.pruefbereit > 0) {
     wartet.push({
       label: `${c.counts.pruefbereit} Dokument${c.counts.pruefbereit === 1 ? "" : "e"} prüfen & freigeben`,
       href: `/review?case=${c.caseId}`,
@@ -116,6 +119,23 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
 
 function ermittleSchritt(c: NextStepInput): NextStep {
   const id = c.caseId;
+
+  // Erledigte Faelle zuerst: Die Fallseite berechnet den Schritt fuer JEDEN
+  // Fall, auch fuer abgeschlossene – anders als das Dashboard, das terminale
+  // Status herausfiltert. Ohne diese Stufe fiel ein archivierter Fall bis ans
+  // Ende der Leiter durch und wurde dort aufgefordert, seine Einreichung
+  // vorzubereiten. Bewusst ohne Handlungsaufforderung: Hier ist nichts zu tun.
+  if (c.status === "abgeschlossen" || c.status === "archiviert") {
+    return {
+      key: "erledigt",
+      title: c.status === "archiviert" ? "Fall archiviert" : "Fall abgeschlossen",
+      reason:
+        c.status === "archiviert"
+          ? "Der Fall liegt im Archiv. Er wird nicht mehr bearbeitet."
+          : "Die Finanzierung steht. Für diesen Fall ist nichts mehr zu tun.",
+      tone: "ready",
+    };
+  }
 
   if (c.status === "ki_pruefung_laeuft" || c.counts.docsLaufend > 0) {
     return {
@@ -270,7 +290,14 @@ function ermittleSchritt(c: NextStepInput): NextStep {
     };
   }
 
-  if (c.status === "eingereicht" || c.status === "bank_nachforderung") {
+  // "uebertragen" ist der Status, der "eingereicht" meint – seine Beschriftung
+  // lautet woertlich "Bei Bank eingereicht". Hier stand frueher der Wert
+  // "eingereicht", den CASE_STATUSES nie kannte: Der Zweig war toter Code, und
+  // ein an die Bank uebergebener Fall wurde aufgefordert, seine Einreichung
+  // vorzubereiten. "exportiert" zaehlt bewusst NICHT dazu – ein erzeugtes
+  // Paket ist noch nicht bei der Bank, dort ist der Einreichungsassistent
+  // weiterhin der richtige naechste Schritt.
+  if (c.status === "uebertragen" || c.status === "bank_nachforderung") {
     return {
       key: "fristen",
       title: "Fristen & Nachforderungen im Blick behalten",

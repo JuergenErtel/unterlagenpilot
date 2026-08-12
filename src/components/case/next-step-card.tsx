@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale } from "lucide-react";
+import { ArrowRight, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
   unterlagen_luecken: FileSearch,
   unterlagen_anfordern: Send,
   fristen: ClipboardList,
+  erledigt: CheckCircle2,
   einreichung: PackageCheck,
 };
 
