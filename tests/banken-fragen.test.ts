@@ -14,7 +14,13 @@ import {
   waehleAusKandidaten,
 } from "@/lib/banken/fragen/deuten";
 import { buendele, DECKEL, type Zeile } from "@/lib/banken/fragen/sammeln";
-import { pruefeBeleg, inBuendel, parallelBegrenzt } from "@/lib/banken/fragen/lesen";
+import {
+  pruefeBeleg,
+  inBuendel,
+  parallelBegrenzt,
+  BUENDEL_GROESSE,
+  GLEICHZEITIG,
+} from "@/lib/banken/fragen/lesen";
 import { baueGruppen } from "@/lib/banken/fragen/antwort";
 import type { Urteil } from "@/lib/banken/fragen/schema";
 import { beantworteFrage } from "@/lib/banken/fragen";
@@ -149,6 +155,15 @@ describe("Buendeln", () => {
 
   it("nimmt im Regelfall alles unter dem Deckel", () => {
     expect(DECKEL).toBeGreaterThanOrEqual(300);
+  });
+
+  it("bleibt auch im schlimmsten Fall unter dem Anfragebudget des Anbieters", () => {
+    // Das Mistral-Konto erlaubt 50 Anfragen/Minute. Wer Deckel oder
+    // Buendelgroesse aendert, aendert damit auch die Zahl der KI-Aufrufe je
+    // Frage – gemessen kippt der Lauf ab zwoelf gleichzeitigen Aufrufen in den
+    // Backoff und wird drei- bis fuenfmal langsamer.
+    expect(Math.ceil(DECKEL / BUENDEL_GROESSE)).toBeLessThanOrEqual(30);
+    expect(GLEICHZEITIG).toBeLessThanOrEqual(10);
   });
 
   it("liest das gefragte Kriterium zuerst, auch wenn das Stichwort woanders trifft", () => {

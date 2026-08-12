@@ -1,15 +1,33 @@
 import { normalisiere } from "../suche";
 
-/** Texte je KI-Aufruf. Klein genug, dass ein Fehlschlag wenig mitreisst. */
-export const BUENDEL_GROESSE = 20;
+/**
+ * Texte je KI-Aufruf. Klein genug, dass ein Fehlschlag wenig mitreisst.
+ *
+ * Zwoelf statt zwanzig: Die Wartezeit haengt nicht am Umfang der Eingabe – die
+ * Bestandstexte sind winzig (Median 154 Zeichen, ganze 238 Texte zusammen nur
+ * ~10.500 Token, ein Fuenftel des Minutenbudgets) – sondern daran, wieviele
+ * Urteile ein einzelner Aufruf ERZEUGEN muss. Kleinere Buendel antworten
+ * frueher, und mehr davon laufen nebeneinander.
+ */
+export const BUENDEL_GROESSE = 12;
 /**
  * Gleichzeitige KI-Aufrufe. Der 429-Backoff faengt den Rest ab.
  *
- * Sechs statt vier, weil ein voll ausgereizter Lauf (300 Texte) sonst ueber
- * eine Minute braucht – gemessen 77 s. Bei hoechstens 20 Aufrufen je Frage
- * bleibt das weit unter den 50 Anfragen/Minute des Anbieters.
+ * Zehn, gemessen am schwersten Regelfall (238 Texte, Frage nach Einkommen in
+ * Fremdwaehrung), je drei Laeufe im Wechsel gegen die echte Anbindung:
+ *
+ *   Buendel 20 / gleichzeitig  6 -> 10,4 / 10,4 / 10,5 s
+ *   Buendel 12 / gleichzeitig 10 ->  6,8 /  7,0 /  6,9 s   <- gewaehlt
+ *   Buendel 10 / gleichzeitig 12 ->  5,8 /  6,2 / 33,6 s
+ *
+ * Ab zwoelf gleichzeitigen Aufrufen greift regelmaessig der Backoff und macht
+ * den Lauf drei- bis fuenfmal so langsam wie der Gewinn ausmacht. Zehn ist der
+ * schnellste Wert, der noch VERLAESSLICH ist – ein Vermittler, der auf eine
+ * Antwort wartet, merkt einen Ausreisser staerker als eine halbe Sekunde
+ * Median. Mehr Parallelitaet hilft nicht: Weder Token- noch Anfragebudget sind
+ * ausgereizt, das Limit liegt beim Anbieter im Burst.
  */
-export const GLEICHZEITIG = 6;
+export const GLEICHZEITIG = 10;
 /** Laenge je Text im Prompt. Der laengste Bestandstext liegt weit darunter. */
 export const MAX_TEXTLAENGE = 1500;
 
