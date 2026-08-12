@@ -50,6 +50,30 @@ const AMPEL_PUNKT: Record<string, string> = {
 };
 
 /**
+ * Farbe je Phase – eine Reise von Tinte über Markentürkis zu Grün.
+ *
+ * Bewusst EIN Verlauf statt sieben bunter Töne: Gelb und Rot bleiben für die
+ * Machbarkeits-Ampel reserviert, die auf denselben Karten sitzt. Zwei
+ * Farbsprachen nebeneinander würden beide unlesbar machen. Grün trägt nur die
+ * letzte Spalte – dort bedeutet es dasselbe wie überall in der App: fertig.
+ *
+ * Die Klassen stehen ausgeschrieben, weil Tailwind zusammengesetzte
+ * Klassennamen nicht findet.
+ */
+const PHASEN_FARBE: Record<string, { kante: string; flaeche: string; zahl: string }> = {
+  neu: { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40", zahl: "text-muted-foreground" },
+  anfrage_erstellt: { kante: "bg-primary/30", flaeche: "bg-primary/[0.04]", zahl: "text-muted-foreground" },
+  selbstauskunft_laeuft: { kante: "bg-primary/50", flaeche: "bg-primary/[0.07]", zahl: "text-muted-foreground" },
+  finanzierungsvorschlag: { kante: "bg-ai/40", flaeche: "bg-ai/[0.06]", zahl: "text-ai" },
+  kreditpruefung_eingereicht: { kante: "bg-ai/70", flaeche: "bg-ai/[0.10]", zahl: "text-ai" },
+  zusage: { kante: "bg-success/50", flaeche: "bg-success/[0.07]", zahl: "text-success" },
+  abgeschlossen: { kante: "bg-success/80", flaeche: "bg-success/[0.12]", zahl: "text-success" },
+  verloren: { kante: "bg-destructive/40", flaeche: "bg-destructive/[0.05]", zahl: "text-muted-foreground" },
+};
+
+const PHASE_STANDARD = { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40", zahl: "text-muted-foreground" };
+
+/**
  * Das Kanban der Vertriebsphasen. Karten lassen sich ziehen; weil das auf dem
  * Handy und ohne Zeigegerät unzuverlässig ist, hat jede Karte zusätzlich ein
  * Menü mit denselben Zielen.
@@ -84,7 +108,9 @@ export function LeadBoard({
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-2 max-md:flex-col max-md:overflow-visible">
-        {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => (
+        {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => {
+          const farbe = PHASEN_FARBE[s.phase] ?? PHASE_STANDARD;
+          return (
           <section
             key={s.phase}
             onDragOver={(e) => {
@@ -94,12 +120,17 @@ export function LeadBoard({
               if (gezogen && s.phase !== "verloren") verschieben(gezogen, s.phase);
               setGezogen(null);
             }}
-            className="w-64 shrink-0 rounded-lg bg-muted/40 p-2 max-md:w-full"
+            className={`w-64 shrink-0 overflow-hidden rounded-lg p-2 pt-0 max-md:w-full ${farbe.flaeche}`}
           >
+            {/* Farbkante als Registerreiter der Spalte – die Farbe steht oben
+                und stört die Karten darunter nicht. */}
+            <div className={`-mx-2 mb-2 h-1 ${farbe.kante}`} aria-hidden />
             <header className="px-1 pb-2">
               <p className="text-sm font-semibold">{s.titel}</p>
               <p className="text-xs text-muted-foreground">
-                {s.anzahl} {s.anzahl === 1 ? "Fall" : "Fälle"}
+                <span className={`font-medium ${farbe.zahl}`}>
+                  {s.anzahl} {s.anzahl === 1 ? "Fall" : "Fälle"}
+                </span>
                 {s.summe > 0 && ` · ${eur(s.summe)}`}
               </p>
             </header>
@@ -204,7 +235,8 @@ export function LeadBoard({
               )}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       <LossDialog

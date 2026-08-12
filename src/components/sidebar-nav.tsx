@@ -29,7 +29,8 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
       { href: "/cases", label: "Fälle", icon: FolderOpen },
       { href: "/review", label: "Review-Center", icon: ScanSearch },
       { href: "/messages", label: "Nachrichten", icon: Send },
-      { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+      // Die Pipeline hat seit dem 12.08.2026 keinen eigenen Menüpunkt mehr:
+      // Sie IST das Dashboard (Standardsicht "Board").
       { href: "/banken", label: "Banken-Wiki", icon: Landmark },
     ],
   },

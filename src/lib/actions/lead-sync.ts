@@ -11,6 +11,6 @@ export async function gleicheLeadsAb(): Promise<SyncErgebnis> {
     organizationId: ctx.organizationId,
     userId: ctx.userId,
   });
-  revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
   return ergebnis;
 }

@@ -15,7 +15,7 @@ import { LEAD_PHASES, LOSS_REASONS, type LeadPhase } from "@/lib/domain/enums";
  */
 
 function revalidiere(caseId: string): void {
-  revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
   revalidatePath(`/cases/${caseId}`);
 }
 
