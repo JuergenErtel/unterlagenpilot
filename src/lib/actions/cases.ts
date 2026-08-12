@@ -643,16 +643,25 @@ async function applyExtractedFieldsToObject(
     where: { id: caseId },
     select: {
       property: {
+        // Jedes Feld, das computeObjectUpdate füllen kann, muss hier geladen
+        // werden: ein nicht selektiertes Feld sieht dort wie ein leeres aus –
+        // und ein vorhandener Wert würde überschrieben.
         select: {
           objektart: true,
           street: true,
           zip: true,
           city: true,
           wohnflaeche: true,
+          nutzflaeche: true,
           grundstuecksflaeche: true,
           baujahr: true,
+          zustand: true,
           anzahlZimmer: true,
+          anzahlWohneinheiten: true,
           heizungsart: true,
+          stellplaetze: true,
+          hausgeldMonatlich: true,
+          mieteinnahmenMonatlich: true,
         },
       },
       financingRequest: { select: { kaufpreis: true, baukosten: true } },

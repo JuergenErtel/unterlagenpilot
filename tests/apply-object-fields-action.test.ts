@@ -108,6 +108,36 @@ describe("setDocumentReview – Objektdaten-Übernahme beim Akzeptieren", () => 
     expect(financingUpsert).not.toHaveBeenCalled();
   });
 
+  it("lädt jedes befüllbare Objektfeld zum Leer-Prüfen – sonst überschreibt es Vorhandenes", async () => {
+    // Ein Feld, das die Aktion nicht selektiert, sieht in computeObjectUpdate
+    // wie ein leeres aus. Dieser Fall hält den Prisma-Select und die Matcher
+    // zusammen: alles hier ist gesetzt, also darf nichts geschrieben werden.
+    mockDoc("expose");
+    extractedFindMany.mockResolvedValue([
+      { key: "nutzflaeche", label: "Nutzfläche", value: "195,1", correctedValue: null },
+      { key: "objektzustand", label: "Objektzustand", value: "Gepflegt", correctedValue: null },
+      { key: "anzahl_garage_stellplatz", label: "Anzahl Garage/Stellplatz", value: "3", correctedValue: null },
+      { key: "wohneinheiten", label: "Anzahl Wohneinheiten", value: "4", correctedValue: null },
+      { key: "hausgeld", label: "Hausgeld", value: "320 €", correctedValue: null },
+      { key: "mieteinnahmen", label: "Mieteinnahmen monatlich", value: "1.450 €", correctedValue: null },
+    ]);
+    caseFindUnique.mockResolvedValue({
+      property: {
+        nutzflaeche: 80,
+        zustand: "renovierungsbedürftig",
+        stellplaetze: 1,
+        anzahlWohneinheiten: 2,
+        hausgeldMonatlich: 250,
+        mieteinnahmenMonatlich: 900,
+      },
+      financingRequest: null,
+    });
+
+    await setDocumentReview("doc-1", "akzeptiert");
+
+    expect(propertyUpsert).not.toHaveBeenCalled();
+  });
+
   it("lässt Nicht-Objekt-Dokumente aus (Gehaltsabrechnung schreibt nie Objektdaten)", async () => {
     mockDoc("gehaltsabrechnung");
     extractedFindMany.mockResolvedValue(EXPOSE_FIELDS);

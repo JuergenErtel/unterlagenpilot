@@ -47,6 +47,15 @@ describe("parsePropertyType", () => {
     expect(parsePropertyType("Mehrfamilienhaus")).toBe("mehrfamilienhaus");
     expect(parsePropertyType("Baugrundstück")).toBe("grundstueck");
   });
+  it("mappt gängige Exposé-Bauformen auf die Bankkategorie", () => {
+    // Bungalow/Villa sind für Bank und Europace ein Einfamilienhaus.
+    expect(parsePropertyType("Bungalow")).toBe("einfamilienhaus");
+    expect(parsePropertyType("Stadtvilla")).toBe("einfamilienhaus");
+    expect(parsePropertyType("Penthouse")).toBe("eigentumswohnung");
+    expect(parsePropertyType("Maisonette")).toBe("eigentumswohnung");
+    // Eine Mehrfamilienvilla bleibt ein Mehrfamilienhaus.
+    expect(parsePropertyType("Mehrfamilienvilla")).toBe("mehrfamilienhaus");
+  });
   it("gibt undefined bei unklaren Angaben zurück", () => {
     expect(parsePropertyType("Haus")).toBeUndefined();
     expect(parsePropertyType("")).toBeUndefined();
@@ -160,6 +169,89 @@ describe("computeObjectUpdate", () => {
     expect(propertyData.objektart).toBeUndefined();
     expect(financingData.kaufpreis).toBeUndefined();
     expect(appliedLabels).toHaveLength(0);
+  });
+
+  it("übernimmt ein echtes ImmoScout-Exposé: Adresse in Einzelteilen, Bauform, Nebenflächen", () => {
+    // Feld-Keys 1:1 aus dem Exposé im Fall UP-2026-0007 (Bungalow, Wörth am Rhein).
+    const { propertyData, financingData } = computeObjectUpdate(
+      [
+        f("objekt_typ", "Objekt-Typ", "Bungalow"),
+        f("postleitzahl", "Postleitzahl", "76744"),
+        f("ort", "Ort", "Wörth am Rhein"),
+        f("nutzflaeche", "Nutzfläche (ca.)", "195.1"),
+        f("objektzustand", "Objektzustand", "Gepflegt"),
+        f("anzahl_garage_stellplatz", "Anzahl Garage/Stellplatz", "3"),
+        f("kaufpreis", "Kaufpreis", "895000"),
+        // Der Makler ist nicht das Objekt – seine Adresse darf nie einfließen.
+        f("anbieter_adresse", "Anbieter Adresse", "Wormser Straße 13, 67346 Speyer"),
+        f("anbieter_firma", "Anbieter Firma", "RIEGEL Immobilien"),
+      ],
+      empty
+    );
+    expect(propertyData.objektart).toBe("einfamilienhaus");
+    expect(propertyData.zip).toBe("76744");
+    expect(propertyData.city).toBe("Wörth am Rhein");
+    expect(propertyData.street).toBeUndefined();
+    expect(propertyData.nutzflaeche).toBe(195.1);
+    expect(propertyData.zustand).toBe("Gepflegt");
+    expect(propertyData.stellplaetze).toBe(3);
+    expect(financingData.kaufpreis).toBe(895000);
+  });
+
+  it("übernimmt Straße/PLZ/Ort auch als getrennte Felder", () => {
+    const { propertyData } = computeObjectUpdate(
+      [
+        f("strasse", "Straße", "Musterstraße 12"),
+        f("plz", "PLZ", "76744"),
+        f("stadt", "Stadt", "Wörth"),
+      ],
+      empty
+    );
+    expect(propertyData).toEqual({ street: "Musterstraße 12", zip: "76744", city: "Wörth" });
+  });
+
+  it("übernimmt Hausgeld, Mieteinnahmen und Wohneinheiten – aber keine Jahresangabe als Monatswert", () => {
+    const monatlich = computeObjectUpdate(
+      [
+        f("hausgeld", "Hausgeld", "320 €"),
+        f("mieteinnahmen", "Mieteinnahmen monatlich", "1.450 €"),
+        f("wohneinheiten", "Anzahl Wohneinheiten", "4"),
+      ],
+      empty
+    );
+    expect(monatlich.propertyData.hausgeldMonatlich).toBe(320);
+    expect(monatlich.propertyData.mieteinnahmenMonatlich).toBe(1450);
+    expect(monatlich.propertyData.anzahlWohneinheiten).toBe(4);
+
+    const jaehrlich = computeObjectUpdate(
+      [f("mieteinnahmen_jahr", "Mieteinnahmen jährlich", "17.400 €")],
+      empty
+    );
+    expect(jaehrlich.propertyData.mieteinnahmenMonatlich).toBeUndefined();
+  });
+
+  it("hält den Quadratmeterpreis vom Kaufpreis fern – auch wenn er zuerst kommt", () => {
+    const { financingData } = computeObjectUpdate(
+      [
+        f("kaufpreis_pro_m2", "Kaufpreis pro m²", "3688"),
+        f("kaufpreis", "Kaufpreis", "895000"),
+      ],
+      empty
+    );
+    expect(financingData.kaufpreis).toBe(895000);
+
+    // Ohne echten Kaufpreis bleibt das Feld leer statt den m²-Preis zu erben.
+    const nurQm = computeObjectUpdate([f("kaufpreis_pro_m2", "Kaufpreis pro m²", "3688")], empty);
+    expect(nurQm.financingData.kaufpreis).toBeUndefined();
+  });
+
+  it("verwirft krumme Stückzahlen statt sie zu runden", () => {
+    const { propertyData } = computeObjectUpdate(
+      [f("stellplaetze", "Stellplätze", "1,5"), f("wohneinheiten", "Wohneinheiten", "2,5")],
+      empty
+    );
+    expect(propertyData.stellplaetze).toBeUndefined();
+    expect(propertyData.anzahlWohneinheiten).toBeUndefined();
   });
 
   it("ignoriert leere Werte und liefert leere Updates ohne Treffer", () => {

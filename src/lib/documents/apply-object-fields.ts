@@ -39,10 +39,16 @@ export interface CurrentProperty {
   zip?: string | null;
   city?: string | null;
   wohnflaeche?: number | null;
+  nutzflaeche?: number | null;
   grundstuecksflaeche?: number | null;
   baujahr?: number | null;
+  zustand?: string | null;
   anzahlZimmer?: number | null;
+  anzahlWohneinheiten?: number | null;
   heizungsart?: string | null;
+  stellplaetze?: number | null;
+  hausgeldMonatlich?: number | null;
+  mieteinnahmenMonatlich?: number | null;
 }
 
 export interface CurrentFinancing {
@@ -62,10 +68,16 @@ export interface PropertyUpdate {
   zip?: string;
   city?: string;
   wohnflaeche?: number;
+  nutzflaeche?: number;
   grundstuecksflaeche?: number;
   baujahr?: number;
+  zustand?: string;
   anzahlZimmer?: number;
+  anzahlWohneinheiten?: number;
   heizungsart?: string;
+  stellplaetze?: number;
+  hausgeldMonatlich?: number;
+  mieteinnahmenMonatlich?: number;
 }
 
 export interface FinancingUpdate {
@@ -124,7 +136,11 @@ export function parsePropertyType(raw: string): PropertyType | undefined {
     [/reihen(haus|mittel|eck|end)|rmh|reh\b/, "reihenhaus"],
     [/einfamilien|efh/, "einfamilienhaus"],
     [/mehrfamilien|mfh/, "mehrfamilienhaus"],
-    [/eigentumswohnung|etw|wohnung/, "eigentumswohnung"],
+    // Bungalow und Villa sind für Bank wie Europace ein Einfamilienhaus. Beide
+    // Regeln stehen NACH "mehrfamilien", damit eine Mehrfamilienvilla nicht
+    // versehentlich zum EFH wird.
+    [/bungalow|villa/, "einfamilienhaus"],
+    [/eigentumswohnung|etw|wohnung|penthouse|maisonette/, "eigentumswohnung"],
     [/grundstueck|bauplatz|baugrund/, "grundstueck"],
     [/gewerbe/, "gewerbe"],
   ];
@@ -134,13 +150,54 @@ export function parsePropertyType(raw: string): PropertyType | undefined {
 
 const OBJEKTART: Matcher = { exact: ["objektart", "objekttyp", "immobilienart", "immobilientyp", "propertytype"], contains: ["objektart"] };
 const OBJEKTADRESSE: Matcher = { exact: ["objektadresse", "objektanschrift", "propertyaddress", "adressedesobjekts"], contains: ["objektadresse", "objektanschrift"] };
+// Adresse auch in Einzelteilen: Exposé-Portale liefern PLZ und Ort getrennt
+// (und die Straße oft gar nicht). Bewusst nur exakte Keys/Labels – "Anbieter
+// Adresse" oder "Notarort" dürfen nie als Objektanschrift durchgehen.
+const STRASSE: Matcher = { exact: ["strasse", "objektstrasse", "strassehausnummer", "street"] };
+const PLZ: Matcher = { exact: ["plz", "postleitzahl", "objektplz", "zip", "zipcode", "postalcode"] };
+const ORT: Matcher = { exact: ["ort", "stadt", "objektort", "city"] };
 const KAUFPREIS: Matcher = { exact: ["kaufpreis", "kaufsumme", "purchaseprice"], contains: ["kaufpreis"] };
 const WOHNFLAECHE: Matcher = { exact: ["wohnflaeche", "livingarea", "livingspace"], contains: ["wohnflaeche"] };
+const NUTZFLAECHE: Matcher = { exact: ["nutzflaeche", "usablearea"], contains: ["nutzflaeche"] };
 const GRUNDSTUECK: Matcher = { exact: ["grundstuecksflaeche", "grundstuecksgroesse", "plotarea", "plotsize"], contains: ["grundstuecksflaeche", "grundstuecksgroesse"] };
 const BAUJAHR: Matcher = { exact: ["baujahr", "yearbuilt", "yearofconstruction", "constructionyear"], contains: ["baujahr"] };
 const ZIMMER: Matcher = { exact: ["zimmer", "anzahlzimmer", "zimmeranzahl", "rooms", "numberofrooms"], contains: ["anzahlzimmer"] };
 const HEIZUNG: Matcher = { exact: ["heizungsart", "heizung", "heating", "heatingtype"], contains: ["heizungsart"] };
+const ZUSTAND: Matcher = { exact: ["objektzustand", "zustand", "condition"], contains: ["objektzustand"] };
+const STELLPLAETZE: Matcher = {
+  exact: ["stellplaetze", "anzahlstellplaetze", "stellplatzanzahl", "anzahlgaragestellplatz", "anzahlgaragenstellplaetze"],
+  contains: ["anzahlstellplaetze"],
+};
+const WOHNEINHEITEN: Matcher = { exact: ["wohneinheiten", "anzahlwohneinheiten"], contains: ["wohneinheiten"] };
+const HAUSGELD: Matcher = { exact: ["hausgeld", "hausgeldmonatlich", "wohngeld"], contains: ["hausgeld"] };
+const MIETEINNAHMEN: Matcher = {
+  exact: ["mieteinnahmen", "mieteinnahmenmonatlich", "kaltmiete", "nettokaltmiete"],
+  contains: ["mieteinnahmen"],
+};
 const BAUKOSTEN: Matcher = { exact: ["gesamtbaukosten", "baukosten", "constructioncosts"], contains: ["gesamtbaukosten"] };
+
+/**
+ * Erkennt Jahresangaben ("Mieteinnahmen jährlich", "Hausgeld p.a."). Die
+ * Zielspalten sind Monatswerte und fließen in Haushaltsrechnung und
+ * Machbarkeit – ein Jahreswert darin wäre um den Faktor 12 falsch.
+ */
+/**
+ * Erkennt Quadratmeterpreise ("Kaufpreis pro m²"). Sie tragen dasselbe Wort
+ * wie der Kaufpreis, sind aber ein Vielfaches kleiner – ohne diese Sperre
+ * hinge es an der Reihenfolge der Felder, ob 895.000 € oder 3.688 € als
+ * Kaufpreis im Fall landet.
+ */
+function istQuadratmeterpreis(key: string, label: string): boolean {
+  // norm() wirft das Hochzeichen weg: "pro m²" wird zu "prom", "pro_m2" zu "prom2".
+  return /prom2?|proqm|proquadratmeter|persqm|persquaremeter/.test(`${norm(key)}|${norm(label)}`);
+}
+
+function istJahresangabe(key: string, label: string): boolean {
+  const roh = `${key} ${label}`.toLowerCase();
+  if (/\bp\.\s?a\.|\bp\.a\b/.test(roh)) return true;
+  const n = `${norm(key)}|${norm(label)}`;
+  return /jaehrlich|jahres|projahr|annual|peryear/.test(n);
+}
 
 function isEmpty(v: unknown): boolean {
   return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
@@ -161,14 +218,30 @@ export function computeObjectUpdate(
   const financingData: FinancingUpdate = {};
   const appliedLabels: string[] = [];
 
-  const setPropNum = (field: "wohnflaeche" | "grundstuecksflaeche" | "anzahlZimmer", value: string, label: string) => {
+  type NumField =
+    | "wohnflaeche"
+    | "nutzflaeche"
+    | "grundstuecksflaeche"
+    | "anzahlZimmer"
+    | "hausgeldMonatlich"
+    | "mieteinnahmenMonatlich";
+
+  const setPropNum = (field: NumField, value: string, label: string) => {
     const n = parseGermanNumber(value);
     if (n === undefined || n <= 0 || !isEmpty(prop[field]) || propertyData[field] !== undefined) return;
     propertyData[field] = n;
     appliedLabels.push(label);
   };
 
-  const setPropStr = (field: "street" | "zip" | "city" | "heizungsart", value: string, label: string) => {
+  /** Stückzahlen (Stellplätze, Wohneinheiten): nur ganze Zahlen, kein Runden. */
+  const setPropInt = (field: "stellplaetze" | "anzahlWohneinheiten", value: string, label: string) => {
+    const n = parseGermanNumber(value);
+    if (n === undefined || !Number.isInteger(n) || n <= 0 || !isEmpty(prop[field]) || propertyData[field] !== undefined) return;
+    propertyData[field] = n;
+    appliedLabels.push(label);
+  };
+
+  const setPropStr = (field: "street" | "zip" | "city" | "heizungsart" | "zustand", value: string, label: string) => {
     const v = value.trim();
     if (!v || !isEmpty(prop[field]) || propertyData[field] !== undefined) return;
     propertyData[field] = v;
@@ -213,11 +286,31 @@ export function computeObjectUpdate(
       continue;
     }
 
+    if (matches(STRASSE, key, label)) { setPropStr("street", value, label); continue; }
+    if (matches(PLZ, key, label)) { setPropStr("zip", value, label); continue; }
+    if (matches(ORT, key, label)) { setPropStr("city", value, label); continue; }
     if (matches(WOHNFLAECHE, key, label)) { setPropNum("wohnflaeche", value, label); continue; }
+    if (matches(NUTZFLAECHE, key, label)) { setPropNum("nutzflaeche", value, label); continue; }
     if (matches(GRUNDSTUECK, key, label)) { setPropNum("grundstuecksflaeche", value, label); continue; }
     if (matches(ZIMMER, key, label)) { setPropNum("anzahlZimmer", value, label); continue; }
+    if (matches(STELLPLAETZE, key, label)) { setPropInt("stellplaetze", value, label); continue; }
+    if (matches(WOHNEINHEITEN, key, label)) { setPropInt("anzahlWohneinheiten", value, label); continue; }
     if (matches(HEIZUNG, key, label)) { setPropStr("heizungsart", value, label); continue; }
-    if (matches(KAUFPREIS, key, label)) { setFinNum("kaufpreis", value, label); continue; }
+    if (matches(ZUSTAND, key, label)) { setPropStr("zustand", value, label); continue; }
+    // Monatswerte: eine als Jahressumme ausgewiesene Angabe wird verworfen,
+    // nicht umgerechnet – die KI nennt nicht immer verlässlich den Zeitraum.
+    if (matches(HAUSGELD, key, label)) {
+      if (!istJahresangabe(key, label)) setPropNum("hausgeldMonatlich", value, label);
+      continue;
+    }
+    if (matches(MIETEINNAHMEN, key, label)) {
+      if (!istJahresangabe(key, label)) setPropNum("mieteinnahmenMonatlich", value, label);
+      continue;
+    }
+    if (matches(KAUFPREIS, key, label)) {
+      if (!istQuadratmeterpreis(key, label)) setFinNum("kaufpreis", value, label);
+      continue;
+    }
     if (matches(BAUKOSTEN, key, label)) { setFinNum("baukosten", value, label); continue; }
   }
 
