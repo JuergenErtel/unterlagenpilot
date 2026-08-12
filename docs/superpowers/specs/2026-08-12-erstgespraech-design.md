@@ -155,18 +155,58 @@ Nebenbedingung für den [[machbarkeits-solver]]. Bisher rechnet er gegen die
 tragbare Rate aus der Haushaltsrechnung; mit einer genannten Wunschrate kann
 er sagen, ob der Kunde *sein* Ziel erreicht, nicht nur ob die Bank mitgeht.
 
+## Bindende Zusicherung: kein Feld blockiert
+
+Jürgen am 12.08.2026: *„keines der Felder erzeugt einen K.O., wenn ich es
+nicht ausfülle. Nach EP übertragen muss auch gehen, wenn nicht alle Felder
+ausgefüllt sind."*
+
+Das ist keine Bequemlichkeit, sondern die Wirklichkeit des Erstgesprächs: Ein
+Kunde weiß seine Grundstücksgröße nicht auswendig, und das Gespräch darf
+daran nicht hängenbleiben.
+
+Konkret heißt das:
+- **Die Fortschrittsleiste informiert, sie sperrt nicht.** „Noch 6 Angaben
+  bis zum Angebot" ist eine Auskunft, kein Tor.
+- **Kein Pflichtfeld, keine Validierung, die das Speichern verhindert.**
+  Jedes Feld ist einzeln speicherbar, auch wenn alle anderen leer sind.
+- **„An Europace übertragen" ist immer bedienbar** — auch bei 3 von 26
+  Angaben. Das passt zur API: Sie verlangt formal nur den Datenkontext, und
+  das Mapping lässt leere Felder bereits weg (`...(x ? { feld: x } : {})`).
+- Die Übertragung **meldet**, was fehlt, statt sie zu verweigern: „Übertragen
+  — 6 Angaben fehlten, in Europace nachtragen."
+
+Einzige Ausnahme, die bleibt: die manuelle Freigabe vor jeder Übertragung
+(siehe `pruefeEuropaceFreigabe`). Die ist eine bindende Zusage an den Kunden,
+kein Vollständigkeitsgatter.
+
 ## Was der Katalog noch nicht kann
 
 Der Abgleich gegen das Europace-Modell ergab: Der Katalog deckt die gesamte
 Oberfläche ab, die BaufiDesk an Europace sendet. Eine Lücke gibt es:
 
-**„Freiberufler" fehlt als Beschäftigungsart.** `EMPLOYMENT_TYPES` kennt nur
-`selbststaendiger`. Europace unterscheidet „Einnahmen aus freiberuflicher
-Tätigkeit" von „Einnahmen aus selbständiger Tätigkeit" — es sind zwei
-verschiedene Kriterien im Banken-Wiki, und die Unterlagen unterscheiden sich.
-Für ein Interview, das auf ein Europace-Angebot zielt, gehört die Kategorie
-ergänzt (Enum, Labels, Checklisten-Vorlage, FinLink-Übersetzung von
-`freelancer`, das heute auf `selbststaendiger` fällt).
+**„Freiberufler" fehlt als Beschäftigungsart** — wird im selben Zug ergänzt
+(Jürgens Entscheidung vom 12.08.2026).
+
+Die Information geht heute an drei Stellen verloren:
+- `EMPLOYMENT_TYPES` kennt nur `selbststaendiger`.
+- Die FinLink-Übersetzung wirft `freelancer` auf `selbststaendiger`
+  (`EMPLOYMENT_DE` in `finlink/dto.ts`).
+- Das Europace-Mapping bildet auf `SELBSTSTAENDIGER` ab — **obwohl das
+  Europace-Schema `FREIBERUFLER` als eigenen Typ führt.** Geprüft gegen
+  `schema/kundenangaben-openapi.json`: Dort stehen ANGESTELLTER, ARBEITER,
+  BEAMTER, FREIBERUFLER, RENTNER, SELBSTSTAENDIGER, STUDENT.
+
+Auch das Banken-Wiki trennt beides: „Ansatz Einnahmen aus freiberuflicher
+Tätigkeit" und „Ansatz Einnahmen aus selbständiger Tätigkeit" sind zwei
+getrennte Kriterien der 69.
+
+**Eigene Checklisten-Vorlage `freiberufler_kauf` — braucht Jürgens
+Bestätigung:** Ein Freiberufler ermittelt seinen Gewinn per
+Einnahmen-Überschuss-Rechnung, nicht per Bilanz. Vorschlag: Ausweis,
+Einkommensteuerbescheid, Einkommensteuererklärung, EÜR, BWA, Eigenkapital,
+Grundbuch, Exposé — **ohne** Jahresabschluss und Summen-/Saldenliste, die
+die Selbstständigen-Vorlage führt.
 
 ## Was bewusst NICHT gebaut wird
 
@@ -177,14 +217,16 @@ ergänzt (Enum, Labels, Checklisten-Vorlage, FinLink-Übersetzung von
 - **Kein automatischer Versand, keine automatische Übertragung.** Wie überall
   in BaufiDesk: erzeugen ja, absenden nur per Mensch.
 
-## Offene Punkte
+## Entschieden am 12.08.2026
 
-1. ~~Pflichtmenge bestätigen~~ — am 12.08.2026 von Jürgen um neun Angaben
-   ergänzt, jetzt 26 plus die gerechneten Nebenkosten.
-2. Soll die Kategorie „Freiberufler" im selben Zug kommen oder getrennt?
-3. Reihenfolge der Abschnitte im Vermittlermodus — die Katalogreihenfolge ist
-   für den Kunden gedacht (Vorhaben zuerst). Passt sie zum Telefonat?
-4. **Zinsbindung als Auswahl oder freie Zahl?** Üblich sind 5/10/15/20/30
-   Jahre. Eine Auswahl ist am Telefon schneller, eine freie Zahl deckt
-   Sonderfälle. Vorschlag: Auswahl mit den fünf üblichen Werten plus Feld
-   „andere".
+1. **Pflichtmenge:** um neun Angaben ergänzt, jetzt 26 plus gerechnete
+   Nebenkosten.
+2. **Zinsbindung:** freie Zahl, keine Auswahlliste.
+3. **Freiberufler:** eigene Beschäftigungsart, im selben Zug.
+4. **Reihenfolge der Abschnitte:** bleibt vorerst wie im Katalog.
+5. **Kein Feld blockiert** — siehe eigener Abschnitt oben.
+
+## Offen
+
+- Bestätigung der Unterlagenliste für Freiberufler (EÜR statt Bilanz, siehe
+  oben).
