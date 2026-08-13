@@ -204,6 +204,60 @@ export const KATALOG: Schritt[] = [
     ],
   },
   {
+    id: "darlehen",
+    abschnitt: "vorhaben",
+    frage: "Wie hoch soll das Darlehen sein?",
+    hinweis: "Meist Kaufpreis plus Nebenkosten minus Eigenkapital – ein Schätzwert genügt.",
+    /*
+     * Anschlussfinanzierung und Kapitalbeschaffung fragen denselben Betrag
+     * schon unter ihrem eigenen Namen ("Restschuld", "Benötigter Betrag").
+     * Zweimal nach demselben Zielfeld zu fragen, wäre in beiden Modi verwirrend
+     * – und in der Maske fürs Erstgespräch stünden zwei Eingaben auf derselben
+     * Spalte.
+     */
+    sichtbar: (a) => {
+      const art = wert(a, "finanzierungsart.art");
+      return art !== "anschlussfinanzierung" && art !== "kapitalbeschaffung";
+    },
+    felder: [
+      {
+        id: "betrag",
+        label: "Gewünschte Darlehenssumme",
+        typ: "betrag",
+        ziel: { entitaet: "financingRequest", feld: "darlehenswunsch" },
+      },
+    ],
+  },
+  {
+    id: "kondition",
+    abschnitt: "vorhaben",
+    frage: "Wie soll die Finanzierung aussehen?",
+    hinweis: "Wünsche, keine Zusagen – die Bank entscheidet über die Konditionen.",
+    felder: [
+      {
+        id: "zinsbindung",
+        label: "Zinsbindung in Jahren",
+        typ: "zahl",
+        hinweis: "Üblich sind 5, 10, 15, 20 oder 30 Jahre.",
+        ziel: { entitaet: "financingRequest", feld: "zinsbindungJahre" },
+      },
+      {
+        id: "sondertilgung",
+        label: "Sondertilgung gewünscht?",
+        // "ja_nein" ist der vorhandene Wahrheitswert-Typ des Kundenmodus – der
+        // Katalog bekommt keinen zweiten dafuer.
+        typ: "ja_nein",
+        ziel: { entitaet: "financingRequest", feld: "sondertilgungGewuenscht" },
+      },
+      {
+        id: "wunschrate",
+        label: "Wunschrate monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "financingRequest", feld: "wunschrateMonatlich" },
+      },
+    ],
+  },
+  {
     id: "maklergebuehr",
     abschnitt: "vorhaben",
     frage: "Fällt beim Kauf eine Maklergebühr an?",

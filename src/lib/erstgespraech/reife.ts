@@ -13,6 +13,12 @@ export interface ReifeFeld {
   abschnitt: string;
   gefuellt: boolean;
   person?: 1 | 2;
+  /**
+   * Die Tabelle, in der die Angabe steht. Ohne sie ist ein Feld nicht
+   * eindeutig: "zip" gibt es beim Antragsteller UND beim Objekt, "street"
+   * ebenso. Die gefuehrte Maske ordnet ihre Eingabefelder darueber zu.
+   */
+  quelle: Quelle;
 }
 
 export interface Reife {
@@ -21,7 +27,13 @@ export interface Reife {
   gesamt: number;
 }
 
-type Quelle = "applicant" | "employment" | "income" | "property" | "financingRequest" | "case";
+export type Quelle =
+  | "applicant"
+  | "employment"
+  | "income"
+  | "property"
+  | "financingRequest"
+  | "case";
 
 interface Definition {
   schluessel: string;
@@ -99,6 +111,7 @@ export function berechneReife(stand: Fallstand, antragstellerZahl: number): Reif
         abschnitt: def.abschnitt,
         gefuellt: istGefuellt(lies(def.quelle, def.schluessel, position)),
         person: def.jePerson ? (position as 1 | 2) : undefined,
+        quelle: def.quelle,
       });
     }
   }
