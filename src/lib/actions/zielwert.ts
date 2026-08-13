@@ -10,6 +10,12 @@ import { prisma } from "@/lib/db";
 
 const DATUMSFELDER = ["geburtsdatum", "eintrittsdatum", "befristetBis", "gruendungsdatum"];
 const WAHRHEITSFELDER = ["inProbezeit", "sondertilgungGewuenscht"];
+// inProbezeit ist in der DB NOT NULL (Standard false). Eine geloeschte Angabe
+// kann hier keine echte Luecke ausdruecken – sie faellt auf den Schema-
+// Standard zurueck, statt einen Laufzeitfehler auszuloesen. sondertilgung-
+// Gewuenscht ist dagegen nullable: null bedeutet dort laut Schema-Kommentar
+// "nicht gefragt" und ist erlaubt.
+const NICHT_NULLBARE_WAHRHEITSFELDER = ["inProbezeit"];
 const ZAHLENFELDER = [
   "anzahlKinder",
   "wohnflaeche",
@@ -34,32 +40,49 @@ const ZAHLENFELDER = [
   "zinsbindungJahre",
   "wunschrateMonatlich",
 ];
+// Ganzzahlige Spalten (Prisma-Typ Int?). Ein Bruchwert wuerde beim Schreiben
+// zur Laufzeit knallen ("Wert stimmt nicht mit Feldtyp ueberein") statt beim
+// Speichern sauber abgewiesen zu werden – deshalb wird hier gerundet, nicht
+// einfach durchgereicht.
+const GANZZAHLFELDER = ["anzahlKinder", "baujahr", "stellplaetze", "zinsbindungJahre"];
 
 /**
  * Wandelt den Textwert in den Typ, den das Zielfeld erwartet.
  *
- * Zahlen kommen aus zwei Quellen mit unterschiedlicher Schreibweise: Im
- * Erstgespräch tippt der Vermittler deutsches Format ("895.000" = 895000,
- * Punkt als Tausendertrenner, Komma als Dezimaltrennzeichen). In der
- * Selbstauskunft ist der Wert dagegen schon einmal geparst (siehe
- * `schema.ts#parseBetrag`) und liegt als reine Zahl vor, die beim Rücklesen
- * aus der Datenbank via `String()` mit "." als ECHTEM Dezimaltrennzeichen
- * ausgegeben wird (z. B. "129.5" für 129,5 m²). Ein Punkt wird deshalb nur
- * dann als Tausendertrenner entfernt, wenn ihm genau drei Ziffern folgen –
- * die deutsche Dreiergruppierung. Ein einzelner Nachkommaanteil (ein bis
- * zwei Ziffern) bleibt unangetastet. Das erfüllt beide Aufrufer, ohne einen
- * von ihnen zu verfälschen.
+ * `format` legt fest, wie eine Zahl im Text geschrieben ist – das ist NICHT
+ * aus dem Text selbst entscheidbar: "33.333" sieht als deutsche
+ * Tausendertrennung (33333) genauso aus wie als bereits geparste Zahl mit
+ * drei Nachkommastellen (33,333). Die beiden Aufrufer haben strukturell
+ * unterschiedliche Quellen:
+ *  - "de" (Default): Der Vermittler tippt im Erstgespräch direkt deutsches
+ *    Format ("895.000" = 895000, Punkt als Tausendertrenner, Komma als
+ *    Dezimaltrennzeichen). Alle Punkte werden entfernt, das Komma wird zum
+ *    Dezimalpunkt.
+ *  - "maschinell": Die Selbstauskunft hat den Wert schon einmal geparst
+ *    (siehe `schema.ts#parseBetrag`) und liest ihn nur über `String(zahl)`
+ *    zurück (`takeover.ts#alsText`) – z. B. "33.333" für 33,333 % Beteiligung
+ *    oder "129.5" für 129,5 m², IMMER mit "." als echtem Dezimalpunkt, NIE
+ *    mit Tausendertrennung. Hier wird direkt `Number()` aufgerufen, ohne
+ *    Punkte zu entfernen.
+ * `konvertiere()` in `self-disclosure.ts` ruft ausschließlich mit
+ * "maschinell" – nur so bleibt `uebernehmen` beweisbar unverändert, nicht nur
+ * heuristisch plausibel.
  */
-export function wandleWert(feld: string, roh: string): unknown {
+export function wandleWert(feld: string, roh: string, format: "de" | "maschinell" = "de"): unknown {
   const wert = roh.trim();
-  // Eine geloeschte Angabe ist eine Angabe: null schreiben, nicht ignorieren.
-  if (wert === "") return null;
+  if (wert === "") {
+    // Eine geloeschte Angabe ist eine Angabe: null schreiben, nicht
+    // ignorieren – außer bei einer NOT-NULL-Spalte, die keinen null-Zustand
+    // kennt (siehe NICHT_NULLBARE_WAHRHEITSFELDER oben).
+    return NICHT_NULLBARE_WAHRHEITSFELDER.includes(feld) ? false : null;
+  }
   if (DATUMSFELDER.includes(feld)) return new Date(wert);
   if (WAHRHEITSFELDER.includes(feld)) return /^(ja|true|1)$/i.test(wert);
   if (ZAHLENFELDER.includes(feld)) {
-    const normiert = wert.replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
-    const n = Number(normiert);
-    return Number.isFinite(n) ? n : null;
+    const n =
+      format === "maschinell" ? Number(wert) : Number(wert.replace(/\./g, "").replace(",", "."));
+    if (!Number.isFinite(n)) return null;
+    return GANZZAHLFELDER.includes(feld) ? Math.round(n) : n;
   }
   return wert;
 }
@@ -89,6 +112,24 @@ async function ermittleApplicantId(
  * gepflegte Wert bleibt also unangetastet. Im Erstgespräch dagegen tippt der
  * Vermittler direkt in dieses Feld; wenn er es leert, meint er das so, und
  * eine gelöschte Angabe muss den Fall auch wieder leeren.
+ *
+ * SICHERHEIT – VORBEDINGUNG DES AUFRUFERS:
+ * Dieser Kern prüft selbst WEDER Berechtigung NOCH Sperrstatus. `uebernehmen`
+ * ruft vorher `requireCaseAccess(caseId)` und blockt gesperrte Fälle
+ * (`LOCKED_CASE_STATUSES`) – dasselbe MUSS der Aufrufer von `schreibeZielwert`
+ * vor jedem Aufruf selbst sicherstellen (die Server Action aus Aufgabe 6).
+ * Ohne das ist der Schreibpfad ein IDOR: Ein autorisierter Nutzer könnte über
+ * eine fremde `caseId` in einen Fall schreiben, auf den er keinen Zugriff
+ * hat, oder in einen bereits exportierten/gesperrten Fall.
+ *
+ * SICHERHEIT – `ziel` NIE aus einer Anfrage übernehmen:
+ * `ziel.feld` wird direkt als dynamischer Spaltenname verwendet
+ * (`data: { [ziel.feld]: ... }`). Zusammen mit `entitaet: "case"` heißt das:
+ * Wer `ziel` beeinflussen kann, kann z. B. `case.organizationId` oder
+ * `case.status` schreiben. `ziel` MUSS deshalb serverseitig immer aus dem
+ * festen Fragenkatalog (`self-disclosure/catalog.ts` bzw. dessen Pendant für
+ * das Erstgespräch) stammen – niemals aus Formulardaten, Query-Parametern
+ * oder einem sonst vom Client beeinflussbaren Wert.
  */
 export async function schreibeZielwert(
   caseId: string,

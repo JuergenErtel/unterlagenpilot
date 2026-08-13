@@ -181,10 +181,16 @@ const BESCHAEFTIGUNG: Record<string, string> = {
  * Nur die Abbildung der neun Berufsoptionen auf `EmploymentType` bleibt hier:
  * Sie ist reine Vokabel-Übersetzung des Selbstauskunft-Katalogs, keine
  * allgemeine Typumwandlung.
+ *
+ * Format IMMER "maschinell": Die Werte hier kommen nie aus getipptem Text,
+ * sondern aus `Antworten`, wo Zahl-Felder schon einmal geparst (`parseBetrag`)
+ * gespeichert und über `String()` zurückgelesen wurden (`takeover.ts#alsText`)
+ * – nie mit deutscher Tausendertrennung. Mit "de" würde z. B. eine
+ * Beteiligung von 33,333 % ("33.333") fälschlich zu 33333 % statt 33,333 %.
  */
 function konvertiere(feld: string, wert: string): unknown {
   if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
-  return wandleWert(feld, wert);
+  return wandleWert(feld, wert, "maschinell");
 }
 
 /**

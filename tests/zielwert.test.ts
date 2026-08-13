@@ -59,13 +59,53 @@ describe("Typumwandlung fuer Zielfelder", () => {
   it("macht aus einem leeren Text null – eine geloeschte Angabe ist eine Angabe", () => {
     expect(wandleWert("kaufpreis", "")).toBeNull();
   });
-  it("erkennt einen echten Nachkommaanteil aus der Selbstauskunft nicht als Tausendertrenner", () => {
-    // So liest die Selbstauskunft eine geparste Zahl zurueck (String(129.5) === "129.5").
-    expect(wandleWert("wohnflaeche", "129.5")).toBe(129.5);
-  });
   it("wandelt die neuen Finanzierungsfelder korrekt um", () => {
     expect(wandleWert("zinsbindungJahre", "15")).toBe(15);
     expect(wandleWert("wunschrateMonatlich", "1.250,50")).toBe(1250.5);
+  });
+
+  describe("Format 'de' (Erstgespraech – der Vermittler tippt)", () => {
+    it("behandelt einen Punkt immer als Tausendertrenner, auch bei drei Nachkommastellen", () => {
+      // Genau die Stelle, an der eine reine Ziffernheuristik bricht: "33.333"
+      // ist ohne Herkunftskenntnis nicht von einer echten Tausenderzahl zu
+      // unterscheiden. Im "de"-Format ist das immer die deutsche Schreibweise.
+      expect(wandleWert("beteiligungProzent", "33.333", "de")).toBe(33333);
+      expect(wandleWert("darlehenswunsch", "1.234", "de")).toBe(1234);
+      expect(wandleWert("darlehenswunsch", "0.001", "de")).toBe(1);
+    });
+  });
+
+  describe("Format 'maschinell' (Selbstauskunft – der Wert ist schon geparst)", () => {
+    it("liest einen Punkt als echten Dezimalpunkt, nie als Tausendertrenner", () => {
+      // So liest die Selbstauskunft eine geparste Zahl zurueck: String(129.5) === "129.5".
+      expect(wandleWert("wohnflaeche", "129.5", "maschinell")).toBe(129.5);
+      // Der Produktionsfall aus der Pruefung: 33,333 % Beteiligung.
+      expect(wandleWert("beteiligungProzent", "33.333", "maschinell")).toBe(33.333);
+      expect(wandleWert("darlehenswunsch", "1.234", "maschinell")).toBe(1.234);
+      expect(wandleWert("darlehenswunsch", "0.001", "maschinell")).toBe(0.001);
+    });
+  });
+
+  describe("Ganzzahlige Zielfelder", () => {
+    it("rundet einen Bruchwert, statt ihn an Prisma weiterzureichen und abzustuerzen", () => {
+      // zinsbindungJahre ist Int? in der DB – "15,5" wuerde ungerundet einen
+      // Prisma-Laufzeitfehler ausloesen.
+      expect(wandleWert("zinsbindungJahre", "15,5", "de")).toBe(16);
+      expect(wandleWert("baujahr", "1998.7", "maschinell")).toBe(1999);
+    });
+  });
+
+  describe("Nicht-nullbare Wahrheitsfelder", () => {
+    it("faellt bei einer geloeschten Angabe auf den Schema-Standard zurueck, statt null zu schreiben", () => {
+      // inProbezeit ist Boolean @default(false), also NOT NULL – null wuerde
+      // an dieser Spalte einen Laufzeitfehler ausloesen.
+      expect(wandleWert("inProbezeit", "")).toBe(false);
+    });
+    it("schreibt bei einem nullbaren Wahrheitsfeld weiterhin null", () => {
+      // sondertilgungGewuenscht ist Boolean? – null heisst laut Schema
+      // "nicht gefragt" und ist dort ausdruecklich erlaubt.
+      expect(wandleWert("sondertilgungGewuenscht", "")).toBeNull();
+    });
   });
 });
 
