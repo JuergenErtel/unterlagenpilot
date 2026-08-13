@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { sauberName } from "@/lib/platforms/case-writer";
 
 const RUN = process.env.RUN_DB_IT === "1";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +135,95 @@ describe.runIf(RUN)("createCaseFromCanonical (PGlite)", () => {
     expect(res2.filledFields).toHaveLength(0);
   });
 
+  it("zieht 'befristet' automatisch auf true, wenn 'Aus FinLink aktualisieren' ein Vertragsende nachtraegt", async () => {
+    // Realer Ablauf (Fund der Pruefung vom 13.08.2026): Ein bestehender
+    // Beschaeftigungssatz hat kein Vertragsende. Der Vermittler drueckt "Aus
+    // FinLink aktualisieren", und FinLink liefert diesmal ein end_date. Die
+    // generische fuelle()-Pruefung ("nur wenn leer") zieht befristetBis nach,
+    // kann aber befristet (NOT NULL, Vorgabe false) nicht anfassen – ohne
+    // gezielte Kopplung widerspraeche der Datensatz sich selbst: ein Datum
+    // steht, aber "befristet" bliebe false.
+    const { createCaseFromCanonical, fillCaseFromCanonical } = await import("@/lib/platforms/case-writer");
+    const created = await createCaseFromCanonical(
+      { organizationId: orgId, userId },
+      {
+        caseNumber: "",
+        applicants: [{ position: 1, vorname: "Nora", nachname: "Befrist" }],
+        employment: [{ applicantPosition: 1, beschaeftigungsart: "angestellter", arbeitgeber: "ACME" }],
+        income: [],
+        liabilities: [],
+        assets: [],
+        financing: {},
+        platformIds: { finlinkId: "FL-BEFRISTET" },
+      } as any
+    );
+
+    const vorher = await prisma.case.findUnique({
+      where: { id: created.caseId },
+      include: { applicants: { include: { employment: true } } },
+    });
+    expect(vorher.applicants[0].employment[0].befristetBis).toBeNull();
+    expect(vorher.applicants[0].employment[0].befristet).toBe(false);
+
+    const res = await fillCaseFromCanonical(created.caseId, {
+      caseNumber: "",
+      applicants: [{ position: 1 }],
+      employment: [{ applicantPosition: 1, befristetBis: "2027-06-30" }],
+      income: [],
+      liabilities: [],
+      assets: [],
+      financing: {},
+      platformIds: { finlinkId: "FL-BEFRISTET" },
+    } as any);
+
+    expect(res.filledFields).toContain("befristetBis (Antragsteller 1)");
+    expect(res.filledFields).toContain("befristet (Antragsteller 1)");
+
+    const nachher = await prisma.case.findUnique({
+      where: { id: created.caseId },
+      include: { applicants: { include: { employment: true } } },
+    });
+    expect(nachher.applicants[0].employment[0].befristetBis?.toISOString().slice(0, 10)).toBe("2027-06-30");
+    expect(nachher.applicants[0].employment[0].befristet).toBe(true);
+  });
+
+  it("laesst 'befristet' unangetastet, wenn kein neues Vertragsende nachgezogen wird", async () => {
+    // Umkehrschluss der Kopplung: Ein vom Vermittler von Hand gesetztes
+    // "befristet: true" ohne Datum darf nicht zurueckfallen, nur weil
+    // FinLink diesmal kein Vertragsende liefert.
+    const { createCaseFromCanonical, fillCaseFromCanonical } = await import("@/lib/platforms/case-writer");
+    const created = await createCaseFromCanonical(
+      { organizationId: orgId, userId },
+      {
+        caseNumber: "",
+        applicants: [{ position: 1, vorname: "Kai", nachname: "Handgesetzt" }],
+        employment: [{ applicantPosition: 1, beschaeftigungsart: "angestellter" }],
+        income: [],
+        liabilities: [],
+        assets: [],
+        financing: {},
+        platformIds: { finlinkId: "FL-HANDGESETZT" },
+      } as any
+    );
+    const satz = await prisma.employmentRecord.findFirst({ where: { applicant: { caseId: created.caseId } } });
+    await prisma.employmentRecord.update({ where: { id: satz.id }, data: { befristet: true } });
+
+    await fillCaseFromCanonical(created.caseId, {
+      caseNumber: "",
+      applicants: [{ position: 1 }],
+      employment: [{ applicantPosition: 1, arbeitgeber: "Neue Firma GmbH" }],
+      income: [],
+      liabilities: [],
+      assets: [],
+      financing: {},
+      platformIds: { finlinkId: "FL-HANDGESETZT" },
+    } as any);
+
+    const nachher = await prisma.employmentRecord.findFirst({ where: { applicant: { caseId: created.caseId } } });
+    expect(nachher.arbeitgeber).toBe("Neue Firma GmbH");
+    expect(nachher.befristet).toBe(true);
+  });
+
   it("dedupliziert bei gleicher finlinkId in derselben Organisation", async () => {
     const { createCaseFromCanonical } = await import("@/lib/platforms/case-writer");
     const base = {
@@ -153,16 +241,26 @@ describe.runIf(RUN)("createCaseFromCanonical (PGlite)", () => {
 });
 
 describe("Namen aus fremden Systemen", () => {
-  it("schneidet Leerraum ab – FinLink liefert 'Mohammad ' mit angehaengtem Leerzeichen", () => {
+  // Bewusst per dynamischem import (statt eines statischen Imports am
+  // Dateianfang): Ein statischer Import von case-writer.ts laedt das Modul
+  // schon beim Einsammeln der Testdatei – VOR dem beforeAll() oben, das erst
+  // @/lib/db auf die PGlite-Instanz umbiegt. case-writer.ts liest "prisma"
+  // aus @/lib/db beim ERSTEN Laden fest ein; ein zu frueher Import haette
+  // ihn unbemerkt an den echten (PROD-)Client gebunden statt an PGlite, und
+  // die DB-Integrationstests oben waeren an einem Fremdschluessel-Fehler
+  // gescheitert, der mit ihrer eigentlichen Aussage nichts zu tun hat.
+  it("schneidet Leerraum ab – FinLink liefert 'Mohammad ' mit angehaengtem Leerzeichen", async () => {
     // Gemessen am Fall UP-2026-0007: vorname "[Mohammad ]", nachname
     // "[Lahwani ]". Die Anrede baut "Hallo ${Name}," – daraus wurde
     // "Hallo Mohammad  Lahwani ,". Betrifft Anrede, Dateinamen und Bank-PDFs.
+    const { sauberName } = await import("@/lib/platforms/case-writer");
     expect(sauberName("Mohammad ")).toBe("Mohammad");
     expect(sauberName("  Lahwani  ")).toBe("Lahwani");
     expect(sauberName("Anna  Lena")).toBe("Anna Lena");
   });
 
-  it("macht aus einem reinen Leerzeichen-Namen null statt eines leeren Namens", () => {
+  it("macht aus einem reinen Leerzeichen-Namen null statt eines leeren Namens", async () => {
+    const { sauberName } = await import("@/lib/platforms/case-writer");
     expect(sauberName("   ")).toBeNull();
     expect(sauberName(null)).toBeNull();
     expect(sauberName(undefined)).toBeNull();

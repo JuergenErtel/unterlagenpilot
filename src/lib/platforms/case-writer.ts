@@ -259,6 +259,15 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
         fuelle("arbeitgeber", vorhanden.arbeitgeber, emp.arbeitgeber);
         fuelle("eintrittsdatum", vorhanden.eintrittsdatum, emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : undefined);
         fuelle("befristetBis", vorhanden.befristetBis, emp.befristetBis ? new Date(emp.befristetBis) : undefined);
+        // Gezielte Kopplung statt generischem fuelle(): "befristet" ist NOT
+        // NULL mit Vorgabe false, also nie "leer" im Sinn von fuelle() – die
+        // generische Pruefung wuerde es nie anfassen. Zieht dieser Lauf aber
+        // gerade ein Vertragsende NACH (befristetBis war leer, jetzt nicht
+        // mehr), widerspraeche ein weiterhin false gesetztes "befristet" dem
+        // eigenen Datensatz. Ohne ein NEU gesetztes befristetBis bleibt
+        // "befristet" unangetastet: ein vom Vermittler von Hand gesetztes
+        // true darf nicht zurueckfallen, nur weil FinLink kein Datum liefert.
+        if (nach.befristetBis !== undefined) nach.befristet = true;
         if (Object.keys(nach).length > 0) {
           await tx.employmentRecord.update({ where: { id: vorhanden.id }, data: nach });
           filledFields.push(
