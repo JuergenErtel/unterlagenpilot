@@ -4,26 +4,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted entstehen, sonst sind sie in der Factory noch nicht da.
 const h = vi.hoisted(() => ({
   schreiben: vi.fn(),
-  caseFindUnique: vi.fn(),
   audit: vi.fn(),
+  // Der Status kommt aus derselben Abfrage wie die Zugriffspruefung.
+  status: { wert: "neu" },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/context", () => ({
   requireCaseAccess: vi.fn(async (caseId: string) => ({
     ctx: { organizationId: "o1", userId: "u1" },
-    caseRow: { id: caseId, organizationId: "o1" },
+    caseRow: { id: caseId, organizationId: "o1", status: h.status.wert },
   })),
 }));
 vi.mock("@/lib/actions/zielwert", () => ({ schreibeZielwert: h.schreiben }));
-vi.mock("@/lib/db", () => ({ prisma: { case: { findUnique: h.caseFindUnique } } }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
 
 beforeEach(() => {
   h.schreiben.mockReset();
   h.audit.mockReset();
-  h.caseFindUnique.mockReset();
-  h.caseFindUnique.mockResolvedValue({ status: "neu" });
+  h.status.wert = "neu";
 });
 
 describe("Erstgespraech: ein Feld speichern", () => {
@@ -103,10 +102,54 @@ describe("Erstgespraech: ein Feld speichern", () => {
     );
   });
 
+  it("weist Listen-Ziele ab, die im Katalog kein Feld haben", async () => {
+    // Verpflichtungen und Eigenkapitalpositionen stehen im Katalog als
+    // { entitaet: "liability", liste: true } – ohne `feld`. Wer sie in die
+    // Positivliste laesst, erlaubt den Schluessel "liability.undefined".
+    const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
+    await expect(
+      speichereGespraechsfeld(
+        "c1",
+        { entitaet: "liability", feld: undefined as unknown as string },
+        "x"
+      )
+    ).rejects.toThrow();
+    await expect(
+      speichereGespraechsfeld("c1", { entitaet: "asset", feld: "liste" }, "x")
+    ).rejects.toThrow();
+    expect(h.schreiben).not.toHaveBeenCalled();
+  });
+
+  it("nimmt auch einen Nicht-String an, statt daran zu zerbrechen", async () => {
+    // wandleWert ruft roh.trim(); eine Zahl aus einer manipulierten Anfrage
+    // waere dort ein 500er.
+    const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
+    await speichereGespraechsfeld(
+      "c1",
+      { entitaet: "financingRequest", feld: "kaufpreis" },
+      895000 as unknown as string
+    );
+    expect(h.schreiben).toHaveBeenCalledWith(
+      "c1",
+      { entitaet: "financingRequest", feld: "kaufpreis", person: 1 },
+      "895000"
+    );
+  });
+
+  it("schreibt den Wert selbst NICHT ins Pruefprotokoll", async () => {
+    // Das Gespraech traegt Personendaten. Im Audit steht nur, WELCHES Feld
+    // geaendert wurde – nie, worauf.
+    const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
+    await speichereGespraechsfeld("c1", { entitaet: "applicant", feld: "vorname" }, "Mohammad");
+    const metadata = h.audit.mock.calls[0]![0]!.metadata as Record<string, unknown>;
+    expect(JSON.stringify(metadata)).not.toContain("Mohammad");
+    expect(metadata).toEqual({ quelle: "erstgespraech", ziel: "applicant.vorname", person: 1 });
+  });
+
   it("schreibt nicht in einen gesperrten Fall", async () => {
     // Vorbedingung aus dem Doc-Kommentar von schreibeZielwert: Der Kern prueft
     // weder Berechtigung noch Sperrstatus – beides muss hier passieren.
-    h.caseFindUnique.mockResolvedValue({ status: "exportiert" });
+    h.status.wert = "exportiert";
     const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
     const ergebnis = await speichereGespraechsfeld(
       "c1",

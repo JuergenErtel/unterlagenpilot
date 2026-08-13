@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Lock, Users } from "lucide-react";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { LOCKED_CASE_STATUSES, MAX_APPLICANTS } from "@/lib/domain/enums";
@@ -30,10 +30,13 @@ const eur = (n: number): string => `${Math.round(n).toLocaleString("de-DE")} €
  */
 export default async function ErstgespraechPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ zu_zweit?: string }>;
 }) {
   const { id } = await params;
+  const { zu_zweit } = await searchParams;
   await requireCaseAccess(id);
 
   const fall = await prisma.case.findUniqueOrThrow({
@@ -62,12 +65,21 @@ export default async function ErstgespraechPage({
     caseFelder: { financingType: fall.financingType ?? null },
   };
 
-  // Zwei Antragsteller sind der Baufi-Standard-Hoechstfall; ohne Antragsteller
-  // fragen wir nach einem – ein leerer Fall soll die Maske nicht leeren.
-  const antragstellerZahl = Math.min(
-    Math.max(fall.applicants.length, 1),
-    MAX_APPLICANTS
-  ) as 1 | 2;
+  /*
+   * Zwei Antragsteller sind der Baufi-Standard-Hoechstfall; ohne Antragsteller
+   * fragen wir nach einem – ein leerer Fall soll die Maske nicht leeren.
+   *
+   * "Wir kaufen zu zweit" faellt oft erst im Gespraech. Die Katalogfrage
+   * danach hat kein Zielfeld und steht deshalb nicht in der Maske; ohne den
+   * Schalter muesste der Vermittler mitten im Telefonat nach /edit wechseln,
+   * um Antragsteller 2 anzulegen. Der Schalter steht in der Adresse (statt im
+   * Browserspeicher), damit er ein Neuladen und jedes Zwischenspeichern
+   * ueberlebt. Angelegt wird Antragsteller 2 dabei nicht – das erledigt
+   * `schreibeZielwert` beim ersten Wert, den er bekommt (`ermittleApplicantId`).
+   */
+  const vorhandene = Math.min(Math.max(fall.applicants.length, 1), MAX_APPLICANTS);
+  const zuZweit = vorhandene > 1 || zu_zweit === "1";
+  const antragstellerZahl = (zuZweit ? 2 : 1) as 1 | 2;
 
   const reife = berechneReife(stand, antragstellerZahl);
   const maske = baueMaske(stand, antragstellerZahl, reife);
@@ -110,6 +122,38 @@ export default async function ErstgespraechPage({
       )}
 
       <Reifeleiste reife={reife} />
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span>
+              {zuZweit ? "Zwei Antragsteller" : "Ein Antragsteller"}
+              {zuZweit && vorhandene < 2 && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · Antragsteller 2 entsteht mit der ersten Angabe
+                </span>
+              )}
+            </span>
+          </div>
+          {vorhandene > 1 ? (
+            <span className="text-xs text-muted-foreground">
+              Beide sind bereits im Fall angelegt – entfernen geht in den Stammdaten.
+            </span>
+          ) : (
+            <Button asChild variant="outline" size="sm">
+              <Link
+                href={
+                  zuZweit ? `/cases/${id}/erstgespraech` : `/cases/${id}/erstgespraech?zu_zweit=1`
+                }
+              >
+                {zuZweit ? "Doch alleine" : "Zweiter Antragsteller"}
+              </Link>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

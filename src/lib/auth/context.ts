@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { verifyUploadToken } from "@/lib/security/upload-token";
 import { readSessionToken, verifySessionToken } from "@/lib/auth/session";
-import type { UserRole } from "@/lib/domain/enums";
+import type { CaseStatus, UserRole } from "@/lib/domain/enums";
 
 /**
  * Auth-/Zugriffskontext (mandantenfähig).
@@ -149,14 +149,22 @@ export async function requireOrganizationAccess(organizationId: string): Promise
  * Lädt einen Fall NUR, wenn er zur Organisation des Kontextes gehört.
  * Existiert er nicht oder gehört er einer anderen Organisation, antworten wir
  * identisch (404), um Existenz nicht preiszugeben.
+ *
+ * `status` gehört mit in die Auskunft: Fast jede schreibende Action muss danach
+ * prüfen, ob der Fall gesperrt ist (`LOCKED_CASE_STATUSES`). Ohne ihn holte
+ * jede dieser Actions dieselbe Zeile ein zweites Mal – bei feldweisem Speichern
+ * (Erstgespräch) wäre das eine zusätzliche Datenbankrunde je Tastendruckende.
  */
 export async function requireCaseAccess(
   caseId: string
-): Promise<{ ctx: AppContext; caseRow: { id: string; organizationId: string } }> {
+): Promise<{
+  ctx: AppContext;
+  caseRow: { id: string; organizationId: string; status: CaseStatus };
+}> {
   const ctx = await requireContext();
   const caseRow = await prisma.case.findUnique({
     where: { id: caseId },
-    select: { id: true, organizationId: true },
+    select: { id: true, organizationId: true, status: true },
   });
   if (!caseRow || caseRow.organizationId !== ctx.organizationId) {
     const { notFound } = await import("next/navigation");

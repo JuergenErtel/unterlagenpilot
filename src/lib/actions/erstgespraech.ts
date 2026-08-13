@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
-import { prisma } from "@/lib/db";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import { schreibeZielwert } from "@/lib/actions/zielwert";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
@@ -60,7 +59,7 @@ export async function speichereGespraechsfeld(
   ziel: { entitaet: string; feld: string; person?: 1 | 2 },
   wert: string
 ): Promise<GespraechsfeldErgebnis> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow } = await requireCaseAccess(caseId);
 
   // Diese Datei traegt "use server": jede exportierte Funktion ist ein
   // oeffentlich erreichbarer Endpunkt. Ohne diese Pruefung liesse sich jedes
@@ -72,17 +71,23 @@ export async function speichereGespraechsfeld(
 
   // Zweite Vorbedingung des Schreibkerns (siehe Doc-Kommentar dort): Er prueft
   // den Sperrstatus nicht selbst. Ein exportierter Fall ist eine abgegebene
-  // Akte – was die Bank bekommen hat, darf sich hier nicht mehr aendern.
-  const fall = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true } });
-  if (!fall) return { gespeichert: false, hinweis: "Fall nicht gefunden." };
-  if (LOCKED_CASE_STATUSES.has(fall.status)) {
+  // Akte – was die Bank bekommen hat, darf sich hier nicht mehr aendern. Der
+  // Status kommt aus derselben Abfrage wie die Zugriffspruefung; ihn hier
+  // erneut zu holen waere je gespeichertem Feld eine dritte Datenbankrunde.
+  if (LOCKED_CASE_STATUSES.has(caseRow.status)) {
     return { gespeichert: false, hinweis: "Der Fall ist gesperrt – die Angabe wurde nicht gespeichert." };
   }
 
   // Auch die Personennummer kommt aus der Anfrage: auf die beiden zulaessigen
-  // Werte festnageln, statt sie durchzureichen.
+  // Werte festnageln, statt sie durchzureichen. Und der Wert selbst kommt als
+  // String an ODER auch nicht – `wandleWert` ruft `roh.trim()`, eine Zahl oder
+  // ein Objekt aus einer manipulierten Anfrage waere dort ein 500er.
   const person: 1 | 2 = ziel?.person === 2 ? 2 : 1;
-  await schreibeZielwert(caseId, { entitaet: erlaubt.entitaet, feld: erlaubt.feld, person }, wert ?? "");
+  await schreibeZielwert(
+    caseId,
+    { entitaet: erlaubt.entitaet, feld: erlaubt.feld, person },
+    String(wert ?? "")
+  );
 
   await audit({
     organizationId: ctx.organizationId,
