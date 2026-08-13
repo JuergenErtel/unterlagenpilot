@@ -23,6 +23,14 @@ export interface Urteil {
   rate: number;
   /** Monatliche Rate eines etwaigen Ratenkredits. */
   ratenkreditRate: number;
+  /**
+   * Um wie viel die Rate ueber der Wunschrate des Kunden liegt; 0 = gehalten,
+   * null = keine Wunschrate genannt.
+   *
+   * Bewusst nie negativ: "Du liegst 400 Euro unter deinem Wunsch" ist keine
+   * Aussage, die jemand braucht -- gehalten ist gehalten.
+   */
+  wunschrateAbweichung: number | null;
   ueberschuss: number;
   machbar: boolean;
   nebenkosten: NebenkostenAufstellung;
@@ -131,6 +139,11 @@ export function bewerte(e: SolverEingabe, a: Annahmen): Urteil {
     { tilgungProzent: e.tilgungProzent }
   );
 
+  // Die Wunschrate faerbt die Ampel NICHT (Entscheidung des Vermittlers vom
+  // 13.08.2026): `machbar` bleibt die Bankensicht aus Auslauf und
+  // Haushaltsueberschuss. Ein verfehlter Wunsch ist ein Gespraechsthema, kein
+  // K.o. -- sonst gaelten Faelle als "nicht darstellbar", die jede Bank
+  // finanziert.
   const machbar = auslauf <= a.auslaufObergrenze && h.ueberschuss >= a.ueberschussPuffer;
 
   return {
@@ -141,6 +154,10 @@ export function bewerte(e: SolverEingabe, a: Annahmen): Urteil {
     zinsProzent,
     rate,
     ratenkreditRate: rkRate,
+    wunschrateAbweichung:
+      e.wunschrateMonatlich != null && e.wunschrateMonatlich > 0
+        ? Math.max(0, r2(rate + rkRate - e.wunschrateMonatlich))
+        : null,
     ueberschuss: h.ueberschuss,
     machbar,
     nebenkosten,

@@ -67,6 +67,7 @@ export function baueEingabe(
       ratenkreditAnteil: 0,
       tilgungProzent: 2,
       sollzinsProzent: c.financing?.sollzinsProzent ?? null,
+      wunschrateMonatlich: c.financing?.wunschrateMonatlich ?? null,
       nettoEinkommen,
       zusatzEinnahmen: sum((c.income ?? []).map((i) => i.sonstigeEinnahmen ?? 0)),
       zusatzErwachsene: 0,

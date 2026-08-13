@@ -17,6 +17,7 @@ const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   ratenkreditAnteil: 0,
   tilgungProzent: 2,
   sollzinsProzent: null,
+  wunschrateMonatlich: null,
   nettoEinkommen: 2_900,
   zusatzEinnahmen: 0,
   zusatzErwachsene: 0,
@@ -153,5 +154,15 @@ describe("Transparenz", () => {
 
   it("reicht die Unsicherheit beim Bundesland durch", () => {
     expect(loese(eingabe(), VORGABE_ANNAHMEN, true).bundeslandUnsicher).toBe(true);
+  });
+});
+
+describe("Wunschrate im Ergebnis", () => {
+  it("reicht die genannte Wunschrate durch, damit die Anzeige sie benennen kann", () => {
+    // Ohne den Wert liesse sich eine EINGEHALTENE Wunschrate nicht anzeigen:
+    // Die Abweichung ist dann 0 und traegt die Zahl nicht mehr.
+    const e = eingabe({ wunschrateMonatlich: 1_400 });
+    expect(loese(e, VORGABE_ANNAHMEN, false).wunschrate).toBe(1_400);
+    expect(loese(eingabe(), VORGABE_ANNAHMEN, false).wunschrate).toBeNull();
   });
 });

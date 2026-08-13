@@ -25,6 +25,12 @@ export interface SolverEingabe {
   tilgungProzent: number;
   /** Konkreter Sollzins aus einem Angebot; null => Annahmen greifen. */
   sollzinsProzent: number | null;
+  /**
+   * Monatliche Wunschrate des Kunden aus dem Erstgespraech; null => nicht
+   * genannt. Sie ist die Grenze des KUNDEN, nicht die der Bank: Sie wird
+   * berichtet, geht aber NICHT in `machbar` ein (siehe `bewerte`).
+   */
+  wunschrateMonatlich: number | null;
 
   nettoEinkommen: number;
   zusatzEinnahmen: number;

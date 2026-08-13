@@ -19,6 +19,7 @@ const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   ratenkreditAnteil: 0,
   tilgungProzent: 2,
   sollzinsProzent: null,
+  wunschrateMonatlich: null,
   // Bewusst knapp: mit 10.000 € Eigenkapital liegt der Auslauf bei 103 %, und
   // der Haushalt traegt die daraus folgende Rate nicht. Genau der Fall, den der
   // Solver retten soll.

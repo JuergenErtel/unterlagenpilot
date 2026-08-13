@@ -17,6 +17,7 @@ const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   ratenkreditAnteil: 0,
   tilgungProzent: 2,
   sollzinsProzent: null,
+  wunschrateMonatlich: null,
   nettoEinkommen: 5_000,
   zusatzEinnahmen: 0,
   zusatzErwachsene: 0,
@@ -131,5 +132,54 @@ describe("Bewertung", () => {
     const ohne = bewerte(eingabe(), VORGABE_ANNAHMEN);
     const mit = bewerte(eingabe({ bestehendeRaten: 312 }), VORGABE_ANNAHMEN);
     expect(mit.ueberschuss).toBeCloseTo(ohne.ueberschuss - 312, 0);
+  });
+});
+
+/**
+ * Die Wunschrate ist die Grenze des KUNDEN, nicht die der Bank.
+ *
+ * Der Solver rechnet gegen den Auslauf und den Haushaltsueberschuss – also
+ * dagegen, ob die Bank mitgeht. Ob der Kunde SEIN Ziel erreicht, stand
+ * nirgends. Entscheidung des Vermittlers vom 13.08.2026: berichten, nicht
+ * blockieren. Ein verfehlter Wunsch ist ein Gespraechsthema, kein K.o. – die
+ * Ampel wuerde sonst Faelle rot faerben, die jede Bank finanziert.
+ */
+describe("Wunschrate", () => {
+  it("meldet die Abweichung, wenn die Rate ueber dem Wunsch liegt", () => {
+    const u = bewerte(eingabe({ wunschrateMonatlich: 800 }), VORGABE_ANNAHMEN);
+    expect(u.rate).toBeGreaterThan(800);
+    expect(u.wunschrateAbweichung).toBeCloseTo(u.rate - 800, 2);
+  });
+
+  it("meldet eine eingehaltene Wunschrate als Abweichung 0, nicht als negative Zahl", () => {
+    // "Du liegst 400 Euro unter deinem Wunsch" ist keine Aussage, die jemand
+    // braucht – gehalten ist gehalten.
+    const u = bewerte(eingabe({ wunschrateMonatlich: 99_999 }), VORGABE_ANNAHMEN);
+    expect(u.wunschrateAbweichung).toBe(0);
+  });
+
+  it("meldet ohne genannte Wunschrate gar nichts", () => {
+    expect(bewerte(eingabe(), VORGABE_ANNAHMEN).wunschrateAbweichung).toBeNull();
+  });
+
+  it("faerbt die Ampel nicht: eine verfehlte Wunschrate laesst machbar unberuehrt", () => {
+    const ohne = bewerte(eingabe(), VORGABE_ANNAHMEN);
+    const mit = bewerte(eingabe({ wunschrateMonatlich: 1 }), VORGABE_ANNAHMEN);
+    expect(ohne.machbar).toBe(true);
+    expect(mit.machbar).toBe(ohne.machbar);
+    expect(mit.ueberschuss).toBe(ohne.ueberschuss);
+  });
+});
+
+describe("Wunschrate misst die Gesamtbelastung", () => {
+  it("zaehlt eine Ratenkreditrate mit, nicht nur die Rate des Baudarlehens", () => {
+    // Der Kunde zahlt beides. Nur gegen das Baudarlehen zu messen, meldete
+    // "Wunsch gehalten", waehrend monatlich mehrere hundert Euro danebenlaufen.
+    const u = bewerte(
+      eingabe({ ratenkreditAnteil: 20_000, wunschrateMonatlich: 800 }),
+      VORGABE_ANNAHMEN
+    );
+    expect(u.ratenkreditRate).toBeGreaterThan(0);
+    expect(u.wunschrateAbweichung).toBeCloseTo(u.rate + u.ratenkreditRate - 800, 2);
   });
 });

@@ -58,6 +58,7 @@ export function nebenkostenVorschau(eingabe: VorschauEingabe): NebenkostenAufste
     ratenkreditAnteil: 0,
     tilgungProzent: 0,
     sollzinsProzent: null,
+  wunschrateMonatlich: null,
     nettoEinkommen: 0,
     zusatzEinnahmen: 0,
     zusatzErwachsene: 0,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Target, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -56,6 +56,30 @@ export function MachbarkeitErgebnis({
               tonKritisch={a.ueberschuss < 0}
             />
           </dl>
+
+          {/*
+            * Die Wunschrate ist die Grenze des KUNDEN, nicht die der Bank –
+            * deshalb steht sie neben der Ampel und nicht darin. Ein verfehlter
+            * Wunsch faerbt hier nichts rot: Der Fall ist darstellbar, nur das
+            * Gespraech wird ein anderes.
+            */}
+          {ergebnis.wunschrate != null && a.wunschrateAbweichung != null && (
+            <p className="mt-5 flex items-start gap-2 border-t pt-4 text-sm">
+              <Target className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              {a.wunschrateAbweichung > 0 ? (
+                <span>
+                  Die Rate liegt{" "}
+                  <span className="font-semibold">{eur(a.wunschrateAbweichung)}</span> über der
+                  Wunschrate von {eur(ergebnis.wunschrate)}, die im Erstgespräch genannt wurde.
+                </span>
+              ) : (
+                <span>
+                  Die im Erstgespräch genannte Wunschrate von {eur(ergebnis.wunschrate)} ist
+                  eingehalten.
+                </span>
+              )}
+            </p>
+          )}
         </CardContent>
       </Card>
 

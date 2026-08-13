@@ -17,6 +17,7 @@ const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   ratenkreditAnteil: 0,
   tilgungProzent: 2,
   sollzinsProzent: null,
+  wunschrateMonatlich: null,
   nettoEinkommen: 4_000,
   zusatzEinnahmen: 0,
   zusatzErwachsene: 0,

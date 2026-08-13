@@ -42,6 +42,12 @@ export interface SolverErgebnis {
   annahmen: Annahmen;
   nebenkosten: NebenkostenAufstellung;
   bundeslandUnsicher: boolean;
+  /**
+   * Die genannte Wunschrate, nur zur Anzeige. Sie steht hier zusaetzlich zur
+   * Abweichung im Urteil, weil eine EINGEHALTENE Wunschrate eine Abweichung
+   * von 0 hat -- die Zahl selbst waere dann verloren.
+   */
+  wunschrate: number | null;
 }
 
 /** Naechstbesseres Band – das Ziel im Optimierungsmodus. */
@@ -183,6 +189,7 @@ export function loese(
     paare,
     annahmen: a,
     nebenkosten: ausgangslage.nebenkosten,
+    wunschrate: e.wunschrateMonatlich,
     bundeslandUnsicher,
   };
 }
