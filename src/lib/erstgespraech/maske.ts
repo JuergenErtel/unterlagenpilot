@@ -1,7 +1,7 @@
 import { KATALOG, wert as antwortWert } from "@/lib/self-disclosure/catalog";
 import type { Abschnitt as AbschnittId, Antworten, Feld, FeldTyp } from "@/lib/self-disclosure/types";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
-import type { Reife } from "@/lib/erstgespraech/reife";
+import { ANGEBOTSRELEVANTE_ZIELE, type Reife } from "@/lib/erstgespraech/reife";
 import {
   EMPLOYMENT_TYPES,
   EMPLOYMENT_TYPE_LABELS,
@@ -242,10 +242,9 @@ function schreibbareFelder(schrittIndex: number): Array<Feld & { ziel: { entitae
 /**
  * Nachziehen, was sonst unerreichbar waere.
  *
- * Die Reifeleiste zaehlt ihre Angaben unabhaengig von der Finanzierungsart.
- * Die Verzweigungen des Katalogs blenden je nach Art aber Schritte aus (bei
- * einer Anschlussfinanzierung z. B. den Kaufpreis). Was die Leiste anmahnt,
- * muss die Maske auch anbieten: fuer jede noch nicht abgedeckte Angabe den
+ * Die Verzweigungen des Katalogs blenden je nach Finanzierungsart Schritte aus
+ * (bei einer Modernisierung z. B. die Objektmasse). Was die Leiste anmahnt,
+ * muss die Maske aber anbieten: fuer jede noch nicht abgedeckte Angabe den
  * ersten Katalogschritt hinzunehmen, der sie traegt.
  *
  * Das gilt in BEIDE Richtungen – hier steht auch der Grund, warum die Reife
@@ -316,10 +315,31 @@ export function baueMaske(
     for (const feld of schreibbareFelder(k.schrittIndex)) {
       const zielKey = zielSchluessel(feld.ziel.entitaet, feld.ziel.feld, k.person);
       if (belegt.has(zielKey)) continue;
+
+      const relevant = relevanteZiele.get(zielKey);
+      /*
+       * Die Gegenrichtung zu `ergaenzeUnerreichbare`: Eine angebotsrelevante
+       * Angabe, die die Reife fuer DIESEN Fall nicht zaehlt, gibt es hier nicht
+       * – dann darf die Maske sie auch nicht fragen.
+       *
+       * Bei den Arbeitsvertrags-Angaben fiel das noch von selbst weg, weil sie
+       * allein im Schritt `beruf_dauer` stehen. Die Grundstuecksgroesse steht
+       * dagegen NEBEN Wohnflaeche und Baujahr in "Wie gross ist die
+       * Immobilie?": Der Schritt bleibt sichtbar, also blieb auch die Frage
+       * nach dem Grundstueck einer Eigentumswohnung stehen. Gleiches bei der
+       * Maklergebuehr einer Anschlussfinanzierung – der Katalog blendet nur die
+       * Ja/Nein-Frage aus, das Prozentfeld haengt an der im Gespraech hart
+       * gesetzten Antwort "ja".
+       *
+       * Nur angebotsrelevante Ziele werden so gefiltert: Baukosten oder
+       * Warmmiete zaehlt die Reife nie, sie sollen aber gefragt werden.
+       */
+      if (!relevant && ANGEBOTSRELEVANTE_ZIELE.has(`${feld.ziel.entitaet}.${feld.ziel.feld}`)) {
+        continue;
+      }
       belegt.add(zielKey);
 
       const person = k.person;
-      const relevant = relevanteZiele.get(zielKey);
       const abschnitt =
         abschnitte.get(schritt.abschnitt) ??
         {

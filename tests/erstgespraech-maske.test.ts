@@ -225,3 +225,56 @@ describe("Arbeitsvertrags-Angaben haengen an der Beschaeftigungsart", () => {
     expect(probezeit[0]!.person).toBe(2);
   });
 });
+
+/**
+ * Was die Reife fuer diesen Fall nicht zaehlt, fragt die Maske auch nicht.
+ *
+ * Bisher lief die Abstimmung nur in EINE Richtung: `ergaenzeUnerreichbare`
+ * zieht Katalogschritte herein, damit jede gezaehlte Angabe eingebbar ist. Die
+ * Gegenrichtung fehlte – und die faellt anders als bei den Arbeitsvertrags-
+ * Angaben nicht von selbst weg: Die Grundstuecksgroesse steht im Schritt "Wie
+ * gross ist die Immobilie?" NEBEN Wohnflaeche und Baujahr. Der Schritt bleibt
+ * sichtbar, also fragte die Maske auch den Kaeufer einer Eigentumswohnung nach
+ * der Grundstuecksgroesse. Ebenso die Maklergebuehr bei einer
+ * Anschlussfinanzierung: Der Katalog blendet zwar die Ja/Nein-Frage aus, das
+ * Prozentfeld haengt aber an der im Gespraech hart gesetzten Antwort "ja".
+ */
+describe("Die Maske folgt der Reife feldweise", () => {
+  const objektZiele = (objektart: string | null, financingType: string | null = "kauf") =>
+    alleFelder({
+      ...leererStand,
+      property: objektart ? { objektart } : null,
+      caseFelder: { financingType },
+    }).map((f) => f.ziel.feld);
+
+  it("fragt bei einer Eigentumswohnung nicht nach der Grundstuecksgroesse", () => {
+    const ziele = objektZiele("eigentumswohnung");
+    expect(ziele).not.toContain("grundstuecksflaeche");
+    // Die Nachbarfelder desselben Schritts bleiben stehen.
+    expect(ziele).toContain("wohnflaeche");
+    expect(ziele).toContain("baujahr");
+  });
+
+  it("fragt bei einem Haus weiter danach", () => {
+    expect(objektZiele("einfamilienhaus")).toContain("grundstuecksflaeche");
+  });
+
+  it("fragt bei unbekannter Objektart weiter danach", () => {
+    expect(objektZiele(null)).toContain("grundstuecksflaeche");
+  });
+
+  it("fragt bei einem unbebauten Grundstueck nicht nach Wohnflaeche und Baujahr", () => {
+    const ziele = objektZiele("grundstueck");
+    expect(ziele).not.toContain("wohnflaeche");
+    expect(ziele).not.toContain("baujahr");
+    expect(ziele).toContain("grundstuecksflaeche");
+  });
+
+  it("fragt bei einer Anschlussfinanzierung nicht nach der Maklergebuehr", () => {
+    expect(objektZiele(null, "anschlussfinanzierung")).not.toContain("maklerprovisionProzent");
+  });
+
+  it("fragt beim Kauf weiter nach der Maklergebuehr", () => {
+    expect(objektZiele(null, "kauf")).toContain("maklerprovisionProzent");
+  });
+});

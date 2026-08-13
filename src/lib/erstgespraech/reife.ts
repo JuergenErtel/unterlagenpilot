@@ -1,5 +1,5 @@
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
-import type { EmploymentType } from "@/lib/domain/enums";
+import { PROPERTY_TYPES, type EmploymentType, type FinancingType, type PropertyType } from "@/lib/domain/enums";
 
 /**
  * Welche der angebotsrelevanten Angaben stehen, welche fehlen.
@@ -64,6 +64,37 @@ export const BESCHAEFTIGUNG_MIT_ARBEITSVERTRAG: EmploymentType[] = [
   "sonstiges",
 ];
 
+/**
+ * Objektarten mit eigenem Grund und Boden – also alle ausser der
+ * Eigentumswohnung, deren Kaeufer nur einen Miteigentumsanteil erwirbt.
+ *
+ * Bewusst aus PROPERTY_TYPES ABGELEITET statt aufgezaehlt: Kommt eine
+ * Objektart hinzu, zaehlt die Grundstuecksgroesse fuer sie erst einmal mit.
+ * Das ist die sichere Richtung – eine zu viel gestellte Frage faellt auf, eine
+ * still verschwundene nicht. Gleiches Prinzip wie bei der unbekannten
+ * Beschaeftigungsart (siehe `Definition.nurBeiObjektart`).
+ */
+export const OBJEKTART_MIT_GRUNDSTUECK: PropertyType[] = PROPERTY_TYPES.filter(
+  (a) => a !== "eigentumswohnung"
+);
+
+/** Bebaute Objektarten – ein unbebautes Grundstueck hat weder Wohnflaeche noch Baujahr. */
+export const OBJEKTART_BEBAUT: PropertyType[] = PROPERTY_TYPES.filter((a) => a !== "grundstueck");
+
+/**
+ * Finanzierungsarten, bei denen ueberhaupt etwas gekauft wird – nur dort gibt
+ * es einen Kaufpreis und eine Maklerprovision.
+ *
+ * Hier eine geschlossene Aufzaehlung statt einer Ableitung: "Kauf" ist ein
+ * enger Begriff, und eine kuenftige Art (etwa ein Forward-Darlehen) waere
+ * eher KEIN Kauf. Entspricht dem KAUFZWEIG des Fragenkatalogs.
+ *
+ * Innerhalb des Kaufzweigs wird nichts ausgeblendet: Provisionsfrei ist eine
+ * 0, keine verschwundene Zeile – auch beim Bautraeger-Neubau (Entscheidung des
+ * Vermittlers vom 13.08.2026).
+ */
+export const FINANZIERUNG_MIT_KAUF: FinancingType[] = ["kauf", "neubau"];
+
 interface Definition {
   schluessel: string;
   label: string;
@@ -82,15 +113,25 @@ interface Definition {
    * Unterlagenliste (`nurBeiBeschaeftigung`, checklists/templates.ts).
    */
   nurBeiBeschaeftigung?: EmploymentType[];
+  /**
+   * Die Angabe gilt nur fuer diese Objektarten – dieselbe Regel wie oben:
+   * Eine UNBEKANNTE Objektart zaehlt mit, weil die Objektart selbst eine der
+   * Angaben ist und leer sein darf.
+   */
+  nurBeiObjektart?: PropertyType[];
+  /** Die Angabe gilt nur fuer diese Finanzierungsarten; unbekannt zaehlt mit. */
+  nurBeiFinanzierungsart?: FinancingType[];
 }
 
 /**
  * Die angebotsrelevanten Angaben, bestaetigt von Juergen am 12.08.2026.
  *
  * 26 Definitionen – die tatsaechliche ANZAHL je Fall haengt aber an der Zahl
- * der Antragsteller (`jePerson`) und seit dem 13.08.2026 auch an der
- * Beschaeftigungsart (`nurBeiBeschaeftigung`). Wer die Zahl irgendwo anzeigt,
- * muss sie deshalb aus `berechneReife` nehmen, nie fest hinschreiben.
+ * der Antragsteller (`jePerson`), an der Beschaeftigungsart
+ * (`nurBeiBeschaeftigung`) und seit dem 13.08.2026 auch an Objektart und
+ * Finanzierungsart (`nurBeiObjektart`, `nurBeiFinanzierungsart`). Wer die Zahl
+ * irgendwo anzeigt, muss sie deshalb aus `berechneReife` nehmen, nie fest
+ * hinschreiben.
  */
 const FELDER: Definition[] = [
   { schluessel: "vorname", label: "Vorname", abschnitt: "person", quelle: "applicant", jePerson: true },
@@ -122,13 +163,31 @@ const FELDER: Definition[] = [
   { schluessel: "eigenkapital", label: "Eigenkapital", abschnitt: "eigenkapital", quelle: "financingRequest" },
   { schluessel: "objektart", label: "Objektart", abschnitt: "objekt", quelle: "property" },
   { schluessel: "zip", label: "PLZ des Objekts", abschnitt: "objekt", quelle: "property" },
-  { schluessel: "wohnflaeche", label: "Wohnfläche", abschnitt: "objekt", quelle: "property" },
-  { schluessel: "grundstuecksflaeche", label: "Grundstücksgröße", abschnitt: "objekt", quelle: "property" },
-  { schluessel: "baujahr", label: "Baujahr", abschnitt: "objekt", quelle: "property" },
+  { schluessel: "wohnflaeche", label: "Wohnfläche", abschnitt: "objekt", quelle: "property", nurBeiObjektart: OBJEKTART_BEBAUT },
+  {
+    schluessel: "grundstuecksflaeche",
+    label: "Grundstücksgröße",
+    abschnitt: "objekt",
+    quelle: "property",
+    nurBeiObjektart: OBJEKTART_MIT_GRUNDSTUECK,
+  },
+  { schluessel: "baujahr", label: "Baujahr", abschnitt: "objekt", quelle: "property", nurBeiObjektart: OBJEKTART_BEBAUT },
   { schluessel: "nutzung", label: "Nutzung", abschnitt: "objekt", quelle: "property" },
   { schluessel: "financingType", label: "Finanzierungsart", abschnitt: "vorhaben", quelle: "case" },
-  { schluessel: "kaufpreis", label: "Kaufpreis", abschnitt: "vorhaben", quelle: "financingRequest" },
-  { schluessel: "maklerprovisionProzent", label: "Maklerprovision", abschnitt: "vorhaben", quelle: "financingRequest" },
+  {
+    schluessel: "kaufpreis",
+    label: "Kaufpreis",
+    abschnitt: "vorhaben",
+    quelle: "financingRequest",
+    nurBeiFinanzierungsart: FINANZIERUNG_MIT_KAUF,
+  },
+  {
+    schluessel: "maklerprovisionProzent",
+    label: "Maklerprovision",
+    abschnitt: "vorhaben",
+    quelle: "financingRequest",
+    nurBeiFinanzierungsart: FINANZIERUNG_MIT_KAUF,
+  },
   { schluessel: "darlehenswunsch", label: "Darlehenswunsch", abschnitt: "vorhaben", quelle: "financingRequest" },
   { schluessel: "zinsbindungJahre", label: "Zinsbindung", abschnitt: "vorhaben", quelle: "financingRequest" },
   { schluessel: "sondertilgungGewuenscht", label: "Sondertilgung gewünscht", abschnitt: "vorhaben", quelle: "financingRequest" },
@@ -155,15 +214,29 @@ function istGefuellt(wert: unknown): boolean {
 }
 
 /**
- * Gilt eine an die Beschaeftigungsart gebundene Angabe fuer diese Person?
+ * Gilt eine gebundene Angabe bei diesem Merkmal (Beschaeftigungs-, Objekt-
+ * oder Finanzierungsart)?
  *
- * Solange die Beschaeftigungsart unbekannt ist, JA – siehe
- * `Definition.nurBeiBeschaeftigung`.
+ * Solange das Merkmal unbekannt ist, JA – siehe `Definition`.
  */
-function giltBeiBeschaeftigung(erlaubt: EmploymentType[], art: unknown): boolean {
-  if (typeof art !== "string" || art === "") return true;
-  return (erlaubt as string[]).includes(art);
+function gilt(erlaubt: readonly string[], merkmal: unknown): boolean {
+  if (typeof merkmal !== "string" || merkmal === "") return true;
+  return erlaubt.includes(merkmal);
 }
+
+/**
+ * Alle Zielspalten, die ueberhaupt angebotsrelevant sind – ungefiltert.
+ *
+ * Die Maske braucht die Liste, um die Gegenrichtung zu `ergaenzeUnerreichbare`
+ * zu bilden: Steht eine Zielspalte hier drin, wird aber fuer DIESEN Fall nicht
+ * gezaehlt, dann ist sie weggefallen (die Eigentumswohnung hat kein
+ * Grundstueck) – und die Maske darf sie auch nicht fragen. Ohne diese Liste
+ * liesse sich "weggefallen" nicht von "war nie angebotsrelevant" (Warmmiete,
+ * Baukosten) unterscheiden.
+ */
+export const ANGEBOTSRELEVANTE_ZIELE: ReadonlySet<string> = new Set(
+  FELDER.map((d) => `${d.quelle}.${d.schluessel}`)
+);
 
 export function berechneReife(stand: Fallstand, antragstellerZahl: number): Reife {
   const personen = Math.max(antragstellerZahl, 1);
@@ -185,13 +258,21 @@ export function berechneReife(stand: Fallstand, antragstellerZahl: number): Reif
   for (const def of FELDER) {
     const positionen = def.jePerson ? Array.from({ length: personen }, (_, i) => i + 1) : [1];
     for (const position of positionen) {
-      // Angaben, die es fuer diese Beschaeftigungsart nicht gibt (Arbeitsvertrag
-      // eines Rentners), werden weder gezaehlt noch gefragt: `baueMaske` holt
-      // sich ueber `ergaenzeUnerreichbare` genau die Katalogschritte, die die
-      // hier gezaehlten Angaben tragen.
+      // Angaben, die es in diesem Fall nicht gibt – der Arbeitsvertrag eines
+      // Rentners, das Grundstueck einer Eigentumswohnung, der Kaufpreis einer
+      // Anschlussfinanzierung –, werden weder gezaehlt noch gefragt:
+      // `baueMaske` folgt dieser Liste in BEIDE Richtungen (ergaenzt fehlende
+      // Katalogschritte, laesst weggefallene Felder weg).
       if (
         def.nurBeiBeschaeftigung &&
-        !giltBeiBeschaeftigung(def.nurBeiBeschaeftigung, lies("employment", "beschaeftigungsart", position))
+        !gilt(def.nurBeiBeschaeftigung, lies("employment", "beschaeftigungsart", position))
+      ) {
+        continue;
+      }
+      if (def.nurBeiObjektart && !gilt(def.nurBeiObjektart, stand.property?.objektart)) continue;
+      if (
+        def.nurBeiFinanzierungsart &&
+        !gilt(def.nurBeiFinanzierungsart, stand.caseFelder.financingType)
       ) {
         continue;
       }

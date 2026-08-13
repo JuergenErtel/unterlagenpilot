@@ -65,3 +65,65 @@ describe("Angebotsreife", () => {
     expect(gefuellt).toContain("befristet");
   });
 });
+
+/**
+ * Nicht jede Angabe gibt es in jedem Fall.
+ *
+ * Eine Eigentumswohnung hat kein Grundstueck, ein unbebautes Grundstueck weder
+ * Wohnflaeche noch Baujahr, und bei einer Anschlussfinanzierung wird nichts
+ * gekauft – also gibt es weder Kaufpreis noch Maklerprovision. Wurden sie
+ * trotzdem gezaehlt, konnte die Reifeleiste in genau diesen Faellen nie voll
+ * werden und mahnte eine Angabe an, die es nicht gibt.
+ *
+ * Dieselbe Schutzregel wie bei der Beschaeftigungsart: Solange Objektart bzw.
+ * Finanzierungsart LEER sind, zaehlt alles mit – sonst verschwaende eine Frage,
+ * bevor der Vermittler ueberhaupt gefragt hat.
+ */
+describe("Angaben haengen an Objektart und Finanzierungsart", () => {
+  const schluessel = (property: Record<string, unknown> | null, financingType: string | null) =>
+    berechneReife({ ...leer, property, caseFelder: { financingType } }, 1).felder.map(
+      (f) => f.schluessel
+    );
+
+  it("fragt bei einer Eigentumswohnung nicht nach der Grundstuecksgroesse", () => {
+    expect(schluessel({ objektart: "eigentumswohnung" }, "kauf")).not.toContain("grundstuecksflaeche");
+  });
+
+  it("fragt bei einem Haus sehr wohl danach", () => {
+    for (const art of ["einfamilienhaus", "doppelhaushaelfte", "reihenhaus", "mehrfamilienhaus"]) {
+      expect(schluessel({ objektart: art }, "kauf"), art).toContain("grundstuecksflaeche");
+    }
+  });
+
+  it("fragt bei einem unbebauten Grundstueck weder nach Wohnflaeche noch Baujahr", () => {
+    const s = schluessel({ objektart: "grundstueck" }, "kauf");
+    expect(s).not.toContain("wohnflaeche");
+    expect(s).not.toContain("baujahr");
+    expect(s).toContain("grundstuecksflaeche");
+  });
+
+  it("fragt ohne Kauf weder nach Kaufpreis noch nach Maklerprovision", () => {
+    for (const art of ["anschlussfinanzierung", "umschuldung", "modernisierung", "kapitalbeschaffung"]) {
+      const s = schluessel(null, art);
+      expect(s, art).not.toContain("kaufpreis");
+      expect(s, art).not.toContain("maklerprovisionProzent");
+    }
+  });
+
+  it("fragt bei Kauf und Neubau nach beidem", () => {
+    // Provisionsfrei ist hier eine 0, keine ausgeblendete Zeile: Innerhalb des
+    // Kaufzweigs bleibt die Frage stehen, auch beim Bautraeger-Neubau.
+    for (const art of ["kauf", "neubau"]) {
+      const s = schluessel(null, art);
+      expect(s, art).toContain("kaufpreis");
+      expect(s, art).toContain("maklerprovisionProzent");
+    }
+  });
+
+  it("zaehlt alles mit, solange Objektart und Finanzierungsart leer sind", () => {
+    const s = schluessel(null, null);
+    for (const feld of ["grundstuecksflaeche", "wohnflaeche", "baujahr", "kaufpreis", "maklerprovisionProzent"]) {
+      expect(s, feld).toContain(feld);
+    }
+  });
+});
