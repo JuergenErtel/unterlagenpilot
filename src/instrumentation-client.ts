@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noise";
+import { mitDomFingerabdruck } from "@/lib/observability/hydration-diagnose";
 
 /**
  * Sentry – clientseitige Fehlererfassung (Browser).
@@ -23,7 +24,16 @@ Sentry.init({
   // denselben parentNode-Fehler (Dashboard: 12x pro Aufruf, Issue BAUFIDESK-B),
   // obwohl die Seite vollständig bleibt. Nur diese Kaskade wird verworfen – die
   // Ursache (Hydration-Fehler) bleibt sichtbar. Details siehe Modul-Kommentar.
-  beforeSend: (event) => (isReactStreamingCascade(event) ? null : event),
+  //
+  // Und genau diese Ursache ist noch offen (BAUFIDESK-E): Reacts Meldung nennt
+  // sechs mögliche Gründe und keinen konkreten. Deshalb bekommt jedes
+  // Hydration-Event einen Strukturfingerabdruck des DOM mit – nur Tagnamen,
+  // Ids und Attributnamen, keine Inhalte. Er zeigt beim nächsten Vorfall, ob
+  // eine Browser-Erweiterung den Baum vor der Hydration verändert hat.
+  beforeSend: (event) =>
+    isReactStreamingCascade(event)
+      ? null
+      : mitDomFingerabdruck(event, typeof document === "undefined" ? undefined : document),
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
