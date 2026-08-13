@@ -7,7 +7,7 @@ import { berechneReife } from "@/lib/erstgespraech/reife";
 import { baueMaske } from "@/lib/erstgespraech/maske";
 import { nebenkostenVorschau } from "@/lib/erstgespraech/nebenkosten-vorschau";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
-import { getEuropaceClient } from "@/lib/platforms/europace/client";
+import { getDatenkontext, getEuropaceClient } from "@/lib/platforms/europace/client";
 import { Reifeleiste } from "@/components/erstgespraech/reifeleiste";
 import { GespraechsAbschnitt } from "@/components/erstgespraech/abschnitt";
 import { Uebergabe } from "@/components/erstgespraech/uebergabe";
@@ -96,6 +96,18 @@ export default async function ErstgespraechPage({
   const kaufpreis = fall.financingRequest?.kaufpreis ?? null;
   const gesperrt = LOCKED_CASE_STATUSES.has(fall.status);
   const europaceKonfiguriert = getEuropaceClient(ctx.organizationId) !== null;
+
+  // Freigabestatus und Datenkontext fuer den Uebergabe-Knopf (Fund A3,
+  // Schlusspruefung 12.08.2026): derselbe Stand, den der aeltere Einstieg im
+  // Einreichungsassistenten (`case/europace-uebertragung.tsx`) schon zeigt –
+  // sonst weiss dieser zweite Einstieg weder, ob der Fall freigegeben ist,
+  // noch, dass er (mangels Zugang) im Testmodus liefe.
+  const europaceMapping = await prisma.platformMapping.findUnique({
+    where: { caseId_platform: { caseId: id, platform: "europace" } },
+    select: { released: true },
+  });
+  const europaceFreigegeben = europaceMapping?.released ?? false;
+  const europaceDatenkontext = getDatenkontext();
 
   return (
     <div className="space-y-6">
@@ -207,7 +219,14 @@ export default async function ErstgespraechPage({
         />
       ))}
 
-      <Uebergabe caseId={id} stand={stand} reife={reife} konfiguriert={europaceKonfiguriert} />
+      <Uebergabe
+        caseId={id}
+        stand={stand}
+        reife={reife}
+        konfiguriert={europaceKonfiguriert}
+        freigegeben={europaceFreigegeben}
+        datenkontext={europaceDatenkontext}
+      />
     </div>
   );
 }
