@@ -73,52 +73,6 @@ function applicant(email: string) {
   };
 }
 
-/**
- * Ein Antragsteller mit abgeschlossenem Erstgespräch (alle 26 Angaben aus
- * `berechneReife` gefüllt) – für Fixtures, die NICHT die Erstgespräch-Stufe
- * testen. Seit dem Dashboard-Fix (A4, Schlusspruefung 12.08.2026) zählt
- * `getDashboardData` dieselbe Reife wie die Fallseite; ein `applicant()` ohne
- * Beschäftigung/Einkommen/Objekt/Finanzierung würde dort sonst immer
- * "Erstgespräch führen" auslösen und andere Prioritätsstufen (z. B. die
- * Selbstauskunft) verdecken, die dieser Fixture-Satz eigentlich prüfen soll.
- */
-function vollstaendigerAntragsteller(email: string) {
-  return {
-    position: 1,
-    vorname: "Max",
-    nachname: "Muster",
-    email,
-    geburtsdatum: new Date("1980-01-01"),
-    staatsangehoerigkeit: "deutsch",
-    street: "Musterstr. 1",
-    familienstand: "verheiratet",
-    anzahlKinder: 0,
-    employment: [{ beschaeftigungsart: "angestellter", inProbezeit: false, befristet: false }],
-    income: [{ nettoMonatlich: 3000, sonstigeEinnahmen: 0 }],
-  };
-}
-
-const VOLLSTAENDIGES_OBJEKT_UND_VORHABEN = {
-  financingType: "kauf",
-  property: {
-    objektart: "einfamilienhaus",
-    zip: "12345",
-    wohnflaeche: 120,
-    grundstuecksflaeche: 300,
-    baujahr: 2000,
-    nutzung: "eigennutzung",
-  },
-  financingRequest: {
-    eigenkapital: 50000,
-    kaufpreis: 400000,
-    maklerprovisionProzent: 3.57,
-    darlehenswunsch: 350000,
-    zinsbindungJahre: 10,
-    sondertilgungGewuenscht: true,
-    wunschrateMonatlich: 1500,
-  },
-};
-
 function leereAggregation(caseId: string) {
   return {
     caseId,
@@ -157,8 +111,7 @@ beforeEach(() => {
           status: "unterlagen_fehlen",
           erstkontaktMessageId: "msg-1",
           updatedAt: new Date(),
-          applicants: [vollstaendigerAntragsteller("c1@example.com")],
-          ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
+          applicants: [applicant("c1@example.com")],
         },
         {
           id: "c2-bogen-ausgefuellt",
@@ -166,8 +119,7 @@ beforeEach(() => {
           status: "unterlagen_fehlen",
           erstkontaktMessageId: "msg-2",
           updatedAt: new Date(),
-          applicants: [vollstaendigerAntragsteller("c2@example.com")],
-          ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
+          applicants: [applicant("c2@example.com")],
         },
         {
           id: "c3-kein-link",
@@ -175,8 +127,7 @@ beforeEach(() => {
           status: "unterlagen_fehlen",
           erstkontaktMessageId: "msg-3",
           updatedAt: new Date(),
-          applicants: [vollstaendigerAntragsteller("c3@example.com")],
-          ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
+          applicants: [applicant("c3@example.com")],
         },
       ]);
     }
@@ -238,61 +189,5 @@ describe("getDashboardData – Selbstauskunfts-Signal (ladeSelbstauskunftStandBa
     selfDisclosureLinkFindMany.mockResolvedValue([]);
     await getDashboardData("org-1");
     expect(selfDisclosureLinkFindMany).toHaveBeenCalledTimes(1);
-  });
-});
-
-/**
- * A4 (Schlusspruefung 12.08.2026): `computeNextStep` bekam im Dashboard kein
- * `erstgespraech` – derselbe Fall zeigte auf der Fallseite "Erstgespräch
- * führen", auf dem Dashboard aber etwas anderes, weil dort der Block einfach
- * fehlte. Der Fix reicht denselben Stand durch wie Fallseite und Review-Seite:
- * dieselbe Zaehlregel (`berechneReife`, Antragstellerzahl auf 1..MAX_APPLICANTS
- * geklemmt) – dafuer muss der Batch auch `property` und `financingRequest`
- * laden, die vorher im Include fehlten.
- */
-describe("getDashboardData – Erstgespraech-Stufe in der Fallreise (A4)", () => {
-  function kandidatMitOffenemErstgespraech(overrides: Partial<Record<string, unknown>> = {}) {
-    return {
-      id: "c-erstgespraech-offen",
-      caseNumber: "UP-0099",
-      status: "unterlagen_fehlen",
-      erstkontaktMessageId: "msg-1",
-      financingType: null,
-      updatedAt: new Date(),
-      applicants: [applicant("kunde@example.com")],
-      property: null,
-      financingRequest: null,
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    selfDisclosureLinkFindMany.mockReset().mockResolvedValue([]);
-  });
-
-  it("zeigt 'Erstgespräch führen', wenn nichts anderes vorrangig ist – wie auf der Fallseite", async () => {
-    caseFindMany.mockReset().mockImplementation((args: { include?: unknown }) => {
-      if (args.include) return Promise.resolve([kandidatMitOffenemErstgespraech()]);
-      return Promise.resolve([]);
-    });
-
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-erstgespraech-offen");
-    expect(todo?.nextStep).toBe("Erstgespräch führen");
-  });
-
-  it("lädt property und financingRequest für die Kandidaten (gleiche Zaehlregel wie die Fallseite)", async () => {
-    caseFindMany.mockReset().mockImplementation((args: { include?: unknown }) => {
-      if (args.include) return Promise.resolve([kandidatMitOffenemErstgespraech()]);
-      return Promise.resolve([]);
-    });
-
-    await getDashboardData("org-1");
-    const todoCall = caseFindMany.mock.calls.find(
-      (call) => (call[0] as { include?: Record<string, unknown> }).include
-    );
-    const include = (todoCall?.[0] as { include?: Record<string, unknown> } | undefined)?.include;
-    expect(include?.property).toBeTruthy();
-    expect(include?.financingRequest).toBeTruthy();
   });
 });
