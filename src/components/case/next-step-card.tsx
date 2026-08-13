@@ -13,6 +13,7 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
   erstkontakt_email_fehlt: UserRound,
   erstkontakt_vorbereiten: Mail,
   erstkontakt_entwurf: Send,
+  erstgespraech: ClipboardList,
   selbstauskunft_eingegangen: ClipboardCheck,
   selbstauskunft_wartet: ClipboardList,
   dokumente_freigeben: ScanSearch,

@@ -5,8 +5,8 @@ import { computeNextStep } from "@/lib/cases/next-step";
 import type { NextStepInput } from "@/lib/cases/next-step";
 import type { CockpitData } from "@/lib/cases/cockpit";
 
-/** Cockpit-Ausschnitt plus Erstkontakt-Stand – zusammen das, was die Fallseite liefert. */
-type TestInput = CockpitData & Pick<NextStepInput, "erstkontakt">;
+/** Cockpit-Ausschnitt plus Erstkontakt- und Erstgespräch-Stand – zusammen das, was die Fallseite liefert. */
+type TestInput = CockpitData & Pick<NextStepInput, "erstkontakt" | "erstgespraech">;
 
 /** Minimal-Cockpit; Tests überschreiben nur, was für die jeweilige Stufe zählt. */
 function cockpit(over: {
@@ -19,6 +19,7 @@ function cockpit(over: {
     erstelltVorTagen: number | null;
   };
   erstkontakt?: NextStepInput["erstkontakt"];
+  erstgespraech?: NextStepInput["erstgespraech"];
 }): TestInput {
   return {
     caseId: "c1",
@@ -49,6 +50,7 @@ function cockpit(over: {
     missingCustomerFields: over.missingCustomerFields ?? [],
     selbstauskunft: over.selbstauskunft,
     erstkontakt: over.erstkontakt,
+    erstgespraech: over.erstgespraech,
     anforderungsAbgleich: null,
   };
 }
@@ -397,5 +399,64 @@ describe("Stufe: Machbarkeit", () => {
       cockpit({ counts: { docsMissing: 3, machbarkeitBlockiert: false }, erstkontakt: versendet })
     );
     expect(s.key).toBe("unterlagen_anfordern");
+  });
+});
+
+describe("computeNextStep – Erstgespräch", () => {
+  it("führt nach dem Erstkontakt ins Erstgespräch, solange Angaben fehlen", () => {
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("erstgespraech");
+    expect(s.cta?.href).toBe("/cases/c1/erstgespraech");
+  });
+
+  it("überspringt das Erstgespräch, wenn alle Angaben stehen", () => {
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 0 },
+      })
+    );
+    expect(s.key).not.toBe("erstgespraech");
+  });
+
+  it("bleibt als wartender Schritt sichtbar, wenn ein unversendeter Erstkontakt es verdrängt", () => {
+    // Das Erstgespraech braucht keinen versendeten Erstkontakt – ohne den
+    // Hinweis verschwaende es spurlos, sobald der Erstkontakt vorn steht.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
+        erstgespraech: { offeneAngaben: 4 },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+    expect(s.wartet).toEqual([{ label: "Erstgespräch führen", href: "/cases/c1/erstgespraech" }]);
+  });
+
+  it("nennt das Erstgespräch nicht doppelt, wenn es selbst der Hauptschritt ist", () => {
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("erstgespraech");
+    expect(s.wartet).toBeUndefined();
+  });
+
+  it("meldet das Erstgespräch nicht als wartend, solange die KI-Prüfung läuft", () => {
+    const s = computeNextStep(
+      cockpit({
+        status: "ki_pruefung_laeuft",
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 4 },
+      })
+    );
+    expect(s.key).toBe("ki_laeuft");
+    expect(s.wartet).toBeUndefined();
   });
 });

@@ -5,6 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { berechneReife } from "@/lib/erstgespraech/reife";
+import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import { RejectDocumentButton } from "@/components/review/reject-document-button
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatConfidence } from "@/lib/utils";
 import {
+  MAX_APPLICANTS,
   type DocumentType,
   type Severity,
 } from "@/lib/domain/enums";
@@ -45,13 +48,27 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
   const caseScope = caseId
     ? await prisma.case.findFirst({
         where: { id: caseId, organizationId: ctx.organizationId },
-        select: { id: true, caseNumber: true },
+        select: {
+          id: true,
+          caseNumber: true,
+          financingType: true,
+          applicants: {
+            orderBy: { position: "asc" },
+            include: {
+              employment: { orderBy: { createdAt: "asc" } },
+              income: { orderBy: { createdAt: "asc" } },
+            },
+          },
+          property: true,
+          financingRequest: true,
+        },
       })
     : null;
 
   // Abschluss des geführten Modus: nichts mehr offen → nächster Schritt des Falls.
-  // Derselbe Aufruf wie auf der Fallseite (inkl. Erstkontakt-Stand), sonst
-  // widerspräche sich die Leiter zwischen Review-Abschluss und Fallseite.
+  // Derselbe Aufruf wie auf der Fallseite (inkl. Erstkontakt- und
+  // Erstgespräch-Stand), sonst widerspräche sich die Leiter zwischen
+  // Review-Abschluss und Fallseite.
   const completion =
     caseScope && documents.length === 0
       ? await (async () => {
@@ -59,6 +76,20 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             getCaseCockpit(caseScope.id),
             ladeErstkontaktStand(caseScope.id),
           ]);
+          // Dieselbe Zaehlung wie die Maske selbst (erstgespraech/page.tsx):
+          // Antragstellerzahl aus den vorhandenen Antragstellern, geklemmt auf
+          // 1..MAX_APPLICANTS.
+          const stand: Fallstand = {
+            applicants: caseScope.applicants as unknown as Fallstand["applicants"],
+            property: (caseScope.property as Record<string, unknown> | null) ?? null,
+            financingRequest: (caseScope.financingRequest as Record<string, unknown> | null) ?? null,
+            caseFelder: { financingType: caseScope.financingType ?? null },
+          };
+          const antragstellerZahl = Math.min(
+            Math.max(caseScope.applicants.length, 1),
+            MAX_APPLICANTS
+          ) as 1 | 2;
+          const reife = berechneReife(stand, antragstellerZahl);
           const step = computeNextStep({
             ...cockpit,
             erstkontakt: {
@@ -66,6 +97,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
               vorbereitet: Boolean(erstkontaktStand.messageId),
               versendet: erstkontaktStand.versendet,
             },
+            erstgespraech: { offeneAngaben: reife.gesamt - reife.gefuellt },
           });
           return { cockpit, step };
         })()

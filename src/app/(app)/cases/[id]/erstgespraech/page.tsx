@@ -7,8 +7,10 @@ import { berechneReife } from "@/lib/erstgespraech/reife";
 import { baueMaske } from "@/lib/erstgespraech/maske";
 import { nebenkostenVorschau } from "@/lib/erstgespraech/nebenkosten-vorschau";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
+import { getEuropaceClient } from "@/lib/platforms/europace/client";
 import { Reifeleiste } from "@/components/erstgespraech/reifeleiste";
 import { GespraechsAbschnitt } from "@/components/erstgespraech/abschnitt";
+import { Uebergabe } from "@/components/erstgespraech/uebergabe";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +39,7 @@ export default async function ErstgespraechPage({
 }) {
   const { id } = await params;
   const { zu_zweit } = await searchParams;
-  await requireCaseAccess(id);
+  const { ctx } = await requireCaseAccess(id);
 
   const fall = await prisma.case.findUniqueOrThrow({
     where: { id },
@@ -93,6 +95,7 @@ export default async function ErstgespraechPage({
   });
   const kaufpreis = fall.financingRequest?.kaufpreis ?? null;
   const gesperrt = LOCKED_CASE_STATUSES.has(fall.status);
+  const europaceKonfiguriert = getEuropaceClient(ctx.organizationId) !== null;
 
   return (
     <div className="space-y-6">
@@ -203,6 +206,8 @@ export default async function ErstgespraechPage({
           gesperrt={gesperrt}
         />
       ))}
+
+      <Uebergabe caseId={id} stand={stand} reife={reife} konfiguriert={europaceKonfiguriert} />
     </div>
   );
 }

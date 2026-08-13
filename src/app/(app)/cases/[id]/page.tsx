@@ -8,6 +8,8 @@ import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin,
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
+import { berechneReife } from "@/lib/erstgespraech/reife";
+import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { listUploadLinks } from "@/lib/security/upload-link";
 import { runAiCheck, acceptDocument } from "@/lib/actions/cases";
 import { UploadLinkManager } from "@/components/case/upload-link-manager";
@@ -59,6 +61,7 @@ import {
   DOCUMENT_REVIEW_STATUS_LABELS,
   EMPLOYMENT_TYPE_LABELS,
   LOCKED_CASE_STATUSES,
+  MAX_APPLICANTS,
   type CaseStatus,
   type DocumentReviewStatus,
   type EmploymentType,
@@ -224,6 +227,25 @@ export default async function CaseCockpitPage({
   const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
 
   /*
+   * Reife des Erstgespraechs fuer die Fallreise (next-step.ts). Dieselbe
+   * Zaehlung wie die Maske selbst (erstgespraech/page.tsx): Antragstellerzahl
+   * aus den vorhandenen Antragstellern, geklemmt auf 1..MAX_APPLICANTS. Ohne
+   * diese Angleichung nennte die Fallreise eine andere Zahl offener Angaben
+   * als die Maske, die der Vermittler gerade sieht.
+   */
+  const erstgespraechStand: Fallstand = {
+    applicants: caseRow.applicants as unknown as Fallstand["applicants"],
+    property: (caseRow.property as Record<string, unknown> | null) ?? null,
+    financingRequest: (caseRow.financingRequest as Record<string, unknown> | null) ?? null,
+    caseFelder: { financingType: caseRow.financingType ?? null },
+  };
+  const erstgespraechAntragstellerZahl = Math.min(
+    Math.max(caseRow.applicants.length, 1),
+    MAX_APPLICANTS
+  ) as 1 | 2;
+  const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
+
+  /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
    * Zeilen gebaut, nicht aus dem Prozentwert abgeleitet: erst dann sagt sie
    * mehr als der Prozentwert daneben, naemlich WELCHE Art von Arbeit noch
@@ -338,6 +360,9 @@ export default async function CaseCockpitPage({
             empfaenger: erstkontaktStand.empfaenger,
             vorbereitet: Boolean(erstkontaktStand.messageId),
             versendet: erstkontaktStand.versendet,
+          },
+          erstgespraech: {
+            offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
           },
         });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde

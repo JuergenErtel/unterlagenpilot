@@ -13,6 +13,7 @@ export interface NextStep {
     | "erstkontakt_email_fehlt"
     | "erstkontakt_vorbereiten"
     | "erstkontakt_entwurf"
+    | "erstgespraech"
     | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
     | "kundendaten"
@@ -89,6 +90,8 @@ export interface NextStepInput {
     vorbereitet: boolean;
     versendet: boolean;
   };
+  /** Stand des Erstgespraechs; fehlt bei Aufrufern, die ihn nicht laden. */
+  erstgespraech?: { offeneAngaben: number };
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
@@ -112,6 +115,18 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
     wartet.push({
       label: `${c.counts.pruefbereit} Dokument${c.counts.pruefbereit === 1 ? "" : "e"} prüfen & freigeben`,
       href: `/review?case=${c.caseId}`,
+    });
+  }
+  // Das Erstgespraech braucht weder einen versendeten Erstkontakt noch eine
+  // fertige KI-Pruefung als Voraussetzung – es laesst sich jederzeit parallel
+  // fuehren. Verdraengt ein hoeherer Schritt (Erstkontakt, KI-Lauf/-Fehler)
+  // die Stufe "erstgespraech" von vorn, bleibt sie trotzdem sofort erledigbar
+  // und soll nicht spurlos verschwinden (derselbe Grund wie bei der
+  // Dokumentfreigabe oben, siehe Fall UP-2026-0007).
+  if (!stumm && schritt.key !== "erstgespraech" && c.erstgespraech && c.erstgespraech.offeneAngaben > 0) {
+    wartet.push({
+      label: "Erstgespräch führen",
+      href: `/cases/${c.caseId}/erstgespraech`,
     });
   }
   return wartet;
@@ -186,6 +201,19 @@ function ermittleSchritt(c: NextStepInput): NextStep {
       reason: `Der Entwurf ist fertig formuliert und wartet auf deine Prüfung, bevor er an ${c.erstkontakt.empfaenger} geht.`,
       tone: "review",
       cta: { label: "Prüfen und senden", href: `/cases/${id}/messages` },
+    };
+  }
+
+  // Nach dem Erstkontakt, vor der Dokumentfreigabe: Ohne die Angaben aus dem
+  // Gespraech laesst sich kein Angebot rechnen – Unterlagen zu pruefen ist
+  // dann verfrueht.
+  if (c.erstgespraech && c.erstgespraech.offeneAngaben > 0) {
+    return {
+      key: "erstgespraech",
+      title: "Erstgespräch führen",
+      reason: `${c.erstgespraech.offeneAngaben} Angaben fehlen noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
+      tone: "review",
+      cta: { label: "Erstgespräch öffnen", href: `/cases/${id}/erstgespraech` },
     };
   }
 
