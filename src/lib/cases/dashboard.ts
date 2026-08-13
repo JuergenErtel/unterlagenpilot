@@ -4,7 +4,8 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
-import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
+import { isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
+import { countRunningClassifications } from "@/lib/documents/processing";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
@@ -129,7 +130,16 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   // Next-Step-Engine (gleiche Prioritätsleiter wie auf der Fallseite).
   const todoDocs = await prisma.document.findMany({
     where: { caseId: { in: todoCandidates.map((c) => c.id) } },
-    select: { caseId: true, reviewStatus: true, classificationStatus: true, extractionStatus: true },
+    // `updatedAt` gehört dazu: An ihm allein hängt das Alter eines laufenden
+    // Dokuments (countRunningClassifications) – der Fallstatus sagt beim
+    // normalen Upload nichts darüber. Dieselbe Auswahl wie im Cockpit.
+    select: {
+      caseId: true,
+      reviewStatus: true,
+      classificationStatus: true,
+      extractionStatus: true,
+      updatedAt: true,
+    },
   });
 
   // Selbstauskunft je Kandidat – EINE Batch-Query (dieselbe Quelle wie die
@@ -186,6 +196,10 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
         MAX_APPLICANTS
       ) as 1 | 2;
       const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
+      // Nur FRISCH laufende Klassifikationen zählen (documents/processing.ts) –
+      // dieselbe Zählung wie im Cockpit, damit Dashboard und Fallseite
+      // denselben Schritt nennen.
+      const docsLaufend = countRunningClassifications(docs);
       let step = computeNextStep({
         caseId: c.id,
         status: c.status,
@@ -194,7 +208,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           docsMissing: agg.missing.length,
           criticals: agg.plausibility.filter((p) => p.status === "kritisch").length,
           docsFehler: docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length,
-          docsLaufend: docs.filter((d) => d.classificationStatus === "laeuft").length,
+          docsLaufend,
           offeneBefunde: befundeJeFall.get(c.id) ?? 0,
           // Bewusst false: der Solver braucht je Fall einen vollstaendigen
           // caseToCanonical-Lauf. Zwoelf davon wuerden die Dashboard-Liste
@@ -223,8 +237,12 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       // Ohne ihn bliebe ein Fall mit hart gestorbenem Hintergrundlauf hier für
       // immer bei "KI-Auswertung läuft" stehen, während die Fallseite (die der
       // Vermittler als nächstes öffnet) schon "unterbrochen" zeigt – derselbe
-      // Fall, zwei Aussagen.
-      step = withAiCheckStaleOverride(step, isAiCheckRunning(c.status, c.updatedAt));
+      // Fall, zwei Aussagen. `isAnyAiCheckRunning` (nicht `isAiCheckRunning`)
+      // erkennt auch den Einzel-Upload, der den Fallstatus nie anfasst.
+      step = withAiCheckStaleOverride(
+        step,
+        isAnyAiCheckRunning(c.status, c.updatedAt, docsLaufend)
+      );
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
       return { c, agg, name, step, blockers };
     })

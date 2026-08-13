@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countProcessingDocuments } from "@/lib/documents/processing";
+import { countProcessingDocuments, countRunningClassifications } from "@/lib/documents/processing";
 
 const now = new Date("2026-08-03T12:00:00Z");
 const fresh = new Date("2026-08-03T11:58:00Z"); // 2 min alt
@@ -33,5 +33,25 @@ describe("countProcessingDocuments", () => {
 
   it("liefert 0 ohne laufende Verarbeitung", () => {
     expect(countProcessingDocuments([doc({})], now)).toBe(0);
+  });
+});
+
+/**
+ * Grundlage von `counts.docsLaufend` (cockpit.ts, dashboard.ts) und damit der
+ * Stufe "KI-Auswertung läuft". Beim normalen Upload ist das Dokument der
+ * EINZIGE Ort, an dem der Laufzustand steht – der Fallstatus bleibt unberührt.
+ */
+describe("countRunningClassifications", () => {
+  it("zählt nur Dokumente, deren Klassifikation läuft – nicht OCR oder Extraktion", () => {
+    const docs = [
+      doc({ classificationStatus: "laeuft" }),
+      doc({ ocrStatus: "laeuft" }),
+      doc({ extractionStatus: "laeuft" }),
+    ];
+    expect(countRunningClassifications(docs, now)).toBe(1);
+  });
+
+  it("ignoriert veraltete laeuft-Status – daran hängt die Erkennung eines gestorbenen Einzel-Uploads", () => {
+    expect(countRunningClassifications([doc({ classificationStatus: "laeuft", updatedAt: stale })], now)).toBe(0);
   });
 });

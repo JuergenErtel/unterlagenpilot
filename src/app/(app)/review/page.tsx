@@ -5,7 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
-import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
+import { isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
@@ -93,7 +93,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             MAX_APPLICANTS
           ) as 1 | 2;
           const reife = berechneReife(stand, antragstellerZahl);
-          let step = computeNextStep({
+          const rohSchritt = computeNextStep({
             ...cockpit,
             erstkontakt: {
               empfaenger: erstkontaktStand.empfaenger,
@@ -105,10 +105,16 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
           // Stale-Schutz: dieselbe Regel wie Fallseite und Dashboard
           // (ai-check-status.ts). Ohne ihn bliebe der Review-Abschluss für
           // einen hart gestorbenen Hintergrundlauf für immer bei
-          // "KI-Auswertung läuft" stehen.
-          const aiCheckRunning = isAiCheckRunning(caseScope.status, caseScope.updatedAt);
-          step = withAiCheckStaleOverride(step, aiCheckRunning);
-          return { cockpit, step, aiCheckRunning };
+          // "KI-Auswertung läuft" stehen. `isAnyAiCheckRunning` erkennt dabei
+          // auch den normalen Einzel-Upload, der den Fallstatus nie anfasst.
+          const step = withAiCheckStaleOverride(
+            rohSchritt,
+            isAnyAiCheckRunning(caseScope.status, caseScope.updatedAt, cockpit.counts.docsLaufend)
+          );
+          // Hat der Schutz zugeschlagen? Nur dann ist der Lauf tot; nur dann
+          // wäre "Alles freigegeben" unter der "unterbrochen"-Karte gelogen.
+          const kiLaufUnterbrochen = rohSchritt.key === "ki_laeuft" && step.key !== "ki_laeuft";
+          return { cockpit, step, kiLaufUnterbrochen };
         })()
       : null;
 
@@ -139,10 +145,13 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
         <div className="space-y-4">
           {/* Läuft gerade eine KI-Prüfung, sind die Dokumente nur vorübergehend
               aus der Liste verschwunden ("laeuft" statt "fertig") – dann wäre
-              "Alles freigegeben" irreführend. Dieselbe Grundlage (aiCheckRunning)
-              wie die NextStepCard darunter: stirbt der Lauf hart (stale), sagt
-              hier nicht "läuft gerade", während die Karte "unterbrochen" zeigt. */}
-          {completion.cockpit.counts.docsLaufend > 0 && completion.aiCheckRunning ? (
+              "Alles freigegeben" irreführend. `docsLaufend` ist bereits
+              altersbereinigt (countRunningClassifications), zählt also nur
+              wirklich laufende Dokumente – auch die eines normalen Uploads, bei
+              dem der Fallstatus unberührt bleibt. Ist der Lauf dagegen tot,
+              erklärt die NextStepCard darunter das "unterbrochen"; ein grünes
+              "Alles freigegeben" daneben wäre der Widerspruch dazu. */}
+          {completion.cockpit.counts.docsLaufend > 0 ? (
             <Card className="border-ai/30 bg-ai/5">
               <CardContent className="flex items-center gap-3 p-6">
                 <Sparkles className="h-8 w-8 shrink-0 text-ai" />
@@ -157,7 +166,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                 </div>
               </CardContent>
             </Card>
-          ) : (
+          ) : completion.kiLaufUnterbrochen ? null : (
             <Card className="border-success/30 bg-success/5">
               <CardContent className="flex items-center gap-3 p-6">
                 <CheckCircle2 className="h-8 w-8 shrink-0 text-success" />

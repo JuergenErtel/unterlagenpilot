@@ -5,6 +5,7 @@ import { readinessTone, type Tone } from "@/lib/ui/tone";
 import type { Auslaufband } from "@/lib/machbarkeit/bewertung";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
 import { ladeSelbstauskunftStand } from "./selbstauskunft-stand";
+import { countRunningClassifications } from "@/lib/documents/processing";
 
 export interface CockpitData {
   caseId: string;
@@ -62,7 +63,16 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
     prisma.case.findUniqueOrThrow({ where: { id: caseId }, include: { applicants: { orderBy: { position: "asc" } } } }),
     prisma.document.findMany({
       where: { caseId },
-      select: { reviewStatus: true, classificationStatus: true, extractionStatus: true, documentType: true },
+      // `updatedAt` gehört dazu: An ihm allein hängt das Alter eines laufenden
+      // Dokuments (countRunningClassifications) – der Fallstatus sagt beim
+      // normalen Upload nichts darüber.
+      select: {
+        reviewStatus: true,
+        classificationStatus: true,
+        extractionStatus: true,
+        documentType: true,
+        updatedAt: true,
+      },
     }),
     prisma.missingDocumentRequest.findMany({ where: { caseId, resolved: false } }),
     // EINE Quelle für den Selbstauskunft-Stand (siehe selbstauskunft-stand.ts):
@@ -100,7 +110,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   ).length;
   const pruefbereit = docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length;
   const docsFehler = docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length;
-  const docsLaufend = docs.filter((d) => d.classificationStatus === "laeuft").length;
+  const docsLaufend = countRunningClassifications(docs);
   const warnings = agg.plausibility.filter((p) => p.status !== "ok").length;
   const criticals = agg.plausibility.filter((p) => p.status === "kritisch");
   // Unterlagen-Detektiv: was der Vermittler noch nicht gesichtet hat.

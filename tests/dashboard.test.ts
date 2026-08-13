@@ -422,4 +422,60 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
     const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
     expect(todo?.nextStep).toBe("KI-Prüfung wurde unterbrochen");
   });
+
+  /*
+   * Der Sammel-Lauf `runAiCheck` ist der SELTENERE der beiden Auslöser für
+   * "KI-Auswertung läuft". Der häufigere ist der normale Upload: Die Pipeline
+   * (`runPipelineAfterStore`) setzt `classificationStatus: "laeuft"` je
+   * Dokument und fasst den Fallstatus NIE an. Ein Stale-Schutz, der nur am
+   * Fallstatus hängt, hält deshalb jeden frischen Einzel-Upload für
+   * unterbrochen – bei genau der Aktion, die in dieser App am häufigsten
+   * vorkommt.
+   */
+  function laufendesDokument(alterMs: number) {
+    documentFindMany.mockReset().mockResolvedValue([
+      {
+        caseId: "c-ki-stale",
+        reviewStatus: "offen",
+        classificationStatus: "laeuft",
+        extractionStatus: "laeuft",
+        updatedAt: new Date(Date.now() - alterMs),
+      },
+    ]);
+  }
+
+  it("nennt einen frischen Einzel-Upload 'KI-Auswertung läuft' – auch wenn der Fallstatus unberührt bleibt", async () => {
+    nurDiesenFall(
+      ki_pruefung_kandidat({ status: "unterlagen_fehlen", updatedAt: new Date(Date.now() - 60 * 60_000) })
+    );
+    laufendesDokument(30_000);
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.nextStep).toBe("KI-Auswertung läuft");
+  });
+
+  it("erkennt einen gestorbenen Einzel-Upload am Alter des DOKUMENTS als unterbrochen", async () => {
+    nurDiesenFall(
+      ki_pruefung_kandidat({ status: "unterlagen_fehlen", updatedAt: new Date(Date.now() - 60 * 60_000) })
+    );
+    laufendesDokument(11 * 60_000);
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    // Kein "läuft" mehr: Das Dokument zählt altersbereinigt nicht mehr mit,
+    // und ohne laufenden Fallstatus fällt die Leiter auf die nächste Stufe.
+    expect(todo?.nextStep).not.toBe("KI-Auswertung läuft");
+  });
+
+  it("bleibt bei einem hängengebliebenen Sammel-Lauf 'unterbrochen', auch wenn Dokumente auf 'laeuft' stehengeblieben sind", async () => {
+    nurDiesenFall(
+      ki_pruefung_kandidat({ updatedAt: new Date(Date.now() - 11 * 60_000) })
+    );
+    laufendesDokument(11 * 60_000);
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.nextStep).toBe("KI-Prüfung wurde unterbrochen");
+  });
 });

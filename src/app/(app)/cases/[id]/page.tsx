@@ -48,7 +48,7 @@ import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
 import { DocumentsProcessing } from "@/components/case/documents-processing";
-import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
+import { isAiCheckRunning, isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { countProcessingDocuments } from "@/lib/documents/processing";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
@@ -210,7 +210,17 @@ export default async function CaseCockpitPage({
   const aiCheckLocked = LOCKED_CASE_STATUSES.has(caseRow.status as CaseStatus);
   // Läuft die Prüfung im Hintergrund, zeigt die Seite Fortschritt statt Button.
   // Ein veralteter läuft-Status (abgestürzter Lauf) gibt den Button wieder frei.
+  // Bewusst NUR der Fallstatus (Sammel-Lauf): Genau dagegen sperrt `runAiCheck`
+  // (actions/cases.ts) den Start, und ein einzelnes gerade klassifiziertes
+  // Upload-Dokument soll den Startknopf nicht verstecken.
   const aiCheckRunning = isAiCheckRunning(caseRow.status, caseRow.updatedAt);
+  // Für die Fallreise dagegen zählt JEDER laufende KI-Vorgang – auch der
+  // Einzel-Upload, der den Fallstatus nie anfasst (siehe isAnyAiCheckRunning).
+  const kiLaufAktiv = isAnyAiCheckRunning(
+    caseRow.status,
+    caseRow.updatedAt,
+    cockpit.counts.docsLaufend
+  );
   const aiCheckDone = documents.filter((d) => d.classificationStatus !== "laeuft").length;
   // Nach einem Upload trudeln Typ/Felder asynchron nach – solange pollt die Seite,
   // damit die Tabelle ohne manuelles Neuladen aktuell wird. Läuft bereits die
@@ -369,7 +379,7 @@ export default async function CaseCockpitPage({
         // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg. Dieselbe
         // Funktion wie das Dashboard (ai-check-status.ts), damit derselbe Fall
         // an beiden Stellen dieselbe Aussage trifft.
-        step = withAiCheckStaleOverride(step, aiCheckRunning);
+        step = withAiCheckStaleOverride(step, kiLaufAktiv);
         const actionSlot =
           step.key === "ki_laeuft" ? (
             <AiCheckRunning done={aiCheckDone} total={documents.length} />

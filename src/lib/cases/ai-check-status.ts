@@ -26,12 +26,45 @@ export function isAiCheckRunning(status: string, updatedAt: Date, now: Date = ne
 }
 
 /**
+ * Läuft für den Fall ÜBERHAUPT eine KI-Verarbeitung – egal, wer sie ausgelöst
+ * hat? Genau diese Frage stellt die Prioritätsleiter, wenn sie `ki_laeuft`
+ * liefert (next-step.ts: `status === "ki_pruefung_laeuft" || docsLaufend > 0`).
+ *
+ * Es gibt nämlich ZWEI Auslöser, und `isAiCheckRunning` kennt nur den
+ * selteneren:
+ *  - Der manuelle Sammel-Lauf (`runAiCheck`) setzt `case.status` auf
+ *    `ki_pruefung_laeuft`. Sein Alter steht in `case.updatedAt`.
+ *  - Der weitaus häufigere normale Upload (`runPipelineAfterStore`) setzt je
+ *    Dokument `classificationStatus: "laeuft"` und fasst den Fallstatus NIE an.
+ *    Sein Alter steht am DOKUMENT (`document.updatedAt`) – deshalb erwartet
+ *    diese Funktion `docsLaufend` bereits altersbereinigt
+ *    (`countRunningClassifications`, documents/processing.ts).
+ *
+ * Ohne den zweiten Auslöser behauptete `withAiCheckStaleOverride` bei jedem
+ * frischen Einzel-Upload "KI-Prüfung wurde unterbrochen": Der Fall stand ja
+ * weiter auf z. B. `unterlagen_fehlen`, also war `isAiCheckRunning` falsch,
+ * während der Lauf ganz normal arbeitete.
+ */
+export function isAnyAiCheckRunning(
+  status: string,
+  updatedAt: Date,
+  docsLaufend: number,
+  now: Date = new Date()
+): boolean {
+  return docsLaufend > 0 || isAiCheckRunning(status, updatedAt, now);
+}
+
+/**
  * Ersetzt einen "läuft"-Schritt der Prioritätsleiter (next-step.ts) durch
- * "unterbrochen", wenn der zugrunde liegende KI-Lauf laut isAiCheckRunning
- * nicht mehr aktiv ist. Ohne diesen Schutz bliebe die Leiter für einen hart
- * gestorbenen Hintergrundlauf für immer bei "KI-Auswertung läuft" stehen.
- * Fallseite und Dashboard rufen dieselbe Funktion auf, damit derselbe Fall
- * an beiden Stellen dieselbe Aussage trifft.
+ * "unterbrochen", wenn der zugrunde liegende KI-Lauf nicht mehr aktiv ist.
+ * Ohne diesen Schutz bliebe die Leiter für einen hart gestorbenen
+ * Hintergrundlauf für immer bei "KI-Auswertung läuft" stehen. Fallseite,
+ * Dashboard und Review-Seite rufen dieselbe Funktion auf, damit derselbe Fall
+ * an allen drei Stellen dieselbe Aussage trifft.
+ *
+ * `aiCheckRunning` MUSS aus `isAnyAiCheckRunning` stammen, nicht aus
+ * `isAiCheckRunning`: Letzteres kennt nur den manuellen Sammel-Lauf und hielte
+ * jeden frischen Einzel-Upload für unterbrochen.
  */
 export function withAiCheckStaleOverride(step: NextStep, aiCheckRunning: boolean): NextStep {
   if (step.key !== "ki_laeuft" || aiCheckRunning) return step;
