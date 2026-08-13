@@ -30,6 +30,7 @@ import { floorplanAnalysisSchema, floorplanJsonSchema, type FloorplanAnalysis } 
 import { selfEmployedAnalysisSchema, selfEmployedJsonSchema, type SelfEmployedAnalysis } from "@/lib/einkommen/schema";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import { crossDocumentChecks, parseGermanNumber } from "@/lib/ai/cross-checks";
+import { brauchtSelbststaendigenEinkommensnachweis } from "@/lib/checklists/case-input";
 import { documentReferencesSchema, type DocumentReferencesResult } from "@/lib/detektiv/schema";
 import { dokumentgrenzenSchema, type DokumentgrenzenResult } from "@/lib/aufteilung/schema";
 import {
@@ -443,7 +444,14 @@ export class AIService {
     const summary: BankSummary = {
       kurzprofil: [a?.vorname, a?.nachname].filter(Boolean).join(" ") || "Antragsteller",
       einkommenBeschaeftigung: describeIncome(caseData),
-      selbststaendigkeit: (caseData.employment ?? []).some((e) => e.beschaeftigungsart === "selbststaendiger")
+      // Dieselbe Menge wie das EÜR-basierte Selbststaendigen-Einkommens-Werkzeug
+      // auf der Fallseite (case-input.ts) statt einer eigenen, hier bereits
+      // einmal veralteten Inline-Prüfung – die vergass "freiberufler", als die
+      // Kategorie am 12.08.2026 dazukam, und der Hinweis verschwand ersatzlos
+      // aus dem Bank-PDF fuer Freiberufler.
+      selbststaendigkeit: (caseData.employment ?? []).some((e) =>
+        brauchtSelbststaendigenEinkommensnachweis(e.beschaeftigungsart)
+      )
         ? "Mindestens ein Antragsteller ist selbstständig – Selbstständigenunterlagen erforderlich."
         : null,
       objektuebersicht: prop
