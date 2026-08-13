@@ -459,4 +459,69 @@ describe("computeNextStep – Erstgespräch", () => {
     expect(s.key).toBe("ki_laeuft");
     expect(s.wartet).toBeUndefined();
   });
+
+  // Kritischer Fund aus der Prüfung: Solange offene Angaben JEDEN anderen
+  // Hauptschritt schlagen, liefern praktisch alle Fälle denselben nächsten
+  // Schritt – die Leiter führt dann nicht mehr. Freigabebereite Dokumente und
+  // kritische Hinweise sind fachlich dringlicher als das Erstgespräch und
+  // müssen es weiterhin verdrängen.
+  it("verdrängt das Erstgespräch nicht mehr die Dokumentfreigabe", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 2 },
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("dokumente_freigeben");
+    // Bleibt trotzdem sichtbar, statt spurlos zu verschwinden.
+    expect(s.wartet).toEqual([{ label: "Erstgespräch führen", href: "/cases/c1/erstgespraech" }]);
+  });
+
+  it("verdrängt das Erstgespräch nicht mehr kritische Hinweise", () => {
+    const s = computeNextStep(
+      cockpit({
+        counts: { criticals: 1 },
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("kritische_hinweise");
+    expect(s.wartet).toEqual([{ label: "Erstgespräch führen", href: "/cases/c1/erstgespraech" }]);
+  });
+
+  it("führt weiterhin vor Machbarkeit und fehlenden Unterlagen ins Erstgespräch", () => {
+    // Die Umsortierung darf die bestehende Reihenfolge unterhalb nicht kippen.
+    const s = computeNextStep(
+      cockpit({
+        counts: { docsMissing: 5, machbarkeitBlockiert: true },
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("erstgespraech");
+  });
+
+  // Kritischer Fund: Für abgegebene Fälle ist die Maske schreibgeschützt
+  // (LOCKED_CASE_STATUSES) – "Erstgespräch führen" wäre dort eine Sackgasse.
+  it("schickt einen exportierten Fall nicht ins schreibgeschützte Erstgespräch", () => {
+    const s = computeNextStep(cockpit({ status: "exportiert", erstgespraech: { offeneAngaben: 6 } }));
+    expect(s.key).not.toBe("erstgespraech");
+    expect(s.key).toBe("einreichung");
+    expect(s.wartet).toBeUndefined();
+  });
+
+  it("schickt einen bei der Bank eingereichten Fall nicht ins Erstgespräch, sondern auf Fristen", () => {
+    const s = computeNextStep(cockpit({ status: "uebertragen", erstgespraech: { offeneAngaben: 6 } }));
+    expect(s.key).toBe("fristen");
+    expect(s.wartet).toBeUndefined();
+  });
+
+  it("schickt einen Fall mit Bank-Nachforderung nicht ins Erstgespräch (nicht gesperrt, aber erledigt)", () => {
+    // bank_nachforderung steht NICHT in LOCKED_CASE_STATUSES – die Maske wäre
+    // technisch bedienbar, fachlich gehört der Fall aber auf "Fristen".
+    const s = computeNextStep(cockpit({ status: "bank_nachforderung", erstgespraech: { offeneAngaben: 6 } }));
+    expect(s.key).toBe("fristen");
+    expect(s.wartet).toBeUndefined();
+  });
 });

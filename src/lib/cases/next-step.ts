@@ -1,4 +1,5 @@
 import type { Tone } from "@/lib/ui/tone";
+import { LOCKED_CASE_STATUSES, type CaseStatus } from "@/lib/domain/enums";
 
 /**
  * Der EINE nächste Schritt eines Falls – Herzstück der geführten Fallreise.
@@ -119,11 +120,21 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
   }
   // Das Erstgespraech braucht weder einen versendeten Erstkontakt noch eine
   // fertige KI-Pruefung als Voraussetzung – es laesst sich jederzeit parallel
-  // fuehren. Verdraengt ein hoeherer Schritt (Erstkontakt, KI-Lauf/-Fehler)
-  // die Stufe "erstgespraech" von vorn, bleibt sie trotzdem sofort erledigbar
-  // und soll nicht spurlos verschwinden (derselbe Grund wie bei der
-  // Dokumentfreigabe oben, siehe Fall UP-2026-0007).
-  if (!stumm && schritt.key !== "erstgespraech" && c.erstgespraech && c.erstgespraech.offeneAngaben > 0) {
+  // fuehren. Verdraengt ein hoeherer Schritt (Dokumentfreigabe, kritische
+  // Hinweise, Erstkontakt, KI-Lauf/-Fehler) die Stufe "erstgespraech" von
+  // vorn, bleibt sie trotzdem sofort erledigbar und soll nicht spurlos
+  // verschwinden (derselbe Grund wie bei der Dokumentfreigabe oben, siehe
+  // Fall UP-2026-0007). Dieselbe Sperre wie oben: fuer abgegebene Faelle
+  // (schreibgeschuetzte Maske) und bei einer Bank-Nachforderung waere der
+  // Hinweis kein erledigbarer Wegweiser, sondern eine Sackgasse.
+  if (
+    !stumm &&
+    schritt.key !== "erstgespraech" &&
+    c.erstgespraech &&
+    c.erstgespraech.offeneAngaben > 0 &&
+    !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
+    c.status !== "bank_nachforderung"
+  ) {
     wartet.push({
       label: "Erstgespräch führen",
       href: `/cases/${c.caseId}/erstgespraech`,
@@ -204,19 +215,6 @@ function ermittleSchritt(c: NextStepInput): NextStep {
     };
   }
 
-  // Nach dem Erstkontakt, vor der Dokumentfreigabe: Ohne die Angaben aus dem
-  // Gespraech laesst sich kein Angebot rechnen – Unterlagen zu pruefen ist
-  // dann verfrueht.
-  if (c.erstgespraech && c.erstgespraech.offeneAngaben > 0) {
-    return {
-      key: "erstgespraech",
-      title: "Erstgespräch führen",
-      reason: `${c.erstgespraech.offeneAngaben} Angaben fehlen noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
-      tone: "review",
-      cta: { label: "Erstgespräch öffnen", href: `/cases/${id}/erstgespraech` },
-    };
-  }
-
   // Vor der Dokumentfreigabe: Aus der Selbstauskunft entstehen die Stammdaten,
   // auf denen Haushaltsrechnung und Einreichung aufbauen.
   if (c.selbstauskunft?.eingegangen) {
@@ -257,6 +255,35 @@ function ermittleSchritt(c: NextStepInput): NextStep {
       reason: "Die Plausibilitätsprüfung hat Widersprüche gefunden, die vor der Einreichung geklärt werden müssen.",
       tone: "blocker",
       cta: { label: "Hinweise ansehen", href: `/cases/${id}?tab=plausibilitaet` },
+    };
+  }
+
+  // Nach der Dokumentfreigabe und den kritischen Hinweisen: liegen die vor,
+  // ist der Fall ueber das Erstgespraech hinaus – sie sind dringlicher (siehe
+  // die beiden Faelle oben). Aber immer noch vor Machbarkeit/Unterlagen-Kram:
+  // ohne die Angaben aus dem Gespraech laesst sich kein Angebot rechnen.
+  //
+  // An `!LOCKED_CASE_STATUSES.has(...)` gebunden: Fuer abgegebene Faelle
+  // (exportiert/uebertragen/abgeschlossen/archiviert) ist die Maske
+  // schreibgeschuetzt (`feld.tsx`, LOCKED_CASE_STATUSES) – der Schritt waere
+  // dort nicht erledigbar und die Leiter bliebe fuer immer bei ihm stehen.
+  // "bank_nachforderung" faellt NICHT unter LOCKED_CASE_STATUSES (die Maske
+  // bleibt dort bearbeitbar) und braucht deshalb einen eigenen Ausschluss:
+  // Ein Fall, den die Bank bereits zurueckgemeldet hat, gehoert auf "Fristen
+  // im Blick behalten" (siehe die "fristen"-Stufe unten), nicht zurueck ins
+  // Erstgespraech.
+  if (
+    c.erstgespraech &&
+    c.erstgespraech.offeneAngaben > 0 &&
+    !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
+    c.status !== "bank_nachforderung"
+  ) {
+    return {
+      key: "erstgespraech",
+      title: "Erstgespräch führen",
+      reason: `${c.erstgespraech.offeneAngaben} Angaben fehlen noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
+      tone: "review",
+      cta: { label: "Erstgespräch öffnen", href: `/cases/${id}/erstgespraech` },
     };
   }
 
