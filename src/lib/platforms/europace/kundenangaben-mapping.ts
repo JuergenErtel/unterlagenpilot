@@ -302,9 +302,38 @@ function finanzierungsbedarf(c: CanonicalCase): EuropaceFinanzierungsbedarf | un
           ...(MIT_NEBENKOSTEN.has(typ) && nebenkosten ? { nebenkosten } : {}),
         };
 
+  /*
+   * Die drei Konditionswuensche aus dem Erstgespraech.
+   *
+   * Die Wunschrate geht als Tilgungswunsch "RATE" mit: Europace leitet die
+   * Tilgung dann aus der Rate ab, und die Angebote kommen auf die Wunschrate
+   * gerechnet zurueck (Entscheidung des Vermittlers vom 13.08.2026).
+   *
+   * Eine Sondertilgung von 0 wird GESENDET – das ist die Antwort "keine",
+   * nicht "nicht gefragt". Eine Wunschrate von 0 dagegen nicht: Eine Rate von
+   * null Euro ist keine Aussage, die jemand ernst meinen kann.
+   */
+  const details = wegLassenWennLeer({
+    zinsbindungInJahren: f.zinsbindungJahre ?? undefined,
+    sondertilgungJaehrlich: f.sondertilgungProzentJaehrlich ?? undefined,
+    tilgungswunsch:
+      f.wunschrateMonatlich != null && f.wunschrateMonatlich > 0
+        ? { "@type": "RATE", rate: f.wunschrateMonatlich }
+        : undefined,
+  });
+
+  // Auch ohne Darlehenswunsch einen Baustein anlegen, sobald ein Wunsch
+  // erfasst ist: Der Darlehenswunsch faellt am Anfang des Gespraechs, die
+  // Konditionen am Ende – sonst gingen die Konditionen still verloren.
   const bausteine =
-    f.darlehenswunsch != null
-      ? [{ "@type": "ANNUITAETENDARLEHEN", darlehensbetrag: f.darlehenswunsch }]
+    f.darlehenswunsch != null || details
+      ? [
+          wegLassenWennLeer({
+            "@type": "ANNUITAETENDARLEHEN",
+            darlehensbetrag: f.darlehenswunsch ?? undefined,
+            annuitaetendetails: details,
+          })!,
+        ]
       : undefined;
 
   return wegLassenWennLeer({

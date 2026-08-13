@@ -105,7 +105,7 @@ describe("Maske fuers Erstgespraech", () => {
     expect(wandleWert("beteiligungProzent", formatiereWert("zahl", 33.333))).toBe(33.333);
     expect(wandleWert("baujahr", formatiereWert("zahl", 1998))).toBe(1998);
     expect(wandleWert("wohnflaeche", formatiereWert("zahl", 129.5))).toBe(129.5);
-    expect(wandleWert("sondertilgungGewuenscht", formatiereWert("ja_nein", false))).toBe(false);
+    expect(wandleWert("sondertilgungProzentJaehrlich", formatiereWert("zahl", 5))).toBe(5);
     expect(formatiereWert("datum", new Date("1987-09-18"))).toBe("1987-09-18");
     expect(formatiereWert("betrag", null)).toBe("");
   });
@@ -114,7 +114,7 @@ describe("Maske fuers Erstgespraech", () => {
     const stand: Fallstand = {
       applicants: [{ position: 1, vorname: "Anna", income: [{ nettoMonatlich: 3200 }] }],
       property: { wohnflaeche: 129.5 },
-      financingRequest: { kaufpreis: 895000, sondertilgungGewuenscht: true },
+      financingRequest: { kaufpreis: 895000, sondertilgungProzentJaehrlich: 5 },
       caseFelder: { financingType: "kauf" },
     };
     const felder = alleFelder(stand);
@@ -123,7 +123,7 @@ describe("Maske fuers Erstgespraech", () => {
     expect(wert("wohnflaeche")).toBe("129,5");
     expect(wert("nettoMonatlich")).toBe("3.200");
     expect(wert("vorname")).toBe("Anna");
-    expect(wert("sondertilgungGewuenscht")).toBe("ja");
+    expect(wert("sondertilgungProzentJaehrlich")).toBe("5");
     expect(wert("financingType")).toBe("kauf");
   });
 

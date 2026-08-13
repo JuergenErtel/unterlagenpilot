@@ -337,6 +337,96 @@ describe("canonicalToKundenangaben – Finanzierungsbedarf", () => {
     ]);
   });
 
+  /**
+   * Die drei Konditionswuensche aus dem Erstgespraech. Sie hingen bis zum
+   * 13.08.2026 im Datenmodell, ohne Europace je zu erreichen – der Vermittler
+   * erfragte sie im Telefonat und musste sie in Europace erneut eintippen.
+   */
+  const mitWuenschen = (teil: Record<string, unknown>) =>
+    canonicalToKundenangaben(
+      fall({
+        financingType: "kauf",
+        financing: { finanzierungsart: "kauf", darlehenswunsch: 400_000, ...teil },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    ).kundenangaben.finanzierungsbedarf!.finanzierungsbausteine;
+
+  it("haengt die Konditionswuensche als annuitaetendetails an das Darlehen", () => {
+    expect(
+      mitWuenschen({
+        zinsbindungJahre: 15,
+        sondertilgungProzentJaehrlich: 5,
+        wunschrateMonatlich: 1_500,
+      })
+    ).toEqual([
+      {
+        "@type": "ANNUITAETENDARLEHEN",
+        darlehensbetrag: 400_000,
+        annuitaetendetails: {
+          zinsbindungInJahren: 15,
+          sondertilgungJaehrlich: 5,
+          tilgungswunsch: { "@type": "RATE", rate: 1_500 },
+        },
+      },
+    ]);
+  });
+
+  it("sendet nur die tatsaechlich erfassten Wuensche", () => {
+    expect(mitWuenschen({ zinsbindungJahre: 10 })).toEqual([
+      {
+        "@type": "ANNUITAETENDARLEHEN",
+        darlehensbetrag: 400_000,
+        annuitaetendetails: { zinsbindungInJahren: 10 },
+      },
+    ]);
+  });
+
+  it("sendet eine Sondertilgung von 0 Prozent – das ist die Antwort 'keine', keine Luecke", () => {
+    expect(mitWuenschen({ sondertilgungProzentJaehrlich: 0 })).toEqual([
+      {
+        "@type": "ANNUITAETENDARLEHEN",
+        darlehensbetrag: 400_000,
+        annuitaetendetails: { sondertilgungJaehrlich: 0 },
+      },
+    ]);
+  });
+
+  it("traegt die Wuensche auch ohne Darlehenswunsch, statt sie fallen zu lassen", () => {
+    // Der Darlehenswunsch steht am Anfang des Gespraechs, die Konditionen am
+    // Ende – wer nur die Konditionen erfasst hat, darf sie nicht verlieren.
+    const bausteine = canonicalToKundenangaben(
+      fall({ financingType: "kauf", financing: { finanzierungsart: "kauf", zinsbindungJahre: 15 } }),
+      { datenkontext: "TEST_MODUS" }
+    ).kundenangaben.finanzierungsbedarf!.finanzierungsbausteine;
+    expect(bausteine).toEqual([
+      { "@type": "ANNUITAETENDARLEHEN", annuitaetendetails: { zinsbindungInJahren: 15 } },
+    ]);
+  });
+
+  it("laesst annuitaetendetails ganz weg, wenn kein Wunsch erfasst ist", () => {
+    expect(mitWuenschen({})).toEqual([
+      { "@type": "ANNUITAETENDARLEHEN", darlehensbetrag: 400_000 },
+    ]);
+  });
+
+  it("bleibt mit Konditionswuenschen schemakonform", () => {
+    const r = canonicalToKundenangaben(
+      fall({
+        financingType: "kauf",
+        financing: {
+          finanzierungsart: "kauf",
+          kaufpreis: 450_000,
+          darlehenswunsch: 400_000,
+          zinsbindungJahre: 15,
+          sondertilgungProzentJaehrlich: 5,
+          wunschrateMonatlich: 1_500,
+        },
+      }),
+      { datenkontext: "TEST_MODUS" }
+    );
+    expect(validateKundenangabenRequest(r).errors).toEqual([]);
+  });
+
   it("legt das Eigenkapital als Bank- und Sparguthaben im Haushalt ab", () => {
     const r = canonicalToKundenangaben(kauffall, { datenkontext: "TEST_MODUS" });
     expect(r.kundenangaben.haushalte![0]!.finanzielleSituation).toEqual({

@@ -111,8 +111,23 @@ export interface EuropaceFinanzierungszweck extends MitTyp {
   };
 }
 
+/**
+ * Konditionswuensche am Annuitaetendarlehen.
+ *
+ * `sondertilgungJaehrlich` ist ein PROZENTSATZ, kein Betrag – deshalb fragt
+ * das Erstgespraech seit dem 13.08.2026 auch in Prozent statt ja/nein.
+ * `tilgungswunsch` ist polymorph; BaufiDesk sendet nur die Auspraegung "RATE"
+ * (die monatliche Wunschrate des Kunden), nie einen Tilgungssatz.
+ */
+export interface EuropaceAnnuitaetendetails {
+  zinsbindungInJahren?: number;
+  sondertilgungJaehrlich?: number;
+  tilgungswunsch?: MitTyp & { rate?: number };
+}
+
 export interface EuropaceFinanzierungsbaustein extends MitTyp {
   darlehensbetrag?: number;
+  annuitaetendetails?: EuropaceAnnuitaetendetails;
 }
 
 export interface EuropaceFinanzierungsbedarf {

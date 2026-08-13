@@ -49,7 +49,7 @@ const GRUPPEN_REIHENFOLGE: EuropaceGruppe[] = [
  *  "vorhaben" ist der eigentliche Finanzierungsbedarf. */
 const KONDITIONSWUNSCH_SCHLUESSEL = new Set([
   "zinsbindungJahre",
-  "sondertilgungGewuenscht",
+  "sondertilgungProzentJaehrlich",
   "wunschrateMonatlich",
 ]);
 

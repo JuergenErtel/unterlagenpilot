@@ -9,12 +9,12 @@ import { prisma } from "@/lib/db";
  */
 
 const DATUMSFELDER = ["geburtsdatum", "eintrittsdatum", "befristetBis", "gruendungsdatum"];
-const WAHRHEITSFELDER = ["inProbezeit", "befristet", "sondertilgungGewuenscht"];
+const WAHRHEITSFELDER = ["inProbezeit", "befristet"];
 // inProbezeit UND befristet sind in der DB NOT NULL (Standard false). Eine
 // geloeschte Angabe kann hier keine echte Luecke ausdruecken – sie faellt auf
-// den Schema-Standard zurueck, statt einen Laufzeitfehler auszuloesen.
-// sondertilgungGewuenscht ist dagegen nullable: null bedeutet dort laut
-// Schema-Kommentar "nicht gefragt" und ist erlaubt.
+// den Schema-Standard zurueck, statt einen Laufzeitfehler auszuloesen. Damit
+// sind derzeit ALLE Wahrheitsfelder nicht nullbar; die Unterscheidung bleibt
+// stehen, weil ein nullbares Boolean jederzeit wieder dazukommen kann.
 const NICHT_NULLBARE_WAHRHEITSFELDER = ["inProbezeit", "befristet"];
 const ZAHLENFELDER = [
   "anzahlKinder",
@@ -38,6 +38,7 @@ const ZAHLENFELDER = [
   "einmalzahlungenJaehrlich",
   "beteiligungProzent",
   "zinsbindungJahre",
+  "sondertilgungProzentJaehrlich",
   "wunschrateMonatlich",
 ];
 // Ganzzahlige Spalten (Prisma-Typ Int?). Ein Bruchwert wuerde beim Schreiben

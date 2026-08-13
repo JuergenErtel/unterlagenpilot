@@ -181,7 +181,7 @@ describe("Erstgespraech: ein Feld speichern", () => {
 
   it("kennt die drei Konditionsfelder aus dem erweiterten Katalog", async () => {
     const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
-    for (const feld of ["zinsbindungJahre", "sondertilgungGewuenscht", "wunschrateMonatlich"]) {
+    for (const feld of ["zinsbindungJahre", "sondertilgungProzentJaehrlich", "wunschrateMonatlich"]) {
       await expect(
         speichereGespraechsfeld("c1", { entitaet: "financingRequest", feld }, "10")
       ).resolves.toEqual({ gespeichert: true });

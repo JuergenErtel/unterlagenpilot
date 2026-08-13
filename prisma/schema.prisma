@@ -635,9 +635,12 @@ model FinancingRequest {
   /// Gewuenschte Zinsbindung in Jahren. Freie Zahl, keine Auswahlliste:
   /// 5/10/15/20/30 sind ueblich, aber nicht die einzigen Werte.
   zinsbindungJahre         Int?
-  /// Wunsch nach jaehrlicher Sondertilgungsoption. null = nicht gefragt,
-  /// false = ausdruecklich nicht gewuenscht.
-  sondertilgungGewuenscht  Boolean?
+  /// Gewuenschte jaehrliche Sondertilgung in Prozent des Darlehens. 5 % ist
+  /// marktueblich. null = nicht gefragt, 0 = ausdruecklich keine gewuenscht.
+  /// Prozent statt ja/nein, weil Europace (annuitaetendetails.
+  /// sondertilgungJaehrlich) einen Satz erwartet - aus einem "ja" muesste
+  /// BaufiDesk sonst eine Zahl erfinden, die der Vermittler nie gesagt hat.
+  sondertilgungProzentJaehrlich Float?
   /// Monatliche Wunschrate des Kunden. Nebenbedingung fuer den
   /// Machbarkeits-Solver: Er rechnet sonst nur gegen die TRAGBARE Rate.
   wunschrateMonatlich      Float?

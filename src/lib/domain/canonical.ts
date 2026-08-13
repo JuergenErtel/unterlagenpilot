@@ -102,8 +102,8 @@ export interface CanonicalFinancing {
   selbstnutzung?: boolean;
   /** Gewuenschte Zinsbindung in Jahren, aus dem Erstgespraech. */
   zinsbindungJahre?: number;
-  /** Wunsch nach jaehrlicher Sondertilgungsoption. */
-  sondertilgungGewuenscht?: boolean;
+  /** Gewuenschte jaehrliche Sondertilgung in Prozent des Darlehens (5 % ist marktueblich). */
+  sondertilgungProzentJaehrlich?: number;
   /** Monatliche Wunschrate des Kunden – Nebenbedingung fuer den Machbarkeits-Solver. */
   wunschrateMonatlich?: number;
 }

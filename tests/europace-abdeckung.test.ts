@@ -55,7 +55,7 @@ function basisfall(): CanonicalCase {
       eigenkapital: 50000,
       darlehenswunsch: 350000,
       zinsbindungJahre: 10,
-      sondertilgungGewuenscht: true,
+      sondertilgungProzentJaehrlich: 5,
       wunschrateMonatlich: 1500,
     },
     platformIds: {},
@@ -97,25 +97,29 @@ describe("erreichtEuropaceNie – Deckung mit dem tatsaechlichen Mapping", () =>
     expect(erreichtEuropaceNie("nutzung", "vermietet")).toBe(true);
   });
 
-  it("zinsbindungJahre veraendert den Request nicht", () => {
+  /*
+   * Seit dem 13.08.2026 gehen die drei Konditionswuensche als
+   * `annuitaetendetails` mit – die Gegenprobe muss also anschlagen.
+   */
+  it("zinsbindungJahre erreicht Europace", () => {
     const c = basisfall();
     c.financing.zinsbindungJahre = 20;
-    expect(request(c)).toBe(basis);
-    expect(erreichtEuropaceNie("zinsbindungJahre", 20)).toBe(true);
+    expect(request(c)).not.toBe(basis);
+    expect(erreichtEuropaceNie("zinsbindungJahre", 20)).toBe(false);
   });
 
-  it("sondertilgungGewuenscht veraendert den Request nicht", () => {
+  it("sondertilgungProzentJaehrlich erreicht Europace", () => {
     const c = basisfall();
-    c.financing.sondertilgungGewuenscht = false;
-    expect(request(c)).toBe(basis);
-    expect(erreichtEuropaceNie("sondertilgungGewuenscht", false)).toBe(true);
+    c.financing.sondertilgungProzentJaehrlich = 0;
+    expect(request(c)).not.toBe(basis);
+    expect(erreichtEuropaceNie("sondertilgungProzentJaehrlich", 0)).toBe(false);
   });
 
-  it("wunschrateMonatlich veraendert den Request nicht", () => {
+  it("wunschrateMonatlich erreicht Europace", () => {
     const c = basisfall();
     c.financing.wunschrateMonatlich = 2500;
-    expect(request(c)).toBe(basis);
-    expect(erreichtEuropaceNie("wunschrateMonatlich", 2500)).toBe(true);
+    expect(request(c)).not.toBe(basis);
+    expect(erreichtEuropaceNie("wunschrateMonatlich", 2500)).toBe(false);
   });
 
   it("inProbezeit=false veraendert den Request nicht, inProbezeit=true dagegen schon", () => {

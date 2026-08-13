@@ -123,7 +123,8 @@ export function mapCaseToCanonical(c: CaseWithRelations): CanonicalCase {
       eigenkapital: c.financingRequest?.eigenkapital ?? undefined,
       darlehenswunsch: c.financingRequest?.darlehenswunsch ?? undefined,
       zinsbindungJahre: c.financingRequest?.zinsbindungJahre ?? undefined,
-      sondertilgungGewuenscht: c.financingRequest?.sondertilgungGewuenscht ?? undefined,
+      sondertilgungProzentJaehrlich:
+        c.financingRequest?.sondertilgungProzentJaehrlich ?? undefined,
       wunschrateMonatlich: c.financingRequest?.wunschrateMonatlich ?? undefined,
       darlehensbetrag: c.darlehensbetrag ?? undefined,
       sollzinsProzent: c.sollzinsProzent ?? undefined,

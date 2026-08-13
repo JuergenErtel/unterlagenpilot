@@ -52,9 +52,10 @@ describe("Typumwandlung fuer Zielfelder", () => {
     expect(wandleWert("kaufpreis", "895.000")).toBe(895000);
     expect(wandleWert("wohnflaeche", "242,7")).toBe(242.7);
   });
-  it("macht aus ja/nein einen Wahrheitswert", () => {
-    expect(wandleWert("sondertilgungGewuenscht", "ja")).toBe(true);
-    expect(wandleWert("sondertilgungGewuenscht", "nein")).toBe(false);
+  it("macht aus dem Sondertilgungswunsch eine Prozentzahl", () => {
+    expect(wandleWert("sondertilgungProzentJaehrlich", "5")).toBe(5);
+    // "Keine Sondertilgung" ist die 0 – eine Antwort, kein leeres Feld.
+    expect(wandleWert("sondertilgungProzentJaehrlich", "0")).toBe(0);
   });
   it("macht aus ja/nein einen Wahrheitswert fuer die Befristung", () => {
     expect(wandleWert("befristet", "ja")).toBe(true);
@@ -118,10 +119,10 @@ describe("Typumwandlung fuer Zielfelder", () => {
       expect(wandleWert("inProbezeit", "")).toBe(false);
       expect(wandleWert("befristet", "")).toBe(false);
     });
-    it("schreibt bei einem nullbaren Wahrheitsfeld weiterhin null", () => {
-      // sondertilgungGewuenscht ist Boolean? – null heisst laut Schema
+    it("schreibt bei einer geloeschten Zahl weiterhin null", () => {
+      // sondertilgungProzentJaehrlich ist Float? – null heisst laut Schema
       // "nicht gefragt" und ist dort ausdruecklich erlaubt.
-      expect(wandleWert("sondertilgungGewuenscht", "")).toBeNull();
+      expect(wandleWert("sondertilgungProzentJaehrlich", "")).toBeNull();
     });
   });
 });
@@ -203,11 +204,13 @@ describe("schreibeZielwert", () => {
 
     await schreibeZielwert(
       "case-A",
-      { entitaet: "financingRequest", feld: "sondertilgungGewuenscht" },
-      "ja"
+      { entitaet: "financingRequest", feld: "sondertilgungProzentJaehrlich" },
+      "5"
     );
-    const arg = h.financingUpsert.mock.calls[1]![0] as { update: { sondertilgungGewuenscht: boolean } };
-    expect(arg.update.sondertilgungGewuenscht).toBe(true);
+    const arg = h.financingUpsert.mock.calls[1]![0] as {
+      update: { sondertilgungProzentJaehrlich: number };
+    };
+    expect(arg.update.sondertilgungProzentJaehrlich).toBe(5);
 
     await schreibeZielwert(
       "case-A",

@@ -118,7 +118,7 @@ const VOLLSTAENDIGES_OBJEKT_UND_VORHABEN = {
     maklerprovisionProzent: 3.57,
     darlehenswunsch: 350000,
     zinsbindungJahre: 10,
-    sondertilgungGewuenscht: true,
+    sondertilgungProzentJaehrlich: 5,
     wunschrateMonatlich: 1500,
   },
 };

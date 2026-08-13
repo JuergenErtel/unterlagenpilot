@@ -190,7 +190,7 @@ const FELDER: Definition[] = [
   },
   { schluessel: "darlehenswunsch", label: "Darlehenswunsch", abschnitt: "vorhaben", quelle: "financingRequest" },
   { schluessel: "zinsbindungJahre", label: "Zinsbindung", abschnitt: "vorhaben", quelle: "financingRequest" },
-  { schluessel: "sondertilgungGewuenscht", label: "Sondertilgung gewünscht", abschnitt: "vorhaben", quelle: "financingRequest" },
+  { schluessel: "sondertilgungProzentJaehrlich", label: "Sondertilgung", abschnitt: "vorhaben", quelle: "financingRequest" },
   { schluessel: "wunschrateMonatlich", label: "Wunschrate", abschnitt: "vorhaben", quelle: "financingRequest" },
 ];
 

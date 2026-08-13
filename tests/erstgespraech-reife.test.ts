@@ -36,14 +36,14 @@ describe("Angebotsreife", () => {
   });
 
   it("wertet 0 und false als gefuellt, nur null/leer als Luecke", () => {
-    // Eine Wunschrate von 0 ist unsinnig, aber "keine Sondertilgung
-    // gewuenscht" (false) ist eine ANTWORT und darf nicht als Luecke zaehlen.
+    // Eine Wunschrate von 0 ist unsinnig, aber "keine Sondertilgung" (0 %)
+    // ist eine ANTWORT und darf nicht als Luecke zaehlen.
     const r = berechneReife(
-      { ...leer, financingRequest: { sondertilgungGewuenscht: false, maklerprovisionProzent: 0 } },
+      { ...leer, financingRequest: { sondertilgungProzentJaehrlich: 0, maklerprovisionProzent: 0 } },
       1
     );
     const gefuellt = r.felder.filter((f) => f.gefuellt).map((f) => f.schluessel);
-    expect(gefuellt).toContain("sondertilgungGewuenscht");
+    expect(gefuellt).toContain("sondertilgungProzentJaehrlich");
     expect(gefuellt).toContain("maklerprovisionProzent");
   });
 

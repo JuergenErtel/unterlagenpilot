@@ -6,11 +6,11 @@ describe("Konditionswuensche im kanonischen Modell", () => {
     const f: CanonicalFinancing = {
       kaufpreis: 895000,
       zinsbindungJahre: 15,
-      sondertilgungGewuenscht: true,
+      sondertilgungProzentJaehrlich: 5,
       wunschrateMonatlich: 2400,
     };
     expect(f.zinsbindungJahre).toBe(15);
-    expect(f.sondertilgungGewuenscht).toBe(true);
+    expect(f.sondertilgungProzentJaehrlich).toBe(5);
     expect(f.wunschrateMonatlich).toBe(2400);
   });
 });

@@ -19,11 +19,10 @@
  * wird.
  */
 const NIE_UEBERTRAGENE_SCHLUESSEL = new Set<string>([
-  // Die gesamte Gruppe "Konditionswunsch" -- Europaces Finanzierungsbedarf-
-  // Schema kennt weder Zinsbindung noch Sondertilgungswunsch noch Wunschrate.
-  "zinsbindungJahre",
-  "sondertilgungGewuenscht",
-  "wunschrateMonatlich",
+  // Die Gruppe "Konditionswunsch" (Zinsbindung, Sondertilgung, Wunschrate)
+  // stand bis zum 13.08.2026 hier: Das Mapping kannte `annuitaetendetails`
+  // nicht. Seitdem gehen alle drei mit -- die Annahme "Europaces
+  // Finanzierungsbedarf-Schema kennt sie nicht" war schlicht falsch.
   // haushalte[].kunden kennt kein Kinderfeld im Request.
   "anzahlKinder",
   // finanzierungsobjekt() mappt Objektart und Adresse, aber keine Nutzung

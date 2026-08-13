@@ -243,11 +243,13 @@ export const KATALOG: Schritt[] = [
       },
       {
         id: "sondertilgung",
-        label: "Sondertilgung gewünscht?",
-        // "ja_nein" ist der vorhandene Wahrheitswert-Typ des Kundenmodus – der
-        // Katalog bekommt keinen zweiten dafuer.
-        typ: "ja_nein",
-        ziel: { entitaet: "financingRequest", feld: "sondertilgungGewuenscht" },
+        label: "Sondertilgung pro Jahr in Prozent",
+        // Prozent statt ja/nein: Europace erwartet einen Satz
+        // (annuitaetendetails.sondertilgungJaehrlich). Aus einem "ja" muesste
+        // BaufiDesk sonst eine Zahl erfinden, die niemand gesagt hat.
+        typ: "zahl",
+        hinweis: "5 % pro Jahr ist marktüblich. 0 = keine Sondertilgung gewünscht.",
+        ziel: { entitaet: "financingRequest", feld: "sondertilgungProzentJaehrlich" },
       },
       {
         id: "wunschrate",
