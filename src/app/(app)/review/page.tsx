@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
@@ -52,6 +53,8 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
           id: true,
           caseNumber: true,
           financingType: true,
+          status: true,
+          updatedAt: true,
           applicants: {
             orderBy: { position: "asc" },
             include: {
@@ -90,7 +93,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             MAX_APPLICANTS
           ) as 1 | 2;
           const reife = berechneReife(stand, antragstellerZahl);
-          const step = computeNextStep({
+          let step = computeNextStep({
             ...cockpit,
             erstkontakt: {
               empfaenger: erstkontaktStand.empfaenger,
@@ -99,7 +102,13 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             },
             erstgespraech: { offeneAngaben: reife.gesamt - reife.gefuellt },
           });
-          return { cockpit, step };
+          // Stale-Schutz: dieselbe Regel wie Fallseite und Dashboard
+          // (ai-check-status.ts). Ohne ihn bliebe der Review-Abschluss für
+          // einen hart gestorbenen Hintergrundlauf für immer bei
+          // "KI-Auswertung läuft" stehen.
+          const aiCheckRunning = isAiCheckRunning(caseScope.status, caseScope.updatedAt);
+          step = withAiCheckStaleOverride(step, aiCheckRunning);
+          return { cockpit, step, aiCheckRunning };
         })()
       : null;
 
@@ -130,8 +139,10 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
         <div className="space-y-4">
           {/* Läuft gerade eine KI-Prüfung, sind die Dokumente nur vorübergehend
               aus der Liste verschwunden ("laeuft" statt "fertig") – dann wäre
-              "Alles freigegeben" irreführend. */}
-          {completion.cockpit.counts.docsLaufend > 0 ? (
+              "Alles freigegeben" irreführend. Dieselbe Grundlage (aiCheckRunning)
+              wie die NextStepCard darunter: stirbt der Lauf hart (stale), sagt
+              hier nicht "läuft gerade", während die Karte "unterbrochen" zeigt. */}
+          {completion.cockpit.counts.docsLaufend > 0 && completion.aiCheckRunning ? (
             <Card className="border-ai/30 bg-ai/5">
               <CardContent className="flex items-center gap-3 p-6">
                 <Sparkles className="h-8 w-8 shrink-0 text-ai" />
