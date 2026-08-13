@@ -5,7 +5,9 @@ import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
-import type { Platform, CaseStatus } from "@/lib/domain/enums";
+import { berechneReife } from "@/lib/erstgespraech/reife";
+import type { Fallstand } from "@/lib/self-disclosure/takeover";
+import { MAX_APPLICANTS, type Platform, type CaseStatus } from "@/lib/domain/enums";
 import type { TodoCase } from "@/components/dashboard/todo-case-card";
 
 export interface DashboardData {
@@ -96,9 +98,18 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
 
   // To-do-Karten: nur für die zuletzt bearbeiteten aktiven Fälle die teure
   // Aggregation fahren (die Karten zeigen ohnehin höchstens sechs).
+  // property und financingRequest zusaetzlich zu applicants laden: die
+  // Erstgespraech-Reife (berechneReife) braucht alle drei, sonst zaehlt sie
+  // hier weniger offene Angaben als auf der Fallseite (A4, Schlusspruefung
+  // 12.08.2026) und die Fallreise widerspricht sich zwischen Dashboard und
+  // Fallseite.
   const todoCandidates = await prisma.case.findMany({
     where: activeWhere,
-    include: { applicants: { orderBy: { position: "asc" } } },
+    include: {
+      applicants: { orderBy: { position: "asc" } },
+      property: true,
+      financingRequest: true,
+    },
     orderBy: { updatedAt: "desc" },
     take: 12,
   });
@@ -146,6 +157,22 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
         c.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ") ||
         "Ohne Namen";
       const docs = todoDocs.filter((d) => d.caseId === c.id);
+      // Dieselbe Zaehlung wie die Maske selbst (erstgespraech/page.tsx) und
+      // die Fallseite: Antragstellerzahl aus den vorhandenen Antragstellern,
+      // geklemmt auf 1..MAX_APPLICANTS. Ohne diese Angleichung nennte das
+      // Dashboard eine andere Zahl offener Angaben als die Fallseite, die der
+      // Vermittler als naechstes oeffnet.
+      const erstgespraechStand: Fallstand = {
+        applicants: c.applicants as unknown as Fallstand["applicants"],
+        property: (c.property as Record<string, unknown> | null) ?? null,
+        financingRequest: (c.financingRequest as Record<string, unknown> | null) ?? null,
+        caseFelder: { financingType: c.financingType ?? null },
+      };
+      const erstgespraechAntragstellerZahl = Math.min(
+        Math.max(c.applicants.length, 1),
+        MAX_APPLICANTS
+      ) as 1 | 2;
+      const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
       const step = computeNextStep({
         caseId: c.id,
         status: c.status,
@@ -174,6 +201,9 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           empfaenger: c.applicants.map((a) => a.email).find((e): e is string => !!e && e.includes("@")) ?? null,
           vorbereitet: Boolean(c.erstkontaktMessageId),
           versendet: c.erstkontaktMessageId ? (versendetJeNachricht.get(c.erstkontaktMessageId) ?? false) : false,
+        },
+        erstgespraech: {
+          offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
         },
       });
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
