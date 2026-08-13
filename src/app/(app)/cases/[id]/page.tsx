@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
 export const maxDuration = 300;
-import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock } from "lucide-react";
+import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
@@ -261,6 +261,7 @@ export default async function CaseCockpitPage({
     MAX_APPLICANTS
   ) as 1 | 2;
   const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
+  const erstgespraechOffen = erstgespraechReife.gesamt - erstgespraechReife.gefuellt;
 
   /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
@@ -378,9 +379,7 @@ export default async function CaseCockpitPage({
             vorbereitet: Boolean(erstkontaktStand.messageId),
             versendet: erstkontaktStand.versendet,
           },
-          erstgespraech: {
-            offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
-          },
+          erstgespraech: { offeneAngaben: erstgespraechOffen },
         });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
         // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg. Dieselbe
@@ -720,6 +719,22 @@ export default async function CaseCockpitPage({
                 </form>
               )}
               {caseRow.finlinkId && <FinLinkRefreshButton caseId={id} />}
+              {/*
+                * Dauer-Einstieg in die Erstgespraechs-Maske. Die Fallreise
+                * zeigt den Weg nur, solange Angaben FEHLEN – steht alles, gab
+                * es keinen Knopf mehr, um eine Angabe zu korrigieren oder das
+                * Gespraech noch einmal durchzugehen. Ein Werkzeug, das
+                * verschwindet, sobald es sauber ist, laesst sich nicht pflegen.
+                */}
+              <Button asChild variant="outline" className="w-full justify-start">
+                <Link href={`/cases/${id}/erstgespraech`}>
+                  <PhoneCall />
+                  Erstgespräch führen
+                  {erstgespraechOffen > 0 && (
+                    <span className="ml-auto text-xs text-muted-foreground">{erstgespraechOffen} offen</span>
+                  )}
+                </Link>
+              </Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
