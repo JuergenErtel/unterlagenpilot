@@ -134,3 +134,94 @@ describe("Maske fuers Erstgespraech", () => {
     expect(ziele).toContain("baukosten");
   });
 });
+
+/**
+ * Die Angaben rund um den Arbeitsvertrag haengen an der Beschaeftigungsart.
+ *
+ * Vorher taten sie das nicht: Weil `inProbezeit` und `befristet` als
+ * angebotsrelevant galten – unabhaengig von der Beschaeftigungsart – und nur
+ * im Katalogschritt `beruf_dauer` vorkommen, zog `ergaenzeUnerreichbare`
+ * diesen Schritt fuer JEDEN Fall herein. Die Maske fragte damit auch einen
+ * Rentner nach "Beschaeftigt seit", "Arbeitsvertrag befristet?" und "In
+ * Probezeit?" – Angaben, die es fuer ihn nicht gibt, die aber trotzdem als
+ * offen gezaehlt wurden und die Angebotsreife nie voll werden liessen.
+ */
+describe("Arbeitsvertrags-Angaben haengen an der Beschaeftigungsart", () => {
+  const ARBEITSVERTRAG_ZIELE = ["eintrittsdatum", "befristet", "inProbezeit"];
+
+  function standMit(beruf: string | null): Fallstand {
+    return {
+      applicants: [{ position: 1, employment: beruf ? [{ beschaeftigungsart: beruf }] : [] }],
+      property: null,
+      financingRequest: null,
+      caseFelder: { financingType: "kauf" },
+    };
+  }
+
+  const maskenZiele = (beruf: string | null) => alleFelder(standMit(beruf)).map((f) => f.ziel.feld);
+  const reifeSchluessel = (beruf: string | null) =>
+    berechneReife(standMit(beruf), 1).felder.map((f) => f.schluessel);
+
+  it("fragt einen Angestellten nach Eintritt, Befristung und Probezeit", () => {
+    expect(maskenZiele("angestellter")).toEqual(expect.arrayContaining(ARBEITSVERTRAG_ZIELE));
+    expect(reifeSchluessel("angestellter")).toEqual(expect.arrayContaining(["befristet", "inProbezeit"]));
+  });
+
+  it("fragt einen Beamten ebenso", () => {
+    expect(maskenZiele("beamter")).toEqual(expect.arrayContaining(ARBEITSVERTRAG_ZIELE));
+  });
+
+  it("fragt einen Rentner NICHT danach – und zaehlt es auch nicht als offen", () => {
+    for (const ziel of ARBEITSVERTRAG_ZIELE) {
+      expect(maskenZiele("rentner"), `Rentner wird nach ${ziel} gefragt`).not.toContain(ziel);
+    }
+    expect(reifeSchluessel("rentner")).not.toContain("befristet");
+    expect(reifeSchluessel("rentner")).not.toContain("inProbezeit");
+  });
+
+  it("fragt Selbststaendige, Freiberufler, Geschaeftsfuehrer und Gesellschafter NICHT danach", () => {
+    for (const beruf of ["selbststaendiger", "freiberufler", "geschaeftsfuehrer", "gesellschafter"]) {
+      for (const ziel of ARBEITSVERTRAG_ZIELE) {
+        expect(maskenZiele(beruf), `${beruf} wird nach ${ziel} gefragt`).not.toContain(ziel);
+      }
+      expect(reifeSchluessel(beruf)).not.toContain("befristet");
+      expect(reifeSchluessel(beruf)).not.toContain("inProbezeit");
+    }
+  });
+
+  it("fragt bei UNBEKANNTER Beschaeftigungsart weiter danach", () => {
+    // Die Beschaeftigungsart ist selbst eine der Angaben und darf leer sein.
+    // Verschwaenden die Folgefragen schon vorher, fiele eine Angabe still weg,
+    // bevor der Vermittler ueberhaupt gefragt hat.
+    expect(maskenZiele(null)).toEqual(expect.arrayContaining(ARBEITSVERTRAG_ZIELE));
+    expect(reifeSchluessel(null)).toEqual(expect.arrayContaining(["befristet", "inProbezeit"]));
+  });
+
+  it("laesst die Gesamtzahl der Angaben fallabhaengig schrumpfen – um genau die zwei", () => {
+    const offen = berechneReife(standMit(null), 1).gesamt;
+    expect(berechneReife(standMit("rentner"), 1).gesamt).toBe(offen - 2);
+    expect(berechneReife(standMit("angestellter"), 1).gesamt).toBe(offen);
+  });
+
+  it("entscheidet je Antragsteller, nicht je Fall", () => {
+    // Der angestellte Partner einer Selbststaendigen wird sehr wohl nach
+    // seinem Arbeitsvertrag gefragt.
+    const stand: Fallstand = {
+      applicants: [
+        { position: 1, employment: [{ beschaeftigungsart: "selbststaendiger" }] },
+        { position: 2, employment: [{ beschaeftigungsart: "angestellter" }] },
+      ],
+      property: null,
+      financingRequest: null,
+      caseFelder: { financingType: "kauf" },
+    };
+    const reife = berechneReife(stand, 2);
+    const personen = reife.felder.filter((f) => f.schluessel === "inProbezeit").map((f) => f.person);
+    expect(personen).toEqual([2]);
+
+    const felder = baueMaske(stand, 2, reife).flatMap((a) => a.felder);
+    const probezeit = felder.filter((f) => f.ziel.feld === "inProbezeit");
+    expect(probezeit).toHaveLength(1);
+    expect(probezeit[0]!.person).toBe(2);
+  });
+});

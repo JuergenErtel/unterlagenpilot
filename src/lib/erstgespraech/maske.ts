@@ -242,11 +242,19 @@ function schreibbareFelder(schrittIndex: number): Array<Feld & { ziel: { entitae
 /**
  * Nachziehen, was sonst unerreichbar waere.
  *
- * Die Reifeleiste zaehlt 26 Angaben – unabhaengig von der Finanzierungsart.
+ * Die Reifeleiste zaehlt ihre Angaben unabhaengig von der Finanzierungsart.
  * Die Verzweigungen des Katalogs blenden je nach Art aber Schritte aus (bei
  * einer Anschlussfinanzierung z. B. den Kaufpreis). Was die Leiste anmahnt,
  * muss die Maske auch anbieten: fuer jede noch nicht abgedeckte Angabe den
  * ersten Katalogschritt hinzunehmen, der sie traegt.
+ *
+ * Das gilt in BEIDE Richtungen – hier steht auch der Grund, warum die Reife
+ * die Arbeitsvertrags-Angaben an die Beschaeftigungsart bindet
+ * (`nurBeiBeschaeftigung`, reife.ts): Weil `inProbezeit` und `befristet` nur
+ * im Schritt `beruf_dauer` vorkommen, zog diese Funktion den Schritt fuer
+ * JEDEN Fall herein – und die Maske fragte auch den Rentner nach
+ * "Beschaeftigt seit". Zaehlt die Reife die beiden Angaben fuer ihn nicht
+ * mehr, entfaellt der Schritt hier von selbst.
  */
 function ergaenzeUnerreichbare(
   sichtbare: Kandidat[],
