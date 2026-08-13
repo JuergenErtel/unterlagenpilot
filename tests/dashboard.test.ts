@@ -369,3 +369,57 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
     expect(todo?.nextStep).not.toBe("Erstgespräch führen");
   });
 });
+
+/**
+ * Der Stale-Schutz gegen hängengebliebene KI-Prüfungen (isAiCheckStale,
+ * next-step.ts) existierte bislang NUR auf der Fallseite: Stirbt ein
+ * Hintergrundlauf hart (Deploy, Function-Timeout), zeigte die Fallseite "KI-
+ * Prüfung wurde unterbrochen", während dasselbe Dashboard-Todo für immer bei
+ * "KI-Auswertung läuft" stehen blieb – derselbe Fall, zwei Aussagen.
+ */
+describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen", () => {
+  function nurDiesenFall(row: Record<string, unknown>) {
+    caseFindMany.mockReset().mockImplementation((args: { include?: Record<string, unknown> }) => {
+      if (args.include) return Promise.resolve([projiziere(row, args.include)]);
+      return Promise.resolve([]);
+    });
+  }
+
+  function ki_pruefung_kandidat(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "c-ki-stale",
+      caseNumber: "UP-0077",
+      status: "ki_pruefung_laeuft",
+      erstkontaktMessageId: null,
+      financingType: null,
+      updatedAt: new Date(),
+      applicants: [],
+      property: null,
+      financingRequest: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    selfDisclosureLinkFindMany.mockReset().mockResolvedValue([]);
+    generatedMessageFindMany.mockReset().mockResolvedValue([]);
+  });
+
+  it("zeigt 'KI-Auswertung läuft' für einen frischen Lauf", async () => {
+    nurDiesenFall(ki_pruefung_kandidat({ updatedAt: new Date() }));
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.nextStep).toBe("KI-Auswertung läuft");
+  });
+
+  it("zeigt 'KI-Prüfung wurde unterbrochen' statt endlos 'KI-Auswertung läuft', wenn der Lauf laut updatedAt hängengeblieben ist – wie auf der Fallseite", async () => {
+    nurDiesenFall(
+      ki_pruefung_kandidat({ updatedAt: new Date(Date.now() - 11 * 60_000) })
+    );
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.nextStep).toBe("KI-Prüfung wurde unterbrochen");
+  });
+});

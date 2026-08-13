@@ -33,7 +33,7 @@ import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
-import { isAiCheckStale } from "@/lib/cases/ai-check-status";
+import { isAiCheckRunning } from "@/lib/cases/ai-check-status";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import type {
   CaseStatus,
@@ -230,7 +230,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
   // Läuft bereits eine frische Prüfung, keine zweite parallel starten. Ein
   // veralteter läuft-Status (abgestürzter Lauf) darf dagegen neu gestartet
   // werden – als Revert-Ziel dient dann ein neutraler Status.
-  if (current.status === "ki_pruefung_laeuft" && !isAiCheckStale(current.updatedAt)) {
+  if (isAiCheckRunning(current.status, current.updatedAt)) {
     return;
   }
   const previousStatus = current.status === "ki_pruefung_laeuft" ? "unterlagen_fehlen" : current.status;

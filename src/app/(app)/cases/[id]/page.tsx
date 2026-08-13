@@ -48,7 +48,7 @@ import { DangerZone } from "@/components/case/danger-zone";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
 import { DocumentsProcessing } from "@/components/case/documents-processing";
-import { isAiCheckStale } from "@/lib/cases/ai-check-status";
+import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { countProcessingDocuments } from "@/lib/documents/processing";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
@@ -210,7 +210,7 @@ export default async function CaseCockpitPage({
   const aiCheckLocked = LOCKED_CASE_STATUSES.has(caseRow.status as CaseStatus);
   // Läuft die Prüfung im Hintergrund, zeigt die Seite Fortschritt statt Button.
   // Ein veralteter läuft-Status (abgestürzter Lauf) gibt den Button wieder frei.
-  const aiCheckRunning = caseRow.status === "ki_pruefung_laeuft" && !isAiCheckStale(caseRow.updatedAt);
+  const aiCheckRunning = isAiCheckRunning(caseRow.status, caseRow.updatedAt);
   const aiCheckDone = documents.filter((d) => d.classificationStatus !== "laeuft").length;
   // Nach einem Upload trudeln Typ/Felder asynchron nach – solange pollt die Seite,
   // damit die Tabelle ohne manuelles Neuladen aktuell wird. Läuft bereits die
@@ -366,15 +366,10 @@ export default async function CaseCockpitPage({
           },
         });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
-        // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg.
-        if (step.key === "ki_laeuft" && !aiCheckRunning) {
-          step = {
-            key: "ki_fehler",
-            title: "KI-Prüfung wurde unterbrochen",
-            reason: "Der letzte Lauf ist nicht sauber zu Ende gekommen (z. B. durch ein Update). Ein Neustart holt das nach.",
-            tone: "review",
-          };
-        }
+        // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg. Dieselbe
+        // Funktion wie das Dashboard (ai-check-status.ts), damit derselbe Fall
+        // an beiden Stellen dieselbe Aussage trifft.
+        step = withAiCheckStaleOverride(step, aiCheckRunning);
         const actionSlot =
           step.key === "ki_laeuft" ? (
             <AiCheckRunning done={aiCheckDone} total={documents.length} />

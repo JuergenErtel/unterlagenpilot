@@ -4,6 +4,7 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { isAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
@@ -185,7 +186,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
         MAX_APPLICANTS
       ) as 1 | 2;
       const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
-      const step = computeNextStep({
+      let step = computeNextStep({
         caseId: c.id,
         status: c.status,
         counts: {
@@ -218,6 +219,12 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
         },
       });
+      // Stale-Schutz: dieselbe Regel wie auf der Fallseite (ai-check-status.ts).
+      // Ohne ihn bliebe ein Fall mit hart gestorbenem Hintergrundlauf hier für
+      // immer bei "KI-Auswertung läuft" stehen, während die Fallseite (die der
+      // Vermittler als nächstes öffnet) schon "unterbrochen" zeigt – derselbe
+      // Fall, zwei Aussagen.
+      step = withAiCheckStaleOverride(step, isAiCheckRunning(c.status, c.updatedAt));
       const blockers = (Object.keys(platformReady) as Platform[]).filter((p) => !platformReady[p] && p !== "finlink");
       return { c, agg, name, step, blockers };
     })
