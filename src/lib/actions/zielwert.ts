@@ -68,7 +68,25 @@ const GANZZAHLFELDER = ["anzahlKinder", "baujahr", "stellplaetze", "zinsbindungJ
  * "maschinell" – nur so bleibt `uebernehmen` beweisbar unverändert, nicht nur
  * heuristisch plausibel.
  */
-export function wandleWert(feld: string, roh: string, format: "de" | "maschinell" = "de"): unknown {
+/**
+ * Signal fuer "Text war keine lesbare Zahl" – bewusst NICHT `null`.
+ *
+ * Vorher lieferte `wandleWert` fuer "ca. 300" oder "3.000-3.500" `null`
+ * zurueck, `schreibeZielwert` schrieb das ungeprueft in die DB, und ein
+ * vorher gepflegter Wert war ersatzlos weg – die Maske meldete trotzdem
+ * gruen "gespeichert". Das war der einzige Pfad im Feature, der bestehende
+ * Daten zerstoerte (Fund B3, Schlusspruefung 12.08.2026). Ein eigenes,
+ * eindeutig unterscheidbares Signal statt `null` laesst `schreibeZielwert`
+ * den Schreibvorgang auslassen, statt zu loeschen – ein ausdruecklich
+ * geleertes Feld (leerer Text) bleibt weiterhin `null` und loescht wie gewollt.
+ */
+export const UNLESBARER_ZAHLENWERT = Symbol("unlesbarer-zahlenwert");
+
+export function wandleWert(
+  feld: string,
+  roh: string,
+  format: "de" | "maschinell" = "de"
+): unknown {
   const wert = roh.trim();
   if (wert === "") {
     // Eine geloeschte Angabe ist eine Angabe: null schreiben, nicht
@@ -81,7 +99,7 @@ export function wandleWert(feld: string, roh: string, format: "de" | "maschinell
   if (ZAHLENFELDER.includes(feld)) {
     const n =
       format === "maschinell" ? Number(wert) : Number(wert.replace(/\./g, "").replace(",", "."));
-    if (!Number.isFinite(n)) return null;
+    if (!Number.isFinite(n)) return UNLESBARER_ZAHLENWERT;
     return GANZZAHLFELDER.includes(feld) ? Math.round(n) : n;
   }
   return wert;
@@ -131,12 +149,25 @@ async function ermittleApplicantId(
  * das Erstgespräch) stammen – niemals aus Formulardaten, Query-Parametern
  * oder einem sonst vom Client beeinflussbaren Wert.
  */
+export interface SchreibeZielwertErgebnis {
+  gespeichert: boolean;
+  /** Nur gesetzt, wenn NICHT gespeichert wurde, weil der Text keine lesbare Zahl ergab. */
+  unlesbar?: boolean;
+}
+
 export async function schreibeZielwert(
   caseId: string,
   ziel: { entitaet: string; feld: string; person?: 1 | 2 },
   wert: string
-): Promise<void> {
+): Promise<SchreibeZielwertErgebnis> {
   const konvertiert = wandleWert(ziel.feld, wert);
+  // Unlesbare Zahl: NICHTS schreiben. Der vorher gepflegte Wert bleibt in der
+  // DB stehen, statt durch ein stillschweigendes NaN->null geloescht zu
+  // werden – die Zusicherung verbietet Blockieren, nicht Melden (siehe
+  // UNLESBARER_ZAHLENWERT oben).
+  if (konvertiert === UNLESBARER_ZAHLENWERT) {
+    return { gespeichert: false, unlesbar: true };
+  }
   const person = ziel.person ?? 1;
 
   await prisma.$transaction(async (tx) => {
@@ -199,4 +230,5 @@ export async function schreibeZielwert(
         break;
     }
   });
+  return { gespeichert: true };
 }

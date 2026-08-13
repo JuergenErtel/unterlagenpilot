@@ -19,7 +19,7 @@ import {
   type Uebernahmeplan,
 } from "@/lib/self-disclosure/takeover";
 import type { Antworten } from "@/lib/self-disclosure/types";
-import { wandleWert } from "@/lib/actions/zielwert";
+import { wandleWert, UNLESBARER_ZAHLENWERT } from "@/lib/actions/zielwert";
 
 export interface SchrittState {
   error?: string;
@@ -190,7 +190,12 @@ const BESCHAEFTIGUNG: Record<string, string> = {
  */
 function konvertiere(feld: string, wert: string): unknown {
   if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
-  return wandleWert(feld, wert, "maschinell");
+  const konvertiert = wandleWert(feld, wert, "maschinell");
+  // Sollte laut obigem Vertrag nie eintreten (planUebernahme verwirft eine
+  // Luecke des Kunden schon vor dem Vorschlag) – falls doch, lieber wie
+  // frueher `null` schreiben als das Unlesbar-Signal selbst in die DB
+  // durchzureichen (siehe zielwert.ts#UNLESBARER_ZAHLENWERT).
+  return konvertiert === UNLESBARER_ZAHLENWERT ? null : konvertiert;
 }
 
 /**

@@ -16,9 +16,13 @@ import type { MaskenFeld } from "@/lib/erstgespraech/maske";
  * Transaktion je Feld in einem Rutsch (siehe erstgespraech.ts).
  *
  * KEINE Validierung, KEIN Pflichtfeld: Ein leeres Feld ist eine gueltige
- * Angabe und loescht den Wert. Unlesbares wird nicht abgewiesen, sondern vom
- * Schreibkern zu null – der Vermittler soll nicht gegen ein Formular kaempfen,
- * waehrend er telefoniert.
+ * Angabe und loescht den Wert. Eine unlesbare Zahleneingabe ("ca. 300",
+ * "3.000-3.500") wird dagegen NICHT geschrieben – der Schreibkern
+ * (`zielwert.ts`) laesst den vorher gepflegten Wert stehen und meldet das
+ * hier als Fehlerzustand zurueck, statt den Fall ohne sichtbaren Hinweis zu
+ * leeren. Der Vermittler soll trotzdem nicht gegen ein Formular kaempfen,
+ * waehrend er telefoniert – deshalb ein Hinweis statt einer blockierenden
+ * Validierung.
  */
 type Stand = "ruhe" | "speichert" | "gespeichert" | "fehler";
 

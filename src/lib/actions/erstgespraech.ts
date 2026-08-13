@@ -83,11 +83,22 @@ export async function speichereGespraechsfeld(
   // String an ODER auch nicht – `wandleWert` ruft `roh.trim()`, eine Zahl oder
   // ein Objekt aus einer manipulierten Anfrage waere dort ein 500er.
   const person: 1 | 2 = ziel?.person === 2 ? 2 : 1;
-  await schreibeZielwert(
+  const schreibergebnis = await schreibeZielwert(
     caseId,
     { entitaet: erlaubt.entitaet, feld: erlaubt.feld, person },
     String(wert ?? "")
   );
+
+  // Unlesbare Zahleneingabe ("ca. 300", "3.000-3.500"): NICHTS wurde
+  // geschrieben, der vorher gepflegte Wert steht unveraendert in der DB.
+  // Melden statt Blockieren – die Zusicherung verbietet nur Ersteres.
+  if (!schreibergebnis.gespeichert) {
+    return {
+      gespeichert: false,
+      hinweis:
+        "Als Zahl nicht lesbar (z. B. „ca. 300“ oder „3.000–3.500“) – der vorher gespeicherte Wert bleibt unverändert. Bitte eine einzelne Zahl eintragen.",
+    };
+  }
 
   await audit({
     organizationId: ctx.organizationId,

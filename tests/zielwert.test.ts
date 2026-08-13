@@ -42,7 +42,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { wandleWert, schreibeZielwert } from "@/lib/actions/zielwert";
+import { wandleWert, schreibeZielwert, UNLESBARER_ZAHLENWERT } from "@/lib/actions/zielwert";
 
 describe("Typumwandlung fuer Zielfelder", () => {
   it("macht aus Datumstexten ein Datum", () => {
@@ -96,6 +96,18 @@ describe("Typumwandlung fuer Zielfelder", () => {
       // Prisma-Laufzeitfehler ausloesen.
       expect(wandleWert("zinsbindungJahre", "15,5", "de")).toBe(16);
       expect(wandleWert("baujahr", "1998.7", "maschinell")).toBe(1999);
+    });
+  });
+
+  describe("Unlesbare Zahleneingabe (B3 – darf den vorher gepflegten Wert nicht loeschen)", () => {
+    it("liefert das Unlesbar-Signal statt null bei 'ca. 300'", () => {
+      expect(wandleWert("kaufpreis", "ca. 300")).toBe(UNLESBARER_ZAHLENWERT);
+    });
+    it("liefert das Unlesbar-Signal statt null bei einer Spanne '3.000-3.500'", () => {
+      expect(wandleWert("kaufpreis", "3.000-3.500")).toBe(UNLESBARER_ZAHLENWERT);
+    });
+    it("ein explizit geleertes Feld bleibt weiterhin null, nicht das Unlesbar-Signal", () => {
+      expect(wandleWert("kaufpreis", "")).toBeNull();
     });
   });
 
@@ -215,11 +227,30 @@ describe("schreibeZielwert", () => {
   });
 
   it("schreibt einen geleerten Wert als null – anders als uebernehmen darf hier geloescht werden", async () => {
-    await schreibeZielwert("case-A", { entitaet: "property", feld: "wohnflaeche" }, "");
+    const ergebnis = await schreibeZielwert("case-A", { entitaet: "property", feld: "wohnflaeche" }, "");
     expect(h.propertyUpsert).toHaveBeenCalledWith({
       where: { caseId: "case-A" },
       create: { caseId: "case-A", wohnflaeche: null },
       update: { wohnflaeche: null },
+    });
+    expect(ergebnis.gespeichert).toBe(true);
+  });
+
+  describe("Unlesbare Zahleneingabe (B3)", () => {
+    it("schreibt NICHTS in die DB, wenn der Text keine lesbare Zahl ergibt – der vorher gepflegte Wert bleibt stehen", async () => {
+      const ergebnis = await schreibeZielwert("case-A", { entitaet: "property", feld: "wohnflaeche" }, "ca. 300");
+      expect(h.propertyUpsert).not.toHaveBeenCalled();
+      expect(ergebnis).toEqual({ gespeichert: false, unlesbar: true });
+    });
+
+    it("schreibt NICHTS bei einer Spannenangabe wie '3.000-3.500'", async () => {
+      const ergebnis = await schreibeZielwert(
+        "case-A",
+        { entitaet: "financingRequest", feld: "kaufpreis" },
+        "3.000-3.500"
+      );
+      expect(h.financingUpsert).not.toHaveBeenCalled();
+      expect(ergebnis).toEqual({ gespeichert: false, unlesbar: true });
     });
   });
 });

@@ -20,7 +20,9 @@ vi.mock("@/lib/actions/zielwert", () => ({ schreibeZielwert: h.schreiben }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
 
 beforeEach(() => {
-  h.schreiben.mockReset();
+  // Seit Fund B3 liefert schreibeZielwert ein Ergebnisobjekt statt void
+  // (siehe zielwert.ts) – der Normalfall im Mock ist "gespeichert".
+  h.schreiben.mockReset().mockResolvedValue({ gespeichert: true });
   h.audit.mockReset();
   h.status.wert = "neu";
 });
@@ -158,6 +160,23 @@ describe("Erstgespraech: ein Feld speichern", () => {
     );
     expect(ergebnis.gespeichert).toBe(false);
     expect(h.schreiben).not.toHaveBeenCalled();
+  });
+
+  it("meldet eine unlesbare Zahleneingabe, statt sie als Erfolg zu protokollieren (B3)", async () => {
+    // schreibeZielwert schreibt bei "ca. 300" o.ae. NICHTS und meldet das
+    // ueber { gespeichert: false, unlesbar: true } zurueck (siehe
+    // zielwert.ts). Dieser Aufrufer darf das dann nicht als Erfolg
+    // protokollieren oder revalidieren.
+    h.schreiben.mockResolvedValueOnce({ gespeichert: false, unlesbar: true });
+    const { speichereGespraechsfeld } = await import("@/lib/actions/erstgespraech");
+    const ergebnis = await speichereGespraechsfeld(
+      "c1",
+      { entitaet: "financingRequest", feld: "kaufpreis" },
+      "ca. 300"
+    );
+    expect(ergebnis.gespeichert).toBe(false);
+    expect(ergebnis.hinweis).toBeTruthy();
+    expect(h.audit).not.toHaveBeenCalled();
   });
 
   it("kennt die drei Konditionsfelder aus dem erweiterten Katalog", async () => {
