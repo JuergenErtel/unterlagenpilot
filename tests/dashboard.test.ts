@@ -455,7 +455,7 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
     expect(todo?.nextStep).toBe("KI-Auswertung läuft");
   });
 
-  it("erkennt einen gestorbenen Einzel-Upload am Alter des DOKUMENTS als unterbrochen", async () => {
+  it("meldet einen gestorbenen Einzel-Upload als 'ohne KI-Ergebnis' – der Neustart-Weg darf nicht verschwinden", async () => {
     nurDiesenFall(
       ki_pruefung_kandidat({ status: "unterlagen_fehlen", updatedAt: new Date(Date.now() - 60 * 60_000) })
     );
@@ -463,9 +463,18 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
 
     const data = await getDashboardData("org-1");
     const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
-    // Kein "läuft" mehr: Das Dokument zählt altersbereinigt nicht mehr mit,
-    // und ohne laufenden Fallstatus fällt die Leiter auf die nächste Stufe.
-    expect(todo?.nextStep).not.toBe("KI-Auswertung läuft");
+    /*
+     * Bewusst die STUFE geprüft, nicht nur die Abwesenheit von "läuft": Ein
+     * Dokument, das nach einem harten Abbruch für immer auf "laeuft"
+     * stehenbleibt (pipeline.ts setzt "fehler" nur bei erreichtem Code, ein
+     * Aufräum-Cron existiert nicht), fiele sonst durch jedes Raster – aus
+     * docsLaufend (altersbereinigt), aus der Review-Liste (filtert auf
+     * "fertig") und damit aus der Leiter. Die Fallseite nennte irgendeinen
+     * anderen Schritt, ohne den Knopf "KI-Prüfung wiederholen", das
+     * Review-Center meldete "Alles freigegeben" und das Fallbild 100 %.
+     * Ein "not.toBe('KI-Auswertung läuft')" wäre dabei grün geblieben.
+     */
+    expect(todo?.nextStep).toBe("1 Dokument ohne KI-Ergebnis");
   });
 
   it("bleibt bei einem hängengebliebenen Sammel-Lauf 'unterbrochen', auch wenn Dokumente auf 'laeuft' stehengeblieben sind", async () => {

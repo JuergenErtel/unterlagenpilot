@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { countProcessingDocuments, countRunningClassifications } from "@/lib/documents/processing";
+import {
+  countDocumentsWithoutAiResult,
+  countProcessingDocuments,
+  countRunningClassifications,
+} from "@/lib/documents/processing";
 
 const now = new Date("2026-08-03T12:00:00Z");
 const fresh = new Date("2026-08-03T11:58:00Z"); // 2 min alt
@@ -53,5 +57,28 @@ describe("countRunningClassifications", () => {
 
   it("ignoriert veraltete laeuft-Status – daran hängt die Erkennung eines gestorbenen Einzel-Uploads", () => {
     expect(countRunningClassifications([doc({ classificationStatus: "laeuft", updatedAt: stale })], now)).toBe(0);
+  });
+});
+
+/**
+ * Die Gegenbuchung zu countRunningClassifications: Was dort altersbereinigt
+ * herausfällt, MUSS hier auftauchen. Sonst verschwindet ein hart gestorbener
+ * Upload lautlos aus Prioritätsleiter, Review-Center und Fallbild – samt dem
+ * einzigen Weg zurück ("KI-Prüfung wiederholen").
+ */
+describe("countDocumentsWithoutAiResult", () => {
+  it("zählt Klassifikations- und Extraktionsfehler", () => {
+    const docs = [doc({ classificationStatus: "fehler" }), doc({ extractionStatus: "fehler" }), doc({})];
+    expect(countDocumentsWithoutAiResult(docs, now)).toBe(2);
+  });
+
+  it("zählt ein auf 'laeuft' hängengebliebenes Dokument mit – ein frisch laufendes nicht", () => {
+    expect(countDocumentsWithoutAiResult([doc({ classificationStatus: "laeuft", updatedAt: stale })], now)).toBe(1);
+    expect(countDocumentsWithoutAiResult([doc({ classificationStatus: "laeuft", updatedAt: fresh })], now)).toBe(0);
+  });
+
+  it("zählt dasselbe Dokument nur einmal, auch wenn zwei Gründe zutreffen", () => {
+    const docs = [doc({ classificationStatus: "laeuft", extractionStatus: "fehler", updatedAt: stale })];
+    expect(countDocumentsWithoutAiResult(docs, now)).toBe(1);
   });
 });

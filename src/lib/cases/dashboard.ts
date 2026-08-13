@@ -5,7 +5,7 @@ import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
 import { isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
-import { countRunningClassifications } from "@/lib/documents/processing";
+import { countDocumentsWithoutAiResult, countRunningClassifications } from "@/lib/documents/processing";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
@@ -207,7 +207,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           pruefbereit: docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length,
           docsMissing: agg.missing.length,
           criticals: agg.plausibility.filter((p) => p.status === "kritisch").length,
-          docsFehler: docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length,
+          docsFehler: countDocumentsWithoutAiResult(docs),
           docsLaufend,
           offeneBefunde: befundeJeFall.get(c.id) ?? 0,
           // Bewusst false: der Solver braucht je Fall einen vollstaendigen

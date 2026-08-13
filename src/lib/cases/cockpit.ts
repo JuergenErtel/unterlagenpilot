@@ -5,7 +5,7 @@ import { readinessTone, type Tone } from "@/lib/ui/tone";
 import type { Auslaufband } from "@/lib/machbarkeit/bewertung";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
 import { ladeSelbstauskunftStand } from "./selbstauskunft-stand";
-import { countRunningClassifications } from "@/lib/documents/processing";
+import { countDocumentsWithoutAiResult, countRunningClassifications } from "@/lib/documents/processing";
 
 export interface CockpitData {
   caseId: string;
@@ -109,7 +109,10 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       d.reviewStatus !== "ersetzt"
   ).length;
   const pruefbereit = docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length;
-  const docsFehler = docs.filter((d) => d.classificationStatus === "fehler" || d.extractionStatus === "fehler").length;
+  // Enthält auch die auf "laeuft" hängengebliebenen Dokumente, die
+  // `docsLaufend` altersbereinigt herausfiltert – sonst verschwände ein
+  // gestorbener Upload aus jeder Anzeige (siehe documents/processing.ts).
+  const docsFehler = countDocumentsWithoutAiResult(docs);
   const docsLaufend = countRunningClassifications(docs);
   const warnings = agg.plausibility.filter((p) => p.status !== "ok").length;
   const criticals = agg.plausibility.filter((p) => p.status === "kritisch");

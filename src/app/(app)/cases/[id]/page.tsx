@@ -225,7 +225,14 @@ export default async function CaseCockpitPage({
   // Nach einem Upload trudeln Typ/Felder asynchron nach – solange pollt die Seite,
   // damit die Tabelle ohne manuelles Neuladen aktuell wird. Läuft bereits die
   // KI-Prüfungs-Anzeige, pollt die schon; kein zweites Intervall nötig.
-  const processingCount = aiCheckRunning ? 0 : countProcessingDocuments(documents);
+  //
+  // Das Gate hängt an `kiLaufAktiv`, NICHT an `aiCheckRunning`: Die Fallreise
+  // rendert <AiCheckRunning> (4-Sekunden-Intervall auf router.refresh()) bei
+  // jedem `ki_laeuft` – also auch beim normalen Einzel-Upload, bei dem der
+  // Fallstatus unberührt bleibt. Am Fallstatus gemessen liefe daneben
+  // <DocumentsProcessing> mit einem zweiten Intervall, und die schwerste Seite
+  // der App rendert sich während jedes Uploads doppelt so oft neu.
+  const processingCount = kiLaufAktiv ? 0 : countProcessingDocuments(documents);
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.

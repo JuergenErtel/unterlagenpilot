@@ -47,9 +47,16 @@ export type Quelle =
  *
  * "sonstiges" bleibt DRIN: Das ist die Antwort "keine der Kategorien passt",
  * nicht die Aussage "kein Arbeitsvertrag" – ein Minijob faellt z. B. hierher.
- * Dieselbe Ueberlegung wie bei `nurBeiBeschaeftigung` in
- * `checklists/templates.ts`, wo "sonstiges" ebenfalls Gehaltsabrechnungen
- * beibehaelt.
+ *
+ * ACHTUNG, die gleichnamige Liste in `checklists/templates.ts` ist NICHT
+ * dieselbe und darf nicht angeglichen werden: Dort geht es um
+ * Gehaltsabrechnungen, und die fuehrt ein Geschaeftsfuehrer oder
+ * Gesellschafter sehr wohl vor (er bezieht ein Gehalt aus seiner eigenen
+ * Gesellschaft) – beide stehen deshalb dort in der Positivliste. Ein
+ * ARBEITSVERTRAG mit Befristung und Probezeit ist dagegen genau das, was ihn
+ * vom Angestellten unterscheidet; hier bleiben beide draussen. Gemeinsam ist
+ * den Listen nur die Regel fuer die unbekannte Beschaeftigungsart (siehe
+ * `Definition.nurBeiBeschaeftigung`), nicht ihr Inhalt.
  */
 export const BESCHAEFTIGUNG_MIT_ARBEITSVERTRAG: EmploymentType[] = [
   "angestellter",
