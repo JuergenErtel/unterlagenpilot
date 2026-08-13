@@ -19,6 +19,7 @@ import {
   type Uebernahmeplan,
 } from "@/lib/self-disclosure/takeover";
 import type { Antworten } from "@/lib/self-disclosure/types";
+import { wandleWert } from "@/lib/actions/zielwert";
 
 export interface SchrittState {
   error?: string;
@@ -173,37 +174,17 @@ const BESCHAEFTIGUNG: Record<string, string> = {
   sonstiges: "sonstiges",
 };
 
-const DATUMSFELDER = ["geburtsdatum", "eintrittsdatum", "befristetBis", "gruendungsdatum"];
-const ZAHLENFELDER = [
-  "anzahlKinder",
-  "wohnflaeche",
-  "grundstuecksflaeche",
-  "baujahr",
-  "anzahlZimmer",
-  "stellplaetze",
-  "kaufpreis",
-  "baukosten",
-  "modernisierungskosten",
-  "eigenkapital",
-  "darlehenswunsch",
-  "maklerprovisionProzent",
-  "hausgeldMonatlich",
-  "mieteinnahmenMonatlich",
-  "nettoMonatlich",
-  "bruttoMonatlich",
-  "sonstigeEinnahmen",
-  "mieteinnahmen",
-  "einmalzahlungenJaehrlich",
-  "beteiligungProzent",
-];
-
-/** Wandelt den Textwert in den Typ, den das Zielfeld erwartet. */
+/**
+ * Wandelt den Textwert in den Typ, den das Zielfeld erwartet. Datum, Zahl und
+ * Wahrheitswert kommen aus dem gemeinsamen Schreibkern (`zielwert.ts`), den
+ * sich die Selbstauskunft mit der geführten Maske fürs Erstgespräch teilt.
+ * Nur die Abbildung der neun Berufsoptionen auf `EmploymentType` bleibt hier:
+ * Sie ist reine Vokabel-Übersetzung des Selbstauskunft-Katalogs, keine
+ * allgemeine Typumwandlung.
+ */
 function konvertiere(feld: string, wert: string): unknown {
   if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
-  if (DATUMSFELDER.includes(feld)) return new Date(wert);
-  if (ZAHLENFELDER.includes(feld)) return Number(wert);
-  if (feld === "inProbezeit") return wert === "true" || wert === "ja";
-  return wert;
+  return wandleWert(feld, wert);
 }
 
 /**
