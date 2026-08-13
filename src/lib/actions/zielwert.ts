@@ -9,13 +9,13 @@ import { prisma } from "@/lib/db";
  */
 
 const DATUMSFELDER = ["geburtsdatum", "eintrittsdatum", "befristetBis", "gruendungsdatum"];
-const WAHRHEITSFELDER = ["inProbezeit", "sondertilgungGewuenscht"];
-// inProbezeit ist in der DB NOT NULL (Standard false). Eine geloeschte Angabe
-// kann hier keine echte Luecke ausdruecken – sie faellt auf den Schema-
-// Standard zurueck, statt einen Laufzeitfehler auszuloesen. sondertilgung-
-// Gewuenscht ist dagegen nullable: null bedeutet dort laut Schema-Kommentar
-// "nicht gefragt" und ist erlaubt.
-const NICHT_NULLBARE_WAHRHEITSFELDER = ["inProbezeit"];
+const WAHRHEITSFELDER = ["inProbezeit", "befristet", "sondertilgungGewuenscht"];
+// inProbezeit UND befristet sind in der DB NOT NULL (Standard false). Eine
+// geloeschte Angabe kann hier keine echte Luecke ausdruecken – sie faellt auf
+// den Schema-Standard zurueck, statt einen Laufzeitfehler auszuloesen.
+// sondertilgungGewuenscht ist dagegen nullable: null bedeutet dort laut
+// Schema-Kommentar "nicht gefragt" und ist erlaubt.
+const NICHT_NULLBARE_WAHRHEITSFELDER = ["inProbezeit", "befristet"];
 const ZAHLENFELDER = [
   "anzahlKinder",
   "wohnflaeche",

@@ -46,4 +46,22 @@ describe("Angebotsreife", () => {
     expect(gefuellt).toContain("sondertilgungGewuenscht");
     expect(gefuellt).toContain("maklerprovisionProzent");
   });
+
+  it("zaehlt Probezeit und Befristung als gefuellt, sobald ein Beschaeftigungssatz die Vorgabe 'nein' traegt", () => {
+    // Beide Spalten sind NOT NULL mit Vorgabe false ("nein") – die Vorbelegung
+    // IST die Antwort (Entscheidung des Vermittlers vom 13.08.2026). Sobald
+    // ein employment-Satz existiert (z. B. weil die Beschaeftigungsart schon
+    // beantwortet wurde), tragen beide Spalten also den Schema-Standard false
+    // und zaehlen zu Recht als beantwortet – kein Datum noetig.
+    const r = berechneReife(
+      {
+        ...leer,
+        applicants: [{ position: 1, employment: [{ inProbezeit: false, befristet: false }] }],
+      },
+      1
+    );
+    const gefuellt = r.felder.filter((f) => f.gefuellt).map((f) => f.schluessel);
+    expect(gefuellt).toContain("inProbezeit");
+    expect(gefuellt).toContain("befristet");
+  });
 });

@@ -56,6 +56,10 @@ describe("Typumwandlung fuer Zielfelder", () => {
     expect(wandleWert("sondertilgungGewuenscht", "ja")).toBe(true);
     expect(wandleWert("sondertilgungGewuenscht", "nein")).toBe(false);
   });
+  it("macht aus ja/nein einen Wahrheitswert fuer die Befristung", () => {
+    expect(wandleWert("befristet", "ja")).toBe(true);
+    expect(wandleWert("befristet", "nein")).toBe(false);
+  });
   it("macht aus einem leeren Text null – eine geloeschte Angabe ist eine Angabe", () => {
     expect(wandleWert("kaufpreis", "")).toBeNull();
   });
@@ -97,9 +101,10 @@ describe("Typumwandlung fuer Zielfelder", () => {
 
   describe("Nicht-nullbare Wahrheitsfelder", () => {
     it("faellt bei einer geloeschten Angabe auf den Schema-Standard zurueck, statt null zu schreiben", () => {
-      // inProbezeit ist Boolean @default(false), also NOT NULL – null wuerde
-      // an dieser Spalte einen Laufzeitfehler ausloesen.
+      // inProbezeit und befristet sind Boolean @default(false), also NOT
+      // NULL – null wuerde an diesen Spalten einen Laufzeitfehler ausloesen.
       expect(wandleWert("inProbezeit", "")).toBe(false);
+      expect(wandleWert("befristet", "")).toBe(false);
     });
     it("schreibt bei einem nullbaren Wahrheitsfeld weiterhin null", () => {
       // sondertilgungGewuenscht ist Boolean? – null heisst laut Schema

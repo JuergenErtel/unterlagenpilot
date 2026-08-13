@@ -52,7 +52,7 @@ const FELDER: Definition[] = [
   { schluessel: "staatsangehoerigkeit", label: "Staatsangehörigkeit", abschnitt: "person", quelle: "applicant", jePerson: true },
   { schluessel: "beschaeftigungsart", label: "Beschäftigungsart", abschnitt: "beruf", quelle: "employment", jePerson: true },
   { schluessel: "inProbezeit", label: "Probezeit", abschnitt: "beruf", quelle: "employment", jePerson: true },
-  { schluessel: "befristetBis", label: "Befristung", abschnitt: "beruf", quelle: "employment", jePerson: true },
+  { schluessel: "befristet", label: "Befristet", abschnitt: "beruf", quelle: "employment", jePerson: true },
   { schluessel: "nettoMonatlich", label: "Nettoeinkommen", abschnitt: "beruf", quelle: "income", jePerson: true },
   { schluessel: "sonstigeEinnahmen", label: "Weitere Einkünfte", abschnitt: "beruf", quelle: "income", jePerson: true },
   { schluessel: "street", label: "Anschrift", abschnitt: "person", quelle: "applicant" },
@@ -80,6 +80,14 @@ const FELDER: Definition[] = [
  * 0 und false sind ANTWORTEN: "keine Maklerprovision" und "keine
  * Sondertilgung gewuenscht" duerfen nicht als offen gelten, sonst fragt das
  * Interview ewig nach etwas, das schon beantwortet ist.
+ *
+ * Deshalb zaehlen "inProbezeit" und "befristet" ab jetzt IMMER als gefuellt:
+ * beide sind Boolean-Spalten NOT NULL mit Vorgabe false, und die Vorgabe
+ * "nein" IST die Antwort (Entscheidung des Vermittlers vom 13.08.2026) – wer
+ * es anders hat, kreuzt aktiv um. Vorher stand hier "befristetBis" (ein
+ * Datum): Wer unbefristet beschaeftigt oder selbstaendig ist, hat dort nie
+ * etwas stehen, und die Leiste konnte "vollstaendig" fuer die Mehrheit der
+ * Faelle nie erreichen. Das Ankreuzfeld loest das auf.
  */
 function istGefuellt(wert: unknown): boolean {
   return wert !== null && wert !== undefined && wert !== "";

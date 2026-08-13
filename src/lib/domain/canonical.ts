@@ -36,6 +36,7 @@ export interface CanonicalEmployment {
   arbeitgeberAdresse?: string;
   eintrittsdatum?: string;
   befristetBis?: string | null;
+  befristet?: boolean;
   inProbezeit?: boolean;
 }
 

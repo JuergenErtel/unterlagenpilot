@@ -701,6 +701,11 @@ model EmploymentRecord {
   arbeitgeberAdresse String?
   eintrittsdatum     DateTime?
   befristetBis       DateTime?
+  // Ja/Nein-Antwort des Erstgespraechs (siehe reife.ts): befristetBis bleibt
+  // als Datum bestehen (Anzeige + FinLink-Import), ist aber keine Frage mehr,
+  // weil sie fuer die Mehrheit der Faelle (unbefristet, selbstaendig) nie
+  // ausfuellbar ist. Vorbelegung false = "nein" ist bereits eine Antwort.
+  befristet          Boolean         @default(false)
   inProbezeit        Boolean         @default(false)
   createdAt          DateTime        @default(now())
 

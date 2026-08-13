@@ -19,6 +19,10 @@ const beschaeftigung = z
     arbeitgeber: z.string().optional(),
     eintrittsdatum: z.string().optional(),
     befristetBis: z.string().nullable().optional(),
+    // Ja/Nein-Ableitung aus end_date bzw. limited_contract am Arbeitgebersatz
+    // (siehe parseFinLinkApplicantsResponse) – die Reife fragt seit Aufgabe 8
+    // ein Ankreuzfeld statt eines Datums ab.
+    befristet: z.boolean().optional(),
     inProbezeit: z.boolean().optional(),
   })
   .optional();
@@ -522,6 +526,12 @@ export function parseFinLinkApplicantsResponse(body: unknown): Antragsteller[] {
     const eintrittsdatum = alsDatum(emp?.attributes.start_date);
     const befristetBis = alsDatum(emp?.attributes.end_date) ?? null;
     const inProbezeit = emp?.attributes.in_probation_period ?? undefined;
+    // "befristet" ist die Ja/Nein-Ableitung: Ein Vertragsende ist der
+    // staerkste Beleg, sonst zaehlt die explizite Herstellerangabe
+    // limited_contract. Ohne beides bleibt der Wert offen (undefined) statt
+    // faelschlich "nein" zu behaupten – der Schreibkern faellt dann auf den
+    // Schema-Standard false zurueck (siehe case-writer.ts).
+    const befristet = befristetBis != null ? true : (emp?.attributes.limited_contract ?? undefined);
     // Das Gehalt am Arbeitgebersatz ist der Rueckfall: Bei der zweiten
     // Antragstellerin des Falls UP-2026-0007 stand das Einkommen NUR dort.
     const netto = toNumber(at.monthly_net_income) ?? toNumber(emp?.attributes.monthly_net_salary);
@@ -539,8 +549,8 @@ export function parseFinLinkApplicantsResponse(body: unknown): Antragsteller[] {
       email: at.email_address ?? undefined,
       telefon: at.phone_number ?? undefined,
       beschaeftigung:
-        beschaeftigungsart || beruf || arbeitgeber || eintrittsdatum || inProbezeit != null
-          ? { art: beschaeftigungsart, beruf, arbeitgeber, eintrittsdatum, befristetBis, inProbezeit }
+        beschaeftigungsart || beruf || arbeitgeber || eintrittsdatum || inProbezeit != null || befristet != null
+          ? { art: beschaeftigungsart, beruf, arbeitgeber, eintrittsdatum, befristetBis, befristet, inProbezeit }
           : undefined,
       einkommen: netto != null ? { nettoMonatlich: netto } : undefined,
     };

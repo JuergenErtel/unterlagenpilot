@@ -447,10 +447,15 @@ export const KATALOG: Schritt[] = [
     felder: [
       { id: "seit", label: "Beschäftigt seit", typ: "datum", ziel: { entitaet: "employment", feld: "eintrittsdatum" } },
       {
-        id: "befristet_bis",
-        label: "Befristet bis (falls befristet)",
-        typ: "datum",
-        ziel: { entitaet: "employment", feld: "befristetBis" },
+        // Ankreuzfeld statt Datum: Ein Vertragsende ist fuer die Mehrheit der
+        // Faelle (unbefristet) nie ausfuellbar, die Vorbelegung "nein" ist
+        // bereits die Antwort (Entscheidung des Vermittlers vom 13.08.2026).
+        // "befristetBis" (Datum) bleibt als Spalte fuer den FinLink-Import
+        // und die Anzeige bestehen, ist aber keine Frage mehr.
+        id: "befristet",
+        label: "Arbeitsvertrag befristet?",
+        typ: "ja_nein",
+        ziel: { entitaet: "employment", feld: "befristet" },
       },
       {
         id: "probezeit",

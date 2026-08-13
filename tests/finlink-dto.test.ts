@@ -432,4 +432,27 @@ describe("Arbeitgeber aus den included-Ressourcen", () => {
     expect(a!.beschaeftigung).toBeUndefined();
     expect(a!.einkommen).toBeUndefined();
   });
+
+  it("leitet 'befristet' aus dem Vertragsende ab, auch wenn limited_contract fehlt", () => {
+    const mitEndDatum = structuredClone(antwort);
+    (mitEndDatum.included[0]!.attributes as Record<string, unknown>).end_date =
+      "2027-06-30T00:00:00.000+02:00";
+    const [a] = parseFinLinkApplicantsResponse(mitEndDatum);
+    expect(a!.beschaeftigung?.befristetBis).toBe("2027-06-30");
+    expect(a!.beschaeftigung?.befristet).toBe(true);
+  });
+
+  it("leitet 'befristet' aus limited_contract ab, auch ohne Vertragsende", () => {
+    const nurFlag = structuredClone(antwort);
+    (nurFlag.included[0]!.attributes as Record<string, unknown>).limited_contract = true;
+    const [a] = parseFinLinkApplicantsResponse(nurFlag);
+    expect(a!.beschaeftigung?.befristetBis).toBeNull();
+    expect(a!.beschaeftigung?.befristet).toBe(true);
+  });
+
+  it("laesst 'befristet' unbefristet (false), wenn weder Enddatum noch Flag gesetzt sind", () => {
+    // Der Fixture-Satz traegt bereits limited_contract: false und kein end_date.
+    const [a] = parseFinLinkApplicantsResponse(antwort);
+    expect(a!.beschaeftigung?.befristet).toBe(false);
+  });
 });

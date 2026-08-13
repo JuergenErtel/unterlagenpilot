@@ -88,6 +88,7 @@ export async function createCaseFromCanonical(
           arbeitgeber: e.arbeitgeber ?? null,
           eintrittsdatum: e.eintrittsdatum ? new Date(e.eintrittsdatum) : null,
           befristetBis: e.befristetBis ? new Date(e.befristetBis) : null,
+          befristet: e.befristet ?? false,
           inProbezeit: e.inProbezeit ?? false,
         })),
       },
@@ -194,6 +195,7 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
                       arbeitgeber: emp.arbeitgeber ?? null,
                       eintrittsdatum: emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : null,
                       befristetBis: emp.befristetBis ? new Date(emp.befristetBis) : null,
+                      befristet: emp.befristet ?? false,
                       inProbezeit: emp.inProbezeit ?? false,
                     },
                   ],
@@ -236,6 +238,7 @@ export async function fillCaseFromCanonical(caseId: string, canonical: Canonical
             arbeitgeber: emp.arbeitgeber ?? null,
             eintrittsdatum: emp.eintrittsdatum ? new Date(emp.eintrittsdatum) : null,
             befristetBis: emp.befristetBis ? new Date(emp.befristetBis) : null,
+            befristet: emp.befristet ?? false,
             inProbezeit: emp.inProbezeit ?? false,
           },
         });
