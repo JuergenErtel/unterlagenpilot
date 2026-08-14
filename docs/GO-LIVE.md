@@ -71,6 +71,17 @@ Verkaufsargument wird.**
   Platzhalter aus dokumentierten Marktspannen. Für eigene Fälle in Ordnung,
   weil im Ergebnis als „Annahme" gekennzeichnet — vor fremden Nutzern einmal
   bewusst setzen.
+- **OCR-Text app-seitig verschlüsseln** (aus den offenen Punkten der README) —
+  bewusst zurückgestellt am 14.08.2026. **Der Haken, der dabei zu bedenken
+  ist:** `src/lib/cases/search.ts` durchsucht `ocrText` direkt in der Datenbank
+  (`contains`). Verschlüsselter Text macht die Fallsuche über Dokumentinhalte
+  **still kaputt** — sie findet dann einfach nichts mehr, ohne Fehlermeldung.
+  Wer das angeht, entscheidet also zugleich über die Inhaltssuche: entweder sie
+  entfällt, oder es braucht einen Blindindex (gehashte Wörter in einer
+  Nebentabelle; ganze Wörter bleiben suchbar, Teilwortsuche entfällt).
+  Bestehende Dokumente müssen in beiden Fällen einmal nachgezogen werden.
+  Die Datenbank selbst verschlüsselt Supabase bereits auf der Platte; der
+  Zugewinn ist der Schutz gegen einen geleakten Dump.
 - **Manuelle Freigabe von Registrierungen** ist ein Zwischenstand. Beim Umbau
   auf ein automatisches Abosystem müssen AGB §3/§7 und `AGB_VERSION` mitziehen.
 - **Europace-Zugang** ist beantragt, aber noch nicht da. Ohne ihn bleibt die
