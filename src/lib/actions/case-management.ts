@@ -7,8 +7,10 @@ import { audit } from "@/lib/audit";
 import {
   CASE_NOTE_KINDS,
   DEADLINE_KINDS,
+  KONTAKT_ERGEBNISSE,
   type CaseNoteKind,
   type DeadlineKind,
+  type KontaktErgebnis,
 } from "@/lib/domain/enums";
 
 function str(formData: FormData, key: string): string | undefined {
@@ -120,6 +122,64 @@ export async function deleteCaseNote(noteId: string): Promise<void> {
   if (note.case.organizationId !== ctx.organizationId) return;
   await prisma.caseNote.delete({ where: { id: noteId } });
   revalidateCase(note.caseId);
+}
+
+/** Kanäle, über die ein Kontaktversuch laufen kann. E-Mail zählt nicht mit –
+ *  sie erreicht niemanden, sie wartet auf Antwort. */
+const KONTAKT_KANAELE = ["telefon", "whatsapp"] as const;
+
+/**
+ * Hält einen Kontaktversuch fest – die Schreibseite der geführten
+ * Kontaktaufnahme.
+ *
+ * Bewusst ein Vermerk und keine eigene Tabelle: `CaseNote` IST die
+ * Kontakthistorie und wird auf der Verwaltungsseite bereits angezeigt. So
+ * steht der Versuch ohne Zusatzarbeit dort, wo der Vermittler ihn sucht.
+ *
+ * Der Text wird erzeugt, nicht erfragt: Im Gespräch tippt niemand.
+ */
+export async function kontaktVersuchErfassen(caseId: string, formData: FormData): Promise<void> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const kanalRoh = str(formData, "kanal");
+  const ergebnisRoh = str(formData, "ergebnis");
+  if (!(KONTAKT_KANAELE as readonly string[]).includes(kanalRoh ?? "")) return;
+  if (!(KONTAKT_ERGEBNISSE as readonly string[]).includes(ergebnisRoh ?? "")) return;
+  const kanal = kanalRoh as (typeof KONTAKT_KANAELE)[number];
+  const ergebnis = ergebnisRoh as KontaktErgebnis;
+
+  const bisher = await prisma.caseNote.count({
+    where: { caseId, ergebnis: "nicht_erreicht" },
+  });
+
+  const body =
+    ergebnis === "erreicht"
+      ? kanal === "telefon"
+        ? "Telefonisch erreicht."
+        : "Antwort über WhatsApp erhalten."
+      : kanal === "telefon"
+        ? `Nicht erreicht (${bisher + 1}. Versuch).`
+        : `WhatsApp geschrieben (${bisher + 1}. Versuch).`;
+
+  await prisma.caseNote.create({
+    data: { caseId, authorId: ctx.userId, kind: kanal, ergebnis, body },
+  });
+
+  const wiedervorlage = date(formData, "wiedervorlage");
+  if (ergebnis === "erreicht" && wiedervorlage) {
+    await prisma.case.update({ where: { id: caseId }, data: { wiedervorlage } });
+  }
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: caseId,
+  });
+
+  revalidatePath(`/cases/${caseId}`);
+  revalidatePath("/dashboard");
 }
 
 // ---------------------------------------------------------------------------
