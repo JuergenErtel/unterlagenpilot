@@ -33,11 +33,30 @@ describe("waLink", () => {
     expect(waLink("030 12345678-100")).toBeNull();
   });
 
-  it("lehnt zu kurze Nummern nach 00-Normalisierung ab", () => {
+  it("akzeptiert echte kurze Berliner Festnetznummern", () => {
+    // "030 123456" → nach Ziffernfilter: 030123456 (9 Ziffern)
+    // → normiert: 49 + 30123456 = 4930123456 (10 Ziffern)
+    // Das ist real: Berliner Vorwahl 030 (2 Ziffern), 6-stellige Rufnummer.
+    // Deutsche Nummern: 9–13 Ziffern nach Normalisierung erlaubt.
+    expect(waLink("030 123456")).toBe("https://wa.me/4930123456");
+  });
+
+  it("akzeptiert echte kurze Münchner Festnetznummern", () => {
+    // "089 12345" → nach Ziffernfilter: 08912345 (8 Ziffern)
+    // → normiert: 49 + 8912345 = 498912345 (9 Ziffern)
+    // Das ist real: Münchner Vorwahl 089 (3 Ziffern), 5-stellige Rufnummer.
+    // Deutsche Nummern: 9–13 Ziffern nach Normalisierung erlaubt.
+    expect(waLink("089 12345")).toBe("https://wa.me/498912345");
+  });
+
+  it("akzeptiert internationale Nummern nach 00-Strippen (auch mit Tippfehler)", () => {
     // "00170 1234567" → nach Ziffernfilter: 001701234567 (12 Ziffern)
     // → nach 00-Strippen: 1701234567 (10 Ziffern)
-    // 10 Ziffern sind zu kurz für eine internationale Nummer (Minimum E.164: 11)
-    expect(waLink("00170 1234567")).toBeNull();
+    // Internationale Nummern: 8–15 Ziffern erlaubt. 10 Ziffern sind OK.
+    // HINWEIS: Das ist technisch ein Tippfehler (doppelte statt einfacher Null),
+    // aber echte deutsche Festnetznummern zu verwerfen kostet sicher; dieser seltene
+    // Fehler wird akzeptiert. Besser als Kollateralschaden.
+    expect(waLink("00170 1234567")).toBe("https://wa.me/1701234567");
   });
 
   it("akzeptiert gueltige 13-stellige internationale Nummern", () => {
@@ -70,5 +89,19 @@ describe("telLink", () => {
     // "0170 12345678" → nach Ziffernfilter: 017012345678 (12 Ziffern)
     // Das ist eine gültige deutsche Nummer (Vorwahl 170 mit 8-stelliger Anschluss)
     expect(telLink("0170 12345678")).toBe("tel:017012345678");
+  });
+
+  it("akzeptiert echte kurze Berliner Festnetznummern", () => {
+    // "030 123456" → nach Ziffernfilter: 030123456 (9 Ziffern)
+    // Das ist real: Berliner Vorwahl 030, 6-stellige Rufnummer.
+    // Deutsche Nummern: 9–13 Ziffern erlaubt.
+    expect(telLink("030 123456")).toBe("tel:030123456");
+  });
+
+  it("akzeptiert echte kurze Münchner Festnetznummern", () => {
+    // "089 12345" → nach Ziffernfilter: 08912345 (8 Ziffern)
+    // Das ist real: Münchner Vorwahl 089, 5-stellige Rufnummer.
+    // Deutsche Nummern: 9–13 Ziffern erlaubt.
+    expect(telLink("089 12345")).toBe("tel:08912345");
   });
 });
