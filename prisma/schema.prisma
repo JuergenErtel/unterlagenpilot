@@ -72,7 +72,15 @@ enum CaseNoteKind {
   notiz
   telefon
   email
+  whatsapp
   wiedervorlage
+}
+
+/// Ergebnis eines Kontaktversuchs. Nur gesetzt, wenn der Vermerk ein
+/// Kontaktversuch ist – ein freier Vermerk laesst das Feld leer.
+enum KontaktErgebnis {
+  erreicht
+  nicht_erreicht
 }
 
 enum DeadlineKind {
@@ -541,14 +549,15 @@ model Case {
 
 // Kontakthistorie / Notizen am Fall (Telefonnotizen, Wiedervorlagen, freie Notizen).
 model CaseNote {
-  id        String       @id @default(cuid())
+  id        String              @id @default(cuid())
   caseId    String
-  case      Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case      Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
   authorId  String?
-  author    User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  kind      CaseNoteKind @default(notiz)
+  author    User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  kind      CaseNoteKind        @default(notiz)
   body      String
-  createdAt DateTime     @default(now())
+  ergebnis  KontaktErgebnis?
+  createdAt DateTime            @default(now())
 
   @@index([caseId, createdAt])
   @@map("case_notes")

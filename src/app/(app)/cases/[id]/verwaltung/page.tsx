@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Phone, Mail, StickyNote, CalendarClock, CheckCircle2, Trash2, Banknote } from "lucide-react";
+import { ArrowLeft, Phone, Mail, StickyNote, CalendarClock, MessageCircle, CheckCircle2, Trash2, Banknote } from "lucide-react";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
@@ -46,6 +46,7 @@ function isoDate(d: Date | null): string {
 const NOTE_ICON: Record<CaseNoteKind, typeof Phone> = {
   telefon: Phone,
   email: Mail,
+  whatsapp: MessageCircle,
   notiz: StickyNote,
   wiedervorlage: CalendarClock,
 };

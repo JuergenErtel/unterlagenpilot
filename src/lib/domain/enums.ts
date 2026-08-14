@@ -130,13 +130,14 @@ export const LOSS_REASON_LABELS: Record<LossReason, string> = {
 };
 
 /** Art eines Fall-Vermerks (Kontakthistorie). */
-export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "wiedervorlage"] as const;
+export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "whatsapp", "wiedervorlage"] as const;
 export type CaseNoteKind = (typeof CASE_NOTE_KINDS)[number];
 
 export const CASE_NOTE_KIND_LABELS: Record<CaseNoteKind, string> = {
   notiz: "Notiz",
   telefon: "Telefonat",
   email: "E-Mail",
+  whatsapp: "WhatsApp",
   wiedervorlage: "Wiedervorlage",
 };
 
@@ -149,6 +150,15 @@ export const DEADLINE_KIND_LABELS: Record<DeadlineKind, string> = {
   notartermin: "Notartermin",
   nachreichung: "Nachreichfrist Bank",
   sonstige: "Sonstige Frist",
+};
+
+/** Ergebnis eines Kontaktversuchs; leer bei freien Vermerken. */
+export const KONTAKT_ERGEBNISSE = ["erreicht", "nicht_erreicht"] as const;
+export type KontaktErgebnis = (typeof KONTAKT_ERGEBNISSE)[number];
+
+export const KONTAKT_ERGEBNIS_LABELS: Record<KontaktErgebnis, string> = {
+  erreicht: "Erreicht",
+  nicht_erreicht: "Nicht erreicht",
 };
 
 /**
