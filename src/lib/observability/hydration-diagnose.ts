@@ -19,6 +19,24 @@ import type { ErrorEvent } from "@sentry/nextjs";
  * verwerfen, statt ihn ungeklärt mitzuschleppen. Trifft es nicht zu, sind die
  * Body-Kinder trotzdem der erste Hinweis, wo React auseinanderläuft.
  *
+ * Bereits ausgeschlossen (14.08.2026), damit die Wege nicht doppelt gelaufen
+ * werden:
+ *  - Sourcemaps fehlen NICHT. Der Build lädt sie mit Debug-IDs hoch
+ *    ("Source Map Upload Report" im Vercel-Log). Der Stack bleibt trotzdem
+ *    ohne Aussage, weil React den Fehler über den globalen onerror-Handler
+ *    wirft und kein einziger Frame aus unserem Code darin steht.
+ *  - Übersetzung ist bereits dreifach abgewehrt (lang, translate="no",
+ *    notranslate, meta google) – siehe layout.tsx. Der Fehler kam danach wieder.
+ *  - Zeitabhängige Begrüßung ist ausgeschlossen (dashboard/page.tsx: greeting()
+ *    ist bewusst zeitneutral).
+ *  - Die drei Vorfälle verteilen sich über drei Releases, treten aber nur
+ *    sporadisch auf (3x in 5 Tagen bei täglicher Nutzung). Eine feste
+ *    Locale-Differenz scheidet damit aus; es hängt an Umgebung oder Datenlage.
+ *
+ * Bewusst NICHT gesetzt: `suppressHydrationWarning` an html/body. Das wäre die
+ * übliche Absicherung gegen Erweiterungen – würde hier aber genau das Signal
+ * verschlucken, das die Ursache noch klären muss. Erst nach dem Befund setzen.
+ *
  * Datenschutz: aufgezeichnet werden ausschließlich Tagname, Id und erste
  * CSS-Klasse sowie Attribut-NAMEN – keine Attributwerte, keine Textknoten.
  * Damit kann kein Kundenname, kein Betrag und kein Dokumentinhalt nach außen
