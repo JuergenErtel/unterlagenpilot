@@ -43,6 +43,15 @@ export interface NextStep {
    * bekommen (Fall UP-2026-0007). Nur Wegweiser, nie die Hauptaktion.
    */
   wartet?: Array<{ label: string; href: string }>;
+  /**
+   * Staerker hervorheben als die uebrigen Schritte.
+   *
+   * Die Entscheidung darueber gehoert hierher, nicht in die Anzeige: Sonst
+   * muesste `NextStepCard` am Schluessel raten, welcher Schritt gerade wichtig
+   * ist – und beim naechsten Umbau der Leiter faellt genau das auseinander.
+   * Sparsam einsetzen: Wird alles hervorgehoben, ist es nichts mehr.
+   */
+  hervorgehoben?: boolean;
 }
 
 /**
@@ -83,6 +92,11 @@ export interface NextStepInput {
    * Unterlagen überhaupt erst angefordert werden – ihn zurückzuhalten, bis
    * z. B. das Geburtsdatum von Hand nachgetragen wurde, wäre ein Henne-Ei-
    * Problem. Sobald `versendet: true`, taucht keine Erstkontakt-Stufe mehr auf.
+   *
+   * MIT EINER AUSNAHME seit dem 14.08.2026: Das Erstgespraech steht davor,
+   * solange der Erstkontakt nicht versendet ist ("1. Aufgabe nach
+   * Leadeingang"). Der frische Lead gehoert ans Telefon, nicht ins Postfach.
+   * Der Blocker "E-Mail-Adresse fehlt" bleibt weiterhin ganz vorn.
    */
   erstkontakt?: {
     /** Erste gültige E-Mail-Adresse unter den Antragstellern, falls vorhanden. */
@@ -148,7 +162,71 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
       href: `/cases/${c.caseId}/erstgespraech`,
     });
   }
+  /*
+   * Die Gegenrichtung, seit das Erstgespraech beim frischen Lead vorn steht
+   * (14.08.2026): Jetzt ist es der fertige Erstkontakt-Entwurf, der verdraengt
+   * wird – und der ist genauso sofort erledigbar. Ohne diesen Hinweis
+   * verschwaende er spurlos, bis das Gespraech abgehakt ist; das ist dieselbe
+   * Falle, an der im Juli die Dokumentfreigabe unauffindbar war.
+   *
+   * Nur der VORBEREITETE Entwurf: Ist noch keiner erzeugt, gaebe es nichts zu
+   * pruefen, und der Hinweis fuehrte in eine Sackgasse.
+   */
+  if (
+    !stumm &&
+    schritt.key !== "erstkontakt_entwurf" &&
+    c.erstkontakt &&
+    !c.erstkontakt.versendet &&
+    c.erstkontakt.vorbereitet &&
+    c.erstkontakt.empfaenger
+  ) {
+    wartet.push({
+      label: "Erstkontakt prüfen & senden",
+      href: `/cases/${c.caseId}/messages`,
+    });
+  }
   return wartet;
+}
+
+/**
+ * Die Erstgespraechs-Stufe – EINE Regel, zwei Einsatzorte.
+ *
+ * Sie wird zweimal gefragt: einmal ganz vorn, solange der Erstkontakt noch
+ * nicht raus ist (der frische Lead, siehe unten), und einmal an ihrem
+ * angestammten Platz hinter Dokumentfreigabe und kritischen Hinweisen. Beide
+ * Male muessen dieselben Bedingungen gelten, sonst zeigt die Leiter je nach
+ * Fallalter einen anderen Schritt fuer denselben Zustand.
+ *
+ * An `!LOCKED_CASE_STATUSES.has(...)` gebunden: Fuer abgegebene Faelle
+ * (exportiert/uebertragen/abgeschlossen/archiviert) ist die Maske
+ * schreibgeschuetzt (`feld.tsx`) – der Schritt waere dort nicht erledigbar und
+ * die Leiter bliebe fuer immer bei ihm stehen. "bank_nachforderung" faellt
+ * NICHT unter LOCKED_CASE_STATUSES (die Maske bleibt dort bearbeitbar) und
+ * braucht deshalb einen eigenen Ausschluss: Ein Fall, den die Bank bereits
+ * zurueckgemeldet hat, gehoert auf "Fristen im Blick behalten", nicht zurueck
+ * ins Erstgespraech.
+ *
+ * `gefuehrtAm` gesetzt heisst: abgehakt, die Stufe tritt zurueck. Sie
+ * verschwindet dabei nicht – weil sie hier nicht mehr gewinnt, nimmt
+ * `ermittleWartende` sie automatisch als wartenden Schritt auf.
+ */
+function erstgespraechSchritt(c: NextStepInput): NextStep | null {
+  if (!c.erstgespraech || c.erstgespraech.offeneAngaben <= 0) return null;
+  if (c.erstgespraech.gefuehrtAm) return null;
+  if (LOCKED_CASE_STATUSES.has(c.status as CaseStatus)) return null;
+  if (c.status === "bank_nachforderung") return null;
+
+  const offen = c.erstgespraech.offeneAngaben;
+  return {
+    key: "erstgespraech",
+    title: "Erstgespräch führen",
+    // Juergens Ansage vom 14.08.2026: der Schritt soll "viel prominenter"
+    // sein. Bisher der einzige hervorgehobene – das ist Absicht.
+    hervorgehoben: true,
+    reason: `${offen} Angabe${offen === 1 ? "" : "n"} fehl${offen === 1 ? "t" : "en"} noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
+    tone: "review",
+    cta: { label: "Erstgespräch öffnen", href: `/cases/${c.caseId}/erstgespraech` },
+  };
 }
 
 function ermittleSchritt(c: NextStepInput): NextStep {
@@ -206,6 +284,25 @@ function ermittleSchritt(c: NextStepInput): NextStep {
         cta: { label: "Kundendaten ergänzen", href: `/cases/${id}/edit` },
       };
     }
+    /*
+     * Der frische Lead gehoert ans Telefon, nicht ins Postfach.
+     *
+     * Juergens Ansage vom 14.08.2026: "Erstgespraech ist die 1. Aufgabe nach
+     * Leadeingang." Vorher gewann hier der Erstkontakt – der Lead bekam also
+     * eine Mail mit Unterlagen-Checkliste, bevor ihn ueberhaupt jemand
+     * angerufen hatte. Im Baufi-Vertrieb entscheidet die Geschwindigkeit des
+     * ersten Anrufs; die Mail kuendigt man im Gespraech an.
+     *
+     * Nur solange der Erstkontakt NICHT versendet ist: Danach gilt wieder die
+     * angestammte Ordnung, damit ein Fall mit wartenden Dokumenten nicht vom
+     * Gespraech verdeckt wird (dieselbe Falle wie im Juli, siehe
+     * `ermittleWartende`). Der Blocker "E-Mail-Adresse fehlt" steht bewusst
+     * WEITER davor: Ohne Adresse kaeme spaeter weder Erstkontakt noch
+     * Nachforderung raus, und das faellt sonst erst nach dem Gespraech auf.
+     */
+    const vorDerMail = erstgespraechSchritt(c);
+    if (vorDerMail) return vorDerMail;
+
     if (!c.erstkontakt.vorbereitet) {
       return {
         key: "erstkontakt_vorbereiten",
@@ -280,24 +377,8 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   // Ein Fall, den die Bank bereits zurueckgemeldet hat, gehoert auf "Fristen
   // im Blick behalten" (siehe die "fristen"-Stufe unten), nicht zurueck ins
   // Erstgespraech.
-  if (
-    c.erstgespraech &&
-    c.erstgespraech.offeneAngaben > 0 &&
-    // Abgehakt tritt die Stufe zurueck (siehe NextStepInput#erstgespraech).
-    // Sie verschwindet dabei nicht: weil sie hier nicht mehr gewinnt, nimmt
-    // `ermittleWartende` sie oben automatisch als wartenden Schritt auf.
-    !c.erstgespraech.gefuehrtAm &&
-    !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
-    c.status !== "bank_nachforderung"
-  ) {
-    return {
-      key: "erstgespraech",
-      title: "Erstgespräch führen",
-      reason: `${c.erstgespraech.offeneAngaben} Angabe${c.erstgespraech.offeneAngaben === 1 ? "" : "n"} fehl${c.erstgespraech.offeneAngaben === 1 ? "t" : "en"} noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
-      tone: "review",
-      cta: { label: "Erstgespräch öffnen", href: `/cases/${id}/erstgespraech` },
-    };
-  }
+  const nachDerFreigabe = erstgespraechSchritt(c);
+  if (nachDerFreigabe) return nachDerFreigabe;
 
   // Vor allem Unterlagen-Kram: einen Fall, der so nicht darstellbar ist, klärt
   // man, bevor man weiter Unterlagen einsammelt und den Kunden beschäftigt.

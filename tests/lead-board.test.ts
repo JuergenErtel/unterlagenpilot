@@ -18,6 +18,7 @@ function karte(over: Partial<BoardKarte> = {}): BoardKarte {
     verlorenGrund: null,
     vorschlag: null,
   ampel: null,
+    erstgespraechOffen: false,
     ...over,
   };
 }

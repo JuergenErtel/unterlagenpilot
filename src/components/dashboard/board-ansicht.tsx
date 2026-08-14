@@ -82,6 +82,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       abschlussdatum: true,
       darlehensbetrag: true,
       quelle: true,
+      erstgespraechGefuehrtAm: true,
       // Die folgenden Relationen speisen die Machbarkeits-Ampel. Sie haengen
       // bewusst an DIESER Abfrage: ein caseToCanonical je Karte waere eine
       // Datenbankrunde pro Fall – genau deshalb rechnet das Dashboard den
@@ -195,6 +196,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       },
       machbarkeitsAnnahmen
     ),
+    erstgespraechOffen: !c.erstgespraechGefuehrtAm && c.generatedMessages.length === 0,
     vorschlag: schlagePhaseVor({
       leadPhase: c.leadPhase,
       verlorenAm: c.verlorenAm,
@@ -240,6 +242,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       verlorenGrund: k.verlorenGrund,
       vorschlag: k.vorschlag,
       ampel: k.ampel,
+      erstgespraechOffen: k.erstgespraechOffen,
     })),
   });
 

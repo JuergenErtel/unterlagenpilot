@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowRight, PhoneCall, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
   erstkontakt_email_fehlt: UserRound,
   erstkontakt_vorbereiten: Mail,
   erstkontakt_entwurf: Send,
-  erstgespraech: ClipboardList,
+  // Telefonhoerer, nicht Klemmbrett: Das Erstgespraech ist ein Anruf, kein
+  // Formular – und es ist die erste Aufgabe nach dem Leadeingang.
+  erstgespraech: PhoneCall,
   selbstauskunft_eingegangen: ClipboardCheck,
   selbstauskunft_wartet: ClipboardList,
   dokumente_freigeben: ScanSearch,
@@ -36,15 +38,25 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
 export function NextStepCard({ step, actionSlot }: { step: NextStep; actionSlot?: ReactNode }) {
   const tone = TONE[step.tone];
   const Icon = ICON[step.key];
+  // Hervorgehoben heisst: groesseres Zeichen, groessere Zeile, kraeftigerer
+  // Rahmen – dieselbe Karte, nur lauter. Kein zweites Kartenlayout, sonst
+  // laufen die beiden beim naechsten Umbau auseinander.
+  const laut = step.hervorgehoben === true;
   return (
-    <Card className={cn("border-2", tone.border, tone.bg)}>
+    <Card className={cn("border-2", tone.border, tone.bg, laut && "shadow-md")}>
       <CardContent className="flex flex-wrap items-center gap-4 p-5">
-        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 bg-card", tone.border)}>
-          <Icon className={cn("h-5 w-5", tone.text)} />
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full border-2 bg-card",
+            tone.border,
+            laut ? "h-14 w-14" : "h-11 w-11"
+          )}
+        >
+          <Icon className={cn(tone.text, laut ? "h-7 w-7" : "h-5 w-5")} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nächster Schritt</div>
-          <div className="text-lg font-semibold leading-snug">{step.title}</div>
+          <div className={cn("font-semibold leading-snug", laut ? "text-xl" : "text-lg")}>{step.title}</div>
           <p className="mt-0.5 text-sm text-muted-foreground">{step.reason}</p>
           {/* Verdrängte Schritte: als Zeile, nicht als zweiter Knopf – sonst
               stünden zwei Hauptaktionen nebeneinander und die Leiter verlöre

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, CalendarClock, MoreHorizontal, RotateCcw } from "lucide-react";
+import { Check, CalendarClock, MoreHorizontal, PhoneCall, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LEAD_PHASES, LEAD_PHASE_LABELS, type LeadPhase } from "@/lib/domain/enums";
 import { setzePhase, setzeVerloren, hebeVerlustAuf } from "@/lib/actions/lead-phase";
@@ -28,6 +28,7 @@ export interface BoardKarteView {
    * ist eine Client-Komponente und soll keine Server-Module ziehen.
    */
   ampel: { farbe: string; text: string; grund: string } | null;
+  erstgespraechOffen: boolean;
 }
 
 export interface BoardSpalteView {
@@ -191,6 +192,24 @@ export function LeadBoard({
                     {k.liegezeit === 1 ? "Tag" : "Tagen"}
                   </p>
                   <p className="text-xs text-muted-foreground">{k.quelle}</p>
+
+                  {/*
+                    Erste Aufgabe nach dem Leadeingang (14.08.2026): Der frische
+                    Lead gehoert ans Telefon. Der Hinweis ist deshalb ein
+                    Knopf mit Ziel, kein blosses Abzeichen – er ist die Handlung,
+                    nicht ihre Beschreibung. Er sitzt ueber der Ampel, weil er
+                    zuerst dran ist; die Markenfarbe grenzt ihn von der
+                    Ampelsprache (gruen/gelb/rot) ab, die daneben weiterlaeuft.
+                  */}
+                  {k.erstgespraechOffen && (
+                    <Link
+                      href={`/cases/${k.caseId}/erstgespraech`}
+                      className="mt-1.5 flex items-center gap-1.5 rounded border border-primary/40 bg-primary/[0.06] px-2 py-1 text-xs font-medium text-primary hover:bg-primary/[0.12]"
+                    >
+                      <PhoneCall className="h-3 w-3 shrink-0" />
+                      Erstgespräch führen
+                    </Link>
+                  )}
 
                   {k.ampel && (
                     <p

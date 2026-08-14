@@ -424,6 +424,42 @@ describe("computeNextStep – Erstgespräch", () => {
     expect(s.key).not.toBe("erstgespraech");
   });
 
+  it("ist bei einem frischen Lead die ERSTE Aufgabe – noch vor dem Erstkontakt", () => {
+    // Juergens Ansage (14.08.2026): "Erstgespraech ist die 1. Aufgabe nach
+    // Leadeingang." Vorher gewann hier "Erstkontakt pruefen & senden" – der
+    // Lead bekam also eine Mail, bevor ihn jemand angerufen hatte.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: false },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("erstgespraech");
+    expect(s.cta?.href).toBe("/cases/c1/erstgespraech");
+  });
+
+  it("laesst dem Erstkontakt den Vortritt, sobald das Gespräch abgehakt ist", () => {
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: false },
+        erstgespraech: { offeneAngaben: 6, gefuehrtAm: new Date("2026-08-14") },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_entwurf");
+  });
+
+  it("draengt sich nicht vor, wenn die E-Mail-Adresse fehlt – das ist ein Blocker", () => {
+    // Ohne Adresse kann spaeter weder Erstkontakt noch Nachforderung raus.
+    // Der Blocker bleibt vorn, sonst faellt er erst nach dem Gespraech auf.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: null, vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).toBe("erstkontakt_email_fehlt");
+  });
+
   it("tritt zurück, sobald das Gespräch als geführt abgehakt ist – auch mit offenen Angaben", () => {
     // Der Kern des Hakens: Die Reifeleiste zaehlt ~35 Angaben, von denen etliche
     // zu Recht leer bleiben (keine weiteren Einkuenfte, kein Konditionswunsch).
@@ -468,17 +504,35 @@ describe("computeNextStep – Erstgespräch", () => {
     });
   });
 
-  it("bleibt als wartender Schritt sichtbar, wenn ein unversendeter Erstkontakt es verdrängt", () => {
-    // Das Erstgespraech braucht keinen versendeten Erstkontakt – ohne den
-    // Hinweis verschwaende es spurlos, sobald der Erstkontakt vorn steht.
+  it("laesst den fertigen Erstkontakt-Entwurf sichtbar, wenn es ihn verdrängt", () => {
+    // Die Umkehr vom 14.08.2026: Frueher gewann der Erstkontakt und das
+    // Erstgespraech stand unter "Wartet ausserdem" – jetzt andersherum. Die
+    // Zusage dahinter bleibt dieselbe: Ein fertiger, sofort erledigbarer
+    // Schritt darf nicht spurlos verschwinden, weil die Leiter nur EINEN
+    // Schritt zeigt. Genau daran scheiterte im Juli die Dokumentfreigabe.
     const s = computeNextStep(
       cockpit({
         erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: true, versendet: false },
         erstgespraech: { offeneAngaben: 4 },
       })
     );
-    expect(s.key).toBe("erstkontakt_entwurf");
-    expect(s.wartet).toEqual([{ label: "Erstgespräch führen", href: "/cases/c1/erstgespraech" }]);
+    expect(s.key).toBe("erstgespraech");
+    expect(s.wartet).toEqual([
+      { label: "Erstkontakt prüfen & senden", href: "/cases/c1/messages" },
+    ]);
+  });
+
+  it("nennt den Erstkontakt nicht als wartend, wenn er noch gar nicht vorbereitet ist", () => {
+    // Unvorbereitet gibt es nichts zu pruefen – der Hinweis waere eine
+    // Sackgasse statt eines Wegweisers.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.com", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 4 },
+      })
+    );
+    expect(s.key).toBe("erstgespraech");
+    expect(s.wartet ?? []).toEqual([]);
   });
 
   it("nennt das Erstgespräch nicht doppelt, wenn es selbst der Hauptschritt ist", () => {

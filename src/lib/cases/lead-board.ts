@@ -24,6 +24,19 @@ export interface BoardKarte {
    * das ist etwas anderes als die Farbe "grau", die eine Datenluecke meint.
    */
   ampel: { farbe: string; text: string; grund: string } | null;
+  /**
+   * Das Erstgespraech steht noch aus – seit dem 14.08.2026 die erste Aufgabe
+   * nach dem Leadeingang und deshalb schon auf der Karte sichtbar, nicht erst
+   * in der Fallakte.
+   *
+   * Bewusst NICHT an der Zahl offener Angaben gemessen wie in der Leiter
+   * (`next-step.ts`): Dafuer braeuchte jede Karte `berechneReife` und damit
+   * Beschaeftigung und Einkommen je Antragsteller – eine deutlich schwerere
+   * Abfrage fuer bis zu 500 Faelle. Hier zaehlt die einfache Wahrheit
+   * "nicht abgehakt und noch keine Nachricht raus", also genau das Fenster,
+   * in dem die Leiter das Gespraech nach vorn zieht.
+   */
+  erstgespraechOffen: boolean;
 }
 
 export interface BoardSpalte {
