@@ -103,6 +103,11 @@ const envSchema = z.object({
   // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
   CRON_SECRET: z.string().optional(),
   REMINDER_AFTER_DAYS: z.coerce.number().int().min(1).max(90).default(5),
+
+  // Geführte Kontaktaufnahme: Abstand zwischen zwei Anrufversuchen (Stunden)
+  // und Frist ab Leadeingang, nach der ohne Kontakt der Abbruch vorgeschlagen wird.
+  KONTAKT_ABSTAND_STUNDEN: z.coerce.number().int().min(1).default(12),
+  KONTAKT_FRIST_TAGE: z.coerce.number().int().min(1).default(3),
 });
 
 export type Env = z.infer<typeof envSchema>;
