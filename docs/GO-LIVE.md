@@ -32,6 +32,22 @@ Das Site-Gate (`/gate`) schützt die gesamte Anwendung, ausgenommen Kunden-Uploa
 Cron und Sentry-Tunnel. Es soll laut Jürgen bis zur Veröffentlichung bleiben —
 danach entfernen, sonst kommt kein angemeldeter Nutzer hinein.
 
+**Was dabei mit wegfällt (gemessen am 14.08.2026):** Die Domain wird laufend
+automatisiert abgeklopft — Sonden auf `/backend/.env`, `/settings/.env`,
+`/app/.env`, `/.git/HEAD`, PHP-Hintertüren (`hehe.php`, `drykl.php`,
+`403.php`), WordPress-Pfade und `Microsoft.Owin.dll`, in Schüben von 5–8
+Anfragen, mehrmals pro Woche (Sentry zeichnet nur 10 % auf, real also etwa das
+Zehnfache). Heute läuft davon **alles** ins Gate: 307 auf `/gate`, 15 Byte,
+nichts abgeflossen. Fällt das Gate, schlagen diese Sonden direkt auf die
+Anwendung durch. Dann tragen das Login-Rate-Limit und das 404-Verhalten die
+Last — beides ist vorhanden, gehört an diesem Tag aber bewusst geprüft.
+
+Dazu passend: Ohne `UPSTASH_REDIS_REST_URL`/`_TOKEN` zählen **alle**
+Rate-Limits (Login, Registrierung, Passwort-Reset, Gate) pro
+Serverless-Instanz statt instanzübergreifend. Für den Pilotbetrieb mit einem
+Nutzer vertretbar; spätestens mit fremden Nutzern sollte der zentrale Speicher
+stehen, sonst multipliziert sich jedes Limit mit der Zahl der Instanzen.
+
 ### 3. Auftragsverarbeitungsvertrag (Art. 28 DSGVO)
 
 Offener Blocker der Selbstregistrierung: Fremde Organisationen dürfen ohne AVV
