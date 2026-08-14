@@ -50,6 +50,37 @@ describe("Maske fuers Erstgespraech", () => {
     }
   });
 
+  it("fragt den zweiten Antragsteller nach allem, was auch der erste gefragt wird", () => {
+    // Gegenprobe zum Test darueber: Der prueft, dass die Reife nichts anmahnt,
+    // was die Maske nicht ausfuellen kann. Er merkt aber nicht, wenn die Maske
+    // eine Angabe VERLIERT.
+    //
+    // Genau das passierte bei Zielen, die die Reife nur einmal je Fall zaehlt
+    // (`jePerson: false`) – etwa Strasse und Familienstand: Der Filter unten
+    // suchte `applicant.street.2`, die Reife kennt aber nur `applicant.street.1`,
+    // also flog die Frage fuer Person 2 heraus. Ein Paar mit zwei Adressen bekam
+    // fuer den zweiten Antragsteller PLZ und Ort, aber keine Strasse – und den
+    // Familienstand ueberhaupt nicht.
+    const stand: Fallstand = {
+      applicants: [
+        { position: 1, employment: [{ beschaeftigungsart: "angestellter" }] },
+        { position: 2, employment: [{ beschaeftigungsart: "angestellter" }] },
+      ],
+      property: null,
+      financingRequest: null,
+      caseFelder: { financingType: "kauf" },
+    };
+    const felder = alleFelder(stand, 2);
+    const jePerson = (p: 1 | 2) =>
+      new Set(
+        felder
+          .filter((f) => f.person === p)
+          .map((f) => `${f.ziel.entitaet}.${f.ziel.feld}`)
+      );
+
+    expect([...jePerson(1)].filter((z) => !jePerson(2).has(z))).toEqual([]);
+  });
+
   it("gibt jedem Zielfeld genau eine Eingabe", () => {
     // Zwei Eingaben auf derselben Spalte hiessen: die zuletzt verlassene
     // gewinnt, und der Vermittler sieht nicht, welche das war.

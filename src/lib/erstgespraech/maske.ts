@@ -303,6 +303,18 @@ export function baueMaske(
   const relevanteZiele = new Map(
     reife.felder.map((r) => [zielSchluessel(r.quelle, r.schluessel, r.person), r])
   );
+  /*
+   * Dieselben Ziele OHNE Person – fuer den Filter weiter unten.
+   *
+   * Ziele, die die Reife nur einmal je Fall zaehlt (`jePerson: false`, etwa
+   * Strasse und Familienstand), stehen in `relevanteZiele` allein unter
+   * Position 1. Fragte der Filter dort mit `person: 2` nach, ging die Frage fuer
+   * den zweiten Antragsteller verloren. Ob eine Angabe fuer diesen Fall zaehlt,
+   * haengt aber am Ziel, nicht an der Person.
+   */
+  const relevanteZielBasen = new Set(
+    reife.felder.map((r) => `${r.quelle}.${r.schluessel}`)
+  );
 
   const abschnitte = new Map<AbschnittId, MaskenAbschnitt>();
   // Ein Zielfeld bekommt genau EIN Eingabefeld. Sonst schrieben zwei Eingaben
@@ -334,7 +346,8 @@ export function baueMaske(
        * Nur angebotsrelevante Ziele werden so gefiltert: Baukosten oder
        * Warmmiete zaehlt die Reife nie, sie sollen aber gefragt werden.
        */
-      if (!relevant && ANGEBOTSRELEVANTE_ZIELE.has(`${feld.ziel.entitaet}.${feld.ziel.feld}`)) {
+      const zielBasis = `${feld.ziel.entitaet}.${feld.ziel.feld}`;
+      if (!relevanteZielBasen.has(zielBasis) && ANGEBOTSRELEVANTE_ZIELE.has(zielBasis)) {
         continue;
       }
       belegt.add(zielKey);
