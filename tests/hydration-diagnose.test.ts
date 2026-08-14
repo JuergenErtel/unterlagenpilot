@@ -38,18 +38,28 @@ function element(
 }
 
 function dokument(
-  bodyKinder: Array<{ tagName: string; id?: string; className?: string }>,
+  bodyKinder: Array<{
+    tagName: string;
+    id?: string;
+    className?: string;
+    kinder?: Array<{ tagName: string; id?: string; className?: string }>;
+  }>,
   htmlAttribute = ["lang", "translate", "class"],
-  bodyAttribute = ["class"]
+  bodyAttribute = ["class"],
+  suchparameter?: string
 ): DokumentAusschnitt {
   return {
     documentElement: element("HTML", htmlAttribute),
     body: {
       ...element("BODY", bodyAttribute),
-      children: bodyKinder.map((k) =>
-        element(k.tagName, [], k.id ?? "", k.className ?? "")
-      ),
+      children: bodyKinder.map((k) => ({
+        ...element(k.tagName, [], k.id ?? "", k.className ?? ""),
+        children: (k.kinder ?? []).map((e) =>
+          element(e.tagName, [], e.id ?? "", e.className ?? "")
+        ),
+      })),
     },
+    suchparameter,
   };
 }
 
@@ -121,6 +131,52 @@ describe("mitDomFingerabdruck", () => {
   it("kommt ohne Dokument aus (Server, Worker)", () => {
     const original = event(HTML_MISMATCH);
     expect(mitDomFingerabdruck(original, undefined)).toBe(original);
+  });
+
+  it("zeigt die zweite Ebene – die erste ist als sauber belegt", () => {
+    // Juergens Browser lieferte am 14.08.2026 auf der ersten Ebene genau das,
+    // was die Anwendung selbst rendert (12x script, next-route-announcer, 2 div).
+    // Der Unterschied sitzt also tiefer; eine Liste, die bei "div, div" endet,
+    // kann ihn nicht zeigen.
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokument([
+        { tagName: "SCRIPT" },
+        { tagName: "DIV", id: "wurzel", kinder: [{ tagName: "MAIN" }, { tagName: "NAV" }] },
+      ])
+    );
+    const dom = angereichert.extra?.dom as {
+      wurzel: string;
+      wurzelKinder: string[];
+      wurzelKinderGesamt: number;
+    };
+    expect(dom.wurzel).toBe("div#wurzel");
+    expect(dom.wurzelKinder).toEqual(["main", "nav"]);
+    expect(dom.wurzelKinderGesamt).toBe(2);
+  });
+
+  it("nimmt den LETZTEN Body-Knoten mit Kindern – davor stehen die Streaming-Skripte", () => {
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokument([
+        { tagName: "SCRIPT", id: "frueh", kinder: [{ tagName: "SPAN" }] },
+        { tagName: "DIV", id: "app", kinder: [{ tagName: "MAIN" }] },
+      ])
+    );
+    expect((angereichert.extra?.dom as { wurzel: string }).wurzel).toBe("div#app");
+  });
+
+  it("schickt nur unbedenkliche Parameterwerte mit, sonst allein den Namen", () => {
+    // Ein Fehlerbericht darf keine Fall-Id und kein Upload-Token tragen. Die
+    // Ansicht dagegen entscheidet, welcher Teilbaum ueberhaupt gerendert wird.
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokument([{ tagName: "DIV" }], undefined, undefined, "?ansicht=tabelle&case=geheim123&token=abc")
+    );
+    const parameter = (angereichert.extra?.dom as { parameter: string[] }).parameter;
+    expect(parameter).toEqual(["ansicht=tabelle", "case", "token"]);
+    expect(JSON.stringify(parameter)).not.toContain("geheim123");
+    expect(JSON.stringify(parameter)).not.toContain("abc");
   });
 
   it("deckelt sehr lange Listen, damit das Event klein bleibt", () => {

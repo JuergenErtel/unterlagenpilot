@@ -33,7 +33,18 @@ Sentry.init({
   beforeSend: (event) =>
     isReactStreamingCascade(event)
       ? null
-      : mitDomFingerabdruck(event, typeof document === "undefined" ? undefined : document),
+      : mitDomFingerabdruck(
+          event,
+          typeof document === "undefined"
+            ? undefined
+            : {
+                // Kein Object.assign auf das echte `document` – die Diagnose
+                // liest, sie verändert nichts an der laufenden Seite.
+                documentElement: document.documentElement,
+                body: document.body,
+                suchparameter: window.location.search,
+              }
+        ),
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
