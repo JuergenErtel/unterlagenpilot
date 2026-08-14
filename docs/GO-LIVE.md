@@ -42,11 +42,14 @@ nichts abgeflossen. Fällt das Gate, schlagen diese Sonden direkt auf die
 Anwendung durch. Dann tragen das Login-Rate-Limit und das 404-Verhalten die
 Last — beides ist vorhanden, gehört an diesem Tag aber bewusst geprüft.
 
-Dazu passend: Ohne `UPSTASH_REDIS_REST_URL`/`_TOKEN` zählen **alle**
-Rate-Limits (Login, Registrierung, Passwort-Reset, Gate) pro
-Serverless-Instanz statt instanzübergreifend. Für den Pilotbetrieb mit einem
-Nutzer vertretbar; spätestens mit fremden Nutzern sollte der zentrale Speicher
-stehen, sonst multipliziert sich jedes Limit mit der Zahl der Instanzen.
+Dazu passend: In der Produktion ist **kein** `UPSTASH_REDIS_REST_URL`/`_TOKEN`
+gesetzt (`vercel env ls production` am 14.08.2026 geprüft). Damit zählen
+**alle** Rate-Limits — Login, Registrierung, Passwort-Reset, Gate — pro
+Serverless-Instanz statt instanzübergreifend: Wer seine Versuche über genügend
+Instanzen verteilt, bekommt entsprechend mehr davon. Für den Pilotbetrieb mit
+einem Nutzer vertretbar; **vor dem ersten Fremdnutzer sollte der zentrale
+Speicher stehen** — der Adapter in `src/lib/auth/rate-limit.ts` ist fertig und
+schaltet allein durch Setzen der beiden Variablen um.
 
 ### 3. Auftragsverarbeitungsvertrag (Art. 28 DSGVO)
 
