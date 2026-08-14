@@ -49,6 +49,41 @@ import type { ErrorEvent } from "@sentry/nextjs";
  *    sporadisch auf (3x in 5 Tagen bei täglicher Nutzung). Eine feste
  *    Locale-Differenz scheidet damit aus; es hängt an Umgebung oder Datenlage.
  *
+ * NACHGESTELLT UND WIDERLEGT (14.08.2026, lokaler Produktionsbau gegen 181
+ * Fälle – derselbe React-Chunk 4bd1b696 wie in der Produktion, 186 gestreamte
+ * Teilstücke, also dieselbe Bauform wie beim echten Vorfall):
+ *  - Langsam eintrudelnder Strom (32 KB alle 40 ms): hydratisiert sauber.
+ *  - Hülle zuerst, Inhalt erst Sekunden später (Kaltstart-Fall): ebenfalls
+ *    sauber. React verkraftet eine spät nachgelieferte Suspense-Grenze.
+ *  → Das Streaming selbst ist NICHT die Ursache.
+ *
+ * ABGELEITET: Der Client-Baum des Dashboards ist deterministisch. Alle Datums-
+ * und Zahlenformate entstehen in Server-Komponenten und kommen als fertige
+ * Zeichenketten am Client an; die einzige clientseitige Formatierung
+ * (`eur` in lead-board.tsx) rechnet auf ganzen Zahlen, die Node und Chrome
+ * gleich gruppieren. Alle strukturellen Verzweigungen dort hängen an Props aus
+ * der RSC-Payload, die Server und Client teilen. Wenn der Client also aus
+ * denselben Daten dasselbe rendert und React beim Streaming korrekt arbeitet,
+ * dann wich der DOM ab, BEVOR React ihn ansah – oder die Seite lief unter
+ * Umständen, die die bisherige Momentaufnahme nicht erfasst.
+ *
+ * Genau dafür misst die Diagnose seit dem 14.08.2026 vier weitere Dinge. Jede
+ * Messung trennt eine der verbliebenen Erklärungen ab:
+ *  - `fremdeElemente`  – fremdes Custom-Element in BELIEBIGER Tiefe. Die
+ *    ersten beiden Ebenen sind als sauber belegt; ein Passwortmanager hängt
+ *    sein Symbol aber in ein Eingabefeld, nicht an den Body.
+ *  - `offeneTeilstuecke` / `platzhalter` – lief der Strom im Moment des
+ *    Fehlers noch? Trennt „mitten im Aufbau" von „fertig geladen".
+ *  - `lage.vorgerendert` – hat Chrome die Seite aus der Adresszeile heraus
+ *    unsichtbar vorgerendert und erst später aktiviert? Alle drei Vorfälle
+ *    lagen auf dem ERSTEN Aufruf einer Arbeitssitzung (08:22, 07:24, 21:23
+ *    Ortszeit) – die Lage, in der Chrome genau das tut.
+ *  - `lage.sichtbarkeit` / `msSeitStart` – lief die Seite im Hintergrund, und
+ *    wie weit war sie, als es knallte?
+ *
+ * Die Vorfälle vom 08. und 12.08. tragen diese Felder noch nicht: Der
+ * Fingerabdruck ging erst am 14.08. live. Der nächste Vorfall entscheidet.
+ *
  * Bewusst NICHT gesetzt: `suppressHydrationWarning` an html/body. Das wäre die
  * übliche Absicherung gegen Erweiterungen – würde hier aber genau das Signal
  * verschlucken, das die Ursache noch klären muss. Erst nach dem Befund setzen.
@@ -68,15 +103,51 @@ export interface ElementAusschnitt {
   children: ArrayLike<ElementAusschnitt>;
 }
 
+/**
+ * Die Umstände des Aufrufs. Sie stammen aus Browser-APIs, die das Modul selbst
+ * nicht anfassen darf (es soll rein und testbar bleiben) – `instrumentation-client.ts`
+ * liest sie und reicht sie herein.
+ */
+export interface LageAusschnitt {
+  /** `performance.getEntriesByType("navigation")[0].type`: navigate | reload | back_forward | prerender */
+  navigationsart?: string;
+  /**
+   * `activationStart` derselben Messung. Größer 0 heißt: Chrome hat die Seite
+   * vorgerendert, während sie unsichtbar war, und erst später aktiviert.
+   */
+  aktivierungsStartMs?: number;
+  /** `document.visibilityState` im Moment des Fehlers. */
+  sichtbarkeit?: string;
+  /** `performance.now()` – wie weit im Leben der Seite der Fehler auftrat. */
+  msSeitStart?: number;
+}
+
 export interface DokumentAusschnitt {
   documentElement: ElementAusschnitt;
   body: ElementAusschnitt;
   /** Nur der Suchteil der Adresse – der Pfad steht bereits im Sentry-Tag `url`. */
   suchparameter?: string;
+  lage?: LageAusschnitt;
 }
 
 /** Höchstzahl protokollierter Kinder je Ebene – das Event soll klein bleiben. */
 const MAX_KINDER = 20;
+
+/** Höchstzahl gemeldeter fremder Elementnamen. */
+const MAX_FREMDE = 20;
+
+/**
+ * Obergrenze für den Baumdurchlauf. Das Dashboard trägt bei 180 Fällen einige
+ * tausend Knoten; die Grenze verhindert, dass die Diagnose auf einer noch
+ * größeren Seite spürbar Zeit kostet. Sie greift bewusst spät.
+ */
+const MAX_KNOTEN = 20000;
+
+/**
+ * Custom-Elements, die die Anwendung selbst mitbringt. Alles andere mit
+ * Bindestrich im Namen stammt von außen – so heißen HTML-Standardelemente nie.
+ */
+const EIGENE_CUSTOM_ELEMENTE = new Set(["next-route-announcer"]);
 
 /**
  * Suchparameter, deren WERT mitgeschickt werden darf.
@@ -114,6 +185,83 @@ function sichereParameter(suche: string): string[] {
   );
 }
 
+/** Was ein Durchlauf durch den ganzen Baum zutage fördert. */
+interface Baumbefund {
+  /** Fremde Custom-Elements, in beliebiger Tiefe, je Name einmal. */
+  fremdeElemente: string[];
+  /**
+   * Versteckte Container am Body-Ende, in denen noch ECHTER Inhalt liegt:
+   * React legt dort fertige Streaming-Teilstücke ab und schiebt sie an ihren
+   * Platzhalter. Bleibt beim Fehler einer gefüllt zurück, war die Seite mitten
+   * im Strom.
+   *
+   * "Echt" ist die entscheidende Einschränkung: Eine fehlerfrei geladene
+   * Dashboard-Seite lässt rund 190 dieser Container zurück (gemessen am
+   * 14.08.2026 im lokalen Produktionsbau), sechs davon mit einem LEEREN
+   * `<tbody>` – Bodensatz des Tabellen-Streamings. Wer bloß "hat Kinder"
+   * zählt, misst diesen Bodensatz und meldet auf jeder gesunden Seite Alarm.
+   */
+  offeneTeilstuecke: number;
+  /** Verbliebene `<template>`-Platzhalter – dieselbe Frage von der anderen Seite. */
+  platzhalter: number;
+}
+
+/**
+ * Durchläuft den Baum EINMAL und beantwortet die beiden Fragen, die die
+ * zweistufige Momentaufnahme oben nicht beantworten kann: Hängt irgendwo –
+ * gleich wie tief – etwas Fremdes im Baum, und lief der Strom noch?
+ */
+function durchsuche(body: ElementAusschnitt): Baumbefund {
+  const fremde = new Set<string>();
+  let platzhalter = 0;
+  let offeneTeilstuecke = 0;
+  let besucht = 0;
+
+  // Iterativ statt rekursiv: der Baum ist tief, und ein Stapelüberlauf im
+  // Fehlerpfad würde die Meldung verschlucken, die er erklären soll.
+  const stapel: ElementAusschnitt[] = [body];
+  while (stapel.length > 0 && besucht < MAX_KNOTEN) {
+    const knoten = stapel.pop()!;
+    besucht++;
+    const tag = knoten.tagName.toLowerCase();
+    if (tag === "template") platzhalter++;
+    if (tag.includes("-") && !EIGENE_CUSTOM_ELEMENTE.has(tag) && fremde.size < MAX_FREMDE) {
+      fremde.add(tag);
+    }
+    const kinder = Array.from(knoten.children ?? []);
+    for (const kind of kinder) stapel.push(kind);
+  }
+
+  for (const kind of Array.from(body.children ?? [])) {
+    if (!kind.getAttributeNames().includes("hidden")) continue;
+    // Ein Container zählt erst, wenn sein Inhalt selbst Inhalt hat – ein
+    // blosser leerer Wrapper ist der ausgeraeumte Rest eines Teilstuecks.
+    const hatEchtenInhalt = Array.from(kind.children ?? []).some(
+      (enkel) => (enkel.children?.length ?? 0) > 0
+    );
+    if (hatEchtenInhalt) offeneTeilstuecke++;
+  }
+
+  return { fremdeElemente: [...fremde], offeneTeilstuecke, platzhalter };
+}
+
+/**
+ * Die Umstände des Aufrufs, auf runde Zahlen gebracht. `vorgerendert` ist die
+ * eigentliche Frage: Alle drei bisherigen Vorfälle lagen auf dem ersten Aufruf
+ * einer Arbeitssitzung – genau dann rendert Chrome eine aus der Adresszeile
+ * erratene Seite unsichtbar vor und aktiviert sie erst beim Klick.
+ */
+function lagebericht(lage: LageAusschnitt) {
+  return {
+    navigationsart: lage.navigationsart,
+    vorgerendert: (lage.aktivierungsStartMs ?? 0) > 0,
+    aktivierungsStartMs:
+      lage.aktivierungsStartMs == null ? undefined : Math.round(lage.aktivierungsStartMs),
+    sichtbarkeit: lage.sichtbarkeit,
+    msSeitStart: lage.msSeitStart == null ? undefined : Math.round(lage.msSeitStart),
+  };
+}
+
 /** Kurzform eines Elements: `div#id.klasse` – ohne Inhalte. */
 function kuerzel(element: ElementAusschnitt): string {
   const tag = element.tagName.toLowerCase();
@@ -144,6 +292,7 @@ export function mitDomFingerabdruck(
    */
   const wurzel = [...kinder].reverse().find((k) => (k.children?.length ?? 0) > 0);
   const wurzelKinder = Array.from(wurzel?.children ?? []);
+  const befund = durchsuche(dokument.body);
   return {
     ...event,
     extra: {
@@ -157,6 +306,8 @@ export function mitDomFingerabdruck(
         wurzelKinder: wurzelKinder.slice(0, MAX_KINDER).map(kuerzel),
         wurzelKinderGesamt: wurzelKinder.length,
         parameter: dokument.suchparameter ? sichereParameter(dokument.suchparameter) : [],
+        ...befund,
+        lage: dokument.lage ? lagebericht(dokument.lage) : undefined,
       },
     },
   };

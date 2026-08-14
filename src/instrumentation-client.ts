@@ -1,6 +1,30 @@
 import * as Sentry from "@sentry/nextjs";
 import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noise";
-import { mitDomFingerabdruck } from "@/lib/observability/hydration-diagnose";
+import { mitDomFingerabdruck, type LageAusschnitt } from "@/lib/observability/hydration-diagnose";
+
+/**
+ * Die Umstände des Aufrufs für die Hydration-Diagnose. Bewusst hier statt im
+ * Diagnosemodul: dort soll keine Browser-API stehen, sonst ist es nicht mehr
+ * ohne DOM testbar.
+ *
+ * Alles defensiv – `getEntriesByType` fehlt in älteren Browsern, und ein
+ * Fehler IM Fehlerpfad würde den Bericht verschlucken, den er erklären soll.
+ */
+function lageDesAufrufs(): LageAusschnitt | undefined {
+  try {
+    const eintrag = performance.getEntriesByType?.("navigation")?.[0] as
+      | (PerformanceEntry & { type?: string; activationStart?: number })
+      | undefined;
+    return {
+      navigationsart: eintrag?.type,
+      aktivierungsStartMs: eintrag?.activationStart,
+      sichtbarkeit: document.visibilityState,
+      msSeitStart: performance.now(),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Sentry – clientseitige Fehlererfassung (Browser).
@@ -43,6 +67,7 @@ Sentry.init({
                 documentElement: document.documentElement,
                 body: document.body,
                 suchparameter: window.location.search,
+                lage: lageDesAufrufs(),
               }
         ),
 });

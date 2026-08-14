@@ -187,3 +187,159 @@ describe("mitDomFingerabdruck", () => {
     expect(dom.bodyKinderGesamt).toBe(50);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Die vier Messungen, die die verbliebenen Erklaerungen auseinanderhalten
+// (Stand 14.08.2026, siehe Modulkommentar). Bis hierher misst die Diagnose nur
+// zwei Ebenen des Body – und genau dort ist nachweislich nichts zu finden.
+// ---------------------------------------------------------------------------
+
+/** Baum beliebiger Tiefe – der Fingerabdruck oben kann nur zwei Ebenen. */
+function knoten(
+  tagName: string,
+  kinder: DokumentAusschnitt["body"][] = [],
+  attribute: string[] = []
+): DokumentAusschnitt["body"] {
+  return {
+    tagName,
+    id: "",
+    className: "",
+    getAttributeNames: () => attribute,
+    children: kinder,
+  };
+}
+
+function dokumentMitBaum(
+  bodyKinder: DokumentAusschnitt["body"][],
+  lage?: DokumentAusschnitt["lage"]
+): DokumentAusschnitt {
+  return {
+    documentElement: element("HTML", ["lang", "translate", "class"]),
+    body: { ...element("BODY", ["class"]), children: bodyKinder },
+    lage,
+  };
+}
+
+describe("mitDomFingerabdruck – Lagebericht", () => {
+  it("findet ein fremdes Element in BELIEBIGER Tiefe, nicht nur auf Ebene 1 und 2", () => {
+    // Der Konsolenabzug vom 14.08. hat die ersten beiden Ebenen als sauber
+    // belegt. Eine Erweiterung, die tiefer im Baum haengt – etwa ein
+    // Passwortmanager-Symbol in einem Eingabefeld – bleibt dort unsichtbar.
+    const tief = knoten("DIV", [
+      knoten("MAIN", [
+        knoten("SECTION", [knoten("ARTICLE", [knoten("COM-1PASSWORD-BUTTON")])]),
+      ]),
+    ]);
+    const angereichert = mitDomFingerabdruck(event(HTML_MISMATCH), dokumentMitBaum([tief]));
+    const dom = angereichert.extra?.dom as { fremdeElemente: string[] };
+    expect(dom.fremdeElemente).toEqual(["com-1password-button"]);
+  });
+
+  it("haelt die eigenen Custom-Elements heraus – next-route-announcer ist unseres", () => {
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([knoten("NEXT-ROUTE-ANNOUNCER"), knoten("DIV")])
+    );
+    const dom = angereichert.extra?.dom as { fremdeElemente: string[] };
+    expect(dom.fremdeElemente).toEqual([]);
+  });
+
+  it("nennt jedes fremde Element nur einmal und deckelt die Liste", () => {
+    const viele = Array.from({ length: 30 }, (_, i) => knoten(`FREMD-${i}`));
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([knoten("DIV", [...viele, knoten("FREMD-0")])])
+    );
+    const dom = angereichert.extra?.dom as { fremdeElemente: string[] };
+    expect(dom.fremdeElemente.length).toBeLessThanOrEqual(20);
+    expect(new Set(dom.fremdeElemente).size).toBe(dom.fremdeElemente.length);
+  });
+
+  it("zaehlt nicht eingehaengte Streaming-Teilstuecke – lief der Strom noch?", () => {
+    // React legt fertige Teilstuecke in ein verstecktes <div> am Body-Ende und
+    // schiebt sie dann an ihren Platzhalter. Liegt dort beim Fehler noch ein
+    // Container mit ECHTEM Inhalt, war die Seite mitten im Strom.
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([
+        knoten("DIV", [knoten("MAIN", [knoten("TEMPLATE"), knoten("TEMPLATE")])]),
+        knoten("DIV", [knoten("SECTION", [knoten("P")])], ["hidden"]),
+        knoten("DIV", [], ["hidden"]),
+      ])
+    );
+    const dom = angereichert.extra?.dom as { offeneTeilstuecke: number; platzhalter: number };
+    expect(dom.offeneTeilstuecke).toBe(1);
+    expect(dom.platzhalter).toBe(2);
+  });
+
+  it("zaehlt ausgeraeumte Container NICHT – sonst schlaegt jede gesunde Seite Alarm", () => {
+    // Gemessen am 14.08.2026 im lokalen Produktionsbau: Eine vollstaendig und
+    // fehlerfrei geladene Dashboard-Seite laesst rund 190 versteckte Container
+    // am Body zurueck, sechs davon mit einem LEEREN <tbody> darin. Wer bloss
+    // "hat Kinder" zaehlt, misst diesen Bodensatz statt eines Vorfalls.
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([
+        knoten("DIV", [knoten("TBODY")], ["hidden"]),
+        knoten("DIV", [knoten("TBODY")], ["hidden"]),
+        knoten("DIV", [], ["hidden"]),
+      ])
+    );
+    const dom = angereichert.extra?.dom as { offeneTeilstuecke: number };
+    expect(dom.offeneTeilstuecke).toBe(0);
+  });
+
+  it("meldet, ob Chrome die Seite vorgerendert hat – die Lage am Sitzungsbeginn", () => {
+    // Alle drei Vorfaelle lagen auf dem ersten Aufruf einer Arbeitssitzung.
+    // Genau dann rendert Chrome eine aus der Adresszeile erratene Seite vor.
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([knoten("DIV")], {
+        navigationsart: "navigate",
+        aktivierungsStartMs: 812.4,
+        sichtbarkeit: "visible",
+        msSeitStart: 1234.56,
+      })
+    );
+    const lage = (angereichert.extra?.dom as { lage: Record<string, unknown> }).lage;
+    expect(lage).toEqual({
+      navigationsart: "navigate",
+      vorgerendert: true,
+      aktivierungsStartMs: 812,
+      sichtbarkeit: "visible",
+      msSeitStart: 1235,
+    });
+  });
+
+  it("wertet einen gewoehnlichen Aufruf nicht als vorgerendert", () => {
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([knoten("DIV")], {
+        navigationsart: "reload",
+        aktivierungsStartMs: 0,
+        sichtbarkeit: "visible",
+        msSeitStart: 90,
+      })
+    );
+    const lage = (angereichert.extra?.dom as { lage: { vorgerendert: boolean } }).lage;
+    expect(lage.vorgerendert).toBe(false);
+  });
+
+  it("kommt ohne Lage aus – aeltere Browser kennen die Werte nicht", () => {
+    const angereichert = mitDomFingerabdruck(event(HTML_MISMATCH), dokumentMitBaum([knoten("DIV")]));
+    const dom = angereichert.extra?.dom as { lage?: unknown };
+    expect(dom.lage).toBeUndefined();
+  });
+
+  it("überträgt auch aus der Tiefe keine Inhalte – nur Tagnamen", () => {
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokumentMitBaum([
+        knoten("DIV", [knoten("SPAN", [knoten("FREMD-WIDGET", [], ["data-kunde", "title"])])]),
+      ])
+    );
+    const roh = JSON.stringify(angereichert.extra);
+    expect(roh).toContain("fremd-widget");
+    expect(roh).not.toContain("data-kunde");
+  });
+});
