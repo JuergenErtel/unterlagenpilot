@@ -4,6 +4,7 @@ import {
   GRESt_STAND,
   bundeslandAusPlzOrt,
 } from "@/lib/machbarkeit/bundesland";
+import { VORGABE_ANNAHMEN } from "@/lib/machbarkeit/types";
 
 describe("Grunderwerbsteuersaetze", () => {
   it("kennt alle 16 Bundeslaender", () => {
@@ -23,6 +24,16 @@ describe("Grunderwerbsteuersaetze", () => {
 
   it("hat fuer Bayern den bundesweit niedrigsten Satz", () => {
     expect(GRUNDERWERBSTEUER.bayern).toBe(3.5);
+  });
+
+  it("haelt den Ersatzsatz auf dem hoechsten Landessatz", () => {
+    // `grEStFallbackProzent` gilt, wenn das Bundesland unbekannt ist. Die
+    // Zusage dort lautet "der hoechste, nie ein guenstiger" – bisher stand sie
+    // nur im Kommentar. Erhoeht ein Land und der Ersatzsatz zieht nicht mit,
+    // rechnet der Solver einen Fall ohne erkanntes Bundesland STILL zu
+    // guenstig, und die Machbarkeit faellt zu optimistisch aus.
+    const hoechster = Math.max(...Object.values(GRUNDERWERBSTEUER));
+    expect(VORGABE_ANNAHMEN.grEStFallbackProzent).toBe(hoechster);
   });
 });
 

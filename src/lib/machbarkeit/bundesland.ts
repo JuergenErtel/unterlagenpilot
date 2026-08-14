@@ -43,12 +43,24 @@ export const BUNDESLAND_LABELS: Record<Bundesland, string> = {
  * Stand der Steuersaetze. Grunderwerbsteuer ist Landesrecht und aendert sich –
  * zuletzt Bremen zum 01.07.2025 von 5,0 auf 5,5 %. Bei jeder Aenderung hier den
  * Stand mitziehen, sonst rechnet der Solver still mit veralteten Werten.
+ * Der Stand steht in der Oberflaeche neben dem Satz (machbarkeit-ergebnis.tsx).
  *
- * Geprueft gegen die Uebersicht in der deutschsprachigen Wikipedia
- * (Grunderwerbsteuer (Deutschland)) und – fuer Bremen – gegen das Serviceportal
- * der Freien Hansestadt Bremen.
+ * Vollstaendig nachgeprueft am 14.08.2026: alle 16 Saetze unveraendert
+ * bestaetigt, keine Aenderung seit Bremen 01.07.2025, keine fuer 2026
+ * beschlossen. Quellen: Wikipedia (Grunderwerbsteuer (Deutschland)) fuer die
+ * Gesamtuebersicht, service.bremen.de fuer Bremen (Seitenstand 30.04.2026),
+ * steuern.sachsen.de fuer Sachsen.
+ *
+ * ZWEI FALLEN bei der naechsten Pruefung – beide sind hier aufgetreten:
+ *  - **Wikipedias Tabelle hinkt nach.** Sie fuehrte Bremen noch mit 5,0 %,
+ *    obwohl die Erhoehung im selben Artikel im Fliesstext steht. Landeswerte
+ *    immer gegen die Landesquelle halten, nicht gegen die Uebersicht allein.
+ *  - **Rechner- und Ratgeberseiten nennen Sachsen bis heute mit 3,5 %.** Das
+ *    ist der Stand VOR dem Haushaltsbegleitgesetz 2023/2024; seit 01.01.2023
+ *    sind es 5,5 %. Diese Seiten taugen nicht als Beleg, auch wenn gleich ein
+ *    halbes Dutzend dasselbe behauptet.
  */
-export const GRESt_STAND = "2026-08-10";
+export const GRESt_STAND = "2026-08-14";
 
 /** Grunderwerbsteuersatz in Prozent. Bei Aenderung auch GRESt_STAND anpassen. */
 export const GRUNDERWERBSTEUER: Record<Bundesland, number> = {

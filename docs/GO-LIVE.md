@@ -62,3 +62,9 @@ Verkaufsargument wird.**
 - Grunderwerbsteuersätze gegen Quellen geprüft (Stand in
   `src/lib/machbarkeit/bundesland.ts`, zuletzt Bremen 5,5 % seit 01.07.2025).
   **Landesrecht ändert sich — vor der Live-Schaltung erneut prüfen.**
+  Zuletzt vollständig nachgeprüft am **14.08.2026**: alle 16 Sätze unverändert
+  bestätigt, keine Änderung seit Bremen, keine für 2026 beschlossen. Die zwei
+  Fallen der Recherche (Wikipedia führt Bremen veraltet, Ratgeberseiten nennen
+  Sachsen mit dem Stand vor 2023) stehen im Modulkommentar. Der Ersatzsatz für
+  unbekannte Bundesländer ist seither per Test an den höchsten Landessatz
+  gebunden — er darf nie günstiger sein.
