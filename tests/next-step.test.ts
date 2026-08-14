@@ -4,9 +4,14 @@ import { CASE_STATUSES } from "@/lib/domain/enums";
 import { computeNextStep } from "@/lib/cases/next-step";
 import type { NextStepInput } from "@/lib/cases/next-step";
 import type { CockpitData } from "@/lib/cases/cockpit";
+import type { KontaktStand } from "@/lib/cases/kontakt";
 
-/** Cockpit-Ausschnitt plus Erstkontakt- und Erstgespräch-Stand – zusammen das, was die Fallseite liefert. */
-type TestInput = CockpitData & Pick<NextStepInput, "erstkontakt" | "erstgespraech">;
+/** Cockpit-Ausschnitt plus Erstkontakt-, Erstgespräch-, Kontakt- und Wiedervorlage-Stand – zusammen das, was die Fallseite liefert. */
+type TestInput = CockpitData &
+  Pick<
+    NextStepInput,
+    "erstkontakt" | "erstgespraech" | "kontakt" | "wiedervorlageFaellig" | "verloren"
+  >;
 
 /** Minimal-Cockpit; Tests überschreiben nur, was für die jeweilige Stufe zählt. */
 function cockpit(over: {
@@ -20,6 +25,9 @@ function cockpit(over: {
   };
   erstkontakt?: NextStepInput["erstkontakt"];
   erstgespraech?: NextStepInput["erstgespraech"];
+  kontakt?: NextStepInput["kontakt"];
+  wiedervorlageFaellig?: NextStepInput["wiedervorlageFaellig"];
+  verloren?: NextStepInput["verloren"];
 }): TestInput {
   return {
     caseId: "c1",
@@ -51,6 +59,9 @@ function cockpit(over: {
     selbstauskunft: over.selbstauskunft,
     erstkontakt: over.erstkontakt,
     erstgespraech: over.erstgespraech,
+    kontakt: over.kontakt,
+    wiedervorlageFaellig: over.wiedervorlageFaellig,
+    verloren: over.verloren,
     anforderungsAbgleich: null,
   };
 }
@@ -621,5 +632,150 @@ describe("computeNextStep – Erstgespräch", () => {
     const s = computeNextStep(cockpit({ status: "bank_nachforderung", erstgespraech: { offeneAngaben: 6 } }));
     expect(s.key).toBe("fristen");
     expect(s.wartet).toBeUndefined();
+  });
+});
+
+/** Kontaktstand-Attrappe – nur die Felder, die die Leiter liest. */
+function stand(over: Partial<KontaktStand> = {}): KontaktStand {
+  return {
+    jeErreicht: false,
+    versuche: 0,
+    letzterVersuchAm: null,
+    naechsterAb: null,
+    faellig: true,
+    abbruchFaellig: false,
+    ...over,
+  };
+}
+
+describe("Kontaktaufnahme in der Leiter", () => {
+  it("steht vor dem Erstgespraech, solange niemand erreicht wurde", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand(), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).toBe("kontakt_aufnehmen");
+  });
+
+  it("nennt den Versuchsstand im Text", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand({ versuche: 2 }), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.title).toContain("3. Versuch");
+  });
+
+  it("tritt zurueck, sobald der Kunde erreicht wurde", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand({ jeErreicht: true, faellig: false }), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).toBe("erstgespraech");
+  });
+
+  it("schweigt, solange der Abstand laeuft", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand({ versuche: 1, faellig: false }), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).toBe("erstgespraech");
+  });
+
+  it("bietet nach Fristablauf den Abbruch an", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand({ versuche: 4, abbruchFaellig: true }), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).toBe("kontakt_aufgeben");
+    expect(schritt.tone).toBe("blocker");
+  });
+
+  it("weist auf die fehlende Telefonnummer hin, statt stumm zu verschwinden", () => {
+    // Ein Lead ohne Nummer ist ein Problem, keine Erledigung.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand(), telefon: null },
+      })
+    );
+    expect(schritt.key).toBe("kontakt_aufnehmen");
+    expect(schritt.reason).toContain("Telefonnummer");
+  });
+
+  it("erscheint nicht bei abgegebenen Faellen", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        status: "uebertragen",
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand(), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).not.toBe("kontakt_aufnehmen");
+  });
+
+  it("erscheint nicht mehr, wenn der Fall verloren ist", () => {
+    // "Verloren" ist KEIN Status, sondern verlorenAm am Fall – die
+    // LOCKED_CASE_STATUSES fangen es deshalb nicht ab.
+    const schritt = computeNextStep(
+      cockpit({
+        verloren: true,
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand({ abbruchFaellig: true }), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).not.toBe("kontakt_aufnehmen");
+    expect(schritt.key).not.toBe("kontakt_aufgeben");
+  });
+
+  it("wird von der Dokumentfreigabe verdraengt", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 3 },
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 12 },
+        kontakt: { stand: stand(), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).toBe("dokumente_freigeben");
+  });
+});
+
+describe("Wiedervorlage in der Leiter", () => {
+  it("mahnt eine faellige Wiedervorlage an", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        wiedervorlageFaellig: true,
+      })
+    );
+    expect(schritt.key).toBe("wiedervorlage_faellig");
+  });
+
+  it("schweigt ohne faellige Wiedervorlage", () => {
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        wiedervorlageFaellig: false,
+      })
+    );
+    expect(schritt.key).not.toBe("wiedervorlage_faellig");
   });
 });

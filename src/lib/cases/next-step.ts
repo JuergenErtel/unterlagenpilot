@@ -1,5 +1,6 @@
 import type { Tone } from "@/lib/ui/tone";
 import { LOCKED_CASE_STATUSES, type CaseStatus } from "@/lib/domain/enums";
+import type { KontaktStand } from "@/lib/cases/kontakt";
 
 /**
  * Der EINE nächste Schritt eines Falls – Herzstück der geführten Fallreise.
@@ -15,6 +16,9 @@ export interface NextStep {
     | "erstkontakt_vorbereiten"
     | "erstkontakt_entwurf"
     | "erstgespraech"
+    | "kontakt_aufnehmen"
+    | "kontakt_aufgeben"
+    | "wiedervorlage_faellig"
     | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
     | "kundendaten"
@@ -115,6 +119,24 @@ export interface NextStepInput {
    * Die offenen Angaben bleiben danach als wartender Schritt sichtbar.
    */
   erstgespraech?: { offeneAngaben: number; gefuehrtAm?: Date | null };
+  /**
+   * Stand der telefonischen Kontaktaufnahme. Fehlt der Block, verhaelt sich
+   * die Leiter wie zuvor – ohne Kontaktstufen. Der Stand kommt fertig
+   * gerechnet herein (`kontaktStand`), damit diese Datei ohne Uhr auskommt.
+   */
+  kontakt?: {
+    stand: KontaktStand;
+    /** Erste Nummer unter Antragsteller 1 bzw. Kunde; null, wenn keine da ist. */
+    telefon: string | null;
+  };
+  /** Ob eine gesetzte Wiedervorlage heute faellig ist – vom Aufrufer gerechnet. */
+  wiedervorlageFaellig?: boolean;
+  /**
+   * Fall als verloren markiert. Bewusst ein eigenes Feld: "verloren" ist KEIN
+   * CaseStatus, sondern `verlorenAm` am Fall – `LOCKED_CASE_STATUSES` fangen
+   * es also nicht ab.
+   */
+  verloren?: boolean;
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
@@ -186,6 +208,54 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
     });
   }
   return wartet;
+}
+
+/**
+ * Der frische Lead gehoert ans Telefon – und zwar VOR das Erstgespraech: Ohne
+ * Kontakt gibt es kein Gespraech, das man fuehren koennte.
+ *
+ * An dieselben Waechter gebunden wie `erstgespraechSchritt`: Bei abgegebenen
+ * Faellen und bei einer Bank-Nachforderung ist die Strecke vorbei.
+ *
+ * Ist der Abstand noch nicht abgelaufen, gibt die Funktion null zurueck – die
+ * Leiter zeigt dann den naechsten Schritt darunter. Anrufen kann man trotzdem
+ * jederzeit; die Sprosse mahnt nur, wenn es faellig ist.
+ */
+function kontaktSchritt(c: NextStepInput): NextStep | null {
+  if (!c.kontakt) return null;
+  if (c.verloren) return null;
+  if (LOCKED_CASE_STATUSES.has(c.status as CaseStatus)) return null;
+  if (c.status === "bank_nachforderung") return null;
+
+  const { stand, telefon } = c.kontakt;
+  if (stand.jeErreicht) return null;
+
+  const ohneNummer = telefon
+    ? ""
+    : " Für diesen Fall ist keine Telefonnummer hinterlegt – ohne sie hilft nur der schriftliche Weg.";
+
+  if (stand.abbruchFaellig) {
+    return {
+      key: "kontakt_aufgeben",
+      title: "Seit drei Tagen nicht erreichbar – aufgeben?",
+      reason: `${stand.versuche} Versuch${stand.versuche === 1 ? "" : "e"} ohne Kontakt. Du kannst den Fall als verloren markieren (Grund „Kunde nicht erreichbar") oder es weiter probieren.${ohneNummer}`,
+      tone: "blocker",
+    };
+  }
+
+  if (!stand.faellig) return null;
+
+  const naechster = stand.versuche + 1;
+  return {
+    key: "kontakt_aufnehmen",
+    title: naechster === 1 ? "Kunden anrufen" : `Kunden anrufen – ${naechster}. Versuch`,
+    hervorgehoben: true,
+    reason:
+      naechster === 1
+        ? `Der Lead ist frisch. Im Baufi-Vertrieb entscheidet die Geschwindigkeit des ersten Anrufs.${ohneNummer}`
+        : `${stand.versuche} Versuch${stand.versuche === 1 ? "" : "e"} bisher ohne Kontakt.${ohneNummer}`,
+    tone: "review",
+  };
 }
 
 /**
@@ -300,6 +370,8 @@ function ermittleSchritt(c: NextStepInput): NextStep {
      * WEITER davor: Ohne Adresse kaeme spaeter weder Erstkontakt noch
      * Nachforderung raus, und das faellt sonst erst nach dem Gespraech auf.
      */
+    const vorDemGespraech = kontaktSchritt(c);
+    if (vorDemGespraech) return vorDemGespraech;
     const vorDerMail = erstgespraechSchritt(c);
     if (vorDerMail) return vorDerMail;
 
@@ -377,8 +449,22 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   // Ein Fall, den die Bank bereits zurueckgemeldet hat, gehoert auf "Fristen
   // im Blick behalten" (siehe die "fristen"-Stufe unten), nicht zurueck ins
   // Erstgespraech.
+  const vorDemGespraech = kontaktSchritt(c);
+  if (vorDemGespraech) return vorDemGespraech;
   const nachDerFreigabe = erstgespraechSchritt(c);
   if (nachDerFreigabe) return nachDerFreigabe;
+
+  // Eine faellige Wiedervorlage ist ein Versprechen mit Datum – sie steht
+  // deshalb ueber der fachlichen Arbeit, aber unter Gespraech und Kontakt.
+  if (c.wiedervorlageFaellig) {
+    return {
+      key: "wiedervorlage_faellig",
+      title: "Wiedervorlage ist fällig",
+      reason: "Du hattest dir diesen Fall für heute vorgemerkt.",
+      tone: "review",
+      cta: { label: "Fall öffnen", href: `/cases/${id}` },
+    };
+  }
 
   // Vor allem Unterlagen-Kram: einen Fall, der so nicht darstellbar ist, klärt
   // man, bevor man weiter Unterlagen einsammelt und den Kunden beschäftigt.

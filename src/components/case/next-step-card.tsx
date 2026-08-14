@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, PhoneCall, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowRight, PhoneCall, PhoneOff, CalendarClock, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,9 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
   // Telefonhoerer, nicht Klemmbrett: Das Erstgespraech ist ein Anruf, kein
   // Formular – und es ist die erste Aufgabe nach dem Leadeingang.
   erstgespraech: PhoneCall,
+  kontakt_aufnehmen: PhoneCall,
+  kontakt_aufgeben: PhoneOff,
+  wiedervorlage_faellig: CalendarClock,
   selbstauskunft_eingegangen: ClipboardCheck,
   selbstauskunft_wartet: ClipboardList,
   dokumente_freigeben: ScanSearch,
