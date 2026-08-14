@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { frageStellen, type FrageErgebnis } from "@/lib/actions/banken-fragen";
 import type { Urteil } from "@/lib/banken/fragen";
 import { TONE, type Tone } from "@/lib/ui/tone";
+import { datumDe } from "@/lib/datum";
 
 /** Beschriftung und Farbe je Urteil – eine Quelle fuer die ganze Antwort. */
 const ANZEIGE: Record<Urteil, { titel: string; ton: Tone }> = {
@@ -17,8 +18,7 @@ const ANZEIGE: Record<Urteil, { titel: string; ton: Tone }> = {
   keine_aussage: { titel: "Hat sich nicht geäußert", ton: "neutral" },
 };
 
-const datum = (d: string | Date | null) =>
-  d ? new Date(d).toLocaleDateString("de-DE") : "—";
+const datum = datumDe;
 
 /**
  * Fuehrt die Auswertung aus und zeigt sie an.

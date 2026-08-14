@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { datumDe } from "@/lib/datum";
 import {
   einladungErneutSendenAction,
   einladungZurueckziehenAction,
@@ -51,7 +52,7 @@ function EinladungZeile({ einladung }: { einladung: OffeneEinladung }) {
       <span className="font-medium">{einladung.name}</span>
       <span className="text-muted-foreground">{einladung.email}</span>
       <span className="text-xs text-muted-foreground">
-        eingeladen am {new Date(einladung.eingeladenAm).toLocaleDateString("de-DE")}
+        eingeladen am {datumDe(einladung.eingeladenAm)}
       </span>
       <div className="ml-auto flex gap-2">
         <form action={erneutAction}>
