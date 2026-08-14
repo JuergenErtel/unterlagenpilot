@@ -424,6 +424,50 @@ describe("computeNextStep – Erstgespräch", () => {
     expect(s.key).not.toBe("erstgespraech");
   });
 
+  it("tritt zurück, sobald das Gespräch als geführt abgehakt ist – auch mit offenen Angaben", () => {
+    // Der Kern des Hakens: Die Reifeleiste zaehlt ~35 Angaben, von denen etliche
+    // zu Recht leer bleiben (keine weiteren Einkuenfte, kein Konditionswunsch).
+    // Ohne Haken blieb die Leiter fuer immer hier stehen und verdeckte
+    // Machbarkeit, Unterlagen, Fristen und Einreichung – sie zeigt bauartbedingt
+    // nur EINEN Schritt.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6, gefuehrtAm: new Date("2026-08-14") },
+      })
+    );
+    expect(s.key).not.toBe("erstgespraech");
+  });
+
+  it("bleibt nach dem Abhaken als wartender Schritt sichtbar, solange Angaben fehlen", () => {
+    // Zurueckgetreten heisst nicht verschwunden: die offenen Angaben sind weiter
+    // erledigbar und sollen auffindbar bleiben.
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6, gefuehrtAm: new Date("2026-08-14") },
+      })
+    );
+    expect(s.wartet).toContainEqual({
+      label: "Erstgespräch führen",
+      href: "/cases/c1/erstgespraech",
+    });
+  });
+
+  it("meldet nach dem Abhaken nichts mehr, wenn auch keine Angabe mehr offen ist", () => {
+    const s = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 0, gefuehrtAm: new Date("2026-08-14") },
+      })
+    );
+    expect(s.key).not.toBe("erstgespraech");
+    expect(s.wartet ?? []).not.toContainEqual({
+      label: "Erstgespräch führen",
+      href: "/cases/c1/erstgespraech",
+    });
+  });
+
   it("bleibt als wartender Schritt sichtbar, wenn ein unversendeter Erstkontakt es verdrängt", () => {
     // Das Erstgespraech braucht keinen versendeten Erstkontakt – ohne den
     // Hinweis verschwaende es spurlos, sobald der Erstkontakt vorn steht.

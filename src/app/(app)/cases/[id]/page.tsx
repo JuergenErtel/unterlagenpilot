@@ -379,7 +379,10 @@ export default async function CaseCockpitPage({
             vorbereitet: Boolean(erstkontaktStand.messageId),
             versendet: erstkontaktStand.versendet,
           },
-          erstgespraech: { offeneAngaben: erstgespraechOffen },
+          erstgespraech: {
+            offeneAngaben: erstgespraechOffen,
+            gefuehrtAm: caseRow.erstgespraechGefuehrtAm,
+          },
         });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
         // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg. Dieselbe

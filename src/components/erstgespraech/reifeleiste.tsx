@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { Reife } from "@/lib/erstgespraech/reife";
+import { GefuehrtHaken } from "@/components/erstgespraech/gefuehrt-haken";
 
 /**
  * Wie weit die Angaben fuer ein Angebot tragen.
@@ -10,7 +11,17 @@ import type { Reife } from "@/lib/erstgespraech/reife";
  * bedienbar. Deshalb steht hier auch kein rotes "unvollstaendig" – nur die
  * Zahl der offenen Angaben und, wenn nichts mehr fehlt, die Entwarnung.
  */
-export function Reifeleiste({ reife }: { reife: Reife }) {
+export function Reifeleiste({
+  reife,
+  caseId,
+  gefuehrt,
+  gesperrt,
+}: {
+  reife: Reife;
+  caseId: string;
+  gefuehrt: boolean;
+  gesperrt: boolean;
+}) {
   const offen = reife.gesamt - reife.gefuellt;
   const prozent = reife.gesamt === 0 ? 100 : Math.round((reife.gefuellt / reife.gesamt) * 100);
   const fertig = offen === 0;
@@ -37,6 +48,10 @@ export function Reifeleiste({ reife }: { reife: Reife }) {
           Die Leiste zählt mit, sie hält nichts auf: Jedes Feld darf leer bleiben, jede Angabe
           lässt sich nachtragen.
         </p>
+        {/* Der Haken gehört hierher, nicht ans Seitenende: Er ist die Antwort auf
+            genau die Zahl darüber – "die offenen Angaben kenne ich, das Gespräch
+            ist trotzdem geführt". */}
+        <GefuehrtHaken caseId={caseId} gefuehrt={gefuehrt} gesperrt={gesperrt} />
       </CardContent>
     </Card>
   );

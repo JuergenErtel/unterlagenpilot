@@ -47,6 +47,7 @@ export default async function ErstgespraechPage({
       caseNumber: true,
       status: true,
       financingType: true,
+      erstgespraechGefuehrtAm: true,
       applicants: {
         orderBy: { position: "asc" },
         include: {
@@ -136,7 +137,12 @@ export default async function ErstgespraechPage({
         </Card>
       )}
 
-      <Reifeleiste reife={reife} />
+      <Reifeleiste
+        reife={reife}
+        caseId={id}
+        gefuehrt={Boolean(fall.erstgespraechGefuehrtAm)}
+        gesperrt={gesperrt}
+      />
 
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">

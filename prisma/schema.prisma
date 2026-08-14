@@ -462,6 +462,15 @@ model Case {
   // Manuelle Wiedervorlage (Vermittler legt einen Termin fest)
   wiedervorlage DateTime?
 
+  // Erstgespräch als geführt abgehakt. Nicht "alle Angaben da", sondern "ich
+  // habe das Gespräch geführt": Die Reifeleiste zählt ~35 Angaben, von denen
+  // etliche zu Recht leer bleiben (keine weiteren Einkünfte, kein
+  // Konditionswunsch). Ohne diesen Haken bliebe die Fallreise für immer auf
+  // "Erstgespräch führen" stehen und verdeckte Machbarkeit, Unterlagen und
+  // Einreichung – die Leiter zeigt bauartbedingt nur einen Schritt.
+  // Datum statt Boolean, damit nachvollziehbar bleibt, WANN abgehakt wurde.
+  erstgespraechGefuehrtAm DateTime?
+
   // Abschlussdaten (Provisions-/Pipeline-Tracking) – erst nach Zusage relevant
   abschlussBank   String?
   darlehensbetrag Float?

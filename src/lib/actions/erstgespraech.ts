@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCaseAccess } from "@/lib/auth/context";
+import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import { schreibeZielwert } from "@/lib/actions/zielwert";
@@ -112,5 +113,52 @@ export async function speichereGespraechsfeld(
 
   revalidatePath(`/cases/${caseId}/erstgespraech`);
   revalidatePath(`/cases/${caseId}`);
+  return { gespeichert: true };
+}
+
+/**
+ * Das Erstgespraech als gefuehrt abhaken – oder den Haken wieder loesen.
+ *
+ * Warum es diesen Haken gibt: Die Reifeleiste zaehlt rund 35 Angaben, von denen
+ * etliche zu Recht leer bleiben (keine weiteren Einkuenfte, kein
+ * Konditionswunsch, keine zweite Staatsangehoerigkeit). Die Fallreise zeigt
+ * bauartbedingt nur EINEN Schritt – also blieb sie fuer immer auf "Erstgespraech
+ * fuehren" stehen und verdeckte Machbarkeit, Unterlagen, Fristen und
+ * Einreichung, obwohl der Fall laengst weiter war.
+ *
+ * Der Haken erzwingt nichts und schliesst nichts ab: Die Maske bleibt offen,
+ * die offenen Angaben bleiben als wartender Schritt sichtbar (next-step.ts).
+ * Er sagt nur "ich habe das Gespraech gefuehrt" – die Entscheidung darueber
+ * gehoert dem Vermittler, nicht einer Schwelle.
+ */
+export async function markiereErstgespraechGefuehrt(
+  caseId: string,
+  gefuehrt: boolean
+): Promise<{ gespeichert: boolean; hinweis?: string }> {
+  const { ctx, caseRow } = await requireCaseAccess(caseId);
+
+  // Dieselbe Sperre wie beim Feldspeichern: Ein abgegebener Fall ist eine
+  // Akte, an der sich nichts mehr aendert.
+  if (LOCKED_CASE_STATUSES.has(caseRow.status)) {
+    return { gespeichert: false, hinweis: "Der Fall ist gesperrt – der Haken wurde nicht geändert." };
+  }
+
+  await prisma.case.update({
+    where: { id: caseId },
+    data: { erstgespraechGefuehrtAm: gefuehrt ? new Date() : null },
+  });
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: caseId,
+    metadata: { quelle: "erstgespraech", erstgespraechGefuehrt: gefuehrt },
+  });
+
+  revalidatePath(`/cases/${caseId}/erstgespraech`);
+  revalidatePath(`/cases/${caseId}`);
+  revalidatePath("/dashboard");
   return { gespeichert: true };
 }

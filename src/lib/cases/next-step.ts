@@ -92,7 +92,15 @@ export interface NextStepInput {
     versendet: boolean;
   };
   /** Stand des Erstgespraechs; fehlt bei Aufrufern, die ihn nicht laden. */
-  erstgespraech?: { offeneAngaben: number };
+  /**
+   * `gefuehrtAm` gesetzt heisst: der Vermittler hat das Gespraech abgehakt.
+   * Nicht "alle Angaben da" – die Reifeleiste zaehlt ~35, von denen etliche zu
+   * Recht leer bleiben (keine weiteren Einkuenfte, kein Konditionswunsch).
+   * Ohne den Haken bliebe die Leiter fuer immer auf dieser Stufe stehen und
+   * verdeckte alles darunter, weil sie bauartbedingt nur EINEN Schritt zeigt.
+   * Die offenen Angaben bleiben danach als wartender Schritt sichtbar.
+   */
+  erstgespraech?: { offeneAngaben: number; gefuehrtAm?: Date | null };
 }
 
 export function computeNextStep(c: NextStepInput): NextStep {
@@ -275,6 +283,10 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   if (
     c.erstgespraech &&
     c.erstgespraech.offeneAngaben > 0 &&
+    // Abgehakt tritt die Stufe zurueck (siehe NextStepInput#erstgespraech).
+    // Sie verschwindet dabei nicht: weil sie hier nicht mehr gewinnt, nimmt
+    // `ermittleWartende` sie oben automatisch als wartenden Schritt auf.
+    !c.erstgespraech.gefuehrtAm &&
     !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
     c.status !== "bank_nachforderung"
   ) {

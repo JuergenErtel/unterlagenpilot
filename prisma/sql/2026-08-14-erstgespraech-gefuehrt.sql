@@ -1,0 +1,11 @@
+-- Erstgespräch als geführt abhaken.
+--
+-- Die Fallreise blieb für immer auf "Erstgespräch führen" stehen, solange auch
+-- nur eine der ~35 gezählten Angaben leer war – und etliche bleiben zu Recht
+-- leer (keine weiteren Einkünfte, kein Konditionswunsch). Weil die Leiter
+-- bauartbedingt nur einen Schritt zeigt, verdeckte das Machbarkeit, Unterlagen,
+-- Fristen und Einreichung.
+--
+-- Additiv und nullable – keine Auswirkung auf Bestandsdaten: null heißt
+-- "noch nicht abgehakt", also genau das bisherige Verhalten.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS "erstgespraechGefuehrtAm" TIMESTAMP(3);

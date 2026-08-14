@@ -231,6 +231,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
         },
         erstgespraech: {
           offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
+          gefuehrtAm: c.erstgespraechGefuehrtAm,
         },
       });
       // Stale-Schutz: dieselbe Regel wie auf der Fallseite (ai-check-status.ts).

@@ -55,6 +55,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
           financingType: true,
           status: true,
           updatedAt: true,
+          erstgespraechGefuehrtAm: true,
           applicants: {
             orderBy: { position: "asc" },
             include: {
@@ -108,7 +109,10 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
               vorbereitet: Boolean(erstkontaktStand.messageId),
               versendet: erstkontaktStand.versendet,
             },
-            erstgespraech: { offeneAngaben: reife.gesamt - reife.gefuellt },
+            erstgespraech: {
+              offeneAngaben: reife.gesamt - reife.gefuellt,
+              gefuehrtAm: caseScope.erstgespraechGefuehrtAm,
+            },
           });
           // Stale-Schutz: dieselbe Regel wie Fallseite und Dashboard
           // (ai-check-status.ts). Ohne ihn bliebe der Review-Abschluss für
