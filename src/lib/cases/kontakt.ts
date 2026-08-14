@@ -36,6 +36,13 @@ export interface KontaktStand {
   faellig: boolean;
   /** Ist die Frist ohne Kontakt verstrichen? */
   abbruchFaellig: boolean;
+  /**
+   * Die eingestellte Frist in Tagen, aus der `abbruchFaellig` folgt – wird
+   * mitgegeben, damit Texte (z. B. in der Prioritätsleiter) sie nennen
+   * können, statt eine feste Zahl hart zu codieren, während
+   * `KONTAKT_FRIST_TAGE` woanders eingestellt wird.
+   */
+  fristTage: number;
 }
 
 export function kontaktEinstellungen(): KontaktEinstellungen {
@@ -71,5 +78,6 @@ export function kontaktStand(
     // "erreicht" gewinnt immer: Ein Fall, der läuft, darf nie zum Abschuss
     // freigegeben werden, nur weil der Leadeingang lange her ist.
     abbruchFaellig: !jeErreicht && jetzt >= fristEndeAm,
+    fristTage: einstellungen.fristTage,
   };
 }

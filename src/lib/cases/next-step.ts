@@ -17,7 +17,6 @@ export interface NextStep {
     | "erstkontakt_entwurf"
     | "erstgespraech"
     | "kontakt_aufnehmen"
-    | "kontakt_aufgeben"
     | "wiedervorlage_faellig"
     | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
@@ -35,7 +34,9 @@ export interface NextStep {
   tone: Tone;
   /**
    * Primäraktion als Link. Fehlt bei ki_laeuft (Fortschritt), ki_fehler und
-   * erstkontakt_vorbereiten (beide Server-Action-Form statt Link).
+   * erstkontakt_vorbereiten (beide Server-Action-Form statt Link) sowie bei
+   * kontakt_aufnehmen (der Anruf ist keine Seite, zu der ein Link führen
+   * könnte).
    */
   cta?: { label: string; href: string };
   secondary?: Array<{ label: string; href: string }>;
@@ -98,9 +99,14 @@ export interface NextStepInput {
    * Problem. Sobald `versendet: true`, taucht keine Erstkontakt-Stufe mehr auf.
    *
    * MIT EINER AUSNAHME seit dem 14.08.2026: Das Erstgespraech steht davor,
-   * solange der Erstkontakt nicht versendet ist ("1. Aufgabe nach
-   * Leadeingang"). Der frische Lead gehoert ans Telefon, nicht ins Postfach.
-   * Der Blocker "E-Mail-Adresse fehlt" bleibt weiterhin ganz vorn.
+   * solange der Erstkontakt nicht versendet ist. Der frische Lead gehoert ans
+   * Telefon, nicht ins Postfach. Der Blocker "E-Mail-Adresse fehlt" bleibt
+   * weiterhin ganz vorn.
+   *
+   * Seit derselben Aenderung (Task 3, Nachbesserung) ist NICHT mehr das
+   * Erstgespraech die 1. Aufgabe nach Leadeingang, sondern `kontaktSchritt`
+   * (`kontakt_aufnehmen`) – der steht in diesem Zweig noch VOR dem
+   * Erstgespraech (siehe `ermittleSchritt`).
    */
   erstkontakt?: {
     /** Erste gültige E-Mail-Adresse unter den Antragstellern, falls vorhanden. */
@@ -207,6 +213,29 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
       href: `/cases/${c.caseId}/messages`,
     });
   }
+  /*
+   * Der Abbruchvorschlag: `abbruchFaellig` ist monoton (einmal wahr, nie
+   * wieder falsch). Als Hauptschritt haette er die Leiter fuer einen Kunden,
+   * der telefonisch nie erreichbar war, aber schriftlich mitarbeitet
+   * (Mail-Antwort, Upload, Selbstauskunft), fuer immer auf "aufgeben?"
+   * festgehalten – Machbarkeit, Luecken, Fristen und Einreichung waeren dann
+   * unerreichbar. Deshalb nur ein Hinweis, kein Blocker; derselbe Waechter
+   * (verloren/gesperrt/Bank-Nachforderung) wie bei `kontaktSchritt`.
+   */
+  if (
+    !stumm &&
+    c.kontakt &&
+    !c.kontakt.stand.jeErreicht &&
+    c.kontakt.stand.abbruchFaellig &&
+    !c.verloren &&
+    !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
+    c.status !== "bank_nachforderung"
+  ) {
+    wartet.push({
+      label: `Kunde seit ${c.kontakt.stand.fristTage} Tagen nicht erreichbar – aufgeben?`,
+      href: `/cases/${c.caseId}`,
+    });
+  }
   return wartet;
 }
 
@@ -220,6 +249,15 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
  * Ist der Abstand noch nicht abgelaufen, gibt die Funktion null zurueck – die
  * Leiter zeigt dann den naechsten Schritt darunter. Anrufen kann man trotzdem
  * jederzeit; die Sprosse mahnt nur, wenn es faellig ist.
+ *
+ * Liefert bewusst NIE einen "aufgeben"-Hauptschritt: `abbruchFaellig` ist
+ * monoton (einmal wahr, nie wieder falsch) – als Hauptschritt haette er einen
+ * Kunden, der telefonisch nie erreicht wurde, aber schriftlich mitarbeitet
+ * (Mail-Antwort, Upload, Selbstauskunft), fuer immer auf "aufgeben?"
+ * festgenagelt und Machbarkeit, Luecken, Fristen und Einreichung unerreichbar
+ * gemacht – dieselbe Falle, die bei `erstgespraech` schon einmal zuschnappte.
+ * Die Spec nennt den Abbruch ausdruecklich einen VORSCHLAG; er taucht deshalb
+ * nur als Hinweis in `wartet` auf (siehe `ermittleWartende`).
  */
 function kontaktSchritt(c: NextStepInput): NextStep | null {
   if (!c.kontakt) return null;
@@ -229,21 +267,11 @@ function kontaktSchritt(c: NextStepInput): NextStep | null {
 
   const { stand, telefon } = c.kontakt;
   if (stand.jeErreicht) return null;
+  if (!stand.faellig) return null;
 
   const ohneNummer = telefon
     ? ""
     : " Für diesen Fall ist keine Telefonnummer hinterlegt – ohne sie hilft nur der schriftliche Weg.";
-
-  if (stand.abbruchFaellig) {
-    return {
-      key: "kontakt_aufgeben",
-      title: "Seit drei Tagen nicht erreichbar – aufgeben?",
-      reason: `${stand.versuche} Versuch${stand.versuche === 1 ? "" : "e"} ohne Kontakt. Du kannst den Fall als verloren markieren (Grund „Kunde nicht erreichbar") oder es weiter probieren.${ohneNummer}`,
-      tone: "blocker",
-    };
-  }
-
-  if (!stand.faellig) return null;
 
   const naechster = stand.versuche + 1;
   return {
@@ -291,7 +319,8 @@ function erstgespraechSchritt(c: NextStepInput): NextStep | null {
     key: "erstgespraech",
     title: "Erstgespräch führen",
     // Juergens Ansage vom 14.08.2026: der Schritt soll "viel prominenter"
-    // sein. Bisher der einzige hervorgehobene – das ist Absicht.
+    // sein. Seit demselben Tag teilt sich das mit kontakt_aufnehmen – beide
+    // sind der Ruf zum Telefon und duerfen gleich laut sein.
     hervorgehoben: true,
     reason: `${offen} Angabe${offen === 1 ? "" : "n"} fehl${offen === 1 ? "t" : "en"} noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
     tone: "review",
@@ -335,6 +364,23 @@ function ermittleSchritt(c: NextStepInput): NextStep {
       title: `${c.counts.docsFehler} Dokument${c.counts.docsFehler === 1 ? "" : "e"} ohne KI-Ergebnis`,
       reason: "Bei der letzten Auswertung ist etwas schiefgelaufen. Ein erneuter Lauf behebt das in der Regel.",
       tone: "review",
+    };
+  }
+
+  // Eine faellige Wiedervorlage ist eine Verabredung mit Datum – sie schlaegt
+  // jeden allgemeinen Anstupser, auch den Erstkontakt. Frueher stand dieser
+  // Zweig hinter dem Erstkontakt-Block; der kehrt aber auf JEDEM Pfad per
+  // return zurueck, sodass diese Pruefung fuer einen frischen Lead mit
+  // unversendetem Erstkontakt ("Kunde bat um Rueckruf naechste Woche") nie
+  // erreicht wurde. Deshalb jetzt VOR dem Erstkontakt-Block, direkt nach den
+  // KI-Stufen.
+  if (c.wiedervorlageFaellig) {
+    return {
+      key: "wiedervorlage_faellig",
+      title: "Wiedervorlage ist fällig",
+      reason: "Du hattest dir diesen Fall für heute vorgemerkt.",
+      tone: "review",
+      cta: { label: "Fall öffnen", href: `/cases/${id}` },
     };
   }
 
@@ -453,18 +499,6 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   if (vorDemGespraech) return vorDemGespraech;
   const nachDerFreigabe = erstgespraechSchritt(c);
   if (nachDerFreigabe) return nachDerFreigabe;
-
-  // Eine faellige Wiedervorlage ist ein Versprechen mit Datum – sie steht
-  // deshalb ueber der fachlichen Arbeit, aber unter Gespraech und Kontakt.
-  if (c.wiedervorlageFaellig) {
-    return {
-      key: "wiedervorlage_faellig",
-      title: "Wiedervorlage ist fällig",
-      reason: "Du hattest dir diesen Fall für heute vorgemerkt.",
-      tone: "review",
-      cta: { label: "Fall öffnen", href: `/cases/${id}` },
-    };
-  }
 
   // Vor allem Unterlagen-Kram: einen Fall, der so nicht darstellbar ist, klärt
   // man, bevor man weiter Unterlagen einsammelt und den Kunden beschäftigt.

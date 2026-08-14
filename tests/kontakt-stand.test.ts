@@ -69,4 +69,15 @@ describe("kontaktStand", () => {
     const s = kontaktStand([versuch(1, "nicht_erreicht")], LEAD, jetzt(71), EINSTELLUNGEN);
     expect(s.abbruchFaellig).toBe(false);
   });
+
+  it("gibt die eingestellte Frist zur Weiterverwendung im Text mit", () => {
+    // Texte (z. B. die Prioritaetsleiter) sollen die Frist NENNEN koennen,
+    // statt "drei Tage" hart zu codieren, waehrend KONTAKT_FRIST_TAGE
+    // woanders eingestellt wird.
+    const s = kontaktStand([], LEAD, jetzt(1), EINSTELLUNGEN);
+    expect(s.fristTage).toBe(3);
+
+    const andereFrist = kontaktStand([], LEAD, jetzt(1), { ...EINSTELLUNGEN, fristTage: 5 });
+    expect(andereFrist.fristTage).toBe(5);
+  });
 });

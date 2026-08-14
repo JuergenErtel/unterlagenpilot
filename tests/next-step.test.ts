@@ -644,6 +644,7 @@ function stand(over: Partial<KontaktStand> = {}): KontaktStand {
     naechsterAb: null,
     faellig: true,
     abbruchFaellig: false,
+    fristTage: 3,
     ...over,
   };
 }
@@ -693,7 +694,11 @@ describe("Kontaktaufnahme in der Leiter", () => {
     expect(schritt.key).toBe("erstgespraech");
   });
 
-  it("bietet nach Fristablauf den Abbruch an", () => {
+  it("bietet nach Fristablauf den Abbruch nur als Vorschlag in \"wartet\" an, nicht als Hauptschritt", () => {
+    // Nachbesserung: abbruchFaellig ist monoton (einmal wahr, nie wieder
+    // falsch) – als Hauptschritt haette das die Leiter fuer immer hier
+    // festgehalten. Solange noch ein Versuch faellig ist, bleibt
+    // kontakt_aufnehmen der Hauptschritt; der Abbruch ist nur ein Hinweis.
     const schritt = computeNextStep(
       cockpit({
         erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
@@ -701,8 +706,33 @@ describe("Kontaktaufnahme in der Leiter", () => {
         kontakt: { stand: stand({ versuche: 4, abbruchFaellig: true }), telefon: "0170 1234567" },
       })
     );
-    expect(schritt.key).toBe("kontakt_aufgeben");
-    expect(schritt.tone).toBe("blocker");
+    expect(schritt.key).toBe("kontakt_aufnehmen");
+    expect(schritt.wartet).toContainEqual({
+      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
+      href: "/cases/c1",
+    });
+  });
+
+  it("kommt trotz abgelaufener Kontakt-Frist zu den fachlichen Schritten durch, sobald kein Versuch mehr faellig ist", () => {
+    // Genau die Falle, die die Nachbesserung schliesst: Ein Kunde, der
+    // telefonisch nie erreicht wurde, aber schriftlich mitarbeitet (Mail-
+    // Antwort, Upload, Selbstauskunft), darf nicht fuer immer auf "aufgeben?"
+    // haengen bleiben. Machbarkeit, Luecken, Fristen und Einreichung bleiben
+    // erreichbar; der Abbruch bleibt als Hinweis sichtbar.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        kontakt: {
+          stand: stand({ versuche: 4, abbruchFaellig: true, faellig: false }),
+          telefon: "0170 1234567",
+        },
+      })
+    );
+    expect(schritt.key).toBe("einreichung");
+    expect(schritt.wartet).toContainEqual({
+      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
+      href: "/cases/c1",
+    });
   });
 
   it("weist auf die fehlende Telefonnummer hin, statt stumm zu verschwinden", () => {
@@ -730,7 +760,7 @@ describe("Kontaktaufnahme in der Leiter", () => {
     expect(schritt.key).not.toBe("kontakt_aufnehmen");
   });
 
-  it("erscheint nicht mehr, wenn der Fall verloren ist", () => {
+  it("erscheint nicht mehr, wenn der Fall verloren ist – auch nicht als Hinweis in \"wartet\"", () => {
     // "Verloren" ist KEIN Status, sondern verlorenAm am Fall – die
     // LOCKED_CASE_STATUSES fangen es deshalb nicht ab.
     const schritt = computeNextStep(
@@ -742,7 +772,10 @@ describe("Kontaktaufnahme in der Leiter", () => {
       })
     );
     expect(schritt.key).not.toBe("kontakt_aufnehmen");
-    expect(schritt.key).not.toBe("kontakt_aufgeben");
+    expect(schritt.wartet ?? []).not.toContainEqual({
+      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
+      href: "/cases/c1",
+    });
   });
 
   it("wird von der Dokumentfreigabe verdraengt", () => {
@@ -763,6 +796,20 @@ describe("Wiedervorlage in der Leiter", () => {
     const schritt = computeNextStep(
       cockpit({
         erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        wiedervorlageFaellig: true,
+      })
+    );
+    expect(schritt.key).toBe("wiedervorlage_faellig");
+  });
+
+  it("schlaegt auch dann zu, wenn der Erstkontakt noch nicht versendet ist", () => {
+    // Der Bug vor der Nachbesserung: Der Erstkontakt-Zweig kehrt auf JEDEM
+    // Pfad per return zurueck, die Wiedervorlage-Pruefung weiter unten wurde
+    // nie erreicht – ausgerechnet fuer den Normalfall "Kunde bat um Rueckruf
+    // naechste Woche", solange die Erstkontakt-Mail noch nicht raus ist.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
         wiedervorlageFaellig: true,
       })
     );
