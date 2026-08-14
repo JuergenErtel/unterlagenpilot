@@ -177,15 +177,19 @@ class SupabaseStorageProvider implements StorageProvider {
 }
 
 // ---- S3-kompatibel (Stub) ----
+const S3_STUB = "S3-Storage ist ein Stub. STORAGE_PROVIDER=supabase oder local verwenden, oder S3 implementieren.";
+
 class S3StorageProvider implements StorageProvider {
   async put(_input: PutInput): Promise<StoredObject> {
-    throw new Error("S3-Storage ist ein Stub. STORAGE_PROVIDER=supabase oder local verwenden, oder S3 implementieren.");
+    throw new Error(S3_STUB);
   }
   async get(_storageKey: string): Promise<Buffer | null> {
-    return null;
+    throw new Error(S3_STUB);
   }
   async remove(_storageKey: string): Promise<void> {
-    // no-op im Stub
+    // Nicht still durchwinken: ein no-op meldet "gelöscht", ohne zu löschen –
+    // die Datei bliebe liegen, während Audit und Oberfläche das Gegenteil sagen.
+    throw new Error(S3_STUB);
   }
   async createSignedUrl(_storageKey: string, _expiresInSec: number): Promise<string | null> {
     // TODO(prod): S3 GetObject Presigned URL (kurzlebig), Bucket privat + SSE-KMS.
