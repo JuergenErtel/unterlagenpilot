@@ -58,3 +58,21 @@ export async function verifyGateToken(
   const expected = await computeGateToken(password);
   return safeEqual(token, expected);
 }
+
+/**
+ * Prüft ein eingegebenes Passwort gegen das gesetzte – zeitkonstant, wie schon
+ * der Cookie-Vergleich darüber.
+ *
+ * Verglichen werden nicht die Passwörter selbst, sondern ihre HMACs: Die sind
+ * immer gleich lang, womit auch die Länge des Versuchs nichts mehr verrät. Der
+ * praktische Gewinn über HTTP ist gering (Netzlaufzeiten überdecken solche
+ * Unterschiede bei weitem) – aber der Vergleich mit `===` wäre die einzige
+ * Stelle im Gate gewesen, die aus der eigenen Regel ausschert.
+ */
+export async function verifyGatePassword(
+  entered: unknown,
+  password: string
+): Promise<boolean> {
+  if (typeof entered !== "string" || entered.length === 0) return false;
+  return safeEqual(await computeGateToken(entered), await computeGateToken(password));
+}

@@ -61,7 +61,9 @@ export default async function GatePage({
                   className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
                   role="alert"
                 >
-                  Falsches Passwort. Bitte erneut versuchen.
+                  {error === "zu-viele"
+                    ? "Zu viele Fehlversuche. Bitte in einigen Minuten erneut versuchen."
+                    : "Falsches Passwort. Bitte erneut versuchen."}
                 </p>
               ) : null}
               <Button type="submit" className="w-full">
