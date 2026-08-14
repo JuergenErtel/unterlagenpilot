@@ -466,7 +466,12 @@ export default async function CaseCockpitPage({
               <FallbildAnsicht bild={bild} aktionSlot={actionSlot} />
             </div>
             <div className="lg:hidden">
-              <NextStepCard step={step} actionSlot={actionSlot} />
+              <NextStepCard
+                step={step}
+                actionSlot={actionSlot}
+                caseId={id}
+                telefon={caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null}
+              />
             </div>
           </>
         );
