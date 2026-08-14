@@ -73,6 +73,15 @@ export interface Fallbild {
     grund: string;
     ton: Tone;
     ziel?: Ziel;
+    /**
+     * Der rohe Schlüssel der Prioritätsleiter – reine Durchreichung von
+     * `NextStep["key"]`, ohne etwas Neues zu berechnen (siehe Dateikopf).
+     * `FallbildAnsicht` braucht ihn, um bei "Kunden anrufen" dieselbe
+     * `KontaktKnopfreihe` einzuhängen wie `NextStepCard` – ohne den
+     * Schlüssel gäbe es dafür keine typsichere Unterscheidung von den
+     * übrigen Schritten, die alle nur Titel/Grund/Ziel kennen.
+     */
+    schluessel: NextStep["key"];
   };
 }
 
@@ -160,6 +169,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
       grund: e.schritt.reason,
       ton: e.schritt.tone,
       ziel: e.schritt.cta ? { label: e.schritt.cta.label, href: e.schritt.cta.href } : undefined,
+      schluessel: e.schritt.key,
     },
   };
 }

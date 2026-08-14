@@ -397,6 +397,10 @@ export default async function CaseCockpitPage({
           der Erstkontakt ist Teil dieser Leiter (next-step.ts), keine eigene
           Karte mehr: sonst führt die Fallseite an zwei Stellen gleichzeitig. */}
       {(() => {
+        // Einmal ermittelt, dreifach verwendet (Leiter + beide Kartenansichten
+        // unten) – dieselbe Herleitung an drei Stellen zu wiederholen wäre die
+        // Einladung, dass sie irgendwann auseinanderlaufen.
+        const telefon = caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null;
         let step = computeNextStep({
           ...cockpit,
           erstkontakt: {
@@ -410,7 +414,7 @@ export default async function CaseCockpitPage({
           },
           kontakt: {
             stand: kontaktStandFall,
-            telefon: caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null,
+            telefon,
           },
           wiedervorlageFaellig: caseRow.wiedervorlage != null && caseRow.wiedervorlage <= jetzt,
           verloren: caseRow.verlorenAm != null,
@@ -463,15 +467,10 @@ export default async function CaseCockpitPage({
                 erzeugt sie genau die unleserliche Ansicht, die hier
                 abgeschafft werden soll. */}
             <div className="hidden lg:block">
-              <FallbildAnsicht bild={bild} aktionSlot={actionSlot} />
+              <FallbildAnsicht bild={bild} aktionSlot={actionSlot} caseId={id} telefon={telefon} />
             </div>
             <div className="lg:hidden">
-              <NextStepCard
-                step={step}
-                actionSlot={actionSlot}
-                caseId={id}
-                telefon={caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null}
-              />
+              <NextStepCard step={step} actionSlot={actionSlot} caseId={id} telefon={telefon} />
             </div>
           </>
         );

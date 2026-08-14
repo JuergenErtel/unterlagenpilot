@@ -1,15 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Phone, PhoneCall, CalendarClock, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowRight, PhoneCall, CalendarClock, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import type { NextStep } from "@/lib/cases/next-step";
-import { kontaktVersuchErfassen } from "@/lib/actions/case-management";
-import { telLink, waLink } from "@/lib/kontakt/telefon";
+import { KontaktKnopfreihe } from "@/components/case/kontakt-knopfreihe";
 
 const ICON: Record<NextStep["key"], typeof Sparkles> = {
   ki_laeuft: Sparkles,
@@ -65,9 +62,6 @@ export function NextStepCard({
   // Rahmen – dieselbe Karte, nur lauter. Kein zweites Kartenlayout, sonst
   // laufen die beiden beim naechsten Umbau auseinander.
   const laut = step.hervorgehoben === true;
-  // Im Zweifel lieber KEIN Link (siehe telefon.ts) – beide koennen null sein.
-  const anrufLink = telLink(telefon);
-  const whatsappLink = waLink(telefon);
   return (
     <Card className={cn("border-2", tone.border, tone.bg, laut && "shadow-md")}>
       <CardContent className="flex flex-wrap items-center gap-4 p-5">
@@ -84,74 +78,17 @@ export function NextStepCard({
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nächster Schritt</div>
           <div className={cn("font-semibold leading-snug", laut ? "text-xl" : "text-lg")}>{step.title}</div>
           <p className="mt-0.5 text-sm text-muted-foreground">{step.reason}</p>
-          {/* Die drei Knöpfe des Anrufs: erreicht / nicht erreicht /
-              WhatsApp geschrieben, dazu Wähl- und wa.me-Link, wenn eine
-              Nummer da ist. BaufiDesk verschickt nichts – geschrieben wird
-              in WhatsApp vom Vermittler, der Knopf haelt nur fest, dass es
-              passiert ist. Kein eigener Verlust-Dialog hier: den gibt es im
-              Board bereits (`LossDialog`), der Abbruchvorschlag steht seit
-              der Nachbesserung vom 14.08.2026 nur noch in "Wartet
-              außerdem" (kontakt_aufgeben als Hauptschritt haette Faelle
-              dauerhaft festgehalten). */}
+          {/* EINE Definition (`KontaktKnopfreihe`), zwei Einbauorte – siehe
+              dort für Details (Wiedervorlage im "Erreicht"-Formular,
+              BaufiDesk verschickt nichts). Kein eigener Verlust-Dialog hier:
+              den gibt es im Board bereits (`LossDialog`), der
+              Abbruchvorschlag steht seit der Nachbesserung vom 14.08.2026
+              nur noch in "Wartet außerdem" (kontakt_aufgeben als
+              Hauptschritt haette Faelle dauerhaft festgehalten). */}
           {step.key === "kontakt_aufnehmen" && caseId && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {anrufLink && (
-                <Button asChild variant="default">
-                  <a href={anrufLink}>
-                    <Phone className="h-4 w-4" /> Anrufen
-                  </a>
-                </Button>
-              )}
-              <form action={kontaktVersuchErfassen.bind(null, caseId)}>
-                <input type="hidden" name="kanal" value="telefon" />
-                <input type="hidden" name="ergebnis" value="erreicht" />
-                <Button type="submit" variant="outline">
-                  Erreicht
-                </Button>
-              </form>
-              <form action={kontaktVersuchErfassen.bind(null, caseId)}>
-                <input type="hidden" name="kanal" value="telefon" />
-                <input type="hidden" name="ergebnis" value="nicht_erreicht" />
-                <Button type="submit" variant="outline">
-                  Nicht erreicht
-                </Button>
-              </form>
-              {whatsappLink && (
-                <>
-                  <Button asChild variant="ghost">
-                    <a href={whatsappLink} target="_blank" rel="noopener noreferrer">
-                      WhatsApp öffnen
-                    </a>
-                  </Button>
-                  <form action={kontaktVersuchErfassen.bind(null, caseId)}>
-                    <input type="hidden" name="kanal" value="whatsapp" />
-                    <input type="hidden" name="ergebnis" value="nicht_erreicht" />
-                    <Button type="submit" variant="ghost">
-                      WhatsApp geschrieben
-                    </Button>
-                  </form>
-                </>
-              )}
+            <div className="mt-3">
+              <KontaktKnopfreihe caseId={caseId} telefon={telefon} />
             </div>
-          )}
-          {/* Nach "Erreicht" ist die naechste Frage immer dieselbe: wann
-              wieder anfassen? Laeuft ueber dieselbe Aktion wie die
-              Kontaktknoepfe oben – ein leeres Datumsfeld setzt keine
-              Wiedervorlage, `kontaktVersuchErfassen` ignoriert es dann. */}
-          {step.key === "erstgespraech" && caseId && (
-            <form action={kontaktVersuchErfassen.bind(null, caseId)} className="mt-3 flex items-end gap-2">
-              <input type="hidden" name="kanal" value="telefon" />
-              <input type="hidden" name="ergebnis" value="erreicht" />
-              <div className="space-y-1">
-                <Label htmlFor="wv" className="text-xs">
-                  Wiedervorlage
-                </Label>
-                <Input id="wv" type="date" name="wiedervorlage" className="h-9 w-40" />
-              </div>
-              <Button type="submit" variant="outline" size="sm">
-                Merken
-              </Button>
-            </form>
           )}
           {/* Verdrängte Schritte: als Zeile, nicht als zweiter Knopf – sonst
               stünden zwei Hauptaktionen nebeneinander und die Leiter verlöre

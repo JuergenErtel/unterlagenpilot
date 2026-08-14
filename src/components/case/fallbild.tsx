@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { Fallbild, Feld, Tor } from "@/lib/cases/fallbild";
 import { TONE, type Tone } from "@/lib/ui/tone";
+import { KontaktKnopfreihe } from "@/components/case/kontakt-knopfreihe";
 
 /**
  * Das Fallbild: der Kunde in der Mitte, der Weg zur Einreichung als OFFENER
@@ -74,6 +75,8 @@ const FELD_H = 60;
 export function FallbildAnsicht({
   bild,
   aktionSlot,
+  caseId,
+  telefon = null,
 }: {
   bild: Fallbild;
   /**
@@ -82,6 +85,15 @@ export function FallbildAnsicht({
    * Erstkontakt vorbereiten) – als Link wuerden sie schlicht nicht tun.
    */
   aktionSlot?: React.ReactNode;
+  /**
+   * `caseId`/`telefon` fuer die `KontaktKnopfreihe` bei "Kunden anrufen"
+   * (`bild.naechstes.schluessel === "kontakt_aufnehmen"`). Optional, weil
+   * `FallbildAnsicht` grundsaetzlich auch ohne Fallbezug denkbar waere –
+   * ohne `caseId` bleibt die Knopfreihe einfach weg statt mit einer kaputten
+   * Aktion zu rendern (dieselbe Regel wie in `NextStepCard`).
+   */
+  caseId?: string;
+  telefon?: string | null;
 }) {
   const [gewaehlt, setGewaehlt] = useState<string | null>(null);
   const schritt = SPANNE / bild.tore.length;
@@ -349,6 +361,14 @@ export function FallbildAnsicht({
             ) : (
               <>
                 {aktionSlot}
+                {/* EINE Definition (`KontaktKnopfreihe`), zwei Einbauorte –
+                    dieselbe Zeile wie in `NextStepCard`. Ohne sie war "Kunden
+                    anrufen" auf jedem Bildschirm ab der `lg`-Breite (also auf
+                    jedem gewoehnlichen Desktop) nur ein Titel ohne
+                    Handlungsknopf (Controller-Korrektur vom 14.08.2026). */}
+                {bild.naechstes.schluessel === "kontakt_aufnehmen" && caseId && (
+                  <KontaktKnopfreihe caseId={caseId} telefon={telefon} />
+                )}
                 {bild.naechstes.ziel && (
                   <Button asChild size="sm" className="justify-center">
                     <Link href={bild.naechstes.ziel.href}>
