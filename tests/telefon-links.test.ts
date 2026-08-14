@@ -25,6 +25,27 @@ describe("waLink", () => {
     expect(waLink("kenne ich nicht")).toBeNull();
     expect(waLink("123")).toBeNull();
   });
+
+  it("lehnt Durchwahlen ab (zu lange fuer WhatsApp)", () => {
+    // "030 12345678-100" → nach Ziffernfilter: 03012345678100 (14 Ziffern)
+    // → mit Ländercode 49: 493012345678100 (15 Ziffern, maximal E.164, aber zu lang für deutsche Nummer)
+    // Durchwahlen sind hier die 100 am Ende, die Nummer selbst wird nicht richtig erkannt.
+    expect(waLink("030 12345678-100")).toBeNull();
+  });
+
+  it("lehnt zu kurze Nummern nach 00-Normalisierung ab", () => {
+    // "00170 1234567" → nach Ziffernfilter: 001701234567 (12 Ziffern)
+    // → nach 00-Strippen: 1701234567 (10 Ziffern)
+    // 10 Ziffern sind zu kurz für eine internationale Nummer (Minimum E.164: 11)
+    expect(waLink("00170 1234567")).toBeNull();
+  });
+
+  it("akzeptiert gueltige 13-stellige internationale Nummern", () => {
+    // "+49 170 12345678" → nach Ziffernfilter: 4917012345678 (13 Ziffern)
+    // Das ist gültig: 49 (Ländercode) + 170 (Vorwahl) + 12345678 (8-stellig) = 13 total
+    // Für deutsche Nummern ist das die Obergrenze (49 + 11 Ziffern ohne die führende 0)
+    expect(waLink("+49 170 12345678")).toBe("https://wa.me/4917012345678");
+  });
 });
 
 describe("telLink", () => {
@@ -35,5 +56,19 @@ describe("telLink", () => {
   it("gibt null zurueck ohne Nummer", () => {
     expect(telLink(null)).toBeNull();
     expect(telLink("  ")).toBeNull();
+  });
+
+  it("lehnt zu lange Nummern mit Durchwahl ab", () => {
+    // "030 12345678-100" → nach Ziffernfilter: 03012345678100 (14 Ziffern)
+    // Das sind 14 Ziffern für tel:, was noch unter E.164-Limit (15) liegt,
+    // aber 03012345678100 ist keine gültige deutsche Nummer (Durchwahl ist getarnt).
+    // Die 100 am Ende ist die Durchwahl, die tel: stumm mitdial würde.
+    expect(telLink("030 12345678-100")).toBeNull();
+  });
+
+  it("akzeptiert gueltige 13-stellige deutsche Nummern", () => {
+    // "0170 12345678" → nach Ziffernfilter: 017012345678 (12 Ziffern)
+    // Das ist eine gültige deutsche Nummer (Vorwahl 170 mit 8-stelliger Anschluss)
+    expect(telLink("0170 12345678")).toBe("tel:017012345678");
   });
 });
