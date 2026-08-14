@@ -825,4 +825,22 @@ describe("Wiedervorlage in der Leiter", () => {
     );
     expect(schritt.key).not.toBe("wiedervorlage_faellig");
   });
+
+  it("fuehrt zur Verwaltungsseite, nicht zur Fallseite – die Sprosse soll mahnen, aber nicht unentrinnbar sein", () => {
+    // Controller-Entscheidung (14.08.2026): Die Sprosse hat kein "erledigt"-
+    // Gegenstueck und steht weit vorn in der Leiter. Ein reiner Datumsvergleich
+    // wuerde ein altes, nie geraeumtes Datum den Fall dauerhaft hier
+    // festhalten und alles darunter verdecken – dieselbe Falle wie bei
+    // kontakt_aufgeben. Das Feld Wiedervorlage liegt auf der Verwaltungsseite
+    // und laesst sich dort verschieben oder raeumen – der cta muss dorthin
+    // fuehren, nicht zurueck auf die Fallseite, die die Sprosse ja gerade zeigt.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        wiedervorlageFaellig: true,
+      })
+    );
+    expect(schritt.key).toBe("wiedervorlage_faellig");
+    expect(schritt.cta?.href).toBe("/cases/c1/verwaltung");
+  });
 });

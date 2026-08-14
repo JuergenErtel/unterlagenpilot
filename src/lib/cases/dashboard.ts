@@ -4,6 +4,7 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { kontaktStand, kontaktEinstellungen } from "@/lib/cases/kontakt";
 import { isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { countDocumentsWithoutAiResult, countRunningClassifications } from "@/lib/documents/processing";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
@@ -121,6 +122,18 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       },
       property: true,
       financingRequest: true,
+      // Kontaktstand (Aufgabe 7): dieselbe Herleitung wie auf der Fallseite –
+      // nur Vermerke MIT Ergebnis (Kontaktversuche) zählen, aeltere zuerst
+      // egal, hier absteigend geladen, weil kontaktStand nur den spaetesten
+      // braucht.
+      caseNotes: {
+        where: { ergebnis: { not: null } },
+        select: { ergebnis: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+      // Telefonnummer fuer den Anruf-Hinweis: erst der erste Antragsteller
+      // (bereits oben geladen), sonst die Kundennummer als Rueckfalloption.
+      customer: { select: { phone: true } },
     },
     orderBy: { updatedAt: "desc" },
     take: 12,
@@ -170,6 +183,12 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   });
   const versendetJeNachricht = new Map(erstkontaktNachrichten.map((m) => [m.id, m.sent]));
 
+  // EINMAL je Aufruf gebildet, nicht je Fall: `kontaktStand` vergleicht gegen
+  // "jetzt" – zwei Fälle desselben Aufrufs müssen denselben Zeitpunkt sehen,
+  // sonst werden Grenzfälle (Abstand/Frist gerade abgelaufen) unerklärlich.
+  const jetzt = new Date();
+  const kontaktEinstellungenWert = kontaktEinstellungen();
+
   const enriched = await Promise.all(
     todoCandidates.map(async (c) => {
       const agg = await getCaseAggregate(c.id);
@@ -200,6 +219,14 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       // dieselbe Zählung wie im Cockpit, damit Dashboard und Fallseite
       // denselben Schritt nennen.
       const docsLaufend = countRunningClassifications(docs);
+      // Kontaktstand: fertig gerechnet hereingegeben, damit next-step.ts ohne
+      // eigene Uhr auskommt (dieselbe Herleitung wie auf der Fallseite).
+      const stand = kontaktStand(
+        c.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
+        c.createdAt,
+        jetzt,
+        kontaktEinstellungenWert
+      );
       let step = computeNextStep({
         caseId: c.id,
         status: c.status,
@@ -233,6 +260,12 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
           gefuehrtAm: c.erstgespraechGefuehrtAm,
         },
+        kontakt: {
+          stand,
+          telefon: c.applicants[0]?.phone ?? c.customer?.phone ?? null,
+        },
+        wiedervorlageFaellig: c.wiedervorlage != null && c.wiedervorlage <= jetzt,
+        verloren: c.verlorenAm != null,
       });
       // Stale-Schutz: dieselbe Regel wie auf der Fallseite (ai-check-status.ts).
       // Ohne ihn bliebe ein Fall mit hart gestorbenem Hintergrundlauf hier für
@@ -249,9 +282,23 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     })
   );
 
-  // To-dos priorisiert (niedrigster Score / meiste Lücken zuerst)
+  /*
+   * Faellige Kontaktschritte stehen oben: Ein frischer Lead hat naturgemaess
+   * einen niedrigen Reifegrad, aber genau deshalb wuerde er in einer reinen
+   * Reifegrad-Sortierung neben halbfertigen Faellen untergehen. Der Anruf ist
+   * das Zeitkritische – alles andere kann auch morgen noch.
+   *
+   * Im Blick behalten: Die Liste bleibt bei sechs Eintraegen gedeckelt.
+   * Kommen an einem Tag mehr als sechs frische Leads herein, verdraengen die
+   * Anrufe alles andere. Das ist fuer den Moment richtig – falls es stoert,
+   * ist der Deckel die Stellschraube, nicht die Sortierung.
+   */
+  const KONTAKT_SCHRITTE = new Set(["kontakt_aufnehmen", "kontakt_aufgeben"]);
+  const rang = (e: (typeof enriched)[number]) => (KONTAKT_SCHRITTE.has(e.step.key) ? 0 : 1);
+
+  // To-dos priorisiert (Kontaktschritte zuerst, danach niedrigster Score / meiste Lücken zuerst)
   const todos: TodoCase[] = enriched
-    .sort((a, b) => a.agg.readiness.score - b.agg.readiness.score)
+    .sort((a, b) => rang(a) - rang(b) || a.agg.readiness.score - b.agg.readiness.score)
     .slice(0, 6)
     .map((e) => ({
       caseId: e.c.id,

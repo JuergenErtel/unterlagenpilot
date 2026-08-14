@@ -60,7 +60,19 @@ vi.mock("@/lib/platforms/mapping", () => ({
 import { getDashboardData } from "@/lib/cases/dashboard";
 
 const VOR_5_TAGEN = new Date(Date.now() - 5 * 86_400_000);
+const VOR_30_TAGEN = new Date(Date.now() - 30 * 86_400_000);
 const MORGEN = new Date(Date.now() + 86_400_000);
+
+/**
+ * Kontaktvermerk "erreicht" – macht `kontaktStand(...).jeErreicht` wahr und
+ * haelt so `kontakt_aufnehmen` aus Fixtures heraus, die eine TIEFERE Stufe
+ * der Leiter pruefen (Selbstauskunft, Erstgespräch, KI-Stale-Schutz). Ohne
+ * das wuerde seit Aufgabe 7 JEDER frisch angelegte Testfall (kein Vermerk,
+ * `createdAt` = jetzt) faellig fuer den Anruf sein und diese Tests verdecken.
+ */
+function bereitsErreicht() {
+  return [{ ergebnis: "erreicht" as const, createdAt: VOR_30_TAGEN }];
+}
 
 /** Minimaler Antragsteller, der keine der anderen Prioritätsstufen auslöst. */
 function applicant(email: string) {
@@ -131,10 +143,12 @@ const VOLLSTAENDIGES_OBJEKT_UND_VORHABEN = {
  * und das Dashboard behauptet für praktisch jeden Fall „Erstgespräch führen".
  */
 function projiziere(row: Record<string, unknown>, include: Record<string, unknown> | undefined) {
-  const { applicants, property, financingRequest, ...rest } = row as {
+  const { applicants, property, financingRequest, caseNotes, customer, ...rest } = row as {
     applicants?: Array<Record<string, unknown>>;
     property?: unknown;
     financingRequest?: unknown;
+    caseNotes?: unknown;
+    customer?: unknown;
   } & Record<string, unknown>;
   const applicantsInclude =
     ((include?.applicants as { include?: Record<string, unknown> } | undefined)?.include ?? {}) as Record<string, unknown>;
@@ -154,6 +168,12 @@ function projiziere(row: Record<string, unknown>, include: Record<string, unknow
   };
   if (include?.property) projected.property = property;
   if (include?.financingRequest) projected.financingRequest = financingRequest;
+  // caseNotes/customer speisen seit Aufgabe 7 den Kontaktstand
+  // (kontaktStand/kontakt.ts) – nur weiterreichen, wenn die Abfrage sie
+  // tatsaechlich anfordert, sonst wuerde ein vergessenes Include hier
+  // unbemerkt durchrutschen (dieselbe Falle wie bei employment/income, A4).
+  if (include?.caseNotes) projected.caseNotes = caseNotes;
+  if (include?.customer) projected.customer = customer;
   return projected;
 }
 
@@ -199,6 +219,11 @@ beforeEach(() => {
             status: "unterlagen_fehlen",
             erstkontaktMessageId: "msg-1",
             updatedAt: new Date(),
+            createdAt: VOR_30_TAGEN,
+            wiedervorlage: null,
+            verlorenAm: null,
+            caseNotes: bereitsErreicht(),
+            customer: null,
             applicants: [vollstaendigerAntragsteller("c1@example.com")],
             ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
           },
@@ -208,6 +233,11 @@ beforeEach(() => {
             status: "unterlagen_fehlen",
             erstkontaktMessageId: "msg-2",
             updatedAt: new Date(),
+            createdAt: VOR_30_TAGEN,
+            wiedervorlage: null,
+            verlorenAm: null,
+            caseNotes: bereitsErreicht(),
+            customer: null,
             applicants: [vollstaendigerAntragsteller("c2@example.com")],
             ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
           },
@@ -217,6 +247,11 @@ beforeEach(() => {
             status: "unterlagen_fehlen",
             erstkontaktMessageId: "msg-3",
             updatedAt: new Date(),
+            createdAt: VOR_30_TAGEN,
+            wiedervorlage: null,
+            verlorenAm: null,
+            caseNotes: bereitsErreicht(),
+            customer: null,
             applicants: [vollstaendigerAntragsteller("c3@example.com")],
             ...VOLLSTAENDIGES_OBJEKT_UND_VORHABEN,
           },
@@ -307,6 +342,14 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
       erstkontaktMessageId: "msg-1",
       financingType: null,
       updatedAt: new Date(),
+      createdAt: VOR_30_TAGEN,
+      wiedervorlage: null,
+      verlorenAm: null,
+      // Bereits erreicht: sonst waere seit Aufgabe 7 JEDER frische Testfall
+      // (kein Vermerk) faellig fuer `kontakt_aufnehmen` und verdeckte die
+      // Erstgespraech-Stufe, um die es in diesem Block geht.
+      caseNotes: bereitsErreicht(),
+      customer: null,
       applicants: [applicant("kunde@example.com")],
       property: null,
       financingRequest: null,
@@ -346,6 +389,15 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
     });
     expect(include.property).toBe(true);
     expect(include.financingRequest).toBe(true);
+    // Seit Aufgabe 7 speist die Abfrage den Kontaktstand (kontaktStand):
+    // Ohne caseNotes/customer bliebe c.caseNotes undefined und der Aufruf
+    // kraeche, sobald die Next-Step-Engine kontaktStand gerufen bekommt.
+    expect(include.caseNotes).toEqual({
+      where: { ergebnis: { not: null } },
+      select: { ergebnis: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(include.customer).toEqual({ select: { phone: true } });
   });
 
   it("zeigt 'Erstgespräch führen', solange Angaben für ein Angebot fehlen – wie auf der Fallseite", async () => {
@@ -367,6 +419,108 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
     const todo = data.todos.find((t) => t.caseId === "c-erstgespraech");
     expect(todo).toBeDefined();
     expect(todo?.nextStep).not.toBe("Erstgespräch führen");
+  });
+});
+
+/**
+ * Aufgabe 7: Die To-do-Kandidaten laden seit hier die Kontaktvermerke und die
+ * Wiedervorlage und rechnen daraus den Kontaktstand (kontaktStand,
+ * kontakt.ts), bevor sie die Prioritätsleiter fragen – vorher kannte kein
+ * Aufrufer die neue Kontaktsprosse. Faellige Kontaktschritte stehen danach
+ * ganz oben in der To-do-Liste, auch vor einem besseren Reifegrad.
+ */
+describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgabe 7)", () => {
+  function mehrereFaelle(rows: Array<Record<string, unknown>>) {
+    caseFindMany.mockReset().mockImplementation((args: { include?: Record<string, unknown> }) => {
+      if (args.include) return Promise.resolve(rows.map((row) => projiziere(row, args.include)));
+      return Promise.resolve([]);
+    });
+  }
+
+  /** Frischer Lead: kein Kontaktvermerk, Erstkontakt nicht versendet. */
+  function frischerLead(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "c-frischer-lead",
+      caseNumber: "UP-0201",
+      status: "neu",
+      erstkontaktMessageId: null,
+      financingType: null,
+      updatedAt: new Date(),
+      createdAt: new Date(),
+      wiedervorlage: null,
+      verlorenAm: null,
+      caseNotes: [],
+      customer: null,
+      applicants: [applicant("frisch@example.com")],
+      property: null,
+      financingRequest: null,
+      ...overrides,
+    };
+  }
+
+  /** Bereits erreichter Fall mit einem pruefbereiten Dokument – rangiert unter den Kontaktschritten. */
+  function falleMitDokument(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "c-mit-dokument",
+      caseNumber: "UP-0202",
+      status: "unterlagen_fehlen",
+      erstkontaktMessageId: "msg-erreicht",
+      financingType: null,
+      updatedAt: new Date(),
+      createdAt: VOR_30_TAGEN,
+      wiedervorlage: null,
+      verlorenAm: null,
+      caseNotes: bereitsErreicht(),
+      customer: null,
+      applicants: [applicant("erreicht@example.com")],
+      property: null,
+      financingRequest: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    selfDisclosureLinkFindMany.mockReset().mockResolvedValue([]);
+    generatedMessageFindMany.mockReset().mockResolvedValue([{ id: "msg-erreicht", sent: true }]);
+  });
+
+  it("nennt fuer einen frischen Lead ohne Kontaktversuch das Anrufen", async () => {
+    mehrereFaelle([frischerLead()]);
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-frischer-lead");
+    expect(todo?.nextStep).toBe("Kunden anrufen");
+  });
+
+  it("sortiert faellige Kontaktschritte nach oben – auch vor einem besseren Reifegrad", async () => {
+    mehrereFaelle([frischerLead(), falleMitDokument()]);
+    documentFindMany.mockReset().mockResolvedValue([
+      {
+        caseId: "c-mit-dokument",
+        reviewStatus: "offen",
+        classificationStatus: "fertig",
+        extractionStatus: "fertig",
+        updatedAt: new Date(),
+      },
+    ]);
+    // Der frische Lead hat den BESSEREN (hoeheren) Reifegrad – eine reine
+    // Score-Sortierung wuerde ihn nach hinten stellen. Erst die zweistufige
+    // Sortierung (Kontaktschritte zuerst) holt ihn trotzdem nach vorn.
+    getCaseAggregate.mockReset().mockImplementation((id: string) =>
+      Promise.resolve({
+        ...leereAggregation(id),
+        readiness: {
+          score: id === "c-frischer-lead" ? 90 : 5,
+          band: "fast",
+          label: "",
+          mandatoryOpen: 0,
+          mandatoryTotal: 0,
+        },
+      })
+    );
+
+    const data = await getDashboardData("org-1");
+    expect(data.todos[0]?.caseId).toBe("c-frischer-lead");
   });
 });
 
@@ -393,6 +547,15 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
       erstkontaktMessageId: null,
       financingType: null,
       updatedAt: new Date(),
+      createdAt: VOR_30_TAGEN,
+      wiedervorlage: null,
+      verlorenAm: null,
+      // Der KI-Lauf gewinnt in jedem Test dieses Blocks vor der Kontaktstufe
+      // (next-step.ts prüft ki_laeuf/ki_fehler zuerst) – der Vermerk ist hier
+      // nur noetig, damit kontaktStand() nicht auf ein fehlendes caseNotes
+      // stoesst.
+      caseNotes: [],
+      customer: null,
       applicants: [],
       property: null,
       financingRequest: null,

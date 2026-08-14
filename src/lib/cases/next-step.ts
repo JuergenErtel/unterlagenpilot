@@ -380,7 +380,18 @@ function ermittleSchritt(c: NextStepInput): NextStep {
       title: "Wiedervorlage ist fällig",
       reason: "Du hattest dir diesen Fall für heute vorgemerkt.",
       tone: "review",
-      cta: { label: "Fall öffnen", href: `/cases/${id}` },
+      /*
+       * Controller-Entscheidung (14.08.2026): Diese Sprosse hat kein
+       * "erledigt"-Gegenstueck und steht weit vorn in der Leiter. Ein reiner
+       * Datumsvergleich wuerde ein altes, nie geraeumtes Datum den Fall
+       * dauerhaft hier festhalten und alles darunter verdecken – dieselbe
+       * Falle, die bei kontakt_aufgeben schon zuschnappte. Die Sprosse SOLL
+       * mahnen, darf aber nicht unentrinnbar sein: Der cta fuehrt deshalb zur
+       * Verwaltungsseite, wo das Feld Wiedervorlage liegt und sich
+       * verschieben oder raeumen laesst – nicht zurueck auf die Fallseite,
+       * die diese Karte ja gerade zeigt.
+       */
+      cta: { label: "Wiedervorlage verwalten", href: `/cases/${id}/verwaltung` },
     };
   }
 

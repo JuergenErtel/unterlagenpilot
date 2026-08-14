@@ -36,6 +36,7 @@ import { FallbildAnsicht } from "@/components/case/fallbild";
 import { baueFallbild } from "@/lib/cases/fallbild";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
+import { kontaktStand, kontaktEinstellungen } from "@/lib/cases/kontakt";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorbereiten-button";
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
@@ -95,6 +96,16 @@ export default async function CaseCockpitPage({
       },
       property: true,
       financingRequest: true,
+      // Kontaktstand (Aufgabe 7): dieselbe Herleitung wie im Dashboard – nur
+      // Vermerke MIT Ergebnis (Kontaktversuche) zählen.
+      caseNotes: {
+        where: { ergebnis: { not: null } },
+        select: { ergebnis: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+      // Telefonnummer fuer den Anruf-Hinweis: erst der erste Antragsteller
+      // (bereits oben geladen), sonst die Kundennummer als Rueckfalloption.
+      customer: { select: { phone: true } },
     },
   });
   if (!caseRow) notFound();
@@ -263,6 +274,20 @@ export default async function CaseCockpitPage({
   const erstgespraechReife = berechneReife(erstgespraechStand, erstgespraechAntragstellerZahl);
   const erstgespraechOffen = erstgespraechReife.gesamt - erstgespraechReife.gefuellt;
 
+  // Kontaktstand: fertig gerechnet an die Fallreise (next-step.ts) gegeben,
+  // damit next-step.ts ohne eigene Uhr auskommt (dieselbe Herleitung wie im
+  // Dashboard). "jetzt" EINMAL gebildet – hier reicht das fuer einen
+  // einzelnen Fall, aber dieselbe Quelle speist unten sowohl die
+  // Wiedervorlage-Prüfung als auch kontaktStand, damit beide denselben
+  // Zeitpunkt sehen.
+  const jetzt = new Date();
+  const kontaktStandFall = kontaktStand(
+    caseRow.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
+    caseRow.createdAt,
+    jetzt,
+    kontaktEinstellungen()
+  );
+
   /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
    * Zeilen gebaut, nicht aus dem Prozentwert abgeleitet: erst dann sagt sie
@@ -383,6 +408,12 @@ export default async function CaseCockpitPage({
             offeneAngaben: erstgespraechOffen,
             gefuehrtAm: caseRow.erstgespraechGefuehrtAm,
           },
+          kontakt: {
+            stand: kontaktStandFall,
+            telefon: caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null,
+          },
+          wiedervorlageFaellig: caseRow.wiedervorlage != null && caseRow.wiedervorlage <= jetzt,
+          verloren: caseRow.verlorenAm != null,
         });
         // Stale-Schutz: Stirbt der Hintergrundlauf hart (Deploy/Timeout), stünde
         // die Karte sonst für immer auf „KI läuft“ – ohne Ausweg. Dieselbe
