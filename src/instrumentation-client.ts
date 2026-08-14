@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noise";
+import { istFremdesNetzRauschen } from "@/lib/observability/fremdes-netz-rauschen";
 import { mitDomFingerabdruck, type LageAusschnitt } from "@/lib/observability/hydration-diagnose";
 
 /**
@@ -54,8 +55,11 @@ Sentry.init({
   // Hydration-Event einen Strukturfingerabdruck des DOM mit – nur Tagnamen,
   // Ids und Attributnamen, keine Inhalte. Er zeigt beim nächsten Vorfall, ob
   // eine Browser-Erweiterung den Baum vor der Hydration verändert hat.
+  // Zwei belegte Rauschquellen fliegen raus, alles andere bleibt sichtbar:
+  // Reacts Streaming-Kaskade (Folge, nicht Ursache) und anonyme
+  // Netzwerk-Rejections fremder Erweiterungen auf den öffentlichen Seiten.
   beforeSend: (event) =>
-    isReactStreamingCascade(event)
+    isReactStreamingCascade(event) || istFremdesNetzRauschen(event)
       ? null
       : mitDomFingerabdruck(
           event,
