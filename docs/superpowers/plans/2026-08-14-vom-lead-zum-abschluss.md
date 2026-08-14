@@ -21,7 +21,7 @@
 
 ---
 
-### Aufgabe 1: Schema um Kontaktergebnis erweitern
+### Task 1: Schema um Kontaktergebnis erweitern
 
 **Dateien:**
 - Ändern: `prisma/schema.prisma` (Enum `CaseNoteKind`, Model `CaseNote`)
@@ -134,7 +134,7 @@ Zusatzarbeit in der vorhandenen Vermerk-Liste der Verwaltungsseite."
 
 ---
 
-### Aufgabe 2: Kontaktstand ableiten (reine Funktion)
+### Task 2: Kontaktstand ableiten (reine Funktion)
 
 **Dateien:**
 - Erstellen: `src/lib/cases/kontakt.ts`
@@ -355,7 +355,7 @@ gerade abgelaufen, Frist gerade erreicht) nicht pruefbar."
 
 ---
 
-### Aufgabe 3: Drei neue Sprossen in der Prioritätsleiter
+### Task 3: Drei neue Sprossen in der Prioritätsleiter
 
 **Dateien:**
 - Ändern: `src/lib/cases/next-step.ts` (Schlüssel-Union, `NextStepInput`, neue Funktion, zwei Einhängepunkte)
@@ -684,7 +684,7 @@ Erledigung."
 
 ---
 
-### Aufgabe 4: Kontaktversuch erfassen (Server Action)
+### Task 4: Kontaktversuch erfassen (Server Action)
 
 **Dateien:**
 - Ändern: `src/lib/actions/case-management.ts`
@@ -878,7 +878,7 @@ Unbekannte Kanaele und Ergebnisse werden abgewiesen statt erfunden."
 
 ---
 
-### Aufgabe 5: Telefonnummer für Wähl- und WhatsApp-Link aufbereiten
+### Task 5: Telefonnummer für Wähl- und WhatsApp-Link aufbereiten
 
 **Dateien:**
 - Erstellen: `src/lib/kontakt/telefon.ts`
@@ -1006,7 +1006,7 @@ geratene Nummer schriebe an einen Fremden."
 
 ---
 
-### Aufgabe 6: Knöpfe auf der Fallkarte
+### Task 6: Knöpfe auf der Fallkarte
 
 **Dateien:**
 - Ändern: `src/components/case/next-step-card.tsx`
@@ -1101,7 +1101,7 @@ zweiter waere ein zweiter Ort mit derselben Aussage."
 
 ---
 
-### Aufgabe 7: Fallseite und Dashboard speisen die neuen Eingaben
+### Task 7: Fallseite und Dashboard speisen die neuen Eingaben
 
 **Dateien:**
 - Ändern: `src/app/(app)/cases/[id]/page.tsx`
