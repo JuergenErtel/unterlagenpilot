@@ -82,6 +82,14 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
           // Dieselbe Zaehlung wie die Maske selbst (erstgespraech/page.tsx):
           // Antragstellerzahl aus den vorhandenen Antragstellern, geklemmt auf
           // 1..MAX_APPLICANTS.
+          //
+          // Mit EINER bekannten Ausnahme: Hat der Vermittler in der Maske
+          // "zu zweit" geschaltet (`?zu_zweit=1`), rechnet sie schon mit zwei
+          // Antragstellern, waehrend hier erst einer existiert – Antragsteller 2
+          // wird bewusst erst beim ersten Wert angelegt (`ermittleApplicantId`).
+          // In diesem Fenster zeigt die Maske mehr offene Angaben als diese
+          // Stelle. Es schliesst sich mit dem ersten getippten Wert; ihn hier
+          // nachzubilden hiesse, den URL-Schalter durch die halbe App zu reichen.
           const stand: Fallstand = {
             applicants: caseScope.applicants as unknown as Fallstand["applicants"],
             property: (caseScope.property as Record<string, unknown> | null) ?? null,

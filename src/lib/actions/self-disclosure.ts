@@ -19,7 +19,7 @@ import {
   type Uebernahmeplan,
 } from "@/lib/self-disclosure/takeover";
 import type { Antworten } from "@/lib/self-disclosure/types";
-import { wandleWert, UNLESBARER_ZAHLENWERT } from "@/lib/actions/zielwert";
+import { wandleWert, UNLESBARER_WERT } from "@/lib/actions/zielwert";
 
 export interface SchrittState {
   error?: string;
@@ -194,8 +194,8 @@ function konvertiere(feld: string, wert: string): unknown {
   // Sollte laut obigem Vertrag nie eintreten (planUebernahme verwirft eine
   // Luecke des Kunden schon vor dem Vorschlag) – falls doch, lieber wie
   // frueher `null` schreiben als das Unlesbar-Signal selbst in die DB
-  // durchzureichen (siehe zielwert.ts#UNLESBARER_ZAHLENWERT).
-  return konvertiert === UNLESBARER_ZAHLENWERT ? null : konvertiert;
+  // durchzureichen (siehe zielwert.ts#UNLESBARER_WERT).
+  return konvertiert === UNLESBARER_WERT ? null : konvertiert;
 }
 
 /**

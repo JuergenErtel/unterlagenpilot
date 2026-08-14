@@ -70,7 +70,9 @@ const GANZZAHLFELDER = ["anzahlKinder", "baujahr", "stellplaetze", "zinsbindungJ
  * heuristisch plausibel.
  */
 /**
- * Signal fuer "Text war keine lesbare Zahl" – bewusst NICHT `null`.
+ * Signal fuer "Text war kein lesbarer Wert" – bewusst NICHT `null`.
+ * Gilt fuer Zahlen ("ca. 300") ebenso wie fuer Datumsangaben ("morgen",
+ * "31.02.1980"), siehe `wandleDatum` unten.
  *
  * Vorher lieferte `wandleWert` fuer "ca. 300" oder "3.000-3.500" `null`
  * zurueck, `schreibeZielwert` schrieb das ungeprueft in die DB, und ein
@@ -81,7 +83,42 @@ const GANZZAHLFELDER = ["anzahlKinder", "baujahr", "stellplaetze", "zinsbindungJ
  * den Schreibvorgang auslassen, statt zu loeschen – ein ausdruecklich
  * geleertes Feld (leerer Text) bleibt weiterhin `null` und loescht wie gewollt.
  */
-export const UNLESBARER_ZAHLENWERT = Symbol("unlesbarer-zahlenwert");
+export const UNLESBARER_WERT = Symbol("unlesbarer-wert");
+
+/**
+ * Datum streng lesen – niemals `new Date(text)` raten lassen.
+ *
+ * `new Date("12.05.1980")` wirft in Node keinen Fehler, sondern liefert den
+ * 5. DEZEMBER: der Text wird als US-Format Monat.Tag.Jahr gelesen. Ein deutsch
+ * getipptes Geburtsdatum landete damit still um sieben Monate verschoben in der
+ * Datenbank und von dort im Europace-Antrag. Unlesbares wie "morgen" oder ein
+ * nicht existierender Tag ("31.02.") ergab `Invalid Date` und stuerzte erst in
+ * Prisma ab – der Vermittler sah nur "bitte noch einmal versuchen".
+ *
+ * Erlaubt sind deshalb genau zwei Schreibweisen: ISO (so liefert es
+ * `<input type="date">`, so gibt `formatiereWert` es zurueck) und das deutsche
+ * Tag.Monat.Jahr. Gebaut wird in UTC, damit der Rundlauf ueber
+ * `toISOString().slice(0, 10)` nicht auf den Vortag kippt.
+ */
+function wandleDatum(wert: string): Date | typeof UNLESBARER_WERT {
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(wert);
+  const deutsch = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(wert);
+  const [jahr, monat, tag] = iso
+    ? [Number(iso[1]), Number(iso[2]), Number(iso[3])]
+    : deutsch
+      ? [Number(deutsch[3]), Number(deutsch[2]), Number(deutsch[1])]
+      : [NaN, NaN, NaN];
+  if (!Number.isFinite(jahr)) return UNLESBARER_WERT;
+
+  const datum = new Date(Date.UTC(jahr, monat - 1, tag));
+  // Fangt den 31.02.: Date.UTC rollt ueber statt zu scheitern, das Ergebnis
+  // waere der 2. oder 3. Maerz gewesen.
+  const echt =
+    datum.getUTCFullYear() === jahr &&
+    datum.getUTCMonth() === monat - 1 &&
+    datum.getUTCDate() === tag;
+  return echt ? datum : UNLESBARER_WERT;
+}
 
 export function wandleWert(
   feld: string,
@@ -95,12 +132,12 @@ export function wandleWert(
     // kennt (siehe NICHT_NULLBARE_WAHRHEITSFELDER oben).
     return NICHT_NULLBARE_WAHRHEITSFELDER.includes(feld) ? false : null;
   }
-  if (DATUMSFELDER.includes(feld)) return new Date(wert);
+  if (DATUMSFELDER.includes(feld)) return wandleDatum(wert);
   if (WAHRHEITSFELDER.includes(feld)) return /^(ja|true|1)$/i.test(wert);
   if (ZAHLENFELDER.includes(feld)) {
     const n =
       format === "maschinell" ? Number(wert) : Number(wert.replace(/\./g, "").replace(",", "."));
-    if (!Number.isFinite(n)) return UNLESBARER_ZAHLENWERT;
+    if (!Number.isFinite(n)) return UNLESBARER_WERT;
     return GANZZAHLFELDER.includes(feld) ? Math.round(n) : n;
   }
   return wert;
@@ -165,8 +202,8 @@ export async function schreibeZielwert(
   // Unlesbare Zahl: NICHTS schreiben. Der vorher gepflegte Wert bleibt in der
   // DB stehen, statt durch ein stillschweigendes NaN->null geloescht zu
   // werden – die Zusicherung verbietet Blockieren, nicht Melden (siehe
-  // UNLESBARER_ZAHLENWERT oben).
-  if (konvertiert === UNLESBARER_ZAHLENWERT) {
+  // UNLESBARER_WERT oben).
+  if (konvertiert === UNLESBARER_WERT) {
     return { gespeichert: false, unlesbar: true };
   }
   const person = ziel.person ?? 1;

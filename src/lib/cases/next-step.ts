@@ -281,7 +281,7 @@ function ermittleSchritt(c: NextStepInput): NextStep {
     return {
       key: "erstgespraech",
       title: "Erstgespräch führen",
-      reason: `${c.erstgespraech.offeneAngaben} Angaben fehlen noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
+      reason: `${c.erstgespraech.offeneAngaben} Angabe${c.erstgespraech.offeneAngaben === 1 ? "" : "n"} fehl${c.erstgespraech.offeneAngaben === 1 ? "t" : "en"} noch für ein Angebot. Die Maske führt dich durch die Fragen.`,
       tone: "review",
       cta: { label: "Erstgespräch öffnen", href: `/cases/${id}/erstgespraech` },
     };

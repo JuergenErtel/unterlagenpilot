@@ -42,7 +42,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { wandleWert, schreibeZielwert, UNLESBARER_ZAHLENWERT } from "@/lib/actions/zielwert";
+import { wandleWert, schreibeZielwert, UNLESBARER_WERT } from "@/lib/actions/zielwert";
 
 describe("Typumwandlung fuer Zielfelder", () => {
   it("macht aus Datumstexten ein Datum", () => {
@@ -102,13 +102,41 @@ describe("Typumwandlung fuer Zielfelder", () => {
 
   describe("Unlesbare Zahleneingabe (B3 – darf den vorher gepflegten Wert nicht loeschen)", () => {
     it("liefert das Unlesbar-Signal statt null bei 'ca. 300'", () => {
-      expect(wandleWert("kaufpreis", "ca. 300")).toBe(UNLESBARER_ZAHLENWERT);
+      expect(wandleWert("kaufpreis", "ca. 300")).toBe(UNLESBARER_WERT);
     });
     it("liefert das Unlesbar-Signal statt null bei einer Spanne '3.000-3.500'", () => {
-      expect(wandleWert("kaufpreis", "3.000-3.500")).toBe(UNLESBARER_ZAHLENWERT);
+      expect(wandleWert("kaufpreis", "3.000-3.500")).toBe(UNLESBARER_WERT);
     });
     it("ein explizit geleertes Feld bleibt weiterhin null, nicht das Unlesbar-Signal", () => {
       expect(wandleWert("kaufpreis", "")).toBeNull();
+    });
+  });
+
+  describe("Datumsangaben (dieselbe Sorgfalt wie bei Zahlen)", () => {
+    const alsIso = (w: unknown) => (w instanceof Date ? w.toISOString().slice(0, 10) : w);
+
+    it("liest das ISO-Format aus <input type=date> ohne Zeitzonenversatz", () => {
+      // Rundlauf mit formatiereWert, das per toISOString().slice(0,10) ausgibt:
+      // ein lokal erzeugtes Datum kippte hier auf den Vortag.
+      expect(alsIso(wandleWert("geburtsdatum", "1980-05-12"))).toBe("1980-05-12");
+    });
+
+    it("liest ein deutsch getipptes Datum als Tag.Monat.Jahr – nicht als US-Format", () => {
+      // `new Date("12.05.1980")` liefert in Node den 5. DEZEMBER: kein Fehler,
+      // sondern ein still falsches Geburtsdatum, das so in den Europace-Antrag
+      // wandert.
+      expect(alsIso(wandleWert("geburtsdatum", "12.05.1980"))).toBe("1980-05-12");
+    });
+
+    it("liefert bei unlesbarem Datum das Unlesbar-Signal statt Invalid Date", () => {
+      // Invalid Date erreichte bisher ungeprueft Prisma – der Vermittler sah
+      // nur "bitte noch einmal versuchen" statt des Hinweises "nicht lesbar".
+      expect(wandleWert("geburtsdatum", "morgen")).toBe(UNLESBARER_WERT);
+      expect(wandleWert("geburtsdatum", "31.02.1980")).toBe(UNLESBARER_WERT);
+    });
+
+    it("ein geleertes Datumsfeld bleibt null und loescht wie gewollt", () => {
+      expect(wandleWert("geburtsdatum", "")).toBeNull();
     });
   });
 
