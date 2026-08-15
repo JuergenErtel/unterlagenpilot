@@ -1050,7 +1050,7 @@ export async function starteAnfrage(
 npx vitest run tests/anfrage-start.test.ts
 ```
 
-Erwartet: 6 Fälle grün.
+Erwartet: 7 Fälle grün.
 
 - [ ] **Schritt 5: Die öffentliche Seite bauen**
 
@@ -1562,9 +1562,14 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const resolveToken = vi.fn();
+// ALLE drei Ausfuhren nachbilden: src/lib/actions/self-disclosure.ts
+// importiert auch deactivateSelfDisclosureLink. Fehlt eine im Mock,
+// scheitert schon der Import des Moduls – mit einer Meldung, die nach einem
+// Testfehler aussieht, aber keiner ist.
 vi.mock("@/lib/security/self-disclosure-link", () => ({
   resolveSelfDisclosureToken: (...a: unknown[]) => resolveToken(...a),
   createSelfDisclosureLink: vi.fn(),
+  deactivateSelfDisclosureLink: vi.fn(),
 }));
 
 const gebaereFall = vi.fn();
@@ -2133,11 +2138,11 @@ export async function versendeEinladung(
 - [ ] **Schritt 5: Tests und Typprüfung**
 
 ```bash
-npx vitest run tests/anfrage-einladung.test.ts tests/message-templates.test.ts
+npx vitest run tests/anfrage-einladung.test.ts tests/message-render.test.ts tests/messages.test.ts
 npx tsc --noEmit
 ```
 
-Erwartet: 5 neue Fälle grün; die bestehenden Vorlagentests ebenfalls (sie zählen womöglich die Vorlagen — dann die erwartete Zahl dort mitziehen).
+Erwartet: 5 neue Fälle grün; die bestehenden Vorlagentests ebenfalls (zählt einer davon die Vorlagen oder die Platzhalter, die erwartete Zahl dort mitziehen).
 
 - [ ] **Schritt 6: Commit**
 
