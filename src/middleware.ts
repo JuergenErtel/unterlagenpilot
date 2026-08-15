@@ -11,6 +11,7 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  * Bewusst ausgenommen (dürfen NIE hinter dem Gate liegen):
  *  - `/upload/*`      Kunden-Upload-Links (Externe kennen das Gate-Passwort nicht)
  *  - `/selbstauskunft/*` Kunden-Selbstauskunft (gleicher Grund)
+ *  - `/anfrage/*`     Oeffentliches Anfrageformular (Externe kennen das Gate-Passwort nicht)
  *  - `/api/cron/*`    Vercel-Cron (per CRON_SECRET geschützt)
  *  - `/monitoring`    Sentry-Tunnel (Fehler-Reports)
  *  - `/gate`, `/api/gate`  das Gate selbst
@@ -22,6 +23,7 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
 const PUBLIC_PREFIXES = [
   "/upload",
   "/selbstauskunft",
+  "/anfrage",
   "/api/cron",
   "/monitoring",
   "/gate",

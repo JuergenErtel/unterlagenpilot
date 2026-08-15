@@ -2,13 +2,12 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 
 /**
- * Der Schritt, mit dem das öffentliche Formular beginnt.
- *
- * Steht hier und nicht in der Aktionsdatei: Dateien mit "use server" dürfen
- * ausschließlich async Funktionen exportieren – eine Konstante dort bricht
- * den Bau.
+ * Re-Export: Die Konstante selbst liegt in einer eigenen Datei (siehe dort
+ * für die Begründung), damit sie unabhängig von diesem Dienst importierbar
+ * bleibt. Dateien mit "use server" dürfen zudem ausschließlich async
+ * Funktionen exportieren – eine Konstante dort bricht den Bau.
  */
-export const ERSTER_SCHRITT = "finanzierungsart";
+export { ERSTER_SCHRITT } from "@/lib/leadformular/erster-schritt";
 
 /** Rückmeldung des ersten abgesendeten Schritts. */
 export interface AnfrageStart {
