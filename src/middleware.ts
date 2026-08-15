@@ -12,6 +12,11 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  *  - `/upload/*`      Kunden-Upload-Links (Externe kennen das Gate-Passwort nicht)
  *  - `/selbstauskunft/*` Kunden-Selbstauskunft (gleicher Grund)
  *  - `/anfrage/*`     Oeffentliches Anfrageformular (Externe kennen das Gate-Passwort nicht)
+ *  - `/datenschutz`, `/agb`, `/avv` Oeffentliche Rechtsseiten. Die oeffentliche
+ *    Kundenstrecke (`/anfrage`, `/selbstauskunft`) verlinkt neben dem
+ *    Einwilligungs-Haekchen auf `/datenschutz` – landete der Klick hinter dem
+ *    Gate, koennte die betroffene Person den Text nie lesen und die
+ *    Einwilligung, deren Nachweis eigens im Datenmodell steht, waere wertlos.
  *  - `/api/cron/*`    Vercel-Cron (per CRON_SECRET geschützt)
  *  - `/monitoring`    Sentry-Tunnel (Fehler-Reports)
  *  - `/gate`, `/api/gate`  das Gate selbst
@@ -24,6 +29,9 @@ const PUBLIC_PREFIXES = [
   "/upload",
   "/selbstauskunft",
   "/anfrage",
+  "/datenschutz",
+  "/agb",
+  "/avv",
   "/api/cron",
   "/monitoring",
   "/gate",
