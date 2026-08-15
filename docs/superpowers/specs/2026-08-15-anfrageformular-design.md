@@ -31,6 +31,9 @@ signierten Link und läuft von da an auf der bestehenden Kundenstrecke
 E-Mail und Telefon und nach dem Datenschutz-Häkchen — entsteht der Fall,
 bereits gefüllt mit allem, was der Kunde beantwortet hat.
 
+Dazu ein schneller Versandweg: Adresse eintippen, Einladung mit dem
+Formular-Link verschicken — ohne dass dabei ein Fall entsteht.
+
 Der bestehende Weg (Selbstauskunfts-Link aus einer Fallakte heraus) bleibt
 unverändert. Es gibt keinen zweiten Katalog, keine zweite Fortschrittsrechnung
 und keine zweiten Routen für die Schritte.
@@ -101,6 +104,9 @@ Geändert:
   betroffen: Er hat einen eigenen Auflöser und eine eigene Tabelle, sein
   Fallbezug bleibt Pflicht.
 - `LeadSource` bekommt den Wert `webformular`.
+- `MessageTemplateType` bekommt den Wert `selbstauskunft_einladung` (für die
+  Einladungsmail, siehe unten). Enum-Werte stehen in `prisma/schema.prisma`
+  **und** `src/lib/domain/enums.ts` und werden von Hand synchron gehalten.
 
 Alle Änderungen sind additiv. Bestandsdaten bleiben gültig: Jeder heutige Link
 und jeder heutige Bogen trägt seinen `caseId` unverändert weiter.
@@ -196,16 +202,45 @@ ergänzt um den Block „Wie erreichen wir Sie?" mit den noch fehlenden
 Kontaktfeldern und das Pflicht-Häkchen zur Einwilligung.
 
 **Verwaltung:** unter `/settings` eine Kachel „Anfrageformular" — Slug
-festlegen, an/aus, Link kopieren.
+festlegen, an/aus, Link kopieren, Einladung verschicken (siehe unten).
+
+**Fallanlage:** `/cases/new` bekommt unter „Grunddaten" dieselbe Karte
+„Kunden selbst ausfüllen lassen". Der manuelle Weg daneben bleibt unberührt.
+Zwei Fundorte, eine Komponente — die Karte wird einmal gebaut und zweimal
+eingehängt.
+
+## Einladung per Mail
+
+Der schnelle Weg, wenn ein Interessent gerade am Telefon war: Adresse
+eintippen, „Einladung senden", fertig.
+
+- **Verschickt wird der Formular-Link**, nicht ein persönlicher. Es entsteht
+  **kein Fall und kein Nachrichtenentwurf** — der Fall kommt weiterhin erst,
+  wenn der Interessent absendet. Der Versand darf die Grundregel dieses
+  Entwurfs nicht unterlaufen.
+- **Der Text ist eine Vorlage**, kein fest verdrahteter Satz: neuer
+  Vorlagentyp `selbstauskunft_einladung` (Kanal E-Mail) in
+  `DEFAULT_TEMPLATES`, bearbeitbar unter `/settings/vorlagen`, mit dem neuen
+  Platzhalter `{{anfrageLink}}` und der vorhandenen Signatur.
+- **Versand über `sendEmail`** direkt. `sendMessageByEmail` ist nicht
+  benutzbar: Es arbeitet auf `GeneratedMessage`, und die hängt an einem Fall,
+  den es hier nicht gibt.
+- **Jede Einladung wandert ins Prüfprotokoll** (Adresse, Zeitpunkt, Formular).
+  Ohne Fall gäbe es sonst keinerlei Spur: Wer fünf Leute einlädt und zwei
+  Antworten bekommt, wüsste nichts von den anderen drei. Die Karte zeigt die
+  letzten Einladungen mit Datum — gelesen aus dem Protokoll, kein neues
+  Datenmodell.
+- **Fehlerfälle:** Ungültige Adresse wird abgewiesen, bevor etwas passiert.
+  Ist Resend nicht eingerichtet oder scheitert der Versand, sagt die Karte das
+  und der Link bleibt zum Kopieren stehen — kein stiller Fehlschlag. Ist das
+  Formular abgeschaltet, wird nicht eingeladen: Der Empfänger liefe in ein
+  404.
 
 ## Was bewusst NICHT gebaut wird
 
 - **Keine persönlichen Einladungen je Interessent.** Am 15.08.2026 zugunsten
   des Dauerlinks verworfen. Wer einen persönlichen Link braucht, erzeugt ihn
   wie bisher aus der Fallakte.
-- **Kein Mailversand aus der Fallanlage.** War der ursprüngliche Wunsch, ist
-  mit dem Dauerlink gegenstandslos: Der Link wird einmal irgendwo hinterlegt,
-  nicht je Kontakt verschickt.
 - **Keine automatische Antwortmail an den Absender.** Nichts verlässt das Haus
   ohne Klick; die Bestätigung steht auf der Seite.
 - **Kein Captcha, kein BotID.** Honeypot und IP-Grenze zuerst. Härtere
@@ -248,5 +283,9 @@ festlegen, an/aus, Link kopieren.
 - Doppeltes Absenden bleibt bei einem Fall.
 - Abgeschaltetes Formular nimmt nichts an.
 - Honeypot gefüllt: nichts angelegt.
+- Einladung: gültige Adresse verschickt genau eine Mail mit dem
+  Formular-Link und schreibt genau einen Protokolleintrag; ungültige Adresse
+  verschickt nichts; abgeschaltetes Formular verschickt nichts; **in keinem
+  Fall entsteht ein Fall oder ein Nachrichtenentwurf**.
 - Regression: Die fallgebundene Selbstauskunft verhält sich unverändert —
   Vorbelegung, Speichern, Absenden, Übernahme-Eingang.
