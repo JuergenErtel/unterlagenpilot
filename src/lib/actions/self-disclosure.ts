@@ -12,7 +12,7 @@ import {
   createSelfDisclosureLink,
   deactivateSelfDisclosureLink,
 } from "@/lib/security/self-disclosure-link";
-import { schrittFinden, naechsterSchritt, schluessel } from "@/lib/self-disclosure/navigation";
+import { schrittFinden, naechsterSchritt } from "@/lib/self-disclosure/navigation";
 import { schrittSchema } from "@/lib/self-disclosure/schema";
 import {
   planUebernahme,
@@ -82,7 +82,7 @@ export async function speichereAntwort(
   if (!schritt) return { error: "Dieser Schritt gehört nicht zu Ihrem Bogen." };
 
   const roh = Object.fromEntries(formData.entries());
-  const geprueft = schrittSchema(schritt.schritt).safeParse(roh);
+  const geprueft = schrittSchema(schritt.schritt, schritt.personen).safeParse(roh);
   if (!geprueft.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of geprueft.error.issues) {
@@ -94,10 +94,14 @@ export async function speichereAntwort(
 
   // Nur tatsächlich gegebene Werte schreiben. Eine Lücke darf einen früher
   // gegebenen Wert nicht löschen – der Kunde springt oft zurück.
+  //
+  // Die Schlüssel aus `geprueft.data` sind bereits die fertigen Antwortschlüssel
+  // (schrittSchema baut sie ueber `personenSchluessel`) – hier NICHT erneut aus
+  // Schritt-ID und Feld-ID zusammensetzen, sonst verdoppelt sich der Präfix.
   const neu: Antworten = { ...antworten };
-  for (const [feldId, value] of Object.entries(geprueft.data)) {
+  for (const [k, value] of Object.entries(geprueft.data)) {
     if (value === null || value === undefined || value === "") continue;
-    neu[schluessel(schritt.id, feldId)] = value as Antworten[string];
+    neu[k] = value as Antworten[string];
   }
 
   const nach = naechsterSchritt(schritt.id, neu);

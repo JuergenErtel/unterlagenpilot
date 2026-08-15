@@ -223,7 +223,7 @@ const zielSchluessel = (entitaet: string, feld: string, person?: 1 | 2): string 
 function alleKandidaten(antragstellerZahl: 1 | 2): Kandidat[] {
   const alle: Kandidat[] = [];
   KATALOG.forEach((schritt, schrittIndex) => {
-    if (schritt.jeAntragsteller) {
+    if (schritt.personenSpalten) {
       for (let p = 1; p <= antragstellerZahl; p++) alle.push({ schrittIndex, person: p as 1 | 2 });
     } else {
       alle.push({ schrittIndex });

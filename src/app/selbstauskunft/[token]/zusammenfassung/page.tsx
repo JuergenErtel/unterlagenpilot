@@ -5,7 +5,7 @@ import { Logo } from "@/components/brand/logo";
 import { Card, CardContent } from "@/components/ui/card";
 import { AbsendenFormular } from "@/components/self-disclosure/absenden-formular";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
-import { sichtbareSchritte, schluessel } from "@/lib/self-disclosure/navigation";
+import { sichtbareSchritte, personenSchluessel } from "@/lib/self-disclosure/navigation";
 import { fehlendeKontaktangaben } from "@/lib/self-disclosure/pflichtangaben";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -61,10 +61,15 @@ export default async function Zusammenfassung({
   const offen = schritte.reduce(
     (n, s) =>
       n +
-      s.schritt.felder.filter((feld) => {
-        const v = antworten[schluessel(s.id, feld.id)];
-        return v === undefined || v === null || v === "";
-      }).length,
+      (s.personen ?? [undefined]).reduce(
+        (m, person) =>
+          m +
+          s.schritt.felder.filter((feld) => {
+            const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];
+            return v === undefined || v === null || v === "";
+          }).length,
+        0
+      ),
     0
   );
 
@@ -84,10 +89,7 @@ export default async function Zusammenfassung({
         {schritte.map((s) => (
           <div key={s.id} className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium">
-                {s.schritt.frage}
-                {s.person ? ` (Antragsteller ${s.person})` : ""}
-              </p>
+              <p className="text-sm font-medium">{s.schritt.frage}</p>
               <Link
                 href={`/selbstauskunft/${token}/${s.id}`}
                 className="shrink-0 text-xs text-muted-foreground hover:underline"
@@ -96,18 +98,24 @@ export default async function Zusammenfassung({
               </Link>
             </div>
             <dl className="mt-2 space-y-1">
-              {s.schritt.felder.map((feld) => {
-                const v = antworten[schluessel(s.id, feld.id)];
-                const leer = v === undefined || v === null || v === "";
-                return (
-                  <div key={feld.id} className="flex justify-between gap-3 text-sm">
-                    <dt className="text-muted-foreground">{feld.label}</dt>
-                    <dd className={leer ? "italic text-muted-foreground" : "font-medium"}>
-                      {leer ? "noch offen" : String(v)}
-                    </dd>
-                  </div>
-                );
-              })}
+              {(s.personen ?? [undefined]).flatMap((person) =>
+                s.schritt.felder.map((feld) => {
+                  const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];
+                  const leer = v === undefined || v === null || v === "";
+                  const label = person ? `${feld.label} (Antragsteller ${person})` : feld.label;
+                  return (
+                    <div
+                      key={`${person ?? "x"}.${feld.id}`}
+                      className="flex justify-between gap-3 text-sm"
+                    >
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className={leer ? "italic text-muted-foreground" : "font-medium"}>
+                        {leer ? "noch offen" : String(v)}
+                      </dd>
+                    </div>
+                  );
+                })
+              )}
             </dl>
           </div>
         ))}

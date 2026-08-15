@@ -2,32 +2,39 @@ import { KATALOG, anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import type { Antworten, SichtbarerSchritt } from "@/lib/self-disclosure/types";
 
-/** Antwortschlüssel aus Schritt-ID (ggf. mit Personenpräfix) und Feld-ID. */
+/** Antwortschlüssel aus Schritt-ID und Feld-ID, ohne Personenbezug. */
 export function schluessel(schrittId: string, feldId: string): string {
   return `${schrittId}.${feldId}`;
 }
 
 /**
+ * Antwortschlüssel mit Personen-Präfix, wo einer nötig ist.
+ *
+ * Der Präfix steht seit den Spalten nicht mehr in der Schritt-ID: Ein Schritt
+ * erscheint einmal und trägt beide Personen. Gebaut wird er deshalb hier.
+ */
+export function personenSchluessel(schrittId: string, feldId: string, person?: 1 | 2): string {
+  return person ? `p${person}.${schrittId}.${feldId}` : `${schrittId}.${feldId}`;
+}
+
+/**
  * Die Kette der Schritte, die bei diesen Antworten tatsächlich zu sehen sind.
  *
- * Schritte mit `jeAntragsteller` erscheinen bei zwei Antragstellern zweimal,
- * mit den Präfixen "p1."/"p2." – sie stehen direkt hintereinander, damit der
- * Kunde einen Abschnitt zu Ende führt, bevor die zweite Person beginnt.
+ * Ein Schritt mit `personenSpalten` erscheint bei zwei Antragstellern EINMAL,
+ * mit zwei Spalten – nicht mehr zweimal hintereinander. Ein Paar, das
+ * gemeinsam am Rechner sitzt, erwartet beide nebeneinander, nicht erst ihn
+ * und dann sie.
  */
 export function sichtbareSchritte(antworten: Antworten): SichtbarerSchritt[] {
   const personen = anzahlAntragsteller(antworten);
   const out: SichtbarerSchritt[] = [];
   for (const schritt of KATALOG) {
-    if (!schritt.jeAntragsteller) {
-      if (schritt.sichtbar && !schritt.sichtbar(antworten)) continue;
-      out.push({ id: schritt.id, schritt });
-      continue;
-    }
-    for (let p = 1; p <= personen; p++) {
-      const person = p as 1 | 2;
-      if (schritt.sichtbar && !schritt.sichtbar(antworten, person)) continue;
-      out.push({ id: `p${p}.${schritt.id}`, schritt, person });
-    }
+    if (schritt.sichtbar && !schritt.sichtbar(antworten)) continue;
+    out.push(
+      schritt.personenSpalten
+        ? { id: schritt.id, schritt, personen: personen === 2 ? [1, 2] : [1] }
+        : { id: schritt.id, schritt }
+    );
   }
   return out;
 }
@@ -69,17 +76,19 @@ export function offeneFelder(
 ): Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> {
   const out: Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> = [];
   for (const s of sichtbareSchritte(antworten)) {
-    for (const feld of sichtbareFelder(s.schritt, antworten, s.person)) {
-      const v = antworten[schluessel(s.id, feld.id)];
-      const leer = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
-      if (!leer) continue;
-      const person = s.person ? ` (Antragsteller ${s.person})` : "";
-      out.push({
-        schrittId: s.id,
-        feldId: feld.id,
-        label: `${feld.label}${person}`,
-        abschnitt: s.schritt.abschnitt,
-      });
+    for (const person of s.personen ?? [undefined]) {
+      for (const feld of sichtbareFelder(s.schritt, antworten, person)) {
+        const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];
+        const leer = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+        if (!leer) continue;
+        const personLabel = person ? ` (Antragsteller ${person})` : "";
+        out.push({
+          schrittId: s.id,
+          feldId: feld.id,
+          label: `${feld.label}${personLabel}`,
+          abschnitt: s.schritt.abschnitt,
+        });
+      }
     }
   }
   return out;

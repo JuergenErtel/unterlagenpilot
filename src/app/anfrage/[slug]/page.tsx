@@ -19,7 +19,12 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-8 p-6">
       <Logo />
-      <EinstiegFormular slug={slug} frage={schritt.schritt.frage} felder={schritt.schritt.felder} />
+      <EinstiegFormular
+        slug={slug}
+        schrittId={schritt.id}
+        frage={schritt.schritt.frage}
+        felder={schritt.schritt.felder}
+      />
       <p className="mt-auto text-xs text-muted-foreground">
         Ihre Angaben werden verschlüsselt übertragen und ausschließlich zur Bearbeitung Ihrer
         Anfrage verwendet. Mehr dazu in der{" "}

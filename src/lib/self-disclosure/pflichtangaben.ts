@@ -7,8 +7,8 @@ import type { Antworten } from "@/lib/self-disclosure/types";
  * sitzt hier, am Absenden, und ausschließlich beim Formular-Weg: Ein Lead
  * ohne Rückweg ist keiner.
  *
- * Die Personenschritte tragen das Präfix "p1."/"p2." (siehe
- * `sichtbareSchritte`). Wer das vergisst, prüft Schlüssel, die es nie gibt,
+ * Die Antworten der ersten Person tragen das Präfix "p1." (siehe
+ * `personenSchluessel`). Wer das vergisst, prüft Schlüssel, die es nie gibt,
  * und lässt damit jeden Bogen durch.
  */
 export const KONTAKT_SCHLUESSEL = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sichtbareSchritte, offeneFelder } from "@/lib/self-disclosure/navigation";
+import { sichtbareSchritte, offeneFelder, personenSchluessel } from "@/lib/self-disclosure/navigation";
 import { schrittSchema } from "@/lib/self-disclosure/schema";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
 import type { Antworten } from "@/lib/self-disclosure/types";
@@ -7,50 +7,53 @@ import type { Antworten } from "@/lib/self-disclosure/types";
 const ids = (a: Antworten) => sichtbareSchritte(a).map((s) => s.id);
 
 describe("Katalog: Personen- und Berufsabschnitt", () => {
-  it("fragt Person und Beruf bei zwei Antragstellern zweimal", () => {
-    const zuZweit = ids({ "anzahl_antragsteller.anzahl": "2" });
-    expect(zuZweit).toContain("p1.person_name");
-    expect(zuZweit).toContain("p2.person_name");
-    expect(zuZweit).toContain("p2.einkommen");
+  it("fragt Person und Beruf bei zwei Antragstellern als EINEN Schritt mit beiden Spalten", () => {
+    const zuZweit = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" });
+    expect(zuZweit.find((s) => s.id === "person_name")!.personen).toEqual([1, 2]);
+    expect(zuZweit.find((s) => s.id === "einkommen")!.personen).toEqual([1, 2]);
   });
 
-  it("fragt ohne Angabe zur Personenzahl nur die erste Person", () => {
-    expect(ids({})).toContain("p1.person_name");
-    expect(ids({})).not.toContain("p2.person_name");
+  it("zeigt ohne Angabe zur Personenzahl nur eine Spalte", () => {
+    const einer = sichtbareSchritte({});
+    expect(einer.find((s) => s.id === "person_name")!.personen).toEqual([1]);
   });
 
   it("zeigt Arbeitgeberfragen nur bei abhängiger Beschäftigung", () => {
     const angestellt = ids({ "p1.beruf_art.art": "angestellter" });
-    expect(angestellt).toContain("p1.beruf_arbeitgeber");
-    expect(angestellt).not.toContain("p1.beruf_selbststaendig");
+    expect(angestellt).toContain("beruf_arbeitgeber");
+    expect(angestellt).not.toContain("beruf_selbststaendig");
   });
 
   it("zeigt die Firmenfragen bei Selbstständigen", () => {
     const selbst = ids({ "p1.beruf_art.art": "selbststaendiger" });
-    expect(selbst).toContain("p1.beruf_selbststaendig");
-    expect(selbst).not.toContain("p1.beruf_arbeitgeber");
+    expect(selbst).toContain("beruf_selbststaendig");
+    expect(selbst).not.toContain("beruf_arbeitgeber");
   });
 
   it("hält beide Berufszweige zu, solange die Art offen ist", () => {
-    expect(ids({})).not.toContain("p1.beruf_arbeitgeber");
-    expect(ids({})).not.toContain("p1.beruf_selbststaendig");
+    expect(ids({})).not.toContain("beruf_arbeitgeber");
+    expect(ids({})).not.toContain("beruf_selbststaendig");
   });
 
-  it("wertet den Berufszweig je Person getrennt aus", () => {
+  it("wertet den Berufszweig – bis zum Katalogschnitt (Aufgabe 4) – nur ueber Person 1 aus", () => {
+    // Bekannter, vom Brief ausdruecklich benannter Zwischenzustand: Mit
+    // Spalten gibt es nur noch EINE Sichtbarkeits-Entscheidung fuer den ganzen
+    // Schritt (`schritt.sichtbar` laeuft ohne Person). Ein gemischtes Paar
+    // (er angestellt, sie selbststaendig) sieht deshalb noch die Spalte des
+    // ERSTEN Antragstellers fuer beide – das wandert erst beim Katalogschnitt
+    // auf die einzelnen Felder.
     const gemischt = ids({
       "anzahl_antragsteller.anzahl": "2",
       "p1.beruf_art.art": "angestellter",
       "p2.beruf_art.art": "selbststaendiger",
     });
-    expect(gemischt).toContain("p1.beruf_arbeitgeber");
-    expect(gemischt).not.toContain("p2.beruf_arbeitgeber");
-    expect(gemischt).toContain("p2.beruf_selbststaendig");
-    expect(gemischt).not.toContain("p1.beruf_selbststaendig");
+    expect(gemischt).toContain("beruf_arbeitgeber");
+    expect(gemischt).not.toContain("beruf_selbststaendig");
   });
 
   it("fragt Kinder genau einmal, nie je Person", () => {
     const zuZweit = ids({ "anzahl_antragsteller.anzahl": "2" });
-    expect(zuZweit.filter((i) => i.endsWith("haushalt_kinder"))).toHaveLength(1);
+    expect(zuZweit.filter((i) => i === "haushalt_kinder")).toHaveLength(1);
   });
 
   it("zeigt die Objektdetails nur bei gefundener Immobilie", () => {
@@ -62,32 +65,52 @@ describe("Katalog: Personen- und Berufsabschnitt", () => {
 
 describe("Feldvalidierung", () => {
   const betragsSchritt = KATALOG.find((s) => s.id === "kaufpreis")!;
+  const betragsSchluessel = personenSchluessel(betragsSchritt.id, "betrag");
 
   it("nimmt einen leeren Schritt an – es gibt keine Pflichtfelder", () => {
-    expect(schrittSchema(betragsSchritt).safeParse({ betrag: "" }).success).toBe(true);
+    expect(schrittSchema(betragsSchritt).safeParse({ [betragsSchluessel]: "" }).success).toBe(true);
     expect(schrittSchema(betragsSchritt).safeParse({}).success).toBe(true);
   });
 
   it("weist einen unlesbaren Betrag zurück", () => {
-    expect(schrittSchema(betragsSchritt).safeParse({ betrag: "dreitausend" }).success).toBe(false);
+    expect(
+      schrittSchema(betragsSchritt).safeParse({ [betragsSchluessel]: "dreitausend" }).success
+    ).toBe(false);
   });
 
   it("nimmt Beträge mit deutschem Tausenderpunkt an", () => {
-    const r = schrittSchema(betragsSchritt).safeParse({ betrag: "400.000" });
+    const r = schrittSchema(betragsSchritt).safeParse({ [betragsSchluessel]: "400.000" });
     expect(r.success).toBe(true);
-    expect(r.success && r.data.betrag).toBe(400000);
+    expect(r.success && r.data[betragsSchluessel]).toBe(400000);
   });
 
   it("weist eine Auswahl außerhalb der Optionen zurück", () => {
     const auswahl = KATALOG.find((s) => s.id === "finanzierungsart")!;
-    expect(schrittSchema(auswahl).safeParse({ art: "kauf_bestand" }).success).toBe(true);
-    expect(schrittSchema(auswahl).safeParse({ art: "raumschiff" }).success).toBe(false);
+    const k = personenSchluessel(auswahl.id, "art");
+    expect(schrittSchema(auswahl).safeParse({ [k]: "kauf_bestand" }).success).toBe(true);
+    expect(schrittSchema(auswahl).safeParse({ [k]: "raumschiff" }).success).toBe(false);
   });
 
   it("liest ja/nein als Wahrheitswert", () => {
     const dauer = KATALOG.find((s) => s.id === "beruf_dauer")!;
-    const r = schrittSchema(dauer).safeParse({ probezeit: "ja" });
-    expect(r.success && r.data.probezeit).toBe(true);
+    const k = personenSchluessel(dauer.id, "probezeit");
+    const r = schrittSchema(dauer).safeParse({ [k]: "ja" });
+    expect(r.success && r.data[k]).toBe(true);
+  });
+
+  it("behaelt die Antworten beider Spalten", () => {
+    // Der Kern der Falle: schrittSchema muss dieselben Schluessel bilden wie
+    // das Formular – sonst wirft .strip() beide Antworten lautlos weg.
+    const schritt = KATALOG.find((s) => s.personenSpalten)!;
+    // Ein Textfeld, damit "eins"/"zwei" die Formvalidierung besteht – das
+    // erste Feld des Schritts ist eine Auswahl (Anrede) und keine.
+    const feld = schritt.felder.find((f) => f.typ === "text")!.id;
+    const geprueft = schrittSchema(schritt, [1, 2]).parse({
+      [`p1.${schritt.id}.${feld}`]: "eins",
+      [`p2.${schritt.id}.${feld}`]: "zwei",
+    });
+    // Ohne die Schluesselform oben waere das Ergebnis hier leer – lautlos.
+    expect(Object.keys(geprueft)).toHaveLength(2);
   });
 });
 

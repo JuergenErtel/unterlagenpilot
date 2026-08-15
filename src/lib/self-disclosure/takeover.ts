@@ -1,4 +1,5 @@
-import { sichtbareSchritte, schluessel, offeneFelder } from "@/lib/self-disclosure/navigation";
+import { sichtbareSchritte, personenSchluessel, offeneFelder } from "@/lib/self-disclosure/navigation";
+import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import type { Antworten, Ziel } from "@/lib/self-disclosure/types";
 
 /**
@@ -76,43 +77,45 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
   const ohneZiel: Array<{ label: string; wert: string }> = [];
 
   for (const s of sichtbareSchritte(antworten)) {
-    for (const feld of s.schritt.felder) {
-      const k = schluessel(s.id, feld.id);
-      const roh = antworten[k];
-      const kundenwert = alsText(roh);
-      if (kundenwert === "" || (Array.isArray(roh) && roh.length === 0)) continue; // Lücke: nie ein Vorschlag
+    for (const spaltenPerson of s.personen ?? [undefined]) {
+      for (const feld of sichtbareFelder(s.schritt, antworten, spaltenPerson)) {
+        const k = personenSchluessel(s.schritt.id, feld.id, spaltenPerson);
+        const roh = antworten[k];
+        const kundenwert = alsText(roh);
+        if (kundenwert === "" || (Array.isArray(roh) && roh.length === 0)) continue; // Lücke: nie ein Vorschlag
 
-      const personLabel = s.person ? ` (Antragsteller ${s.person})` : "";
-      const label = `${feld.label}${personLabel}`;
+        const personLabel = spaltenPerson ? ` (Antragsteller ${spaltenPerson})` : "";
+        const label = `${feld.label}${personLabel}`;
 
-      // Ohne Zielfeld oder als Liste: nur zur Kenntnis, nicht als Vorschlag.
-      if (!feld.ziel || "liste" in feld.ziel) {
-        ohneZiel.push({ label, wert: kundenwert });
-        continue;
-      }
+        // Ohne Zielfeld oder als Liste: nur zur Kenntnis, nicht als Vorschlag.
+        if (!feld.ziel || "liste" in feld.ziel) {
+          ohneZiel.push({ label, wert: kundenwert });
+          continue;
+        }
 
-      // Die Kinderzahl gilt dem Haushalt: sie geht an beide Antragsteller.
-      const zielPersonen: Array<1 | 2> =
-        s.schritt.id === "haushalt_kinder"
-          ? (stand.applicants
-              .map((a) => a.position)
-              .filter((p): p is 1 | 2 => p === 1 || p === 2)
-              .sort())
-          : [s.person ?? 1];
+        // Die Kinderzahl gilt dem Haushalt: sie geht an beide Antragsteller.
+        const zielPersonen: Array<1 | 2> =
+          s.schritt.id === "haushalt_kinder"
+            ? (stand.applicants
+                .map((a) => a.position)
+                .filter((p): p is 1 | 2 => p === 1 || p === 2)
+                .sort())
+            : [spaltenPerson ?? 1];
 
-      const mehrfach = zielPersonen.length > 1;
-      for (const person of zielPersonen) {
-        const fallwert = fallwertLesen(stand, feld.ziel, person);
-        if (fallwert === kundenwert) continue;
-        vorschlaege.push({
-          schluessel: mehrfach ? `${k}#p${person}` : k,
-          label: mehrfach ? `${feld.label} (Antragsteller ${person})` : label,
-          abschnitt: s.schritt.abschnitt,
-          kundenwert,
-          fallwert,
-          art: fallwert === null ? "luecke" : "abweichung",
-          ziel: { entitaet: feld.ziel.entitaet, feld: feld.ziel.feld, person },
-        });
+        const mehrfach = zielPersonen.length > 1;
+        for (const zielPerson of zielPersonen) {
+          const fallwert = fallwertLesen(stand, feld.ziel, zielPerson);
+          if (fallwert === kundenwert) continue;
+          vorschlaege.push({
+            schluessel: mehrfach ? `${k}#p${zielPerson}` : k,
+            label: mehrfach ? `${feld.label} (Antragsteller ${zielPerson})` : label,
+            abschnitt: s.schritt.abschnitt,
+            kundenwert,
+            fallwert,
+            art: fallwert === null ? "luecke" : "abweichung",
+            ziel: { entitaet: feld.ziel.entitaet, feld: feld.ziel.feld, person: zielPerson },
+          });
+        }
       }
     }
   }

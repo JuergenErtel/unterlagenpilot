@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { personenSchluessel } from "@/lib/self-disclosure/navigation";
 import type { Feld, Schritt } from "@/lib/self-disclosure/types";
 
 /**
@@ -72,8 +73,18 @@ function feldSchema(feld: Feld): z.ZodTypeAny {
   }
 }
 
-export function schrittSchema(schritt: Schritt): z.ZodType<Record<string, unknown>> {
+export function schrittSchema(
+  schritt: Schritt,
+  personen?: (1 | 2)[]
+): z.ZodType<Record<string, unknown>> {
   const shape: Record<string, z.ZodTypeAny> = {};
-  for (const feld of schritt.felder) shape[feld.id] = feldSchema(feld).optional();
+  // Die Schluessel des Schemas MUESSEN denen des Formulars entsprechen:
+  // .strip() wirft alles Unbekannte weg, und zwar lautlos. Ein Schema ueber
+  // blosse Feld-IDs liesse bei Spalten jede Antwort verschwinden.
+  for (const person of personen ?? [undefined]) {
+    for (const feld of schritt.felder) {
+      shape[personenSchluessel(schritt.id, feld.id, person)] = feldSchema(feld).optional();
+    }
+  }
   return z.object(shape).strip() as unknown as z.ZodType<Record<string, unknown>>;
 }

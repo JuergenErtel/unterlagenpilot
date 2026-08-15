@@ -313,7 +313,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "person_name",
     abschnitt: "person",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wie heißen Sie?",
     felder: [
       {
@@ -333,7 +333,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "person_geburt",
     abschnitt: "person",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wann und wo sind Sie geboren?",
     felder: [
       {
@@ -354,7 +354,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "person_familienstand",
     abschnitt: "person",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wie ist Ihr Familienstand?",
     felder: [
       {
@@ -376,7 +376,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "person_anschrift",
     abschnitt: "person",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wo wohnen Sie derzeit?",
     felder: [
       { id: "strasse", label: "Straße und Hausnummer", typ: "text", ziel: { entitaet: "applicant", feld: "street" } },
@@ -387,7 +387,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "person_kontakt",
     abschnitt: "person",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wie erreichen wir Sie?",
     felder: [
       { id: "email", label: "E-Mail", typ: "text", ziel: { entitaet: "applicant", feld: "email" } },
@@ -399,7 +399,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "beruf_art",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "In welchem Arbeitsverhältnis sind Sie beschäftigt?",
     felder: [
       {
@@ -426,7 +426,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "beruf_arbeitgeber",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Bei wem sind Sie beschäftigt?",
     sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
     felder: [
@@ -443,7 +443,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "beruf_dauer",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Seit wann sind Sie dort beschäftigt?",
     sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
     felder: [
@@ -470,7 +470,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "beruf_selbststaendig",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Erzählen Sie uns von Ihrer Tätigkeit",
     sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
     felder: [
@@ -493,7 +493,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "einkommen",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Wie hoch ist Ihr Einkommen?",
     hinweis: "Bitte Ihr eigenes Einkommen, nicht das des Haushalts.",
     felder: [
@@ -510,7 +510,7 @@ export const KATALOG: Schritt[] = [
   {
     id: "weitere_einnahmen",
     abschnitt: "beruf",
-    jeAntragsteller: true,
+    personenSpalten: true,
     frage: "Haben Sie weitere Einnahmen?",
     felder: [
       {

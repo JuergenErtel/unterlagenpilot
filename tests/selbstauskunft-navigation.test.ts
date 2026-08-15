@@ -5,6 +5,7 @@ import {
   vorherigerSchritt,
   fortschritt,
   schluessel,
+  personenSchluessel,
 } from "@/lib/self-disclosure/navigation";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -63,5 +64,40 @@ describe("Katalog-Navigation", () => {
 
   it("baut Antwortschlüssel aus Schritt und Feld", () => {
     expect(schluessel("finanzierungsart", "art")).toBe("finanzierungsart.art");
+  });
+});
+
+describe("Personen-Spalten", () => {
+  it("erzeugt EINEN Schritt mit zwei Spalten statt zweier Schritte", () => {
+    // Der Kern dieser Aufgabe: Ein Paar sitzt gemeinsam am Rechner und
+    // erwartet beide nebeneinander, nicht erst ihn und dann sie.
+    const kette = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" });
+    const personenschritte = kette.filter((s) => s.schritt.personenSpalten);
+    expect(personenschritte.length).toBeGreaterThan(0);
+    for (const s of personenschritte) {
+      expect(s.personen).toEqual([1, 2]);
+      expect(s.id).not.toContain("p1.");
+    }
+  });
+
+  it("zeigt bei einem Antragsteller nur eine Spalte", () => {
+    const kette = sichtbareSchritte({});
+    for (const s of kette.filter((x) => x.schritt.personenSpalten)) {
+      expect(s.personen).toEqual([1]);
+    }
+  });
+
+  it("baut den Schluessel weiterhin mit Personen-Praefix", () => {
+    // Die Schluesselform bleibt: Uebernahme, Vorbelegung und Pflichtangaben
+    // lesen sie so. Nur der Praefix wandert aus der Schritt-ID in den Bau.
+    expect(personenSchluessel("person_name", "nachname", 1)).toBe("p1.person_name.nachname");
+    expect(personenSchluessel("person_name", "nachname", 2)).toBe("p2.person_name.nachname");
+    expect(personenSchluessel("kaufpreis", "betrag")).toBe("kaufpreis.betrag");
+  });
+
+  it("zaehlt die Kette kuerzer, weil Personenschritte nicht mehr doppeln", () => {
+    const einer = sichtbareSchritte({}).length;
+    const zwei = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }).length;
+    expect(zwei).toBe(einer);
   });
 });

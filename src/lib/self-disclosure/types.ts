@@ -49,7 +49,7 @@ export type Abschnitt =
   | "objekt";
 
 export interface Schritt {
-  /** Zugleich URL-Segment (bei Personenschritten mit Präfix "p1."/"p2."). */
+  /** Zugleich URL-Segment. */
   id: string;
   abschnitt: Abschnitt;
   frage: string;
@@ -57,11 +57,24 @@ export interface Schritt {
   felder: Feld[];
   /**
    * Prüft NUR ausdrücklich gegebene Antworten. Fehlt die Steuerantwort, bleibt
-   * der Zweig zu. `person` ist gesetzt, wenn der Schritt je Antragsteller läuft.
+   * der Zweig zu.
+   *
+   * Wird bei Schritten mit `personenSpalten` OHNE Person aufgerufen (siehe
+   * `sichtbareSchritte`) – die Bedingung entscheidet für den ganzen Schritt,
+   * nicht je Spalte. Bei einem gemischten Paar (eine Person angestellt, die
+   * andere selbstständig) kann das noch die falsche Spalte zeigen; beim
+   * Katalogschnitt wandert die Bedingung dafür auf die betroffenen Felder.
    */
   sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
-  /** Läuft zweimal, wenn zwei Antragsteller angegeben sind. */
-  jeAntragsteller?: boolean;
+  /**
+   * Beide Antragsteller nebeneinander auf EINEM Bildschirm, je eine Spalte.
+   *
+   * Vorher hieß das `jeAntragsteller` und erzeugte ZWEI Einträge in der
+   * Schrittkette ("p1.person_name", "p2.person_name") – der Kunde beantwortete
+   * erst alles für sich, dann dasselbe für den Partner. Ein Paar, das
+   * gemeinsam am Rechner sitzt, erwartet beide nebeneinander.
+   */
+  personenSpalten?: boolean;
 }
 
 /** Ein Eintrag einer Liste (Verpflichtungen, Eigenkapital). */
@@ -72,10 +85,11 @@ export type AntwortWert = string | number | boolean | ListenEintrag[] | null;
 /** Schlüssel: "<schrittId>.<feldId>", bei Personenschritten "p2.person_name.vorname". */
 export type Antworten = Record<string, AntwortWert>;
 
-/** Eine konkrete Ausprägung eines Schritts (bei jeAntragsteller je Person eine). */
+/** Eine konkrete Ausprägung eines Schritts (bei personenSpalten mit beiden Spalten). */
 export interface SichtbarerSchritt {
-  /** URL-Segment und Schlüsselpräfix. */
+  /** URL-Segment. Traegt KEINEN Personen-Praefix mehr. */
   id: string;
   schritt: Schritt;
-  person?: 1 | 2;
+  /** Spalten dieses Schritts; fehlt bei Schritten ohne Personenbezug. */
+  personen?: (1 | 2)[];
 }
