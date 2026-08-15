@@ -313,9 +313,44 @@ In `maske.ts` baut `alleKandidaten` die Ausprägungen über `schritt.jeAntragste
 
 `src/components/self-disclosure/step-form.tsx` bekommt `personen?: (1 | 2)[]` und rendert `schritt-felder.tsx` einmal je Person, jede Spalte mit Überschrift. Die Überschrift lautet „Sie" für Person 1 und „Mitantragsteller/in" für Person 2; steht in den Antworten bereits ein Vorname, steht dort der Name. Auf schmalen Bildschirmen stehen die Spalten untereinander (`grid gap-6 sm:grid-cols-2`).
 
-Die Feldnamen im Formular tragen den Präfix mit, damit die Server-Aktion beide Spalten auseinanderhält: `name={personenSchluessel(schrittId, feld.id, person)}`.
+Die Feldnamen im Formular tragen den vollständigen Schlüssel, damit die Server-Aktion beide Spalten auseinanderhält: `name={personenSchluessel(schrittId, feld.id, person)}`. Das gilt **auch für Seiten ohne Spalten** — dort ist der Name dann `vorhaben.art` statt `art`. Ein einheitlicher Name ist die Voraussetzung des nächsten Absatzes.
 
-**Wichtig:** `speichereAntwort` (`src/lib/actions/self-disclosure.ts`) baut den Schlüssel heute aus `schritt.id` und der Feld-ID. Mit Spalten kommen die Namen bereits als vollständige Schlüssel aus dem Formular — die Aktion übernimmt sie, statt sie erneut zusammenzusetzen. Die Prüfung über `schrittSchema` muss entsprechend auf die Feld-IDs je Spalte gehen; sieh dir `src/lib/self-disclosure/schema.ts` an und zieh sie mit.
+**Die Falle dieser Aufgabe — ohne sie speichert der Bogen nichts:** `schrittSchema` (`src/lib/self-disclosure/schema.ts:75-79`) baut seine Prüfung heute über **Feld-IDs** und wirft mit `.strip()` alles weg, was es nicht kennt. Kommen aus dem Formular vollständige Schlüssel, verwirft die Prüfung sie **stillschweigend** — kein Fehler, keine Meldung, nur ein leerer Bogen. Deshalb muss das Schema dieselben Schlüssel bilden:
+
+```ts
+export function schrittSchema(
+  schritt: Schritt,
+  personen?: (1 | 2)[]
+): z.ZodType<Record<string, unknown>> {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  // Die Schluessel des Schemas MUESSEN denen des Formulars entsprechen:
+  // .strip() wirft alles Unbekannte weg, und zwar lautlos. Ein Schema ueber
+  // blosse Feld-IDs liesse bei Spalten jede Antwort verschwinden.
+  for (const person of personen ?? [undefined]) {
+    for (const feld of schritt.felder) {
+      shape[personenSchluessel(schritt.id, feld.id, person)] = feldSchema(feld).optional();
+    }
+  }
+  return z.object(shape).strip() as unknown as z.ZodType<Record<string, unknown>>;
+}
+```
+
+`speichereAntwort` (`src/lib/actions/self-disclosure.ts`) übernimmt die geprüften Schlüssel danach **unverändert** in die Antworten, statt sie erneut aus `schritt.id` und Feld-ID zusammenzusetzen. Dasselbe gilt für `starteAnfrage` (`src/lib/actions/anfrage.ts`), das heute ebenfalls selbst zusammensetzt.
+
+Schreib dafür einen Test, der genau diese Falle bewacht:
+
+```ts
+it("behaelt die Antworten beider Spalten", () => {
+  const schritt = KATALOG.find((s) => s.personenSpalten)!;
+  const feld = schritt.felder[0]!.id;
+  const geprueft = schrittSchema(schritt, [1, 2]).parse({
+    [`p1.${schritt.id}.${feld}`]: "eins",
+    [`p2.${schritt.id}.${feld}`]: "zwei",
+  });
+  // Ohne die Schluesselform oben waere das Ergebnis hier leer – lautlos.
+  expect(Object.keys(geprueft)).toHaveLength(2);
+});
+```
 
 Die Zusammenfassungsseite zeigt je Spalte eine Zeile mit dem Personen-Etikett.
 
@@ -487,7 +522,8 @@ Erstelle `tests/selbstauskunft-katalogschnitt.test.ts`:
 ```ts
 import { describe, expect, it } from "vitest";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
-import { sichtbareSchritte } from "@/lib/self-disclosure/navigation";
+import { sichtbareSchritte, fortschritt } from "@/lib/self-disclosure/navigation";
+import { planUebernahme } from "@/lib/self-disclosure/takeover";
 
 const KURZ = ["vorhaben", "objekt_preis", "finanzierungswunsch", "haushalt", "personen", "verpflichtungen"];
 const VOLL_ZUSAETZLICH = [
@@ -538,6 +574,35 @@ describe("Katalogschnitt", () => {
       expect(KATALOG.find((s) => s.id === id)?.personenSpalten).toBe(true);
     }
   });
+
+  it("der Fortschritt zaehlt 'von 6' im kurzen Weg", () => {
+    // Die angezeigte Gesamtzahl ist der Grund, weiterzumachen oder
+    // abzubrechen – sie ist die eigentliche Zusicherung dieser Arbeit.
+    const antworten = { "vorhaben.art": "kauf_bestand" };
+    expect(fortschritt("vorhaben", antworten, "kurz").gesamt).toBe(6);
+  });
+
+  it("die Uebernahme liest einen kurz ausgefuellten Bogen vollstaendig", () => {
+    // Auch die zweite Spalte: Wer zu zweit anfragt, darf seinen Partner nicht
+    // beim Uebernehmen verlieren.
+    const antworten = {
+      "vorhaben.art": "kauf_bestand",
+      "haushalt.anzahl": "2",
+      "p1.personen.nachname": "Eins",
+      "p2.personen.nachname": "Zwei",
+    };
+    const plan = planUebernahme(antworten, {
+      applicants: [
+        { id: "a1", position: 1 },
+        { id: "a2", position: 2 },
+      ],
+      property: null,
+      financingRequest: null,
+      caseFelder: { financingType: null },
+    });
+    const nachnamen = plan.vorschlaege.filter((v) => v.ziel.feld === "nachname");
+    expect(nachnamen.map((v) => v.kundenwert).sort()).toEqual(["Eins", "Zwei"]);
+  });
 });
 ```
 
@@ -583,7 +648,7 @@ npx vitest run tests/selbstauskunft-katalogschnitt.test.ts
 npx tsc --noEmit
 ```
 
-Erwartet: 6 Fälle grün. Andere Tests scheitern jetzt — sie nennen alte Schritt-IDs. Das behebt Aufgabe 5; **notiere die Liste der scheiternden Dateien im Bericht.**
+Erwartet: 8 Fälle grün. Andere Tests scheitern jetzt — sie nennen alte Schritt-IDs. Das behebt Aufgabe 5; **notiere die Liste der scheiternden Dateien im Bericht.**
 
 - [ ] **Schritt 5: Commit**
 
