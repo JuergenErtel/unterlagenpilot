@@ -42,10 +42,40 @@ function ziffern(nummer: string): string {
   return nummer.replace(/\D/g, "");
 }
 
+/**
+ * Erkennt die doppelte Null vor einer deutschen Mobilnummer und gibt sie ohne
+ * führende Null zurück ("00170 1234567" → "1701234567"); sonst `null`.
+ *
+ * EINE Regel, ZWEI Leser (`telLink` und `waLink`). Als die Ausnahme nur in
+ * `waLink` stand, verstanden die beiden Funktionen dieselbe Eingabe
+ * verschieden – der WhatsApp-Link zeigte auf die deutsche Nummer, der
+ * Wähl-Link auf eine Auslandswahl ins Leere. Zwei Deutungen derselben Ziffern
+ * sind eine Falle für den Nächsten.
+ *
+ * Warum das sicher ist: Es gibt keine Ländervorwahl 15/16/17, und die Ausnahme
+ * greift nur bei GENAU zehn Ziffern. Eine elfstellige Restnummer bleibt
+ * international – dort wäre die nordamerikanische Deutung (Ländercode 1 plus
+ * zehn Ziffern) genauso plausibel, und bei Gleichstand gilt der Dateikopf:
+ * im Zweifel nicht umdeuten.
+ */
+function deutscheMobilnummerNachDoppelterNull(roh: string): string | null {
+  if (!roh.startsWith("00")) return null;
+  const rest = roh.slice(2);
+  if (rest.length !== LAENGE_DEUTSCHE_MOBIL_OHNE_NULL) return null;
+  if (!DEUTSCHE_MOBIL_PRAEFIXE.some((p) => rest.startsWith(p))) return null;
+  return rest;
+}
+
 /** `tel:`-Link; die Nummer bleibt wie eingegeben, nur ohne Trennzeichen. */
 export function telLink(nummer: string | null): string | null {
   if (!nummer?.trim()) return null;
-  const roh = ziffern(nummer);
+  let roh = ziffern(nummer);
+  // Dieselbe Ausnahme wie in `waLink`: die doppelte Null vor einer deutschen
+  // Mobilnummer ist ein Tippfehler, keine Auslandswahl. Korrigiert auf die
+  // nationale Form mit EINER führenden Null – so bleibt die Nummer, wie sie
+  // gemeint war, statt als +170… ins Leere zu wählen.
+  const mobilOhneNull = deutscheMobilnummerNachDoppelterNull(roh);
+  if (mobilOhneNull) roh = `0${mobilOhneNull}`;
   // Längenkontrolle: mindestens 7, höchstens 15 (E.164-Obergrenze).
   // Ohne maximale Grenze könnten Durchwahlen stumm mitdial werden.
   // Deutsche Nummern (mit führender 0): maximal 12 Ziffern
@@ -68,18 +98,17 @@ export function waLink(nummer: string | null): string | null {
 
   let istDeutsch = false;
   if (roh.startsWith("00")) {
-    roh = roh.slice(2);
     // "00170 1234567" ist ein Tippfehler (eine Null zu viel), keine
-    // Auslandsnummer: Nach dem Strippen bliebe "1701234567" stehen und ergäbe
-    // einen Link auf eine nordamerikanisch aussehende FREMDE Nummer – genau
-    // das, was der Dateikopf ausschließt. Zehnstellig und mit deutscher
-    // Mobilvorwahl beginnend gibt es keine Auslandsdeutung, die passte.
-    if (
-      roh.length === LAENGE_DEUTSCHE_MOBIL_OHNE_NULL &&
-      DEUTSCHE_MOBIL_PRAEFIXE.some((p) => roh.startsWith(p))
-    ) {
-      roh = `49${roh}`;
+    // Auslandsnummer: Nach dem bloßen Strippen bliebe "1701234567" stehen und
+    // ergäbe einen Link auf eine nordamerikanisch aussehende FREMDE Nummer –
+    // genau das, was der Dateikopf ausschließt. Dieselbe Erkennung wie in
+    // `telLink`, nur die Zielform unterscheidet sich (wa.me will 49…).
+    const mobilOhneNull = deutscheMobilnummerNachDoppelterNull(roh);
+    if (mobilOhneNull) {
+      roh = `49${mobilOhneNull}`;
       istDeutsch = true;
+    } else {
+      roh = roh.slice(2);
     }
   } else if (roh.startsWith("0")) {
     // Deutsche Nummern mit führender 0 dürfen maximal 12 Ziffern haben

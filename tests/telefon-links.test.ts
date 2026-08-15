@@ -123,3 +123,32 @@ describe("telLink", () => {
     expect(telLink("089 12345")).toBe("tel:08912345");
   });
 });
+
+/**
+ * Nachtrag zur Abschlusspruefung: Die Ausnahme fuer die doppelte Null stand
+ * zuerst nur in `waLink`. Damit verstanden zwei Funktionen dieselbe Eingabe
+ * verschieden – der WhatsApp-Link zeigte auf die deutsche Nummer, der
+ * Waehl-Link auf eine Auslandswahl ins Leere. Diese Tests fuettern deshalb
+ * BEIDE Funktionen mit derselben Eingabe.
+ */
+describe("waLink und telLink verstehen dieselbe Eingabe gleich", () => {
+  it("deuten die doppelte Null vor einer Mobilnummer beide als Tippfehler", () => {
+    expect(waLink("00170 1234567")).toBe("https://wa.me/491701234567");
+    // Nationale Form mit EINER fuehrenden Null – so war sie gemeint.
+    expect(telLink("00170 1234567")).toBe("tel:01701234567");
+  });
+
+  it("halten beide die Grenze bei genau zehn Ziffern ein", () => {
+    // Elfstellig ist von einer nordamerikanischen Nummer nicht zu
+    // unterscheiden: `waLink` deutet international, `telLink` verwirft die
+    // Nummer wegen ihrer Laenge (14 Ziffern mit fuehrender Null). Beide
+    // lassen die Ziffern also unangetastet – keine deutet um.
+    expect(waLink("00151 12345678")).toBe("https://wa.me/15112345678");
+    expect(telLink("00151 12345678")).toBeNull();
+  });
+
+  it("deuten eine gewoehnliche deutsche Nummer beide unveraendert", () => {
+    expect(waLink("0170 1234567")).toBe("https://wa.me/491701234567");
+    expect(telLink("0170 1234567")).toBe("tel:01701234567");
+  });
+});

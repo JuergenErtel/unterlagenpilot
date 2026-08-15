@@ -688,6 +688,25 @@ describe("Kontaktaufnahme in der Leiter", () => {
     expect(schritt.key).toBe("erstkontakt_entwurf");
   });
 
+  it("schlaegt keinen Abbruch mehr vor, wenn das Erstgespraech gefuehrt wurde – auch nach Fristablauf", () => {
+    // Nachtrag zur Abschlusspruefung: Die Sprosse trat beim gefuehrten
+    // Gespraech zurueck, der Hinweis in "wartet" nicht – derselbe
+    // Selbstwiderspruch eine Ebene tiefer. Ein gefuehrtes Gespraech beweist,
+    // dass Kontakt bestand; dann darf nichts mehr zum Aufgeben raten.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6, gefuehrtAm: new Date("2026-08-15") },
+        kontakt: {
+          stand: stand({ versuche: 4, abbruchFaellig: true, faellig: false }),
+          telefon: "0170 1234567",
+        },
+      })
+    );
+    expect(schritt.key).not.toBe("kontakt_aufnehmen");
+    expect((schritt.wartet ?? []).some((w) => w.label.includes("nicht erreichbar"))).toBe(false);
+  });
+
   it("verlinkt den Abbruchvorschlag ins Board, wo der Fall als verloren markiert werden kann", () => {
     // Die Fallseite kennt keinen Weg zu "verloren" – `setzeVerloren` haengt
     // ausschliesslich am LossDialog des Boards (/dashboard). Ein Vorschlag

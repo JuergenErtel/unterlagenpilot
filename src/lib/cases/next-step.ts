@@ -219,18 +219,13 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
    * der telefonisch nie erreichbar war, aber schriftlich mitarbeitet
    * (Mail-Antwort, Upload, Selbstauskunft), fuer immer auf "aufgeben?"
    * festgehalten – Machbarkeit, Luecken, Fristen und Einreichung waeren dann
-   * unerreichbar. Deshalb nur ein Hinweis, kein Blocker; derselbe Waechter
-   * (verloren/gesperrt/Bank-Nachforderung) wie bei `kontaktSchritt`.
+   * unerreichbar. Deshalb nur ein Hinweis, kein Blocker – und zwar hinter
+   * GENAU demselben Waechter wie die Sprosse selbst (`kontaktstreckeLaeuft`).
+   * Solange das eine Kopie war, lief es prompt auseinander: Der Hauptschritt
+   * trat beim gefuehrten Erstgespraech zurueck, der Vorschlag mahnte weiter
+   * "aufgeben?" – bei einem Fall, dessen Gespraech nachweislich stattfand.
    */
-  if (
-    !stumm &&
-    c.kontakt &&
-    !c.kontakt.stand.jeErreicht &&
-    c.kontakt.stand.abbruchFaellig &&
-    !c.verloren &&
-    !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
-    c.status !== "bank_nachforderung"
-  ) {
+  if (!stumm && kontaktstreckeLaeuft(c) && c.kontakt.stand.abbruchFaellig) {
     /*
      * Ziel ist das BOARD, nicht die Fallseite: "verloren" wird ausschliesslich
      * ueber den `LossDialog` im Lead-Board gesetzt (`setzeVerloren`,
@@ -245,6 +240,40 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
     });
   }
   return wartet;
+}
+
+/**
+ * Laeuft fuer diesen Fall ueberhaupt noch eine telefonische Kontaktstrecke?
+ *
+ * EINE Regel, ZWEI Leser: die Sprosse `kontaktSchritt` und der
+ * Abbruchvorschlag in `ermittleWartende`. Beide standen frueher als eigene
+ * Bedingungskette da – und liefen sofort auseinander, als die Regel
+ * "gefuehrtes Erstgespraech beweist Kontakt" dazukam: Der Hauptschritt trat
+ * zurueck, der Vorschlag mahnte weiter "aufgeben?".
+ *
+ * Die Waechter im Einzelnen:
+ * - kein Kontaktstand geladen (z. B. Bestandsfall vor `KONTAKT_START_AB`, oder
+ *   ein Aufrufer, der den Block nicht laedt) → die Leiter verhaelt sich wie
+ *   vor der Einfuehrung der Kontaktaufnahme,
+ * - `verloren` (KEIN CaseStatus, sondern `verlorenAm` am Fall – die
+ *   LOCKED_CASE_STATUSES fangen es deshalb nicht ab),
+ * - abgegebene Faelle (Maske schreibgeschuetzt) und `bank_nachforderung`
+ *   (nicht gesperrt, aber fachlich vorbei) – dieselben Waechter wie beim
+ *   Erstgespraech,
+ * - ein als gefuehrt abgehaktes Erstgespraech IST der Beweis, dass Kontakt
+ *   bestand, auch ohne einen daneben angeklickten "erreicht"-Vermerk,
+ * - und "erreicht" selbst, das die Strecke ohnehin beendet.
+ */
+function kontaktstreckeLaeuft(
+  c: NextStepInput
+): c is NextStepInput & { kontakt: NonNullable<NextStepInput["kontakt"]> } {
+  if (!c.kontakt) return false;
+  if (c.verloren) return false;
+  if (LOCKED_CASE_STATUSES.has(c.status as CaseStatus)) return false;
+  if (c.status === "bank_nachforderung") return false;
+  if (c.erstgespraech?.gefuehrtAm) return false;
+  if (c.kontakt.stand.jeErreicht) return false;
+  return true;
 }
 
 /**
@@ -268,20 +297,14 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
  * nur als Hinweis in `wartet` auf (siehe `ermittleWartende`).
  */
 function kontaktSchritt(c: NextStepInput): NextStep | null {
-  if (!c.kontakt) return null;
-  if (c.verloren) return null;
-  if (LOCKED_CASE_STATUSES.has(c.status as CaseStatus)) return null;
-  if (c.status === "bank_nachforderung") return null;
-
-  // Ein gefuehrtes Erstgespraech IST der Beweis, dass Kontakt bestand – auch
-  // ohne einen daneben angeklickten "erreicht"-Vermerk. Ohne diese Zeile
-  // widerspricht sich die Leiter an genau einer Stelle: Sie ruft zum ERSTEN
-  // Anruf ("Der Lead ist frisch"), waehrend dasselbe Gespraech in der Maske
-  // als gefuehrt abgehakt ist.
-  if (c.erstgespraech?.gefuehrtAm) return null;
+  // Die Waechter stehen in `kontaktstreckeLaeuft` – gemeinsam mit dem
+  // Abbruchvorschlag, damit beide dieselbe Antwort geben.
+  if (!kontaktstreckeLaeuft(c)) return null;
 
   const { stand, telefon } = c.kontakt;
-  if (stand.jeErreicht) return null;
+  // Der Abstand ist KEIN Waechter der Strecke, sondern nur ihre Taktung: Er
+  // schweigt bis zum naechsten faelligen Versuch, waehrend der
+  // Abbruchvorschlag durchaus weiterlaufen darf.
   if (!stand.faellig) return null;
 
   const ohneNummer = telefon
