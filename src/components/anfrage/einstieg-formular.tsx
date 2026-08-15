@@ -36,10 +36,13 @@ export function EinstiegFormular({ slug, frage, felder }: { slug: string; frage:
     <form action={action} className="space-y-5">
       <h1 className="text-2xl font-semibold">{frage}</h1>
       {/* Honigtoepfchen: fuer Menschen unsichtbar, fuer einfache Bots
-          verlockend. Kein display:none – manche Bots ueberspringen das. */}
+          verlockend. Kein display:none – manche Bots ueberspringen das.
+          Bewusst NICHT "website" genannt: Passwortmanager fuellen ein Feld
+          dieses Namens gern automatisch mit einer URL, und dann sieht ein
+          echter Interessent "Vielen Dank!", ohne dass etwas entsteht. */}
       <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
-        <label htmlFor="website">Website</label>
-        <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+        <label htmlFor="firmenzusatz">Firmenzusatz</label>
+        <input id="firmenzusatz" name="firmenzusatz" type="text" tabIndex={-1} autoComplete="off" />
       </div>
       <SchrittFelder felder={felder} defaults={{}} fieldErrors={state.fieldErrors} />
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}

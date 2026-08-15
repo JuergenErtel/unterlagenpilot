@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
@@ -82,6 +83,12 @@ export async function versendeEinladung(
     entityId: formular.id,
     metadata: { email, name: name || null },
   });
+
+  // Ohne das hier zeigt "Zuletzt eingeladen" die gerade verschickte Einladung
+  // erst nach einem Neuladen – ausgerechnet die Bestätigung, für die sie
+  // gebaut wurde.
+  revalidatePath("/settings");
+  revalidatePath("/cases/new");
 
   return { ok: true };
 }

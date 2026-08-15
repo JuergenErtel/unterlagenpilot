@@ -40,15 +40,18 @@ export async function starteAnfrage(
   // Honigtöpfchen: ein für Menschen unsichtbares Feld. Ist es gefüllt, war es
   // kein Mensch. Freundlich bestätigen und nichts tun – eine Fehlermeldung
   // verriete die Erkennung.
-  if (String(formData.get("website") ?? "").trim() !== "") return { danke: true };
+  if (String(formData.get("firmenzusatz") ?? "").trim() !== "") return { danke: true };
 
-  const formular = await formularZuSlug(slug);
-  if (!formular) return { error: "Dieses Formular ist derzeit nicht verfügbar." };
-
+  // Zaehler VOR der Datenbankabfrage: Sonst kostet jede abgewiesene Anfrage
+  // trotzdem eine Datenbank-Runde – genau die Last, vor der die Grenze
+  // schuetzen soll.
   const grenze = await checkRateLimit(`anfrage:${slug}:${await clientIp()}`, MAX_JE_STUNDE, 3600);
   if (!grenze.ok) {
     return { error: "Zu viele Anfragen. Bitte versuchen Sie es später noch einmal." };
   }
+
+  const formular = await formularZuSlug(slug);
+  if (!formular) return { error: "Dieses Formular ist derzeit nicht verfügbar." };
 
   const schritt = schrittFinden(ERSTER_SCHRITT, {});
   if (!schritt) throw new Error(`Erster Schritt "${ERSTER_SCHRITT}" fehlt im Katalog.`);

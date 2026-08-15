@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const audit = vi.fn();
 vi.mock("@/lib/audit", () => ({ audit: (...a: unknown[]) => audit(...a) }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const revalidatePath = vi.fn();
+vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
 
 const ctx = { organizationId: "org-A", userId: "user-1" };
 vi.mock("@/lib/auth/context", () => ({ requireContext: async () => ctx }));
@@ -31,7 +32,7 @@ function form(werte: Record<string, string>) {
 }
 
 beforeEach(() => {
-  [audit, formularDerOrganisation, sendEmail].forEach((m) => m.mockReset());
+  [audit, formularDerOrganisation, sendEmail, revalidatePath].forEach((m) => m.mockReset());
   formularDerOrganisation.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: true });
   sendEmail.mockResolvedValue({ id: "mail-1" });
 });
@@ -43,6 +44,14 @@ describe("versendeEinladung", () => {
     expect(sendEmail.mock.calls[0]![0]!.to).toBe("max@example.de");
     expect(sendEmail.mock.calls[0]![0]!.text).toContain("https://baufidesk.de/anfrage/ertel");
     expect(sendEmail.mock.calls[0]![0]!.empfaenger).toBe("kunde");
+  });
+
+  it("aktualisiert die Liste 'Zuletzt eingeladen' ohne Neuladen", async () => {
+    // Sonst zeigt die Karte die gerade verschickte Einladung erst nach einem
+    // Neuladen – ausgerechnet die Bestaetigung, fuer die sie gebaut wurde.
+    await versendeEinladung(form({ email: "max@example.de" }));
+    expect(revalidatePath).toHaveBeenCalledWith("/settings");
+    expect(revalidatePath).toHaveBeenCalledWith("/cases/new");
   });
 
   it("schreibt die Einladung ins Pruefprotokoll", async () => {

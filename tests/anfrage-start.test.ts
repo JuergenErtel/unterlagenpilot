@@ -81,8 +81,9 @@ describe("starteAnfrage", () => {
 
   it("legt nichts an, wenn das Honigtoepfchen gefuellt ist", async () => {
     // Und meldet trotzdem Erfolg: Wer "erkannt" zurueckgibt, verraet seine
-    // Erkennung an den naechsten Versuch.
-    const { ergebnis } = await starten("ertel", { art: "kauf_bestand", website: "http://spam" });
+    // Erkennung an den naechsten Versuch. Feld heisst bewusst nicht
+    // "website" – Passwortmanager fuellen so benannte Felder gern selbst.
+    const { ergebnis } = await starten("ertel", { art: "kauf_bestand", firmenzusatz: "http://spam" });
     expect(ergebnis).toEqual({ danke: true });
     expect(createAnfrageLink).not.toHaveBeenCalled();
     expect(disclosureCreate).not.toHaveBeenCalled();
@@ -93,6 +94,14 @@ describe("starteAnfrage", () => {
     const { ergebnis } = await starten("ertel", { art: "kauf_bestand" });
     expect(ergebnis?.error).toBeTruthy();
     expect(createAnfrageLink).not.toHaveBeenCalled();
+  });
+
+  it("prueft die IP-Grenze VOR der Datenbankabfrage zum Formular", async () => {
+    // Sonst kostet jede abgewiesene Anfrage trotzdem eine Datenbank-Runde –
+    // genau die Last, vor der die Grenze schuetzen soll.
+    checkRateLimit.mockResolvedValue({ ok: false, remaining: 0, retryAfterSec: 3600 });
+    await starten("ertel", { art: "kauf_bestand" });
+    expect(formularZuSlug).not.toHaveBeenCalled();
   });
 
   it("legt nichts an, wenn das Formular unbekannt oder abgeschaltet ist", async () => {
