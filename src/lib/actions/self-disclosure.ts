@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireCaseAccess } from "@/lib/auth/context";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import {
   resolveSelfDisclosureToken,
@@ -29,6 +30,16 @@ export interface SchrittState {
 }
 
 /**
+ * Neue Schritte je Bogen und Stunde. Grosszuegig bemessen: Ein Bogen hat gut
+ * 30 Schritte, und der Kunde springt beim Ausfuellen oft zurueck und aendert
+ * etwas – das darf kein echter Mensch je treffen. Anders als `starteAnfrage`
+ * zaehlt der Schluessel ueber die linkId, nicht die IP: Der Kunde wechselt
+ * unterwegs (Mobilfunk/WLAN) das Netz, ein IP-Limit wuerde ihn selbst
+ * aussperren.
+ */
+const MAX_SCHRITTE_JE_STUNDE = 200;
+
+/**
  * Speichert einen Schritt und schickt den Kunden zum nächsten.
  *
  * Grundsatz: Ein leerer Schritt ist gültig und wird übersprungen – er schreibt
@@ -42,6 +53,19 @@ export async function speichereAntwort(
 ): Promise<SchrittState | undefined> {
   const access = await resolveSelfDisclosureToken(token);
   if (!access) return { error: "Der Link ist ungültig oder abgelaufen." };
+
+  // Seit dem Anfrageformular praegt sich jeder Besucher seinen Link selbst –
+  // `starteAnfrage` ist gedeckelt, dieser Aufruf bisher nicht. Das ist die
+  // groesste neue Angriffsflaeche des Formular-Wegs: nicht auf Daten, sondern
+  // auf die Verfuegbarkeit der Anwendung.
+  const grenze = await checkRateLimit(
+    `selbstauskunft:schritt:${access.linkId}`,
+    MAX_SCHRITTE_JE_STUNDE,
+    3600
+  );
+  if (!grenze.ok) {
+    return { error: "Zu viele Anfragen. Bitte versuchen Sie es später noch einmal." };
+  }
 
   const bestand = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
@@ -161,6 +185,10 @@ export async function sendeAb(
     try {
       caseId = await gebaereFall(bogen.id, antworten, formular, jetzt);
     } catch (e) {
+      // Ohne dieses Log ist ein wiederkehrender Fehler (Pool-Timeout, siehe
+      // db-connection-pool-timeout-fix) fuer immer unsichtbar: Der Kunde
+      // sieht nur die freundliche Absage unten, niemand erfaehrt vom Muster.
+      console.error("[anfrage] Fallgeburt fehlgeschlagen:", e);
       // Die Reservierung ist bereits committed – bricht die Geburt ab
       // (Pool-Timeout, fuenf Nummernkollisionen in Folge), muss sie
       // zurueckgegeben werden. Sonst gilt der Bogen als "bereits uebermittelt",
