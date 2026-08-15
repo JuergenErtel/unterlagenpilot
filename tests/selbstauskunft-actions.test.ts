@@ -6,6 +6,11 @@ vi.mock("next/navigation", () => ({ redirect: (...a: unknown[]) => redirect(...a
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/auth/context", () => ({ requireCaseAccess: vi.fn() }));
 
+const checkRateLimit = vi.fn();
+vi.mock("@/lib/auth/rate-limit", () => ({
+  checkRateLimit: (...a: unknown[]) => checkRateLimit(...a),
+}));
+
 const resolve = vi.fn();
 vi.mock("@/lib/security/self-disclosure-link", () => ({
   resolveSelfDisclosureToken: (...a: unknown[]) => resolve(...a),
@@ -33,10 +38,11 @@ function form(entries: Record<string, string>): FormData {
 }
 
 beforeEach(() => {
-  [resolve, upsert, findUnique, redirect].forEach((m) => m.mockReset());
+  [resolve, upsert, findUnique, redirect, checkRateLimit].forEach((m) => m.mockReset());
   resolve.mockResolvedValue({ linkId: "link-1", caseId: "case-1", organizationId: "org-1" });
   findUnique.mockResolvedValue({ answers: {}, submittedAt: null });
   upsert.mockResolvedValue({});
+  checkRateLimit.mockResolvedValue({ ok: true, remaining: 199, retryAfterSec: 0 });
 });
 
 describe("speichereAntwort", () => {
@@ -98,5 +104,34 @@ describe("speichereAntwort", () => {
     await speichereAntwort("tok", letzter.id, form({}));
     const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
     expect(arg.update.currentStep).toBe("zusammenfassung");
+  });
+
+  it("weist zu viele Schritte je Bogen und Stunde ab", async () => {
+    // Seit dem Anfrageformular praegt sich jeder Besucher seinen eigenen Link
+    // selbst - ohne Deckel waere das die groesste neue Angriffsflaeche.
+    checkRateLimit.mockResolvedValue({ ok: false, remaining: 0, retryAfterSec: 1800 });
+    const res = await speichereAntwort("tok", "finanzierungsart", form({ art: "kauf_bestand" }));
+    expect(res?.error).toBeTruthy();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("zaehlt die Grenze ueber die linkId, nicht die IP", async () => {
+    await speichereAntwort("tok", "finanzierungsart", form({ art: "kauf_bestand" }));
+    expect(checkRateLimit.mock.calls[0]![0]).toBe("selbstauskunft:schritt:link-1");
+  });
+
+  it("speichert einen Schritt auch ohne Fall", async () => {
+    // Formular-Bogen: Der Fall entsteht erst beim Absenden. Bis dahin darf
+    // kein Schreibvorgang eine caseId verlangen.
+    resolve.mockResolvedValue({ linkId: "link-1", caseId: null, organizationId: "org-A" });
+    findUnique.mockResolvedValue({ answers: {}, submittedAt: null });
+
+    await speichereAntwort("TOK", "finanzierungsart", form({ art: "kauf_bestand" }));
+
+    const daten = upsert.mock.calls[0]![0] as { create: { caseId?: string | null; linkId: string } };
+    // Nicht nur "null" – das Feld darf beim falllosen Bogen gar nicht erst
+    // gesetzt werden, sonst verlangt Prisma spaeter faelschlich einen Wert.
+    expect("caseId" in daten.create).toBe(false);
+    expect(daten.create.linkId).toBe("link-1");
   });
 });

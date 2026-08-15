@@ -24,18 +24,19 @@ export function buildSelfDisclosureUrl(token: string): string {
   return `${getEnv().APP_BASE_URL.replace(/\/$/, "")}/selbstauskunft/${token}`;
 }
 
-export async function createSelfDisclosureLink(
-  caseId: string,
-  expiresAt: Date,
-  options: { organizationId: string; actorUserId?: string | null }
-): Promise<CreatedSelfDisclosureLink> {
-  // Zeile zuerst anlegen, damit die linkId ins signierte Token wandern kann.
+/**
+ * Gemeinsamer Kern für beide Link-Arten: Zeile zuerst anlegen, damit die
+ * linkId ins signierte Token wandern kann, danach den echten Hash nachtragen.
+ */
+async function linkAnlegen(
+  ziel: { caseId: string } | { formularId: string },
+  expiresAt: Date
+): Promise<{ linkId: string; token: string }> {
   const link = await prisma.selfDisclosureLink.create({
-    data: { caseId, tokenHash: `pending-${crypto.randomUUID()}`, expiresAt, active: true },
+    data: { ...ziel, tokenHash: `pending-${crypto.randomUUID()}`, expiresAt, active: true },
   });
-
   const token = createUploadToken({
-    caseId,
+    ...("caseId" in ziel ? { caseId: ziel.caseId } : {}),
     linkId: link.id,
     exp: Math.floor(expiresAt.getTime() / 1000),
   });
@@ -43,22 +44,51 @@ export async function createSelfDisclosureLink(
     where: { id: link.id },
     data: { tokenHash: hashToken(token) },
   });
+  return { linkId: link.id, token };
+}
 
+export async function createSelfDisclosureLink(
+  caseId: string,
+  expiresAt: Date,
+  options: { organizationId: string; actorUserId?: string | null }
+): Promise<CreatedSelfDisclosureLink> {
+  const { linkId, token } = await linkAnlegen({ caseId }, expiresAt);
   await audit({
     organizationId: options.organizationId,
     userId: options.actorUserId ?? null,
     action: "upload_link.created",
     entityType: "case",
     entityId: caseId,
-    metadata: { linkId: link.id, zweck: "selbstauskunft", expiresAt: expiresAt.toISOString() },
+    metadata: { linkId, zweck: "selbstauskunft", expiresAt: expiresAt.toISOString() },
   });
+  return { linkId, token, url: buildSelfDisclosureUrl(token), expiresAt };
+}
 
-  return { linkId: link.id, token, url: buildSelfDisclosureUrl(token), expiresAt };
+/**
+ * Link eines Anfrageformulars – ohne Fall. Er entsteht in dem Moment, in dem
+ * ein Besucher den ersten Schritt absendet, und gehoert damit genau ihm.
+ */
+export async function createAnfrageLink(
+  formularId: string,
+  expiresAt: Date,
+  options: { organizationId: string }
+): Promise<CreatedSelfDisclosureLink> {
+  const { linkId, token } = await linkAnlegen({ formularId }, expiresAt);
+  await audit({
+    organizationId: options.organizationId,
+    userId: null,
+    action: "upload_link.created",
+    entityType: "leadformular",
+    entityId: formularId,
+    metadata: { linkId, zweck: "anfrage", expiresAt: expiresAt.toISOString() },
+  });
+  return { linkId, token, url: buildSelfDisclosureUrl(token), expiresAt };
 }
 
 export interface SelfDisclosureAccess {
   linkId: string;
-  caseId: string;
+  /** null, solange der Bogen aus einem Anfrageformular stammt. */
+  caseId: string | null;
   organizationId: string;
 }
 
@@ -77,13 +107,23 @@ export async function resolveSelfDisclosureToken(
       expiresAt: true,
       caseId: true,
       case: { select: { organizationId: true } },
+      formularId: true,
+      formular: { select: { organizationId: true } },
     },
   });
   if (!link || !link.active) return null;
   if (link.expiresAt < new Date()) return null;
-  if (link.caseId !== payload.caseId) return null;
+  // Beide Seiten auf null normalisieren: Beim Formular-Link ist link.caseId
+  // null und payload.caseId undefined – ein roher !==-Vergleich wuerde jeden
+  // Formular-Bogen aussperren.
+  if ((link.caseId ?? null) !== (payload.caseId ?? null)) return null;
   if (link.tokenHash !== hashToken(token)) return null;
-  return { linkId: link.id, caseId: link.caseId, organizationId: link.case.organizationId };
+
+  const organizationId = link.case?.organizationId ?? link.formular?.organizationId ?? null;
+  // Weder Fall noch Formular: verwaister Link, kein Zugang.
+  if (!organizationId) return null;
+
+  return { linkId: link.id, caseId: link.caseId, organizationId };
 }
 
 /** Widerruft einen Link sofort. Fremde Organisationen bekommen kein Signal. */
@@ -95,7 +135,9 @@ export async function deactivateSelfDisclosureLink(
     where: { id: linkId },
     select: { id: true, caseId: true, case: { select: { organizationId: true } } },
   });
-  if (!link || link.case.organizationId !== ctx.organizationId) return;
+  // Formular-Links haengen hier nicht: kein Fall, kein Widerruf ueber diesen
+  // Weg. Fremde Organisationen bekommen dieselbe Antwort wie "nicht gefunden".
+  if (!link?.caseId || link.case?.organizationId !== ctx.organizationId) return;
   await prisma.selfDisclosureLink.update({ where: { id: linkId }, data: { active: false } });
   await audit({
     organizationId: ctx.organizationId,

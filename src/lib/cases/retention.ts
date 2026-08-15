@@ -31,3 +31,25 @@ export function selectExpiredCases(cases: RetentionCase[], now: Date): ExpiredCa
   }
   return out;
 }
+
+export interface AbandonedSelfDisclosure {
+  id: string;
+  /** Ablauf des zugehörigen Links – nicht des Bogens selbst. */
+  linkExpiresAt: Date;
+}
+
+/**
+ * Abgebrochene Bögen eines Anfrageformulars: `caseId` ist null (nie ein Fall
+ * entstanden) und der zugehörige Link ist abgelaufen. Ohne diesen Schritt
+ * blieben sie für immer liegen – unsichtbar für den Vermittler, von der
+ * Aufbewahrungslogik oben nicht erfasst (die arbeitet nur auf TERMINALEN
+ * FÄLLEN) und ohne Einwilligung gespeichert (die wird erst bei der
+ * Fallgeburt geschrieben). Der Tokenablauf sperrt nur den Zugriff – die Zeile
+ * selbst muss hier aktiv weggeräumt werden.
+ */
+export function selectAbandonedSelfDisclosures(
+  rows: AbandonedSelfDisclosure[],
+  now: Date
+): AbandonedSelfDisclosure[] {
+  return rows.filter((r) => r.linkExpiresAt < now);
+}

@@ -2,11 +2,11 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { Logo } from "@/components/brand/logo";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AbsendenFormular } from "@/components/self-disclosure/absenden-formular";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { sichtbareSchritte, schluessel } from "@/lib/self-disclosure/navigation";
-import { sendeAb } from "@/lib/actions/self-disclosure";
+import { fehlendeKontaktangaben } from "@/lib/self-disclosure/pflichtangaben";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -56,12 +56,8 @@ export default async function Zusammenfassung({
     );
   }
 
-  async function absenden() {
-    "use server";
-    await sendeAb(token);
-  }
-
   const schritte = sichtbareSchritte(antworten);
+  const fehlend = access.caseId === null ? fehlendeKontaktangaben(antworten) : [];
   const offen = schritte.reduce(
     (n, s) =>
       n +
@@ -117,11 +113,7 @@ export default async function Zusammenfassung({
         ))}
       </div>
 
-      <form action={absenden}>
-        <Button type="submit" size="lg" className="w-full">
-          Angaben absenden
-        </Button>
-      </form>
+      <AbsendenFormular token={token} zeigeKontaktblock={access.caseId === null} fehlend={fehlend} />
     </main>
   );
 }

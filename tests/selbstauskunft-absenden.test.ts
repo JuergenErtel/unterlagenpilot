@@ -13,12 +13,13 @@ vi.mock("@/lib/security/self-disclosure-link", () => ({
 }));
 
 const findUnique = vi.fn();
-const update = vi.fn();
+const updateMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     selfDisclosure: {
       findUnique: (...a: unknown[]) => findUnique(...a),
-      update: (...a: unknown[]) => update(...a),
+      updateMany: (...a: unknown[]) => updateMany(...a),
+      update: vi.fn(),
     },
   },
 }));
@@ -26,17 +27,18 @@ vi.mock("@/lib/db", () => ({
 import { sendeAb } from "@/lib/actions/self-disclosure";
 
 beforeEach(() => {
-  [resolve, findUnique, update].forEach((m) => m.mockReset());
+  [resolve, findUnique, updateMany].forEach((m) => m.mockReset());
   resolve.mockResolvedValue({ linkId: "link-1", caseId: "case-1", organizationId: "org-1" });
-  update.mockResolvedValue({});
+  updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("sendeAb", () => {
   it("sendet einen Bogen mit Lücken ab – Pflichtfelder gibt es nicht", async () => {
-    findUnique.mockResolvedValue({ id: "sd-1", submittedAt: null });
+    // Fallgebunden: link.formular bleibt null, der Fall existiert schon.
+    findUnique.mockResolvedValue({ id: "sd-1", submittedAt: null, answers: {}, link: { formular: null } });
     const res = await sendeAb("tok");
     expect(res).toBeUndefined();
-    const arg = update.mock.calls[0]![0] as { data: { submittedAt: Date } };
+    const arg = updateMany.mock.calls[0]![0] as { data: { submittedAt: Date } };
     expect(arg.data.submittedAt).toBeInstanceOf(Date);
   });
 
@@ -44,20 +46,20 @@ describe("sendeAb", () => {
     findUnique.mockResolvedValue({ id: "sd-1", submittedAt: new Date() });
     const res = await sendeAb("tok");
     expect(res?.error).toBeTruthy();
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("weist ein ungültiges Token ab", async () => {
     resolve.mockResolvedValue(null);
     const res = await sendeAb("tok");
     expect(res?.error).toBeTruthy();
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("sendet nichts ab, wenn noch gar kein Bogen existiert", async () => {
     findUnique.mockResolvedValue(null);
     const res = await sendeAb("tok");
     expect(res?.error).toBeTruthy();
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

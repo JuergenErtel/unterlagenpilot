@@ -25,6 +25,7 @@ import {
   createSelfDisclosureLink,
   resolveSelfDisclosureToken,
   buildSelfDisclosureUrl,
+  createAnfrageLink,
 } from "@/lib/security/self-disclosure-link";
 import { hashToken } from "@/lib/security/upload-token";
 
@@ -114,5 +115,49 @@ describe("Selbstauskunft-Link", () => {
       case: { organizationId: "org-1" },
     });
     await expect(resolveSelfDisclosureToken(created.token)).resolves.toBeNull();
+  });
+});
+
+describe("Formular-Link ohne Fall", () => {
+  beforeEach(() => {
+    [linkCreate, linkUpdate, linkFindUnique].forEach((m) => m.mockReset());
+  });
+
+  it("legt einen Link ohne caseId, aber mit formularId an", async () => {
+    linkCreate.mockResolvedValue({ id: "link-1" });
+    linkUpdate.mockResolvedValue({});
+    const erstellt = await createAnfrageLink("form-1", new Date(Date.now() + 86_400_000), {
+      organizationId: "org-A",
+    });
+    const aufruf = linkCreate.mock.calls[0]![0] as { data: { formularId: string; caseId?: string } };
+    expect(aufruf.data.formularId).toBe("form-1");
+    expect(aufruf.data.caseId).toBeUndefined();
+    expect(erstellt.url).toContain("/selbstauskunft/");
+  });
+
+  it("loest das Token auf und liefert caseId null", async () => {
+    linkCreate.mockResolvedValue({ id: "link-1" });
+    linkUpdate.mockResolvedValue({});
+    const erstellt = await createAnfrageLink("form-1", new Date(Date.now() + 86_400_000), {
+      organizationId: "org-A",
+    });
+
+    linkFindUnique.mockResolvedValue({
+      id: "link-1",
+      tokenHash: hashToken(erstellt.token),
+      active: true,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      caseId: null,
+      case: null,
+      formularId: "form-1",
+      formular: { organizationId: "org-A" },
+    });
+
+    const access = await resolveSelfDisclosureToken(erstellt.token);
+    // Der wunde Punkt: Ein Link OHNE Fall traegt im Token kein caseId. Ein
+    // naiver Vergleich (null !== undefined) wuerde jeden Formular-Bogen
+    // aussperren – und zwar erst in der Produktion, weil im Test frueher
+    // immer ein caseId dabei war.
+    expect(access).toEqual({ linkId: "link-1", caseId: null, organizationId: "org-A" });
   });
 });

@@ -29,7 +29,7 @@ import {
   type UnterlagenErgebnis,
 } from "@/lib/platforms/europace/unterlagen";
 import { getStorage } from "@/lib/storage";
-import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
+import { mitFallnummer } from "@/lib/cases/fallnummer-vergabe";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
@@ -50,22 +50,6 @@ const ai = new AIService();
 // Wie viele Dokumente die KI-Prüfung gleichzeitig verarbeitet. Genug, um die
 // Gesamtdauer klein zu halten, ohne den KI-Anbieter mit Requests zu überfahren.
 const AI_CHECK_CONCURRENCY = 4;
-
-/** true, wenn der Fehler eine Prisma-Unique-Constraint-Verletzung (P2002) ist. */
-function isUniqueViolation(e: unknown): boolean {
-  return typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002";
-}
-
-async function nextCaseNumber(organizationId: string, year: number): Promise<string> {
-  // Numerisches Maximum statt `orderBy: { caseNumber: "desc" }`: die DB sortiert
-  // Strings, wodurch ab "…-10000" dauerhaft "…-9999" als höchste Nummer gälte
-  // und jede weitere Fallanlage an der Unique-Constraint scheitern würde.
-  const rows = await prisma.case.findMany({
-    where: { organizationId, caseNumber: { startsWith: caseNumberPrefix(year) } },
-    select: { caseNumber: true },
-  });
-  return formatCaseNumber(year, highestSequence(rows.map((r) => r.caseNumber)) + 1);
-}
 
 export async function createCase(formData: FormData): Promise<void> {
   const ctx = await requireContext();
@@ -95,22 +79,9 @@ export async function createCase(formData: FormData): Promise<void> {
     quelle: "manuell" as const,
   });
 
-  // Race-Schutz: parallele Anlage kann dieselbe Nummer berechnen -> P2002 auf
-  // @@unique([organizationId, caseNumber]). In dem Fall neu berechnen und erneut versuchen.
-  let created: { id: string; caseNumber: string } | null = null;
-  for (let attempt = 0; attempt < 5 && !created; attempt++) {
-    const caseNumber = await nextCaseNumber(ctx.organizationId, year);
-    try {
-      created = await prisma.case.create({
-        data: buildData(caseNumber),
-        select: { id: true, caseNumber: true },
-      });
-    } catch (e) {
-      if (isUniqueViolation(e) && attempt < 4) continue;
-      throw e;
-    }
-  }
-  if (!created) throw new Error("Fallnummer konnte nicht vergeben werden.");
+  const created = await mitFallnummer(ctx.organizationId, year, (caseNumber) =>
+    prisma.case.create({ data: buildData(caseNumber), select: { id: true, caseNumber: true } })
+  );
 
   await audit({
     organizationId: ctx.organizationId,

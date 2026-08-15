@@ -26,6 +26,7 @@ const h = vi.hoisted(() => {
     applicantUpdate: fn(),
     applicantCreate: fn(),
     caseFindUnique: fn(),
+    caseUpdate: fn(),
     propertyFindUnique: fn(),
     propertyUpsert: fn(),
     financingFindUnique: fn(),
@@ -45,7 +46,7 @@ const h = vi.hoisted(() => {
       update: m.applicantUpdate,
       create: m.applicantCreate,
     },
-    case: { findUnique: m.caseFindUnique },
+    case: { findUnique: m.caseFindUnique, update: m.caseUpdate },
     property: { findUnique: m.propertyFindUnique, upsert: m.propertyUpsert },
     financingRequest: { findUnique: m.financingFindUnique, upsert: m.financingUpsert },
     incomeRecord: {
@@ -70,6 +71,7 @@ const {
   applicantUpdate,
   applicantCreate,
   caseFindUnique,
+  caseUpdate,
   propertyFindUnique,
   propertyUpsert,
   financingFindUnique,
@@ -100,6 +102,7 @@ const alleMocks = [
   applicantUpdate,
   applicantCreate,
   caseFindUnique,
+  caseUpdate,
   propertyFindUnique,
   propertyUpsert,
   financingFindUnique,
@@ -122,6 +125,7 @@ beforeEach(() => {
   applicantFindMany.mockResolvedValue([{ id: "a1", position: 1 }]);
   applicantUpdate.mockResolvedValue({});
   applicantCreate.mockResolvedValue({ id: "a2", position: 2 });
+  caseUpdate.mockResolvedValue({});
   disclosureUpdate.mockResolvedValue({});
   incomeFindFirst.mockResolvedValue(null);
   incomeCreate.mockResolvedValue({});
@@ -200,6 +204,24 @@ describe("uebernehmen", () => {
       data: { beschaeftigungsart: string };
     };
     expect(arg.data.beschaeftigungsart).toBe("selbststaendiger");
+  });
+
+  it("schreibt die Finanzierungsart in den Fall (Ziel-Entitaet 'case')", async () => {
+    // Fund der Pruefung: planUebernahme erzeugt fuer "finanzierungsart.art"
+    // einen Vorschlag mit ziel.entitaet "case", schreibeVorschlaege hatte
+    // dafuer aber keinen Zweig – der Wert verschwand im "default: break".
+    disclosureFindFirst.mockResolvedValue({
+      id: "sd-1",
+      caseId: "case-A",
+      answers: { "finanzierungsart.art": "kauf_bestand" },
+    });
+    await uebernehmen("case-A", ["finanzierungsart.art"]);
+    const arg = caseUpdate.mock.calls[0]![0] as {
+      where: { id: string };
+      data: { financingType: string };
+    };
+    expect(arg.where.id).toBe("case-A");
+    expect(arg.data.financingType).toBe("kauf");
   });
 
   it("bildet die Option 'freiberufler' auf die eigene Kategorie ab, nicht auf selbststaendig", async () => {

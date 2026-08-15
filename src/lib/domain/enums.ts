@@ -92,6 +92,7 @@ export const LEAD_SOURCES = [
   "vergleich_de",
   "manuell",
   "unbekannt",
+  "webformular",
 ] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
@@ -102,6 +103,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   vergleich_de: "vergleich.de",
   manuell: "Manuell angelegt",
   unbekannt: "Unbekannt",
+  webformular: "Anfrageformular",
 };
 
 /**
@@ -473,6 +475,7 @@ export const MESSAGE_TEMPLATE_TYPES = [
   "status_eingereicht",
   "status_nachforderung",
   "status_genehmigt",
+  "selbstauskunft_einladung",
 ] as const;
 export type MessageTemplateType = (typeof MESSAGE_TEMPLATE_TYPES)[number];
 
@@ -492,6 +495,7 @@ export const MESSAGE_TEMPLATE_TYPE_LABELS: Record<MessageTemplateType, string> =
   status_eingereicht: "Statusmeldung: eingereicht",
   status_nachforderung: "Statusmeldung: Nachforderung der Bank",
   status_genehmigt: "Statusmeldung: genehmigt",
+  selbstauskunft_einladung: "Einladung zum Anfrageformular",
 };
 
 /** SaaS-Tarife */
@@ -595,6 +599,7 @@ export const AUDIT_ACTIONS = [
   // mit Haftungsbezug und gehoeren deshalb ins Audit-Log.
   "finding.accepted",
   "finding.dismissed",
+  "anfrage.eingeladen",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

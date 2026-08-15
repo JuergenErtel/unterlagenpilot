@@ -14,7 +14,9 @@ export interface Vorbelegungsstand {
   financingRequest: Record<string, unknown> | null;
 }
 
-export async function ladeVorbelegung(caseId: string): Promise<Vorbelegungsstand> {
+/** Ohne Fall gibt es nichts vorzubelegen – der Bogen ist die erste Quelle. */
+export async function ladeVorbelegung(caseId: string | null): Promise<Vorbelegungsstand> {
+  if (!caseId) return { applicants: [], property: null, financingRequest: null };
   const [applicants, property, financingRequest] = await Promise.all([
     prisma.applicant.findMany({ where: { caseId }, orderBy: { position: "asc" } }),
     prisma.property.findUnique({ where: { caseId } }),

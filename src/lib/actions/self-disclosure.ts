@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireCaseAccess } from "@/lib/auth/context";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
 import {
   resolveSelfDisclosureToken,
@@ -19,12 +20,24 @@ import {
   type Uebernahmeplan,
 } from "@/lib/self-disclosure/takeover";
 import type { Antworten } from "@/lib/self-disclosure/types";
-import { wandleWert, UNLESBARER_WERT } from "@/lib/actions/zielwert";
+import { schreibeVorschlaege } from "@/lib/self-disclosure/schreiben";
+import { gebaereFall } from "@/lib/leadformular/fallgeburt";
+import { fehlendeKontaktangaben, KONTAKT_SCHLUESSEL } from "@/lib/self-disclosure/pflichtangaben";
 
 export interface SchrittState {
   error?: string;
   fieldErrors?: Record<string, string>;
 }
+
+/**
+ * Neue Schritte je Bogen und Stunde. Grosszuegig bemessen: Ein Bogen hat gut
+ * 30 Schritte, und der Kunde springt beim Ausfuellen oft zurueck und aendert
+ * etwas – das darf kein echter Mensch je treffen. Anders als `starteAnfrage`
+ * zaehlt der Schluessel ueber die linkId, nicht die IP: Der Kunde wechselt
+ * unterwegs (Mobilfunk/WLAN) das Netz, ein IP-Limit wuerde ihn selbst
+ * aussperren.
+ */
+const MAX_SCHRITTE_JE_STUNDE = 200;
 
 /**
  * Speichert einen Schritt und schickt den Kunden zum nächsten.
@@ -40,6 +53,19 @@ export async function speichereAntwort(
 ): Promise<SchrittState | undefined> {
   const access = await resolveSelfDisclosureToken(token);
   if (!access) return { error: "Der Link ist ungültig oder abgelaufen." };
+
+  // Seit dem Anfrageformular praegt sich jeder Besucher seinen Link selbst –
+  // `starteAnfrage` ist gedeckelt, dieser Aufruf bisher nicht. Das ist die
+  // groesste neue Angriffsflaeche des Formular-Wegs: nicht auf Daten, sondern
+  // auf die Verfuegbarkeit der Anwendung.
+  const grenze = await checkRateLimit(
+    `selbstauskunft:schritt:${access.linkId}`,
+    MAX_SCHRITTE_JE_STUNDE,
+    3600
+  );
+  if (!grenze.ok) {
+    return { error: "Zu viele Anfragen. Bitte versuchen Sie es später noch einmal." };
+  }
 
   const bestand = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
@@ -79,7 +105,14 @@ export async function speichereAntwort(
 
   await prisma.selfDisclosure.upsert({
     where: { linkId: access.linkId },
-    create: { linkId: access.linkId, caseId: access.caseId, answers: neu as object, currentStep },
+    // caseId nur setzen, wenn es einen Fall gibt. Beim Anfrageformular
+    // entsteht er erst beim Absenden.
+    create: {
+      linkId: access.linkId,
+      ...(access.caseId ? { caseId: access.caseId } : {}),
+      answers: neu as object,
+      currentStep,
+    },
     update: { answers: neu as object, currentStep },
   });
 
@@ -89,30 +122,99 @@ export async function speichereAntwort(
 /**
  * Schließt den Bogen ab. Lücken sind ausdrücklich erlaubt – der Eingang zeigt
  * sie dem Vermittler als Nachfassliste. Ab hier ist der Bogen nur noch lesbar.
+ *
+ * Stammt der Bogen aus einem Anfrageformular, entsteht hier – und nur hier –
+ * der Fall. `formData` trägt dann die nachgefragten Kontaktdaten und das
+ * Einwilligungs-Häkchen; beim fallgebundenen Bogen bleibt sie leer.
  */
-export async function sendeAb(token: string): Promise<{ error?: string } | undefined> {
+export async function sendeAb(
+  token: string,
+  formData?: FormData
+): Promise<{ error?: string; fieldErrors?: Record<string, string> } | undefined> {
   const access = await resolveSelfDisclosureToken(token);
   if (!access) return { error: "Der Link ist ungültig oder abgelaufen." };
 
   const bogen = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
-    select: { id: true, submittedAt: true },
+    select: {
+      id: true,
+      submittedAt: true,
+      answers: true,
+      link: { select: { formular: { select: { id: true, organizationId: true, brokerId: true } } } },
+    },
   });
   if (!bogen) return { error: "Es sind noch keine Angaben gespeichert." };
   if (bogen.submittedAt) return { error: "Ihre Angaben wurden bereits übermittelt." };
 
-  await prisma.selfDisclosure.update({
-    where: { id: bogen.id },
-    data: { submittedAt: new Date(), currentStep: "zusammenfassung" },
+  const formular = bogen.link.formular;
+  let antworten = (bogen.answers as Antworten) ?? {};
+
+  if (formular) {
+    if (String(formData?.get("einwilligung") ?? "") !== "ja") {
+      return { error: "Bitte bestätigen Sie die Datenschutzhinweise." };
+    }
+    // Nachgereichte Kontaktdaten in DIESELBEN Antwortschlüssel schreiben –
+    // nicht daneben. Sonst gäbe es zwei Wahrheiten über den Namen.
+    const nachgereicht: Antworten = { ...antworten };
+    for (const [feld, schluesselName] of Object.entries(KONTAKT_SCHLUESSEL)) {
+      const wert = String(formData?.get(feld) ?? "").trim();
+      if (wert) nachgereicht[schluesselName] = wert;
+    }
+    antworten = nachgereicht;
+
+    const fehlt = fehlendeKontaktangaben(antworten);
+    if (fehlt.length > 0) {
+      return {
+        error: "Bitte ergänzen Sie Ihre Kontaktdaten.",
+        fieldErrors: Object.fromEntries(fehlt.map((f) => [f, "Bitte ausfüllen"])),
+      };
+    }
+  }
+
+  const jetzt = new Date();
+  // Versand-Slot ATOMAR reservieren, bevor der Fall entsteht: Zwei Klicks
+  // kurz hintereinander duerfen nicht zwei Faelle erzeugen.
+  const reserviert = await prisma.selfDisclosure.updateMany({
+    where: { id: bogen.id, submittedAt: null },
+    data: { submittedAt: jetzt, currentStep: "zusammenfassung", answers: antworten as object },
   });
+  if (reserviert.count !== 1) return { error: "Ihre Angaben wurden bereits übermittelt." };
+
+  let caseId: string | null;
+  if (formular) {
+    try {
+      caseId = await gebaereFall(bogen.id, antworten, formular, jetzt);
+    } catch (e) {
+      // Ohne dieses Log ist ein wiederkehrender Fehler (Pool-Timeout, siehe
+      // db-connection-pool-timeout-fix) fuer immer unsichtbar: Der Kunde
+      // sieht nur die freundliche Absage unten, niemand erfaehrt vom Muster.
+      console.error("[anfrage] Fallgeburt fehlgeschlagen:", e);
+      // Die Reservierung ist bereits committed – bricht die Geburt ab
+      // (Pool-Timeout, fuenf Nummernkollisionen in Folge), muss sie
+      // zurueckgegeben werden. Sonst gilt der Bogen als "bereits uebermittelt",
+      // obwohl nie ein Fall entstand: Lead verloren, Kunde sieht die
+      // Dankeseite, der Vermittler sieht nichts davon.
+      // "caseId: null" in der WHERE-Klausel ist die Sicherung dagegen, dass
+      // ein Bogen, der TATSAECHLICH schon einen Fall bekommen hat (Fehler erst
+      // nach dem Transaktions-Commit, etwa im Audit-Log gleich danach), je
+      // wieder freigegeben und ein zweiter Fall daraus geboren wird.
+      await prisma.selfDisclosure.updateMany({
+        where: { id: bogen.id, caseId: null },
+        data: { submittedAt: null },
+      });
+      return { error: "Beim Anlegen Ihres Falls ist etwas schiefgelaufen. Bitte versuchen Sie es erneut." };
+    }
+  } else {
+    caseId = access.caseId;
+  }
 
   await audit({
     organizationId: access.organizationId,
     userId: null,
-    action: "case.updated",
+    action: formular ? "case.created" : "case.updated",
     entityType: "case",
-    entityId: access.caseId,
-    metadata: { quelle: "selbstauskunft", ereignis: "eingegangen" },
+    entityId: caseId,
+    metadata: { quelle: formular ? "anfrageformular" : "selbstauskunft", ereignis: "eingegangen" },
   });
 }
 
@@ -158,47 +260,6 @@ export async function ladeUebernahmeplan(caseId: string): Promise<{
 }
 
 /**
- * Die neun Auswahlmöglichkeiten des Bogens auf die sieben Werte von
- * `EmploymentType` abbilden. Der Kunde soll die vertraute Auswahl sehen, das
- * Schema bleibt unangetastet.
- */
-const BESCHAEFTIGUNG: Record<string, string> = {
-  angestellter: "angestellter",
-  arbeiter: "angestellter",
-  selbststaendiger: "selbststaendiger",
-  handwerker: "selbststaendiger",
-  freiberufler: "freiberufler",
-  beamter: "beamter",
-  privatier: "sonstiges",
-  rentner: "rentner",
-  sonstiges: "sonstiges",
-};
-
-/**
- * Wandelt den Textwert in den Typ, den das Zielfeld erwartet. Datum, Zahl und
- * Wahrheitswert kommen aus dem gemeinsamen Schreibkern (`zielwert.ts`), den
- * sich die Selbstauskunft mit der geführten Maske fürs Erstgespräch teilt.
- * Nur die Abbildung der neun Berufsoptionen auf `EmploymentType` bleibt hier:
- * Sie ist reine Vokabel-Übersetzung des Selbstauskunft-Katalogs, keine
- * allgemeine Typumwandlung.
- *
- * Format IMMER "maschinell": Die Werte hier kommen nie aus getipptem Text,
- * sondern aus `Antworten`, wo Zahl-Felder schon einmal geparst (`parseBetrag`)
- * gespeichert und über `String()` zurückgelesen wurden (`takeover.ts#alsText`)
- * – nie mit deutscher Tausendertrennung. Mit "de" würde z. B. eine
- * Beteiligung von 33,333 % ("33.333") fälschlich zu 33333 % statt 33,333 %.
- */
-function konvertiere(feld: string, wert: string): unknown {
-  if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
-  const konvertiert = wandleWert(feld, wert, "maschinell");
-  // Sollte laut obigem Vertrag nie eintreten (planUebernahme verwirft eine
-  // Luecke des Kunden schon vor dem Vorschlag) – falls doch, lieber wie
-  // frueher `null` schreiben als das Unlesbar-Signal selbst in die DB
-  // durchzureichen (siehe zielwert.ts#UNLESBARER_WERT).
-  return konvertiert === UNLESBARER_WERT ? null : konvertiert;
-}
-
-/**
  * Übernimmt die ausgewählten Vorschläge in den Fall. Nichts wird ohne Auswahl
  * geschrieben; ein gesperrter Fall nimmt nichts an. Alle Schreibvorgänge laufen
  * in einer Transaktion – ein abgebrochener Lauf darf keinen halb gefüllten Fall
@@ -237,87 +298,7 @@ export async function uebernehmen(
     const vorhanden = new Map<number, string>(
       stand.applicants.map((a) => [a.position, a.id as string])
     );
-    const benoetigt = [...new Set(gewaehlt.map((v) => v.ziel.person ?? 1))].sort();
-    for (const position of benoetigt) {
-      if (vorhanden.has(position)) continue;
-      const angelegt = await tx.applicant.create({ data: { caseId, position } });
-      vorhanden.set(position, angelegt.id);
-    }
-
-    const proApplicant = new Map<string, Record<string, unknown>>();
-    const proIncome = new Map<string, Record<string, unknown>>();
-    const proEmployment = new Map<string, Record<string, unknown>>();
-    const proSelfEmployment = new Map<string, Record<string, unknown>>();
-    const proProperty: Record<string, unknown> = {};
-    const proFinancing: Record<string, unknown> = {};
-
-    for (const v of gewaehlt) {
-      const wert = konvertiere(v.ziel.feld, v.kundenwert);
-      const applicantId = vorhanden.get(v.ziel.person ?? 1);
-      const sammle = (m: Map<string, Record<string, unknown>>) => {
-        if (!applicantId) return;
-        const daten = m.get(applicantId) ?? {};
-        daten[v.ziel.feld] = wert;
-        m.set(applicantId, daten);
-      };
-      switch (v.ziel.entitaet) {
-        case "applicant":
-          sammle(proApplicant);
-          break;
-        case "income":
-          sammle(proIncome);
-          break;
-        case "employment":
-          sammle(proEmployment);
-          break;
-        case "selfEmployment":
-          sammle(proSelfEmployment);
-          break;
-        case "property":
-          proProperty[v.ziel.feld] = wert;
-          break;
-        case "financingRequest":
-          proFinancing[v.ziel.feld] = wert;
-          break;
-        default:
-          break;
-      }
-    }
-
-    for (const [id, daten] of proApplicant) {
-      await tx.applicant.update({ where: { id }, data: daten });
-    }
-    for (const [applicantId, daten] of proIncome) {
-      const satz = await tx.incomeRecord.findFirst({ where: { applicantId } });
-      if (satz) await tx.incomeRecord.update({ where: { id: satz.id }, data: daten });
-      else await tx.incomeRecord.create({ data: { applicantId, ...daten } });
-    }
-    for (const [applicantId, daten] of proEmployment) {
-      const satz = await tx.employmentRecord.findFirst({ where: { applicantId } });
-      if (satz) await tx.employmentRecord.update({ where: { id: satz.id }, data: daten });
-      else await tx.employmentRecord.create({ data: { applicantId, ...daten } });
-    }
-    for (const [applicantId, daten] of proSelfEmployment) {
-      await tx.selfEmploymentRecord.upsert({
-        where: { applicantId },
-        create: { applicantId, ...daten },
-        update: daten,
-      });
-    }
-    if (Object.keys(proProperty).length > 0) {
-      await tx.property.upsert({
-        where: { caseId },
-        create: { caseId, ...proProperty },
-        update: proProperty,
-      });
-    }
-    if (Object.keys(proFinancing).length > 0) {
-      await tx.financingRequest.upsert({
-        where: { caseId },
-        create: { caseId, ...proFinancing },
-        update: proFinancing,
-      });
-    }
+    await schreibeVorschlaege(tx, caseId, gewaehlt, vorhanden);
 
     await tx.selfDisclosure.update({
       where: { id: bogen.id },

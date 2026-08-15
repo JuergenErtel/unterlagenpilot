@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { purgeCase } from "@/lib/cases/purge";
-import { selectExpiredCases, type RetentionCase } from "@/lib/cases/retention";
+import {
+  selectExpiredCases,
+  selectAbandonedSelfDisclosures,
+  type RetentionCase,
+} from "@/lib/cases/retention";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,6 +75,39 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Zweiter Aufräumschritt in demselben Cron (Schlussreview-Befund 6):
+  // abgebrochene Anfrageformular-Bögen ohne Fall. Es gibt hier keine Frist,
+  // an der eine Organisation drehen könnte – retentionDays greift nicht,
+  // sobald der zugehörige Link abgelaufen ist, ist der Bogen tot.
+  //
+  // Der Ablauf-Filter steht bewusst schon in der Abfrage (nicht erst im
+  // JavaScript danach): Bei dauerhaft > 1000 offenen Bögen würde `take: 1000`
+  // sonst das Fenster mit noch gültigen Zeilen füllen, und die abgelaufenen
+  // kämen nie dran – der Aufräumlauf würde still verhungern. `orderBy` holt
+  // die am längsten überfälligen zuerst, falls der Deckel doch mal greift.
+  const boegenKandidaten = await prisma.selfDisclosure.findMany({
+    where: { caseId: null, link: { expiresAt: { lt: now } } },
+    select: { id: true, link: { select: { expiresAt: true } } },
+    orderBy: { link: { expiresAt: "asc" } },
+    take: 1000,
+  });
+  const abgebrocheneBoegen = selectAbandonedSelfDisclosures(
+    boegenKandidaten.map((b) => ({ id: b.id, linkExpiresAt: b.link.expiresAt })),
+    now
+  );
+
+  let boegenGeloescht = 0;
+  if (!dryRun) {
+    for (const b of abgebrocheneBoegen) {
+      try {
+        await prisma.selfDisclosure.delete({ where: { id: b.id } });
+        boegenGeloescht += 1;
+      } catch (e) {
+        console.error(`[cron/retention] Löschen des abgebrochenen Bogens ${b.id} fehlgeschlagen:`, e);
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     dryRun,
@@ -78,5 +115,8 @@ export async function GET(req: NextRequest) {
     expired: expired.length,
     deleted,
     cases: expired.map((c) => ({ caseNumber: c.caseNumber, status: c.status, ageDays: c.ageDays, retentionDays: c.retentionDays })),
+    abgebrocheneBoegenKandidaten: boegenKandidaten.length,
+    abgebrocheneBoegen: abgebrocheneBoegen.length,
+    boegenGeloescht,
   });
 }

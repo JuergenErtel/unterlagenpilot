@@ -7,7 +7,12 @@ import { getEnv } from "@/lib/env";
  * Ablaufdatum erzwungen. Keine Rückschlüsse ohne Secret möglich.
  */
 export interface UploadTokenPayload {
-  caseId: string;
+  /**
+   * Fehlt beim Anfrageformular: Dort gibt es beim Erzeugen des Links noch
+   * keinen Fall. Der Upload-Link verlangt ihn weiterhin – sein Auflöser
+   * vergleicht gegen `link.caseId` und weist ein Token ohne Fall damit ab.
+   */
+  caseId?: string;
   linkId: string;
   exp: number; // Unix-Sekunden
 }
