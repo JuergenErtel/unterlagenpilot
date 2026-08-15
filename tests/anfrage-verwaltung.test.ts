@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+const auditMock = vi.fn();
+vi.mock("@/lib/audit", () => ({ audit: (...a: unknown[]) => auditMock(...a) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/context", () => ({
   requireContext: async () => ({ organizationId: "org-A", userId: "user-1" }),
@@ -22,7 +23,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { ladeFormularStand, formularEinrichten } from "@/lib/actions/anfrage-verwaltung";
+import { ladeFormularStand, formularEinrichten, formularUmschalten } from "@/lib/actions/anfrage-verwaltung";
 
 function form(werte: Record<string, string>) {
   const f = new FormData();
@@ -31,7 +32,7 @@ function form(werte: Record<string, string>) {
 }
 
 beforeEach(() => {
-  [findFirst, create, update, auditFindMany].forEach((m) => m.mockReset());
+  [findFirst, create, update, auditFindMany, auditMock].forEach((m) => m.mockReset());
   auditFindMany.mockResolvedValue([]);
 });
 
@@ -73,5 +74,41 @@ describe("formularEinrichten", () => {
     create.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
     const res = await formularEinrichten(form({ slug: "ertel" }));
     expect(res.error).toMatch(/vergeben/i);
+  });
+});
+
+describe("formularUmschalten", () => {
+  it("schaltet ein aktives Formular ab", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: true });
+    await formularUmschalten();
+    expect(update).toHaveBeenCalledWith({ where: { id: "form-1" }, data: { aktiv: false } });
+  });
+
+  it("schaltet ein abgeschaltetes Formular wieder ein", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: false });
+    await formularUmschalten();
+    expect(update).toHaveBeenCalledWith({ where: { id: "form-1" }, data: { aktiv: true } });
+  });
+
+  it("tut nichts, wenn noch kein Formular eingerichtet ist", async () => {
+    findFirst.mockResolvedValue(null);
+    await formularUmschalten();
+    expect(update).not.toHaveBeenCalled();
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it("schreibt den neuen Zustand ins Pruefprotokoll", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: true });
+    await formularUmschalten();
+    expect(auditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-A",
+        userId: "user-1",
+        action: "case.updated",
+        entityType: "leadformular",
+        entityId: "form-1",
+        metadata: { aktiv: false },
+      })
+    );
   });
 });
