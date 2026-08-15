@@ -3,6 +3,7 @@ import { Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CopyButton } from "@/components/ui/copy-button";
 import { kontaktVersuchErfassen } from "@/lib/actions/case-management";
 import { telLink, waLink } from "@/lib/kontakt/telefon";
 
@@ -39,24 +40,30 @@ export function KontaktKnopfreihe({ caseId, telefon }: { caseId: string; telefon
 
   return (
     <div className="flex flex-wrap items-end gap-2">
+      {/*
+        Die Nummer steht IMMER lesbar da – auf dem Desktop ist sie sogar die
+        einzige Anrufhilfe.
+        Grund (Jürgen, 15.08.2026): Ein `tel:`-Link reicht die Nummer nur ans
+        Betriebssystem weiter, und am Mac landet sie bei FaceTime. Wer das
+        nicht eingerichtet hat, klickt auf einen Knopf, der nichts tut – und
+        sah bisher nicht einmal die Nummer, um sie von Hand zu wählen. Auf dem
+        Handy dagegen öffnet derselbe Link die Telefon-App, dort ist er das
+        Bequemste. Deshalb: Zahl plus Kopierknopf überall, der Wähl-Link nur
+        auf schmalen Schirmen.
+      */}
+      {telefon && telefon.trim() !== "" && (
+        <span className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
+          <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="font-medium tabular-nums">{telefon}</span>
+          <CopyButton value={telefon} label="Kopieren" />
+        </span>
+      )}
       {anrufLink && (
-        <Button asChild variant="default">
+        <Button asChild variant="default" className="md:hidden">
           <a href={anrufLink}>
             <Phone className="h-4 w-4" /> Anrufen
           </a>
         </Button>
-      )}
-      {/* Nummer da, aber für keinen der beiden Links deutbar (getarnte
-          Durchwahl, Tippfehler, Freitext): Dann darf sie NICHT stumm
-          verschwinden – der Vermittler sähe sonst nur zwei Ergebnis-Knöpfe und
-          keine Nummer, und der Hinweis "keine Telefonnummer hinterlegt" in
-          `next-step.ts` greift hier nicht (er prüft auf `telefon === null`).
-          Als Text kann man sie wenigstens ablesen und von Hand wählen. */}
-      {!anrufLink && !whatsappLink && telefon && telefon.trim() !== "" && (
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
-          <Phone className="h-4 w-4 shrink-0" />
-          {telefon}
-        </span>
       )}
       <form action={kontaktVersuchErfassen.bind(null, caseId)} className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="kanal" value="telefon" />
