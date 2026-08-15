@@ -271,5 +271,12 @@ export function generateByType(
       return buildBankRequest(items.length ? items : [{ title: "die von der Bank genannte Unterlage" }], ctx);
     case "status_genehmigt":
       return buildApproved(ctx);
+    case "selbstauskunft_einladung":
+      // Kein eingebauter Generator: Die Einladung braucht den Formular-Link,
+      // den dieser Kontext nicht kennt. Sie entsteht ausschliesslich ueber die
+      // Vorlage (DEFAULT_TEMPLATES), die immer vorhanden ist. Der Zweig ist
+      // damit unerreichbar – und faellt bewusst laut aus statt still einen
+      // sinnlosen Text zu erzeugen.
+      throw new Error("Die Einladung zum Anfrageformular entsteht nur über die Vorlage.");
   }
 }
