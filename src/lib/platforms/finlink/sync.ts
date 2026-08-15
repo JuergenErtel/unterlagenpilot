@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { getFinLinkClient, type FinLinkClient } from "@/lib/platforms/finlink/client";
+import { finlinkKonfigurationsLuecke, getFinLinkClient, type FinLinkClient } from "@/lib/platforms/finlink/client";
 import { finlinkToCanonical } from "@/lib/platforms/finlink/mapping";
 import { createCaseFromCanonical } from "@/lib/platforms/case-writer";
 import { waehleNeueLeads } from "@/lib/platforms/finlink/select";
@@ -33,10 +33,29 @@ export async function syncFinLinkLeads(
   deps?: { client?: FinLinkClient | null; jetzt?: Date }
 ): Promise<SyncErgebnis> {
   const client = deps?.client === undefined ? getFinLinkClient() : deps.client;
-  if (!client) return { status: "nicht_konfiguriert", angelegt: 0, uebersprungen: [] };
-
   const jetzt = deps?.jetzt ?? new Date();
   const schluessel = { organizationId_quelle: { organizationId: ctx.organizationId, quelle: QUELLE } };
+
+  if (!client) {
+    /*
+     * Halbe Konfiguration laut melden, ganze Abwesenheit still hinnehmen.
+     *
+     * Fehlt die Berater-Kennung, pausiert der Import absichtlich (sonst kaemen
+     * die Leads aller Berater herein). Ohne diesen Vermerk saehe das auf dem
+     * Dashboard aus wie ein normaler Lauf ohne neue Leads — und niemand
+     * bemerkte tagelang, dass gar nichts mehr ankommt.
+     */
+    const luecke = finlinkKonfigurationsLuecke();
+    if (luecke) {
+      await prisma.leadSyncState.upsert({
+        where: schluessel,
+        create: { organizationId: ctx.organizationId, quelle: QUELLE, lastRunAt: jetzt, lastError: luecke },
+        update: { lastRunAt: jetzt, lastError: luecke },
+      });
+    }
+    return { status: "nicht_konfiguriert", angelegt: 0, uebersprungen: [], fehler: luecke ?? undefined };
+  }
+
   const state = await prisma.leadSyncState.findUnique({ where: schluessel });
 
   // Erster Lauf: nur Stichtag setzen. Sonst käme der gesamte Bestand herein.

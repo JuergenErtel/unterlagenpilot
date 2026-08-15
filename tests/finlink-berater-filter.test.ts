@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { HttpFinLinkClient, getFinLinkClient } from "@/lib/platforms/finlink/client";
+import { finlinkKonfigurationsLuecke, HttpFinLinkClient, getFinLinkClient } from "@/lib/platforms/finlink/client";
 
 /**
  * Jürgen hat bei FinLink Administrationsrechte und bekommt über die Partner-API
@@ -83,6 +83,31 @@ describe("FinLink-Import: nur die eigenen Kunden", () => {
   it("lässt den eigenen Vorgang durch", async () => {
     const c = client(fetchMitLeads([lead("meiner", ICH)]));
     await expect(c.fetchVorgang("meiner")).resolves.toBeDefined();
+  });
+});
+
+describe("finlinkKonfigurationsLuecke", () => {
+  it("meldet die halbe Konfiguration – Schlüssel da, Kennung fehlt", async () => {
+    // Ohne diese Meldung pausierte der Import STUMM: Der Abgleich meldete
+    // „ok, 0 neue Leads", und auf dem Dashboard stand ganz normal „zuletzt
+    // abgeglichen vor N Minuten".
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", "");
+    expect(finlinkKonfigurationsLuecke()).toContain("FINLINK_ADVISOR_ID");
+  });
+
+  it("schweigt, wenn FinLink gar nicht eingerichtet ist", () => {
+    // Lokale Entwicklung und andere Organisationen sind kein Grund für eine
+    // rote Zeile auf dem Dashboard.
+    vi.stubEnv("FINLINK_API_KEY", "");
+    vi.stubEnv("FINLINK_ADVISOR_ID", "");
+    expect(finlinkKonfigurationsLuecke()).toBeNull();
+  });
+
+  it("schweigt bei vollständiger Konfiguration", () => {
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
+    expect(finlinkKonfigurationsLuecke()).toBeNull();
   });
 });
 

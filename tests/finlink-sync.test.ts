@@ -24,6 +24,7 @@ vi.mock("@/lib/platforms/case-writer", () => ({
 }));
 
 vi.mock("@/lib/platforms/finlink/client", () => ({
+  finlinkKonfigurationsLuecke: () => null,
   getFinLinkClient: () => ({
     fetchVorgang: h.fetchVorgang,
     fetchLeadsPage: h.fetchLeadsPage,

@@ -245,6 +245,24 @@ const DEFAULT_BASE_URL = "https://api.finlink.de/partner-api";
  * Mit Administrationsrechten liefert die API die Leads aller Berater.
  * Lieber gar kein Import als der Import fremder Kundendaten.
  */
+/**
+ * Beschreibt eine HALBE Konfiguration: Schlüssel da, Berater-Kennung nicht.
+ *
+ * Ohne diese Unterscheidung pausierte der Abgleich stumm — er meldete „ok,
+ * 0 neue Leads", und auf dem Dashboard stand ganz normal „zuletzt abgeglichen
+ * vor N Minuten". Genau die Sorte stiller Ausfall, die man erst nach Tagen
+ * bemerkt, wenn keine Leads mehr ankommen.
+ *
+ * Null heißt: kein Problem. Entweder ist FinLink vollständig eingerichtet oder
+ * bewusst gar nicht (lokale Entwicklung, andere Organisationen) — beides ist
+ * kein Grund für eine rote Zeile.
+ */
+export function finlinkKonfigurationsLuecke(): string | null {
+  if (!process.env.FINLINK_API_KEY) return null;
+  if (process.env.FINLINK_ADVISOR_ID) return null;
+  return "FINLINK_ADVISOR_ID fehlt – der Lead-Abgleich pausiert, damit keine Leads anderer Berater importiert werden.";
+}
+
 export function getFinLinkClient(fetchImpl: FetchLike = fetch): FinLinkClient | null {
   const apiKey = process.env.FINLINK_API_KEY;
   const advisorId = process.env.FINLINK_ADVISOR_ID;
