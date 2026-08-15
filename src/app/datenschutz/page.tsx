@@ -222,8 +222,9 @@ export default function DatenschutzPage() {
         festgehalten wird. Erst mit dieser Einwilligung entsteht aus den Angaben ein Vorgang bei
         der Vermittlerin oder dem Vermittler, die oder der ab dann Verantwortliche ist. Wird ein
         begonnener Bogen nicht zu Ende ausgefüllt, entsteht kein Vorgang; die bis dahin
-        eingegebenen Angaben werden gelöscht, sobald der zugehörige Link abläuft – spätestens 30
-        Tage nach Beginn.
+        eingegebenen Angaben werden gelöscht, sobald der zugehörige Link abläuft – spätestens 31
+        Tage nach Beginn (der tägliche Aufräumlauf prüft einmal pro Tag, daher bis zu einen Tag
+        nach Ablauf).
       </p>
 
       <h2>12. Cookies und lokaler Speicher</h2>

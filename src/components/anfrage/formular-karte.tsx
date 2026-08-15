@@ -83,7 +83,7 @@ export function FormularKarte({ stand }: { stand: FormularStand }) {
             >
               <div className="flex-1 space-y-1">
                 <Label htmlFor="slug-aendern" className="text-xs">
-                  Adresse ändern (noch niemand hat abgesendet)
+                  Adresse ändern (solange niemand den Bogen begonnen hat)
                 </Label>
                 <Input id="slug-aendern" name="slug" defaultValue={stand.slug ?? ""} />
               </div>
