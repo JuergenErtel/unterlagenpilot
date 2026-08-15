@@ -28,10 +28,10 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
  * ist schwer):
  *   RUN_DB_IT=1 npx vitest run tests/anfrage-fallgeburt-db.test.ts
  *
- * Die Antworten decken bewusst den PROPERTY-Zweig des gemeinsamen
- * Schreibkerns ab (Objektort, Kaufpreis) – neben "applicant" ist das der
- * einzige Zweig, den weder die Attrappen-Tests noch selbstauskunft-db.test.ts
- * berühren.
+ * Die Antworten decken bewusst den PROPERTY- und den CASE-Zweig des
+ * gemeinsamen Schreibkerns ab (Objektort/Kaufpreis bzw. Finanzierungsart) –
+ * neben "applicant" sind das die Zweige, die weder die Attrappen-Tests noch
+ * selbstauskunft-db.test.ts berühren.
  */
 describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,6 +80,8 @@ describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
 
   function antwortenEinerPerson() {
     return {
+      // Case-Zweig: die erste Frage des Bogens landet auf Case.financingType.
+      "finanzierungsart.art": "kauf_bestand",
       "p1.person_name.nachname": "Mustermann",
       "p1.person_kontakt.email": "max@example.de",
       "p1.person_kontakt.telefon": "0170 1234567",
@@ -118,6 +120,9 @@ describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
     expect(fall?.property?.city).toBe("München");
     expect(fall?.property?.zip).toBe("80331");
     expect(fall?.financingRequest?.kaufpreis).toBe(400000);
+    // Case-Zweig: Beleg, dass "finanzierungsart.art" wirklich im Fall landet
+    // und nicht mehr im gemeinsamen Schreibkern verschwindet.
+    expect(fall?.financingType).toBe("kauf");
 
     const bogenDanach = await prisma.selfDisclosure.findUnique({ where: { id: bogen.id } });
     expect(bogenDanach?.caseId).toBe(fallId);

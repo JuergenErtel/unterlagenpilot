@@ -156,9 +156,29 @@ export async function sendeAb(
   });
   if (reserviert.count !== 1) return { error: "Ihre Angaben wurden bereits übermittelt." };
 
-  const caseId = formular
-    ? await gebaereFall(bogen.id, antworten, formular, jetzt)
-    : access.caseId;
+  let caseId: string | null;
+  if (formular) {
+    try {
+      caseId = await gebaereFall(bogen.id, antworten, formular, jetzt);
+    } catch (e) {
+      // Die Reservierung ist bereits committed – bricht die Geburt ab
+      // (Pool-Timeout, fuenf Nummernkollisionen in Folge), muss sie
+      // zurueckgegeben werden. Sonst gilt der Bogen als "bereits uebermittelt",
+      // obwohl nie ein Fall entstand: Lead verloren, Kunde sieht die
+      // Dankeseite, der Vermittler sieht nichts davon.
+      // "caseId: null" in der WHERE-Klausel ist die Sicherung dagegen, dass
+      // ein Bogen, der TATSAECHLICH schon einen Fall bekommen hat (Fehler erst
+      // nach dem Transaktions-Commit, etwa im Audit-Log gleich danach), je
+      // wieder freigegeben und ein zweiter Fall daraus geboren wird.
+      await prisma.selfDisclosure.updateMany({
+        where: { id: bogen.id, caseId: null },
+        data: { submittedAt: null },
+      });
+      return { error: "Beim Anlegen Ihres Falls ist etwas schiefgelaufen. Bitte versuchen Sie es erneut." };
+    }
+  } else {
+    caseId = access.caseId;
+  }
 
   await audit({
     organizationId: access.organizationId,

@@ -92,6 +92,26 @@ describe("sendeAb beim Anfrageformular", () => {
     const zweiter = await sendeAb("TOK", form({ einwilligung: "ja" }));
     expect(gebaereFall).toHaveBeenCalledTimes(1);
     expect(zweiter?.error).toBeTruthy();
+    // Die Atomaritaet selbst steckt in der WHERE-Klausel, nicht in der
+    // Reaktion auf den Rueckgabewert – ohne diese Zusicherung koennte jemand
+    // "submittedAt: null" aus dem where streichen und der Test bliebe gruen.
+    expect(disclosureUpdateMany.mock.calls[0]![0]).toMatchObject({
+      where: { id: "bogen-1", submittedAt: null },
+    });
+  });
+
+  it("gibt die Reservierung frei, wenn die Fallgeburt fehlschlaegt", async () => {
+    // Bricht die Transaktion ab (Pool-Timeout, Nummernkollisionen), darf der
+    // Bogen NICHT als "bereits uebermittelt" stehen bleiben – sonst ist der
+    // Lead endgueltig verloren, ohne dass irgendwer es merkt.
+    gebaereFall.mockRejectedValueOnce(new Error("Pool-Timeout"));
+    const res = await sendeAb("TOK", form({ einwilligung: "ja" }));
+    expect(res?.error).toBeTruthy();
+    expect(disclosureUpdateMany).toHaveBeenCalledTimes(2);
+    expect(disclosureUpdateMany.mock.calls[1]![0]).toMatchObject({
+      where: { id: "bogen-1", caseId: null },
+      data: { submittedAt: null },
+    });
   });
 
   it("laesst den fallgebundenen Bogen unveraendert durch", async () => {

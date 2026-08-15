@@ -2,14 +2,11 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { Logo } from "@/components/brand/logo";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AbsendenFormular } from "@/components/self-disclosure/absenden-formular";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { sichtbareSchritte, schluessel } from "@/lib/self-disclosure/navigation";
-import { fehlendeKontaktangaben, KONTAKT_LABELS } from "@/lib/self-disclosure/pflichtangaben";
-import { sendeAb } from "@/lib/actions/self-disclosure";
+import { fehlendeKontaktangaben } from "@/lib/self-disclosure/pflichtangaben";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -57,11 +54,6 @@ export default async function Zusammenfassung({
         </Card>
       </main>
     );
-  }
-
-  async function absenden(formData: FormData) {
-    "use server";
-    await sendeAb(token, formData);
   }
 
   const schritte = sichtbareSchritte(antworten);
@@ -121,38 +113,7 @@ export default async function Zusammenfassung({
         ))}
       </div>
 
-      <form action={absenden} className="space-y-4">
-        {access.caseId === null && (
-          <div className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Wie erreichen wir Sie?</h2>
-            {fehlend.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Diese Angaben brauchen wir, um Ihnen antworten zu können.
-              </p>
-            )}
-            {fehlend.map((k) => (
-              <div key={k} className="space-y-1">
-                <Label htmlFor={k}>{KONTAKT_LABELS[k]}</Label>
-                <Input id={k} name={k} required />
-              </div>
-            ))}
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <input type="checkbox" name="einwilligung" value="ja" required className="mt-0.5 h-4 w-4" />
-              <span>
-                Ich bin damit einverstanden, dass meine Angaben zur Bearbeitung meiner Anfrage
-                gespeichert und verarbeitet werden (
-                <a href="/datenschutz" className="underline">
-                  Datenschutzerklärung
-                </a>
-                ).
-              </span>
-            </label>
-          </div>
-        )}
-        <Button type="submit" size="lg" className="w-full">
-          Angaben absenden
-        </Button>
-      </form>
+      <AbsendenFormular token={token} zeigeKontaktblock={access.caseId === null} fehlend={fehlend} />
     </main>
   );
 }

@@ -20,12 +20,30 @@ const BESCHAEFTIGUNG: Record<string, string> = {
 };
 
 /**
+ * Die sechs Auswahlmöglichkeiten des Bogens auf die fünf Werte von
+ * `FinancingType` abbilden, die der Katalog tatsächlich erzeugen kann. Das
+ * Schema kennt keinen eigenen Wert für "eigenes Bauvorhaben" – er landet wie
+ * "Kauf Neubau" auf "neubau" (siehe auch die umgekehrte Abbildung in
+ * `erstgespraech/maske.ts#ART_ZU_KATALOG`, die genau diese beiden Katalogwerte
+ * ebenfalls zusammenfasst). "umschuldung" hat keine Entsprechung im Katalog.
+ */
+const FINANZIERUNGSART: Record<string, string> = {
+  kauf_neubau: "neubau",
+  kauf_bestand: "kauf",
+  eigenes_bauvorhaben: "neubau",
+  modernisierung: "modernisierung",
+  anschlussfinanzierung: "anschlussfinanzierung",
+  kapitalbeschaffung: "kapitalbeschaffung",
+};
+
+/**
  * Wandelt den Textwert in den Typ, den das Zielfeld erwartet. Datum, Zahl und
  * Wahrheitswert kommen aus dem gemeinsamen Schreibkern (`zielwert.ts`), den
  * sich die Selbstauskunft mit der geführten Maske fürs Erstgespräch teilt.
- * Nur die Abbildung der neun Berufsoptionen auf `EmploymentType` bleibt hier:
- * Sie ist reine Vokabel-Übersetzung des Selbstauskunft-Katalogs, keine
- * allgemeine Typumwandlung.
+ * Nur die Abbildung der Katalog-Auswahltexte auf die Schema-Enums
+ * (`EmploymentType`, `FinancingType`) bleibt hier: Sie ist reine
+ * Vokabel-Übersetzung des Selbstauskunft-Katalogs, keine allgemeine
+ * Typumwandlung.
  *
  * Format IMMER "maschinell": Die Werte hier kommen nie aus getipptem Text,
  * sondern aus `Antworten`, wo Zahl-Felder schon einmal geparst (`parseBetrag`)
@@ -35,6 +53,7 @@ const BESCHAEFTIGUNG: Record<string, string> = {
  */
 function konvertiere(feld: string, wert: string): unknown {
   if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
+  if (feld === "financingType") return FINANZIERUNGSART[wert] ?? null;
   const konvertiert = wandleWert(feld, wert, "maschinell");
   // Sollte laut obigem Vertrag nie eintreten (planUebernahme verwirft eine
   // Luecke des Kunden schon vor dem Vorschlag) – falls doch, lieber wie
@@ -75,6 +94,11 @@ export async function schreibeVorschlaege(
   const proSelfEmployment = new Map<string, Record<string, unknown>>();
   const proProperty: Record<string, unknown> = {};
   const proFinancing: Record<string, unknown> = {};
+  // Die erste Frage des Bogens ("Was möchten Sie finanzieren?") zielt auf
+  // "case" (financingType) – ohne eigenen Sammler verschwand sie bislang
+  // stillschweigend im `default: break` unten, sowohl bei der Fallgeburt als
+  // auch bei der Übernahme durch den Vermittler.
+  const proCase: Record<string, unknown> = {};
 
   for (const v of vorschlaege) {
     const wert = konvertiere(v.ziel.feld, v.kundenwert);
@@ -103,6 +127,9 @@ export async function schreibeVorschlaege(
         break;
       case "financingRequest":
         proFinancing[v.ziel.feld] = wert;
+        break;
+      case "case":
+        proCase[v.ziel.feld] = wert;
         break;
       default:
         break;
@@ -142,5 +169,8 @@ export async function schreibeVorschlaege(
       create: { caseId, ...proFinancing },
       update: proFinancing,
     });
+  }
+  if (Object.keys(proCase).length > 0) {
+    await tx.case.update({ where: { id: caseId }, data: proCase });
   }
 }
