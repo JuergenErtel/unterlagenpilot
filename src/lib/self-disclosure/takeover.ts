@@ -1,5 +1,4 @@
 import { sichtbareSchritte, personenSchluessel, offeneFelder } from "@/lib/self-disclosure/navigation";
-import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import type { Antworten, Ziel } from "@/lib/self-disclosure/types";
 
 /**
@@ -76,9 +75,13 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
   const vorschlaege: Vorschlag[] = [];
   const ohneZiel: Array<{ label: string; wert: string }> = [];
 
+  // Bewusst ALLE Felder des Schritts, nicht `sichtbareFelder`: "Wer liest,
+  // nimmt die volle Kette." Eine gegebene Antwort darf nicht verschwinden,
+  // nur weil der Kunde die zugehörige Steuerantwort später geändert hat – sie
+  // steht ja weiterhin in `answers` und der Vermittler muss sie sehen können.
   for (const s of sichtbareSchritte(antworten)) {
     for (const spaltenPerson of s.personen ?? [undefined]) {
-      for (const feld of sichtbareFelder(s.schritt, antworten, spaltenPerson)) {
+      for (const feld of s.schritt.felder) {
         const k = personenSchluessel(s.schritt.id, feld.id, spaltenPerson);
         const roh = antworten[k];
         const kundenwert = alsText(roh);

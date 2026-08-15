@@ -57,13 +57,11 @@ export interface Schritt {
   felder: Feld[];
   /**
    * Prüft NUR ausdrücklich gegebene Antworten. Fehlt die Steuerantwort, bleibt
-   * der Zweig zu.
-   *
-   * Wird bei Schritten mit `personenSpalten` OHNE Person aufgerufen (siehe
-   * `sichtbareSchritte`) – die Bedingung entscheidet für den ganzen Schritt,
-   * nicht je Spalte. Bei einem gemischten Paar (eine Person angestellt, die
-   * andere selbstständig) kann das noch die falsche Spalte zeigen; beim
-   * Katalogschnitt wandert die Bedingung dafür auf die betroffenen Felder.
+   * der Zweig zu. `person` ist gesetzt, wenn der Schritt `personenSpalten`
+   * trägt – die Bedingung entscheidet dann JE SPALTE, nicht für den ganzen
+   * Schritt: Bei einem gemischten Paar (eine Person angestellt, die andere
+   * selbstständig) bekommt jede Person nur ihre eigene Berufsfrage
+   * (`sichtbareSchritte` berechnet `personen` als echte Teilmenge).
    */
   sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
   /**

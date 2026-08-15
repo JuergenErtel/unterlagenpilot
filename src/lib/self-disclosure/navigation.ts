@@ -24,23 +24,57 @@ export function personenSchluessel(schrittId: string, feldId: string, person?: 1
  * mit zwei Spalten – nicht mehr zweimal hintereinander. Ein Paar, das
  * gemeinsam am Rechner sitzt, erwartet beide nebeneinander, nicht erst ihn
  * und dann sie.
+ *
+ * `personen` ist dabei eine ECHTE Teilmenge: Bei einem gemischten Paar (eine
+ * Person angestellt, die andere selbstständig) bekommt `beruf_arbeitgeber`
+ * nur Person 1 und `beruf_selbststaendig` nur Person 2 – nicht beide Spalten
+ * für beide, sonst würde die Selbstständige nach Arbeitgeber statt nach ihrer
+ * Firma gefragt und ihre Antworten landeten als falsche `employment`-Werte im
+ * Fall. Trägt kein Antragsteller die Bedingung, entfällt der Schritt ganz.
  */
 export function sichtbareSchritte(antworten: Antworten): SichtbarerSchritt[] {
-  const personen = anzahlAntragsteller(antworten);
+  const anzahl = anzahlAntragsteller(antworten);
   const out: SichtbarerSchritt[] = [];
   for (const schritt of KATALOG) {
-    if (schritt.sichtbar && !schritt.sichtbar(antworten)) continue;
-    out.push(
-      schritt.personenSpalten
-        ? { id: schritt.id, schritt, personen: personen === 2 ? [1, 2] : [1] }
-        : { id: schritt.id, schritt }
-    );
+    if (!schritt.personenSpalten) {
+      if (schritt.sichtbar && !schritt.sichtbar(antworten)) continue;
+      out.push({ id: schritt.id, schritt });
+      continue;
+    }
+    const personen: (1 | 2)[] = [];
+    for (let p = 1; p <= anzahl; p++) {
+      const person = p as 1 | 2;
+      if (!schritt.sichtbar || schritt.sichtbar(antworten, person)) personen.push(person);
+    }
+    if (personen.length === 0) continue; // Bedingung trifft auf niemanden zu.
+    out.push({ id: schritt.id, schritt, personen });
   }
   return out;
 }
 
+/**
+ * Alte Schritt-IDs mit Personen-Präfix ("p1.person_name") auf die neue Form
+ * ohne Präfix abbilden.
+ *
+ * `currentStep` steht in der Datenbank und wird nur beim Speichern neu
+ * geschrieben – ein Bogen, der VOR den Personen-Spalten mitten in einem
+ * Personenschritt abgebrochen wurde, trägt die alte ID weiter, ebenso eine
+ * gemerkte URL derselben Form. Ohne dieses Abstreifen fände `schrittFinden`
+ * sie nie wieder: Die Schrittseite leitet auf die Einstiegsseite um, die mit
+ * demselben `currentStep` sofort zurück – eine Weiterleitungsschleife ohne
+ * Selbstheilung (`ERR_TOO_MANY_REDIRECTS`).
+ */
+function findeInKette(kette: SichtbarerSchritt[], id: string): number {
+  const direkt = kette.findIndex((s) => s.id === id);
+  if (direkt >= 0) return direkt;
+  const ohnePraefix = id.replace(/^p[12]\./, "");
+  return ohnePraefix === id ? -1 : kette.findIndex((s) => s.id === ohnePraefix);
+}
+
 export function schrittFinden(id: string, antworten: Antworten): SichtbarerSchritt | null {
-  return sichtbareSchritte(antworten).find((s) => s.id === id) ?? null;
+  const kette = sichtbareSchritte(antworten);
+  const i = findeInKette(kette, id);
+  return i < 0 ? null : kette[i]!;
 }
 
 export function naechsterSchritt(id: string, antworten: Antworten): SichtbarerSchritt | null {
@@ -63,7 +97,7 @@ export function fortschritt(
   antworten: Antworten
 ): { position: number; gesamt: number } {
   const kette = sichtbareSchritte(antworten);
-  const i = kette.findIndex((s) => s.id === id);
+  const i = findeInKette(kette, id);
   return { position: i < 0 ? 0 : i + 1, gesamt: kette.length };
 }
 

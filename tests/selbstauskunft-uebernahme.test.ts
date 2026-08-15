@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { planUebernahme, type Fallstand } from "@/lib/self-disclosure/takeover";
-import type { Antworten } from "@/lib/self-disclosure/types";
+import { KATALOG } from "@/lib/self-disclosure/catalog";
+import type { Antworten, Schritt } from "@/lib/self-disclosure/types";
 
 const leererStand: Fallstand = {
   applicants: [{ id: "a1", position: 1 }],
@@ -94,5 +95,41 @@ describe("planUebernahme", () => {
     expect(v.ziel.entitaet).toBe("income");
     expect(v.ziel.person).toBe(1);
     expect(v.art).toBe("luecke");
+  });
+
+  it("nimmt eine gegebene Antwort auf, auch wenn ihre Feldbedingung inzwischen nicht mehr greift", () => {
+    // Regel: "Wer liest, nimmt die volle Kette" – planUebernahme MUSS ueber
+    // schritt.felder gehen, nicht ueber sichtbareFelder. Sonst: Kunde
+    // beantwortet ein bedingtes Feld, aendert spaeter die Steuerantwort – der
+    // Wert steht weiter in `answers`, verschwindet aber lautlos aus Vorschlag
+    // UND "ohneZiel". Der Katalog nutzt Feld-Bedingungen noch nirgends, darum
+    // hier ein synthetischer Testschritt (in try/finally wieder entfernt).
+    const testSchritt: Schritt = {
+      id: "test_bedingtes_feld",
+      abschnitt: "vorhaben",
+      frage: "Testfrage",
+      felder: [
+        {
+          id: "betrag",
+          label: "Bedingter Betrag",
+          typ: "betrag",
+          sichtbar: (a) => a["test_steuerfrage.antwort"] === "ja",
+          ziel: { entitaet: "financingRequest", feld: "kaufpreis" },
+        },
+      ],
+    };
+    KATALOG.push(testSchritt);
+    try {
+      // Steuerantwort ist inzwischen "nein" – ueber sichtbareFelder waere das
+      // Feld unsichtbar, obwohl die Antwort laengst gegeben ist.
+      const antworten: Antworten = {
+        "test_steuerfrage.antwort": "nein",
+        "test_bedingtes_feld.betrag": 1000,
+      };
+      const plan = planUebernahme(antworten, leererStand);
+      expect(plan.vorschlaege.some((v) => v.schluessel === "test_bedingtes_feld.betrag")).toBe(true);
+    } finally {
+      KATALOG.pop();
+    }
   });
 });

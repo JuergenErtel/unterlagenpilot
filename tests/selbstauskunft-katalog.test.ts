@@ -35,20 +35,19 @@ describe("Katalog: Personen- und Berufsabschnitt", () => {
     expect(ids({})).not.toContain("beruf_selbststaendig");
   });
 
-  it("wertet den Berufszweig – bis zum Katalogschnitt (Aufgabe 4) – nur ueber Person 1 aus", () => {
-    // Bekannter, vom Brief ausdruecklich benannter Zwischenzustand: Mit
-    // Spalten gibt es nur noch EINE Sichtbarkeits-Entscheidung fuer den ganzen
-    // Schritt (`schritt.sichtbar` laeuft ohne Person). Ein gemischtes Paar
-    // (er angestellt, sie selbststaendig) sieht deshalb noch die Spalte des
-    // ERSTEN Antragstellers fuer beide – das wandert erst beim Katalogschnitt
-    // auf die einzelnen Felder.
+  it("wertet den Berufszweig je Person getrennt aus – auch bei einem gemischten Paar", () => {
+    // `personen` ist eine echte Teilmenge (siehe sichtbareSchritte): die
+    // Selbststaendige bekommt ihre Firmenfragen, der Angestellte seine
+    // Arbeitgeberfragen – nicht beide dieselbe Frage fuer beide Spalten.
+    // Genauere Pruefung der Personen-Teilmengen in
+    // selbstauskunft-navigation.test.ts.
     const gemischt = ids({
       "anzahl_antragsteller.anzahl": "2",
       "p1.beruf_art.art": "angestellter",
       "p2.beruf_art.art": "selbststaendiger",
     });
     expect(gemischt).toContain("beruf_arbeitgeber");
-    expect(gemischt).not.toContain("beruf_selbststaendig");
+    expect(gemischt).toContain("beruf_selbststaendig");
   });
 
   it("fragt Kinder genau einmal, nie je Person", () => {

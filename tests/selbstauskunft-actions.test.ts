@@ -52,6 +52,25 @@ describe("speichereAntwort", () => {
     expect(arg.create.answers["finanzierungsart.art"]).toBe("kauf_bestand");
   });
 
+  it("speichert beide Spalten eines personenSpalten-Schritts aus EINEM Formular", async () => {
+    // Die Kernanforderung dieser Aufgabe, auf Aktionsebene: EIN Aufruf von
+    // speichereAntwort fuer EINEN Schritt ("person_name"), dessen Formular
+    // beide Spalten traegt (p1.… UND p2.…) – nicht zwei Aufrufe fuer zwei
+    // verschiedene Schritte wie im DB-Test.
+    findUnique.mockResolvedValue({
+      answers: { "anzahl_antragsteller.anzahl": "2" },
+      submittedAt: null,
+    });
+    await speichereAntwort(
+      "tok",
+      "person_name",
+      form({ "p1.person_name.vorname": "Thomas", "p2.person_name.vorname": "Laura" })
+    );
+    const arg = upsert.mock.calls[0]![0] as { update: { answers: Record<string, unknown> } };
+    expect(arg.update.answers["p1.person_name.vorname"]).toBe("Thomas");
+    expect(arg.update.answers["p2.person_name.vorname"]).toBe("Laura");
+  });
+
   it("lässt einen leeren Schritt zu und speichert nichts davon", async () => {
     const res = await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "" }));
     expect(res).toBeUndefined();

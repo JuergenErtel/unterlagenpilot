@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   sichtbareSchritte,
+  schrittFinden,
   naechsterSchritt,
   vorherigerSchritt,
   fortschritt,
@@ -99,5 +100,44 @@ describe("Personen-Spalten", () => {
     const einer = sichtbareSchritte({}).length;
     const zwei = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }).length;
     expect(zwei).toBe(einer);
+  });
+
+  it("gibt dem gemischten Paar nur die Berufsfrage, die zur jeweiligen Person passt", () => {
+    // Fund der Prüfung: `personen` ist eine ECHTE Teilmenge, berechnet über
+    // `schritt.sichtbar(antworten, person)` je Person – nicht mehr blind
+    // [1,2] oder [1]. Sonst würde die Selbstständige (Person 2) nach
+    // Arbeitgeber gefragt (falsche Felder) und ihre Firmendaten nie erhoben.
+    const gemischt = sichtbareSchritte({
+      "anzahl_antragsteller.anzahl": "2",
+      "p1.beruf_art.art": "angestellter",
+      "p2.beruf_art.art": "selbststaendiger",
+    });
+    expect(gemischt.find((s) => s.id === "beruf_arbeitgeber")?.personen).toEqual([1]);
+    expect(gemischt.find((s) => s.id === "beruf_selbststaendig")?.personen).toEqual([2]);
+  });
+});
+
+describe("Alte currentStep-Werte mit Personen-Praefix (vor dieser Aufgabe gespeichert)", () => {
+  // `currentStep` steht in der Datenbank und wird nur beim Speichern neu
+  // geschrieben. Ein Bogen, der mitten in einem Personenschritt abgebrochen
+  // wurde, traegt die alte Form ("p1.person_name") weiter – ohne Normalisierung
+  // faende `schrittFinden` sie nie wieder, und Schrittseite/Einstiegsseite
+  // leiten sich gegenseitig endlos an.
+  const zuZweit: Antworten = { "anzahl_antragsteller.anzahl": "2" };
+
+  it("findet den Schritt trotz altem Personen-Praefix wieder", () => {
+    expect(schrittFinden("p1.person_name", zuZweit)?.id).toBe("person_name");
+    expect(schrittFinden("p2.einkommen", zuZweit)?.id).toBe("einkommen");
+  });
+
+  it("findet weiterhin normal, wenn KEIN Praefix vorliegt", () => {
+    expect(schrittFinden("kaufpreis", leer)?.id).toBe("kaufpreis");
+    expect(schrittFinden("gibtesnicht", leer)).toBeNull();
+  });
+
+  it("zaehlt den Fortschritt trotz altem Praefix, statt 0 zu melden", () => {
+    const f = fortschritt("p2.einkommen", zuZweit);
+    expect(f.position).toBeGreaterThan(0);
+    expect(f.position).toBe(sichtbareSchritte(zuZweit).findIndex((s) => s.id === "einkommen") + 1);
   });
 });
