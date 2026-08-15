@@ -1,5 +1,6 @@
 import { KATALOG, anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
+import type { Umfang } from "@/lib/self-disclosure/umfang";
 import type { Antworten, SichtbarerSchritt } from "@/lib/self-disclosure/types";
 
 /** Antwortschlüssel aus Schritt-ID und Feld-ID, ohne Personenbezug. */
@@ -31,11 +32,15 @@ export function personenSchluessel(schrittId: string, feldId: string, person?: 1
  * für beide, sonst würde die Selbstständige nach Arbeitgeber statt nach ihrer
  * Firma gefragt und ihre Antworten landeten als falsche `employment`-Werte im
  * Fall. Trägt kein Antragsteller die Bedingung, entfällt der Schritt ganz.
+ *
+ * `umfang` ist bewusst PFLICHT, kein Vorgabewert: Wer ihn vergisst, soll einen
+ * Übersetzungsfehler bekommen statt eine Kette, die still auf "voll" fällt.
  */
-export function sichtbareSchritte(antworten: Antworten): SichtbarerSchritt[] {
+export function sichtbareSchritte(antworten: Antworten, umfang: Umfang): SichtbarerSchritt[] {
   const anzahl = anzahlAntragsteller(antworten);
   const out: SichtbarerSchritt[] = [];
   for (const schritt of KATALOG) {
+    if (umfang === "kurz" && schritt.umfang === "voll") continue;
     if (!schritt.personenSpalten) {
       if (schritt.sichtbar && !schritt.sichtbar(antworten)) continue;
       out.push({ id: schritt.id, schritt });
@@ -71,21 +76,21 @@ function findeInKette(kette: SichtbarerSchritt[], id: string): number {
   return ohnePraefix === id ? -1 : kette.findIndex((s) => s.id === ohnePraefix);
 }
 
-export function schrittFinden(id: string, antworten: Antworten): SichtbarerSchritt | null {
-  const kette = sichtbareSchritte(antworten);
+export function schrittFinden(id: string, antworten: Antworten, umfang: Umfang): SichtbarerSchritt | null {
+  const kette = sichtbareSchritte(antworten, umfang);
   const i = findeInKette(kette, id);
   return i < 0 ? null : kette[i]!;
 }
 
-export function naechsterSchritt(id: string, antworten: Antworten): SichtbarerSchritt | null {
-  const kette = sichtbareSchritte(antworten);
+export function naechsterSchritt(id: string, antworten: Antworten, umfang: Umfang): SichtbarerSchritt | null {
+  const kette = sichtbareSchritte(antworten, umfang);
   const i = kette.findIndex((s) => s.id === id);
   if (i < 0) return null;
   return kette[i + 1] ?? null;
 }
 
-export function vorherigerSchritt(id: string, antworten: Antworten): SichtbarerSchritt | null {
-  const kette = sichtbareSchritte(antworten);
+export function vorherigerSchritt(id: string, antworten: Antworten, umfang: Umfang): SichtbarerSchritt | null {
+  const kette = sichtbareSchritte(antworten, umfang);
   const i = kette.findIndex((s) => s.id === id);
   if (i <= 0) return null;
   return kette[i - 1] ?? null;
@@ -94,9 +99,10 @@ export function vorherigerSchritt(id: string, antworten: Antworten): SichtbarerS
 /** 1-basierte Position und Gesamtzahl – Grundlage des Fortschrittsbalkens. */
 export function fortschritt(
   id: string,
-  antworten: Antworten
+  antworten: Antworten,
+  umfang: Umfang
 ): { position: number; gesamt: number } {
-  const kette = sichtbareSchritte(antworten);
+  const kette = sichtbareSchritte(antworten, umfang);
   const i = findeInKette(kette, id);
   return { position: i < 0 ? 0 : i + 1, gesamt: kette.length };
 }
@@ -106,10 +112,11 @@ export function fortschritt(
  * Listenfelder zählen als offen, wenn die Liste leer ist.
  */
 export function offeneFelder(
-  antworten: Antworten
+  antworten: Antworten,
+  umfang: Umfang
 ): Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> {
   const out: Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> = [];
-  for (const s of sichtbareSchritte(antworten)) {
+  for (const s of sichtbareSchritte(antworten, umfang)) {
     for (const person of s.personen ?? [undefined]) {
       for (const feld of sichtbareFelder(s.schritt, antworten, person)) {
         const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];

@@ -53,7 +53,9 @@ export async function starteAnfrage(
   const formular = await formularZuSlug(slug);
   if (!formular) return { error: "Dieses Formular ist derzeit nicht verfügbar." };
 
-  const schritt = schrittFinden(ERSTER_SCHRITT, {});
+  // Fest "kurz": Dieser Weg IST das oeffentliche Anfrageformular, es gibt
+  // hier noch keinen Link, aus dem sich der Umfang ableiten liesse.
+  const schritt = schrittFinden(ERSTER_SCHRITT, {}, "kurz");
   if (!schritt) throw new Error(`Erster Schritt "${ERSTER_SCHRITT}" fehlt im Katalog.`);
 
   const geprueft = schrittSchema(schritt.schritt, schritt.personen).safeParse(
@@ -82,7 +84,7 @@ export async function starteAnfrage(
     { organizationId: formular.organizationId }
   );
 
-  const weiter = naechsterSchritt(schritt.id, antworten);
+  const weiter = naechsterSchritt(schritt.id, antworten, "kurz");
   const currentStep = weiter?.id ?? "zusammenfassung";
   await prisma.selfDisclosure.create({
     data: { linkId: link.linkId, answers: antworten as object, currentStep },

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { sichtbareSchritte } from "@/lib/self-disclosure/navigation";
+import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,17 @@ export default async function SelbstauskunftEinstieg({
 
   const bogen = await prisma.selfDisclosure.findUnique({
     where: { linkId: access!.linkId },
-    select: { currentStep: true, answers: true, submittedAt: true },
+    select: {
+      currentStep: true,
+      answers: true,
+      submittedAt: true,
+      link: { select: { formularId: true } },
+    },
   });
   if (bogen?.submittedAt) redirect(`/selbstauskunft/${token}/zusammenfassung`);
 
   const antworten = ((bogen?.answers as Antworten | null) ?? {}) as Antworten;
-  const ziel = bogen?.currentStep ?? sichtbareSchritte(antworten)[0]!.id;
+  const umfang = umfangDesBogens({ formularId: bogen?.link?.formularId ?? null });
+  const ziel = bogen?.currentStep ?? sichtbareSchritte(antworten, umfang)[0]!.id;
   redirect(`/selbstauskunft/${token}/${ziel}`);
 }

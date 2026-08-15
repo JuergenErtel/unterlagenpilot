@@ -1,3 +1,5 @@
+import type { Umfang } from "@/lib/self-disclosure/umfang";
+
 /**
  * Der Fragenkatalog der Selbstauskunft ist reine Datenbeschreibung: Ein Schritt
  * ist ein Bildschirm, ein Feld eine Eingabe. Verzweigungen sind Funktionen über
@@ -51,6 +53,14 @@ export type Abschnitt =
 export interface Schritt {
   /** Zugleich URL-Segment. */
   id: string;
+  /**
+   * "kurz" erscheint in BEIDEN Wegen, "voll" nur hinter dem persönlichen Link.
+   *
+   * Pflichtangabe ohne Vorgabewert: Ein Vorgabewert schöbe jede neu ergänzte
+   * Frage stillschweigend in den kurzen Bogen – dorthin, wo jede zusätzliche
+   * Frage am teuersten ist.
+   */
+  umfang: Umfang;
   abschnitt: Abschnitt;
   frage: string;
   hinweis?: string;

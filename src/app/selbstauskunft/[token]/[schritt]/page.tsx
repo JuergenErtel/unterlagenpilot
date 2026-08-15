@@ -13,6 +13,7 @@ import {
 } from "@/lib/self-disclosure/navigation";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { ladeVorbelegung, vorbelegung } from "@/lib/self-disclosure/prefill";
+import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import { StepForm } from "@/components/self-disclosure/step-form";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -46,16 +47,17 @@ export default async function SelbstauskunftSchritt({
 
   const bogen = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
-    select: { answers: true, submittedAt: true },
+    select: { answers: true, submittedAt: true, link: { select: { formularId: true } } },
   });
   if (bogen?.submittedAt) redirect(`/selbstauskunft/${token}/zusammenfassung`);
 
   const antworten = ((bogen?.answers as Antworten | null) ?? {}) as Antworten;
-  const aktuell = schrittFinden(schrittId, antworten);
+  const umfang = umfangDesBogens({ formularId: bogen?.link?.formularId ?? null });
+  const aktuell = schrittFinden(schrittId, antworten, umfang);
   if (!aktuell) redirect(`/selbstauskunft/${token}`);
 
-  const f = fortschritt(aktuell.id, antworten);
-  const zurueck = vorherigerSchritt(aktuell.id, antworten);
+  const f = fortschritt(aktuell.id, antworten, umfang);
+  const zurueck = vorherigerSchritt(aktuell.id, antworten, umfang);
 
   // Vorbelegung: die eigene frühere Antwort schlägt den Fallstand. Was der Fall
   // schon weiß, muss niemand abtippen.

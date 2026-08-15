@@ -4,17 +4,17 @@ import { schrittSchema } from "@/lib/self-disclosure/schema";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
-const ids = (a: Antworten) => sichtbareSchritte(a).map((s) => s.id);
+const ids = (a: Antworten) => sichtbareSchritte(a, "voll").map((s) => s.id);
 
 describe("Katalog: Personen- und Berufsabschnitt", () => {
   it("fragt Person und Beruf bei zwei Antragstellern als EINEN Schritt mit beiden Spalten", () => {
-    const zuZweit = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" });
+    const zuZweit = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }, "voll");
     expect(zuZweit.find((s) => s.id === "person_name")!.personen).toEqual([1, 2]);
     expect(zuZweit.find((s) => s.id === "einkommen")!.personen).toEqual([1, 2]);
   });
 
   it("zeigt ohne Angabe zur Personenzahl nur eine Spalte", () => {
-    const einer = sichtbareSchritte({});
+    const einer = sichtbareSchritte({}, "voll");
     expect(einer.find((s) => s.id === "person_name")!.personen).toEqual([1]);
   });
 
@@ -115,13 +115,13 @@ describe("Feldvalidierung", () => {
 
 describe("offene Felder", () => {
   it("meldet jedes sichtbare, unbeantwortete Feld", () => {
-    const offen = offeneFelder({ "finanzierungsart.art": "kauf_bestand" });
+    const offen = offeneFelder({ "finanzierungsart.art": "kauf_bestand" }, "voll");
     expect(offen.some((o) => o.schrittId === "kaufpreis" && o.feldId === "betrag")).toBe(true);
     expect(offen.some((o) => o.schrittId === "finanzierungsart")).toBe(false);
   });
 
   it("meldet nichts aus unsichtbaren Zweigen", () => {
-    const offen = offeneFelder({ "finanzierungsart.art": "modernisierung" });
+    const offen = offeneFelder({ "finanzierungsart.art": "modernisierung" }, "voll");
     expect(offen.some((o) => o.schrittId === "kaufpreis")).toBe(false);
   });
 });

@@ -119,7 +119,7 @@ describe("speichereAntwort", () => {
 
   it("schickt nach dem letzten Schritt zur Zusammenfassung", async () => {
     const { sichtbareSchritte } = await import("@/lib/self-disclosure/navigation");
-    const letzter = sichtbareSchritte({}).at(-1)!;
+    const letzter = sichtbareSchritte({}, "voll").at(-1)!;
     await speichereAntwort("tok", letzter.id, form({}));
     const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
     expect(arg.update.currentStep).toBe("zusammenfassung");

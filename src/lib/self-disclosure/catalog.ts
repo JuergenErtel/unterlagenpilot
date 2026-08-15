@@ -36,9 +36,16 @@ const hatBerufsart = (a: Antworten, arten: string[], person: 1 | 2 = 1): boolean
 
 const istGefunden = (a: Antworten): boolean => wert(a, "objektstand.stand") === "gefunden";
 
+/**
+ * Zwischenstand dieser Aufgabe: JEDER Schritt trägt vorerst `umfang: "voll"`.
+ * Die kurze Kette ist damit leer – der eigentliche Schnitt zwischen dem
+ * öffentlichen Anfragebogen (sechs Seiten) und dem persönlichen Link (dreizehn)
+ * folgt in der nächsten Aufgabe.
+ */
 export const KATALOG: Schritt[] = [
   {
     id: "finanzierungsart",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Was möchten Sie finanzieren?",
     felder: [
@@ -60,6 +67,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "objektstand",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Haben Sie bereits eine Immobilie gefunden?",
     sichtbar: istKauf,
@@ -77,6 +85,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "nutzung",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie möchten Sie die Immobilie nutzen?",
     sichtbar: istKauf,
@@ -96,6 +105,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "objekt_ort",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "In welcher Stadt liegt die Immobilie?",
     hinweis:
@@ -108,6 +118,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "kaufpreis",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie hoch ist der Kaufpreis?",
     hinweis:
@@ -127,6 +138,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "baukosten",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Was kosten Grundstück und Bau?",
     sichtbar: (a) => wert(a, "finanzierungsart.art") === "eigenes_bauvorhaben",
@@ -147,6 +159,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "modernisierungskosten",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Was möchten Sie modernisieren?",
     sichtbar: (a) => wert(a, "finanzierungsart.art") === "modernisierung",
@@ -162,6 +175,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "restschuld",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie hoch ist Ihre Restschuld?",
     sichtbar: (a) => wert(a, "finanzierungsart.art") === "anschlussfinanzierung",
@@ -177,6 +191,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "kapitalbedarf",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Welchen Betrag benötigen Sie?",
     sichtbar: (a) => wert(a, "finanzierungsart.art") === "kapitalbeschaffung",
@@ -191,6 +206,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "eigenkapital",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie viel Eigenkapital möchten Sie einsetzen?",
     hinweis: "Noch nicht entschieden? Dann der Betrag, den Sie höchstens einbringen könnten.",
@@ -205,6 +221,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "darlehen",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie hoch soll das Darlehen sein?",
     hinweis: "Meist Kaufpreis plus Nebenkosten minus Eigenkapital – ein Schätzwert genügt.",
@@ -230,6 +247,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "kondition",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie soll die Finanzierung aussehen?",
     hinweis: "Wünsche, keine Zusagen – die Bank entscheidet über die Konditionen.",
@@ -261,6 +279,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "maklergebuehr",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Fällt beim Kauf eine Maklergebühr an?",
     sichtbar: istKauf,
@@ -279,6 +298,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "maklergebuehr_hoehe",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Wie hoch sind die Maklergebühren?",
     sichtbar: (a) => wert(a, "maklergebuehr.faellt_an") === "ja",
@@ -293,6 +313,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "anzahl_antragsteller",
+    umfang: "voll",
     abschnitt: "vorhaben",
     frage: "Möchten Sie alleine oder mit einer weiteren Person finanzieren?",
     hinweis: "Verheiratete stellen den Antrag in der Regel gemeinsam.",
@@ -312,6 +333,7 @@ export const KATALOG: Schritt[] = [
   // ------------------------------------------------------ B · Zur Person
   {
     id: "person_name",
+    umfang: "voll",
     abschnitt: "person",
     personenSpalten: true,
     frage: "Wie heißen Sie?",
@@ -332,6 +354,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "person_geburt",
+    umfang: "voll",
     abschnitt: "person",
     personenSpalten: true,
     frage: "Wann und wo sind Sie geboren?",
@@ -353,6 +376,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "person_familienstand",
+    umfang: "voll",
     abschnitt: "person",
     personenSpalten: true,
     frage: "Wie ist Ihr Familienstand?",
@@ -375,6 +399,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "person_anschrift",
+    umfang: "voll",
     abschnitt: "person",
     personenSpalten: true,
     frage: "Wo wohnen Sie derzeit?",
@@ -386,6 +411,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "person_kontakt",
+    umfang: "voll",
     abschnitt: "person",
     personenSpalten: true,
     frage: "Wie erreichen wir Sie?",
@@ -398,6 +424,7 @@ export const KATALOG: Schritt[] = [
   // ------------------------------------------------ C · Beruf und Einkommen
   {
     id: "beruf_art",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "In welchem Arbeitsverhältnis sind Sie beschäftigt?",
@@ -425,6 +452,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "beruf_arbeitgeber",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "Bei wem sind Sie beschäftigt?",
@@ -442,6 +470,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "beruf_dauer",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "Seit wann sind Sie dort beschäftigt?",
@@ -469,6 +498,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "beruf_selbststaendig",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "Erzählen Sie uns von Ihrer Tätigkeit",
@@ -492,6 +522,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "einkommen",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "Wie hoch ist Ihr Einkommen?",
@@ -509,6 +540,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "weitere_einnahmen",
+    umfang: "voll",
     abschnitt: "beruf",
     personenSpalten: true,
     frage: "Haben Sie weitere Einnahmen?",
@@ -531,6 +563,7 @@ export const KATALOG: Schritt[] = [
   // -------------------------------------- D · Haushalt und Verpflichtungen
   {
     id: "haushalt_kinder",
+    umfang: "voll",
     abschnitt: "haushalt",
     frage: "Wie viele Kinder leben in Ihrem Haushalt?",
     hinweis: "Einmal für den ganzen Haushalt – nicht je Person.",
@@ -540,6 +573,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "haushalt_ausgaben",
+    umfang: "voll",
     abschnitt: "haushalt",
     frage: "Welche festen Ausgaben haben Sie?",
     // Kein Ziel: Das Schema kennt weder Warmmiete noch Unterhalt. Die Werte
@@ -551,6 +585,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "verpflichtungen",
+    umfang: "voll",
     abschnitt: "haushalt",
     frage: "Haben Sie laufende Kredite oder Leasingverträge?",
     felder: [
@@ -567,6 +602,7 @@ export const KATALOG: Schritt[] = [
   // ------------------------------------------ E · Eigenkapital im Einzelnen
   {
     id: "eigenkapital_positionen",
+    umfang: "voll",
     abschnitt: "eigenkapital",
     frage: "Woraus besteht Ihr Eigenkapital?",
     felder: [
@@ -583,6 +619,7 @@ export const KATALOG: Schritt[] = [
   // ------------------------------------------------------- F · Das Objekt
   {
     id: "objekt_art",
+    umfang: "voll",
     abschnitt: "objekt",
     frage: "Um welche Art von Immobilie handelt es sich?",
     sichtbar: istGefunden,
@@ -605,6 +642,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "objekt_adresse",
+    umfang: "voll",
     abschnitt: "objekt",
     frage: "Wie lautet die Adresse der Immobilie?",
     sichtbar: istGefunden,
@@ -619,6 +657,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "objekt_masse",
+    umfang: "voll",
     abschnitt: "objekt",
     frage: "Wie groß ist die Immobilie?",
     sichtbar: istGefunden,
@@ -637,6 +676,7 @@ export const KATALOG: Schritt[] = [
   },
   {
     id: "objekt_kosten",
+    umfang: "voll",
     abschnitt: "objekt",
     frage: "Fallen laufende Kosten oder Einnahmen an?",
     sichtbar: istGefunden,

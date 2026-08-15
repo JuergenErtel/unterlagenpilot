@@ -7,6 +7,7 @@ import { AbsendenFormular } from "@/components/self-disclosure/absenden-formular
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { sichtbareSchritte, personenSchluessel } from "@/lib/self-disclosure/navigation";
 import { fehlendeKontaktangaben } from "@/lib/self-disclosure/pflichtangaben";
+import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +36,10 @@ export default async function Zusammenfassung({
 
   const bogen = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
-    select: { answers: true, submittedAt: true },
+    select: { answers: true, submittedAt: true, link: { select: { formularId: true } } },
   });
   const antworten = ((bogen?.answers as Antworten | null) ?? {}) as Antworten;
+  const umfang = umfangDesBogens({ formularId: bogen?.link?.formularId ?? null });
 
   if (bogen?.submittedAt) {
     return (
@@ -56,7 +58,7 @@ export default async function Zusammenfassung({
     );
   }
 
-  const schritte = sichtbareSchritte(antworten);
+  const schritte = sichtbareSchritte(antworten, umfang);
   const fehlend = access.caseId === null ? fehlendeKontaktangaben(antworten) : [];
   const offen = schritte.reduce(
     (n, s) =>

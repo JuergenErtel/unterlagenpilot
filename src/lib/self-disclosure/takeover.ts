@@ -79,7 +79,12 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
   // nimmt die volle Kette." Eine gegebene Antwort darf nicht verschwinden,
   // nur weil der Kunde die zugehörige Steuerantwort später geändert hat – sie
   // steht ja weiterhin in `answers` und der Vermittler muss sie sehen können.
-  for (const s of sichtbareSchritte(antworten)) {
+  //
+  // Umfang fest "voll": Der Bogen kann aus dem kurzen ODER dem vollen Weg
+  // stammen, der Vermittler soll aber ALLES sehen, was der Kunde tatsächlich
+  // beantwortet hat – ein "kurz" hier würde eine gegebene Antwort aus einem
+  // Schritt verschweigen, der nur im vollen Katalog steht.
+  for (const s of sichtbareSchritte(antworten, "voll")) {
     for (const spaltenPerson of s.personen ?? [undefined]) {
       for (const feld of s.schritt.felder) {
         const k = personenSchluessel(s.schritt.id, feld.id, spaltenPerson);
@@ -125,7 +130,10 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
 
   return {
     vorschlaege,
-    offen: offeneFelder(antworten).map((o) => ({ label: o.label, abschnitt: o.abschnitt })),
+    // Ebenso "voll": die Nachfassliste soll jede offene Frage des Katalogs
+    // zeigen, unabhängig davon, ob der Bogen ueber den kurzen oder den vollen
+    // Weg entstand.
+    offen: offeneFelder(antworten, "voll").map((o) => ({ label: o.label, abschnitt: o.abschnitt })),
     ohneZiel,
   };
 }

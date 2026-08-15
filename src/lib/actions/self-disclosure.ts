@@ -19,6 +19,7 @@ import {
   type Fallstand,
   type Uebernahmeplan,
 } from "@/lib/self-disclosure/takeover";
+import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import type { Antworten } from "@/lib/self-disclosure/types";
 import { schreibeVorschlaege } from "@/lib/self-disclosure/schreiben";
 import { gebaereFall } from "@/lib/leadformular/fallgeburt";
@@ -69,7 +70,7 @@ export async function speichereAntwort(
 
   const bestand = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
-    select: { answers: true, submittedAt: true },
+    select: { answers: true, submittedAt: true, link: { select: { formularId: true } } },
   });
   if (bestand?.submittedAt) {
     return {
@@ -78,7 +79,8 @@ export async function speichereAntwort(
   }
 
   const antworten = ((bestand?.answers as Antworten | null) ?? {}) as Antworten;
-  const schritt = schrittFinden(schrittId, antworten);
+  const umfang = umfangDesBogens({ formularId: bestand?.link?.formularId ?? null });
+  const schritt = schrittFinden(schrittId, antworten, umfang);
   if (!schritt) return { error: "Dieser Schritt gehört nicht zu Ihrem Bogen." };
 
   const roh = Object.fromEntries(formData.entries());
@@ -104,7 +106,7 @@ export async function speichereAntwort(
     neu[k] = value as Antworten[string];
   }
 
-  const nach = naechsterSchritt(schritt.id, neu);
+  const nach = naechsterSchritt(schritt.id, neu, umfang);
   const currentStep = nach?.id ?? "zusammenfassung";
 
   await prisma.selfDisclosure.upsert({

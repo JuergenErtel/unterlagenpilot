@@ -36,6 +36,11 @@ import {
  * Die bindende Zusage darueber: Jede Angabe, die die Reifeleiste zaehlt, MUSS
  * in der Maske auch eingebbar sein (`ergaenzeUnerreichbare`). Eine Leiste, die
  * etwas anmahnt, wofuer es kein Feld gibt, waere eine Sackgasse.
+ *
+ * `Schritt.umfang` spielt hier bewusst KEINE Rolle: Die Maske iteriert direkt
+ * ueber KATALOG statt ueber `sichtbareSchritte`, das den kurzen Weg filtert.
+ * Wer alles zeigt – der Vermittler am Telefon –, nimmt immer die volle Kette,
+ * unabhaengig davon, ob der jeweilige Schritt "kurz" oder "voll" traegt.
  */
 
 export interface MaskenFeld {

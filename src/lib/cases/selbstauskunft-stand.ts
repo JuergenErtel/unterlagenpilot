@@ -70,7 +70,10 @@ function ausRohLink(link: RohLink | null): SelbstauskunftStand {
 
   const bogen = link.disclosure;
   const antworten = ((bogen?.answers as Antworten | null) ?? {}) as Antworten;
-  const progress = bogen?.currentStep ? fortschritt(bogen.currentStep, antworten) : null;
+  // Fest "voll": Diese Datei liest ausschliesslich Links, die an einem Fall
+  // haengen (`where: { caseId }` unten) – ein Formular-Link kommt hier nie
+  // vor, der Umfang steht also ohne Ableitung fest.
+  const progress = bogen?.currentStep ? fortschritt(bogen.currentStep, antworten, "voll") : null;
   const begonnen = Boolean(bogen?.currentStep) || Boolean(bogen?.submittedAt);
   const uebernommen = Boolean(bogen?.takenOverAt);
   // Nur ein noch nicht übernommener, eingegangener Bogen ist ein offener Schritt.

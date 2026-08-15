@@ -14,13 +14,13 @@ const leer: Antworten = {};
 
 describe("Katalog-Navigation", () => {
   it("beginnt mit der Finanzierungsart", () => {
-    expect(sichtbareSchritte(leer)[0]!.id).toBe("finanzierungsart");
+    expect(sichtbareSchritte(leer, "voll")[0]!.id).toBe("finanzierungsart");
   });
 
   it("zeigt den Kaufpreis nur im Kaufzweig", () => {
     const kauf = { "finanzierungsart.art": "kauf_bestand" };
     const modernisierung = { "finanzierungsart.art": "modernisierung" };
-    const ids = (a: Antworten) => sichtbareSchritte(a).map((s) => s.id);
+    const ids = (a: Antworten) => sichtbareSchritte(a, "voll").map((s) => s.id);
     expect(ids(kauf)).toContain("kaufpreis");
     expect(ids(modernisierung)).not.toContain("kaufpreis");
     expect(ids(modernisierung)).toContain("modernisierungskosten");
@@ -29,38 +29,38 @@ describe("Katalog-Navigation", () => {
   it("nimmt ohne Angabe zur Finanzierungsart den Kaufzweig", () => {
     // Ausnahme von der Regel "unbeantwortet -> Zweig zu": ohne den Kaufzweig
     // bliebe fast nichts übrig.
-    expect(sichtbareSchritte(leer).map((s) => s.id)).toContain("kaufpreis");
+    expect(sichtbareSchritte(leer, "voll").map((s) => s.id)).toContain("kaufpreis");
   });
 
   it("überspringt die Höhe der Maklergebühr, solange keine anfällt", () => {
-    const ids = (a: Antworten) => sichtbareSchritte(a).map((s) => s.id);
+    const ids = (a: Antworten) => sichtbareSchritte(a, "voll").map((s) => s.id);
     expect(ids({ "maklergebuehr.faellt_an": "nein" })).not.toContain("maklergebuehr_hoehe");
     expect(ids({ "maklergebuehr.faellt_an": "ja" })).toContain("maklergebuehr_hoehe");
   });
 
   it("hält den Zweig zu, wenn die Steuerfrage übersprungen wurde", () => {
-    expect(sichtbareSchritte(leer).map((s) => s.id)).not.toContain("maklergebuehr_hoehe");
+    expect(sichtbareSchritte(leer, "voll").map((s) => s.id)).not.toContain("maklergebuehr_hoehe");
   });
 
   it("liefert den nächsten und vorherigen Schritt entlang der sichtbaren Kette", () => {
     const a: Antworten = { "finanzierungsart.art": "kauf_bestand" };
-    const nach = naechsterSchritt("finanzierungsart", a);
+    const nach = naechsterSchritt("finanzierungsart", a, "voll");
     expect(nach!.id).toBe("objektstand");
-    expect(vorherigerSchritt(nach!.id, a)!.id).toBe("finanzierungsart");
+    expect(vorherigerSchritt(nach!.id, a, "voll")!.id).toBe("finanzierungsart");
   });
 
   it("gibt am Ende der Kette null zurück", () => {
     const a: Antworten = {};
-    const letzter = sichtbareSchritte(a).at(-1)!;
-    expect(naechsterSchritt(letzter.id, a)).toBeNull();
-    expect(vorherigerSchritt(sichtbareSchritte(a)[0]!.id, a)).toBeNull();
+    const letzter = sichtbareSchritte(a, "voll").at(-1)!;
+    expect(naechsterSchritt(letzter.id, a, "voll")).toBeNull();
+    expect(vorherigerSchritt(sichtbareSchritte(a, "voll")[0]!.id, a, "voll")).toBeNull();
   });
 
   it("zählt den Fortschritt über die tatsächlich sichtbaren Schritte", () => {
     const a: Antworten = { "finanzierungsart.art": "kauf_bestand" };
-    const f = fortschritt("objektstand", a);
+    const f = fortschritt("objektstand", a, "voll");
     expect(f.position).toBe(2);
-    expect(f.gesamt).toBe(sichtbareSchritte(a).length);
+    expect(f.gesamt).toBe(sichtbareSchritte(a, "voll").length);
   });
 
   it("baut Antwortschlüssel aus Schritt und Feld", () => {
@@ -72,7 +72,7 @@ describe("Personen-Spalten", () => {
   it("erzeugt EINEN Schritt mit zwei Spalten statt zweier Schritte", () => {
     // Der Kern dieser Aufgabe: Ein Paar sitzt gemeinsam am Rechner und
     // erwartet beide nebeneinander, nicht erst ihn und dann sie.
-    const kette = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" });
+    const kette = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }, "voll");
     const personenschritte = kette.filter((s) => s.schritt.personenSpalten);
     expect(personenschritte.length).toBeGreaterThan(0);
     for (const s of personenschritte) {
@@ -82,7 +82,7 @@ describe("Personen-Spalten", () => {
   });
 
   it("zeigt bei einem Antragsteller nur eine Spalte", () => {
-    const kette = sichtbareSchritte({});
+    const kette = sichtbareSchritte({}, "voll");
     for (const s of kette.filter((x) => x.schritt.personenSpalten)) {
       expect(s.personen).toEqual([1]);
     }
@@ -97,8 +97,8 @@ describe("Personen-Spalten", () => {
   });
 
   it("zaehlt die Kette kuerzer, weil Personenschritte nicht mehr doppeln", () => {
-    const einer = sichtbareSchritte({}).length;
-    const zwei = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }).length;
+    const einer = sichtbareSchritte({}, "voll").length;
+    const zwei = sichtbareSchritte({ "anzahl_antragsteller.anzahl": "2" }, "voll").length;
     expect(zwei).toBe(einer);
   });
 
@@ -111,7 +111,7 @@ describe("Personen-Spalten", () => {
       "anzahl_antragsteller.anzahl": "2",
       "p1.beruf_art.art": "angestellter",
       "p2.beruf_art.art": "selbststaendiger",
-    });
+    }, "voll");
     expect(gemischt.find((s) => s.id === "beruf_arbeitgeber")?.personen).toEqual([1]);
     expect(gemischt.find((s) => s.id === "beruf_selbststaendig")?.personen).toEqual([2]);
   });
@@ -126,18 +126,18 @@ describe("Alte currentStep-Werte mit Personen-Praefix (vor dieser Aufgabe gespei
   const zuZweit: Antworten = { "anzahl_antragsteller.anzahl": "2" };
 
   it("findet den Schritt trotz altem Personen-Praefix wieder", () => {
-    expect(schrittFinden("p1.person_name", zuZweit)?.id).toBe("person_name");
-    expect(schrittFinden("p2.einkommen", zuZweit)?.id).toBe("einkommen");
+    expect(schrittFinden("p1.person_name", zuZweit, "voll")?.id).toBe("person_name");
+    expect(schrittFinden("p2.einkommen", zuZweit, "voll")?.id).toBe("einkommen");
   });
 
   it("findet weiterhin normal, wenn KEIN Praefix vorliegt", () => {
-    expect(schrittFinden("kaufpreis", leer)?.id).toBe("kaufpreis");
-    expect(schrittFinden("gibtesnicht", leer)).toBeNull();
+    expect(schrittFinden("kaufpreis", leer, "voll")?.id).toBe("kaufpreis");
+    expect(schrittFinden("gibtesnicht", leer, "voll")).toBeNull();
   });
 
   it("zaehlt den Fortschritt trotz altem Praefix, statt 0 zu melden", () => {
-    const f = fortschritt("p2.einkommen", zuZweit);
+    const f = fortschritt("p2.einkommen", zuZweit, "voll");
     expect(f.position).toBeGreaterThan(0);
-    expect(f.position).toBe(sichtbareSchritte(zuZweit).findIndex((s) => s.id === "einkommen") + 1);
+    expect(f.position).toBe(sichtbareSchritte(zuZweit, "voll").findIndex((s) => s.id === "einkommen") + 1);
   });
 });

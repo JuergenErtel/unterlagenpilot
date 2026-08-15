@@ -106,6 +106,7 @@ describe("planUebernahme", () => {
     // hier ein synthetischer Testschritt (in try/finally wieder entfernt).
     const testSchritt: Schritt = {
       id: "test_bedingtes_feld",
+      umfang: "voll",
       abschnitt: "vorhaben",
       frage: "Testfrage",
       felder: [

@@ -13,7 +13,9 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
   const formular = await formularZuSlug(slug);
   if (!formular) notFound();
 
-  const schritt = schrittFinden(ERSTER_SCHRITT, {});
+  // Fest "kurz": diese Seite IST der oeffentliche Anfragebogen, es gibt hier
+  // noch keinen Link, aus dem sich der Umfang ableiten liesse.
+  const schritt = schrittFinden(ERSTER_SCHRITT, {}, "kurz");
   if (!schritt) notFound();
 
   return (

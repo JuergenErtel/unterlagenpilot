@@ -4,6 +4,9 @@ import type { Schritt } from "@/lib/self-disclosure/types";
 
 const SCHRITT: Schritt = {
   id: "probe",
+  // Pflichtangabe seit Aufgabe 3 (siehe types.ts); fuer diesen Test ohne
+  // Bedeutung, deshalb der neutrale Wert.
+  umfang: "voll",
   abschnitt: "vorhaben",
   frage: "Testfrage",
   felder: [
