@@ -70,6 +70,9 @@ export async function versendeEinladung(
       subject: quelle.subject ? renderTemplate(quelle.subject, vars) : "Ihre Baufinanzierung",
       text: renderTemplate(quelle.body, vars),
       empfaenger: "kunde",
+      // Im Posteingang steht der Vermittler, nicht das Werkzeug: Der
+      // Interessent hat mit ihm gesprochen, von BaufiDesk hat er nie gehoert.
+      absenderName: ctx.organizationName,
     });
   } catch (e) {
     return { error: `Die Mail konnte nicht versendet werden: ${(e as Error).message}` };

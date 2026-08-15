@@ -77,6 +77,9 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
       subject: message!.subject ?? "Ihre Baufinanzierung – benötigte Unterlagen",
       text: message!.body,
       empfaenger: "kunde",
+      // Im Posteingang steht der Vermittler, nicht das Werkzeug: Der Kunde
+      // kennt seinen Berater, von BaufiDesk hat er nie gehoert.
+      absenderName: ctx.organizationName,
     });
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);

@@ -31,6 +31,29 @@ export interface SendEmailInput {
   text: string;
   replyTo?: string;
   empfaenger: Empfaengerklasse;
+  /**
+   * Anzeigename des Absenders – im Posteingang steht dann dieser Name statt
+   * des Produktnamens. Fuer Kundenmails gehoert hier der Name der Organisation
+   * hin: Der Interessent kennt seinen Vermittler, nicht das Werkzeug, mit dem
+   * dieser arbeitet. Die Adresse bleibt unveraendert die aus EMAIL_FROM, denn
+   * nur deren Domain ist beim Versanddienst verifiziert.
+   */
+  absenderName?: string;
+}
+
+/**
+ * Baut den Absenderkopf: Anzeigename der Organisation, Adresse aus EMAIL_FROM.
+ *
+ * Der Name kommt aus der Datenbank und damit aus einer Eingabe – Zeilenumbrueche
+ * darin wuerden weitere Kopfzeilen in die Mail schmuggeln (Header-Injection),
+ * Anfuehrungszeichen und spitze Klammern den Kopf zerreissen. Deshalb werden
+ * sie entfernt, statt sie zu maskieren: Ein Vermittlername braucht sie nicht.
+ */
+export function absenderKopf(emailFrom: string, name?: string): string {
+  const sauber = (name ?? "").replace(/[<>"\r\n]/g, "").trim();
+  if (!sauber) return emailFrom;
+  const adresse = emailFrom.match(/<([^>]+)>/)?.[1] ?? emailFrom.trim();
+  return `${sauber} <${adresse}>`;
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {
@@ -82,7 +105,7 @@ export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> 
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.EMAIL_FROM,
+      from: absenderKopf(env.EMAIL_FROM, input.absenderName),
       to: ziel,
       subject: betreff,
       text,
