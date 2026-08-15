@@ -30,7 +30,7 @@ export default function DatenschutzPage() {
   return (
     <LegalPageShell title="Datenschutzerklärung">
       <p>
-        <em>Stand: 8. August 2026</em>
+        <em>Stand: 15. August 2026</em>
       </p>
 
       <h2>1. Zwei Rollen – bitte zuerst lesen</h2>
@@ -209,6 +209,21 @@ export default function DatenschutzPage() {
         jeweiligen Vorgang. In der Datenbank wird nur ein Hash des Geheimnisses gespeichert.
         Verantwortlich für den Versand und den Inhalt ist die jeweilige Vermittlerin oder der
         jeweilige Vermittler.
+      </p>
+      <p>
+        Zusätzlich kann eine Vermittlerin oder ein Vermittler ein <strong>öffentliches
+        Anfrageformular</strong> unter einer festen Adresse (<code>/anfrage/…</code>) betreiben.
+        Anders als bei einem versendeten Link besteht hier <strong>noch keine
+        Geschäftsbeziehung</strong>: Wer das Formular öffnet, gibt seine Angaben – etwa
+        Geburtsdatum, Einkommen und Verpflichtungen – von sich aus ein, bevor die Vermittlerin
+        oder der Vermittler davon weiß. Rechtsgrundlage ist deshalb ausschließlich die
+        <strong> ausdrückliche Einwilligung</strong> (Art. 6 Abs. 1 lit. a DSGVO), die beim
+        Absenden des vollständigen Bogens mit Zeitpunkt und Fassung des Einwilligungstextes
+        festgehalten wird. Erst mit dieser Einwilligung entsteht aus den Angaben ein Vorgang bei
+        der Vermittlerin oder dem Vermittler, die oder der ab dann Verantwortliche ist. Wird ein
+        begonnener Bogen nicht zu Ende ausgefüllt, entsteht kein Vorgang; die bis dahin
+        eingegebenen Angaben werden gelöscht, sobald der zugehörige Link abläuft – spätestens 30
+        Tage nach Beginn.
       </p>
 
       <h2>12. Cookies und lokaler Speicher</h2>
