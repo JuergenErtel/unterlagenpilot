@@ -29,8 +29,16 @@ zeigen. Steht dort weiter „Mock (Demo)", fehlt der Schlüssel.
 ### 2. Passwortschutz der Seite entfernen
 
 Das Site-Gate (`/gate`) schützt die gesamte Anwendung, ausgenommen Kunden-Upload,
-Cron und Sentry-Tunnel. Es soll laut Jürgen bis zur Veröffentlichung bleiben —
+Kunden-Selbstauskunft, das öffentliche Anfrageformular (`/anfrage`), die
+öffentlichen Rechtsseiten (`/datenschutz`, `/agb`, `/avv`), Cron und
+Sentry-Tunnel. Es soll laut Jürgen bis zur Veröffentlichung bleiben —
 danach entfernen, sonst kommt kein angemeldeter Nutzer hinein.
+
+**Seit dem Anfrageformular (15.08.2026) ist `/anfrage` der erste öffentlich
+schreibende Weg der Anwendung**, unabhängig vom Gate: Ein Fremder ohne
+Anmeldung kann dort Geburtsdatum, Einkommen und Verpflichtungen eintragen.
+Das Gate schützt nur den Rest der App, nicht diese Route selbst — ihre eigene
+Absicherung sind Honeypot und IP-Rate-Limit (siehe unten).
 
 **Was dabei mit wegfällt (gemessen am 14.08.2026):** Die Domain wird laufend
 automatisiert abgeklopft — Sonden auf `/backend/.env`, `/settings/.env`,
@@ -44,7 +52,9 @@ Last — beides ist vorhanden, gehört an diesem Tag aber bewusst geprüft.
 
 Dazu passend: In der Produktion ist **kein** `UPSTASH_REDIS_REST_URL`/`_TOKEN`
 gesetzt (`vercel env ls production` am 14.08.2026 geprüft). Damit zählen
-**alle** Rate-Limits — Login, Registrierung, Passwort-Reset, Gate — pro
+**alle** Rate-Limits — Login, Registrierung, Passwort-Reset, Gate, seit dem
+15.08.2026 auch das öffentliche Anfrageformular (neue Bögen je Slug/IP) und
+das Speichern einzelner Schritte darin (je Bogen-Link) — pro
 Serverless-Instanz statt instanzübergreifend: Wer seine Versuche über genügend
 Instanzen verteilt, bekommt entsprechend mehr davon. Für den Pilotbetrieb mit
 einem Nutzer vertretbar; **vor dem ersten Fremdnutzer sollte der zentrale
