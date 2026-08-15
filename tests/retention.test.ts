@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { selectExpiredCases, type RetentionCase } from "@/lib/cases/retention";
+import {
+  selectExpiredCases,
+  selectAbandonedSelfDisclosures,
+  type RetentionCase,
+  type AbandonedSelfDisclosure,
+} from "@/lib/cases/retention";
 
 const NOW = new Date("2026-07-10T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86400 * 1000);
@@ -31,5 +36,19 @@ describe("selectExpiredCases", () => {
     expect(selectExpiredCases([{ ...base, status: "unterlagen_fehlen" }], NOW)).toEqual([]);
     expect(selectExpiredCases([{ ...base, status: "uebertragen" }], NOW)).toEqual([]);
     expect(selectExpiredCases([{ ...base, status: "archiviert" }], NOW).length).toBe(1);
+  });
+});
+
+describe("selectAbandonedSelfDisclosures", () => {
+  const bogen: AbandonedSelfDisclosure = { id: "sd-1", linkExpiresAt: daysAgo(1) };
+
+  it("wählt Bögen, deren Link bereits abgelaufen ist", () => {
+    const out = selectAbandonedSelfDisclosures([bogen], NOW);
+    expect(out.map((b) => b.id)).toEqual(["sd-1"]);
+  });
+
+  it("lässt Bögen mit noch gültigem Link unangetastet", () => {
+    const gueltig: AbandonedSelfDisclosure = { id: "sd-2", linkExpiresAt: daysAgo(-1) };
+    expect(selectAbandonedSelfDisclosures([gueltig], NOW)).toEqual([]);
   });
 });
