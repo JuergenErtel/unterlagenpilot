@@ -65,7 +65,7 @@ const GANZZAHLFELDER = ["anzahlKinder", "baujahr", "stellplaetze", "zinsbindungJ
  *    oder "129.5" für 129,5 m², IMMER mit "." als echtem Dezimalpunkt, NIE
  *    mit Tausendertrennung. Hier wird direkt `Number()` aufgerufen, ohne
  *    Punkte zu entfernen.
- * `konvertiere()` in `self-disclosure.ts` ruft ausschließlich mit
+ * `konvertiere()` in `self-disclosure/schreiben.ts` ruft ausschließlich mit
  * "maschinell" – nur so bleibt `uebernehmen` beweisbar unverändert, nicht nur
  * heuristisch plausibel.
  */
