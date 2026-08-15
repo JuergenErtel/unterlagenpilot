@@ -208,8 +208,40 @@ const apiApplicantMeta = z.object({
     .nullable(),
 });
 
+/**
+ * JSON:API-Beziehung zum Berater, dem der Lead gehört.
+ *
+ * Sie entscheidet, ob ein Lead überhaupt importiert werden darf: Wer bei
+ * FinLink Administrationsrechte hat, bekommt über dieselbe API auch die Leads
+ * seiner Kollegen. Manche Leads tragen gar keinen Berater — dann bleibt das
+ * Feld null, und der Aufrufer verwirft sie (ohne Nachweis kein Import).
+ */
+const beraterBeziehungSchema = z
+  .object({
+    advisor: z
+      .object({ data: z.object({ id: z.string() }).passthrough().nullish() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+  .nullish();
+
+/** Berater-Id aus einem JSON:API-Lead; null, wenn keine dranhängt. */
+function beraterIdAus(lead: { relationships?: { advisor?: { data?: { id: string } | null } } | null }): string | null {
+  return lead.relationships?.advisor?.data?.id ?? null;
+}
+
+/** Berater-Id aus einer /leads/{id}-Antwort – für die Prüfung im Einzelabruf. */
+export function parseFinLinkLeadBeraterId(body: unknown): string | null {
+  const parsed = z
+    .object({ data: z.object({ relationships: beraterBeziehungSchema }).passthrough() })
+    .safeParse(body);
+  return parsed.success ? beraterIdAus(parsed.data.data) : null;
+}
+
 const apiLeadSchema = z.object({
   id: z.string().min(1),
+  relationships: beraterBeziehungSchema,
   attributes: z.object({
     applicant_meta: apiApplicantMeta.optional().nullable(),
     // Bei vielen Leads (576 von 905 im Bestand 08/2026) stehen Name/Telefon
@@ -259,6 +291,8 @@ const apiLeadsResponseSchema = z.object({ data: z.array(apiLeadSchema) });
  */
 export interface FinLinkLeadSummary {
   id: string;
+  /** Berater, dem der Lead gehört; null, wenn FinLink keinen nennt. */
+  beraterId: string | null;
   vorname?: string;
   nachname?: string;
   ort?: string;
@@ -311,6 +345,7 @@ export function parseFinLinkLeadsSummaries(body: unknown): FinLinkLeadSummary[] 
     const um = lead.attributes.user_meta;
     return {
       id: lead.id,
+      beraterId: beraterIdAus(lead),
       vorname: am?.first_name ?? um?.first_name ?? undefined,
       nachname: am?.last_name ?? um?.last_name ?? undefined,
       ort: am?.city_name ?? undefined,
@@ -647,6 +682,8 @@ function mapApiLead(lead: z.infer<typeof apiLeadSchema>): FinLinkVorgangDTO {
  */
 export interface FinLinkLeadRoh {
   id: string;
+  /** Berater, dem der Lead gehört; null, wenn FinLink keinen nennt. */
+  beraterId: string | null;
   /** ISO-Zeitstempel des Eingangs; null, wenn FinLink keinen liefert. */
   createdAt: string | null;
   sourceType: string | null;
@@ -657,6 +694,7 @@ export interface FinLinkLeadRoh {
 
 const rohLeadSchema = z.object({
   id: z.string().min(1),
+  relationships: beraterBeziehungSchema,
   attributes: z
     .object({
       created_at: z.string().optional().nullable(),
@@ -680,6 +718,7 @@ export function parseFinLinkLeadsRoh(body: unknown): FinLinkLeadRoh[] {
     const e = l.attributes.extras_meta ?? {};
     return {
       id: l.id,
+      beraterId: beraterIdAus(l),
       createdAt: l.attributes.created_at ?? null,
       sourceType: e.source_type ?? null,
       source: e.source ?? null,

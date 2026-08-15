@@ -1,6 +1,7 @@
 import {
   mergeAntragstellerDetails,
   parseFinLinkApplicantsResponse,
+  parseFinLinkLeadBeraterId,
   parseFinLinkLeadLoanApplicationIds,
   parseFinLinkLeadQuelle,
   parseFinLinkLeadsRoh,
@@ -27,6 +28,16 @@ export interface FinLinkClient {
 interface FinLinkConfig {
   baseUrl: string;
   apiKey: string;
+  /**
+   * Berater, dessen Leads importiert werden dürfen.
+   *
+   * Wer bei FinLink Administrationsrechte hat, bekommt über dieselbe API auch
+   * die Leads seiner Kollegen — gemessen am 15.08.2026 gehörten 8 der 50
+   * neuesten Leads anderen Beratern. Ohne diese Kennung landen fremde
+   * Kundendaten in BaufiDesk; das ist ein Datenschutzproblem, kein
+   * Sortierproblem. Deshalb ist sie Pflicht, nicht optional.
+   */
+  advisorId: string;
 }
 
 type FetchLike = typeof fetch;
@@ -125,11 +136,38 @@ export class HttpFinLinkClient implements FinLinkClient {
     return all;
   }
 
+  /**
+   * Hängt den Berater-Filter an einen Pfad.
+   *
+   * Bewusst als schlichter Query-Parameter: Die naheliegenden JSON:API-Formen
+   * `filter[advisor]` und `filter[advisor_id]` werden von FinLink STILL
+   * ignoriert — sie liefern gemischte Daten zurück, ohne zu widersprechen
+   * (am 15.08.2026 geprüft). `advisor_id` wirkt (50 von 50 Leads richtig).
+   * Weil ein still wirkungsloser Filter gefährlicher ist als gar keiner,
+   * bleibt die zweite Prüfung an der Antwort trotzdem bestehen.
+   */
+  private mitBerater(pfad: string): string {
+    const trenner = pfad.includes("?") ? "&" : "?";
+    return `${pfad}${trenner}advisor_id=${encodeURIComponent(this.config.advisorId)}`;
+  }
+
+  /** Zweite Schranke: Was nicht nachweislich uns gehört, fliegt raus. */
+  private nurEigene<T extends { beraterId: string | null }>(leads: T[]): T[] {
+    const eigene = leads.filter((l) => l.beraterId === this.config.advisorId);
+    const verworfen = leads.length - eigene.length;
+    if (verworfen > 0) {
+      // Datenarm: nur die Zahl, keine Namen und keine Ids fremder Kunden.
+      console.warn(`[finlink] ${verworfen} Lead(s) anderer Berater verworfen.`);
+    }
+    return eigene;
+  }
+
   async listLeads(): Promise<FinLinkLeadSummary[]> {
-    const [summaries, stateEntries] = await Promise.all([
-      this.fetchAllPages(LEADS_PATH, LEADS_PAGE_LIMIT, parseFinLinkLeadsSummaries),
+    const [alleSummaries, stateEntries] = await Promise.all([
+      this.fetchAllPages(this.mitBerater(LEADS_PATH), LEADS_PAGE_LIMIT, parseFinLinkLeadsSummaries),
       this.fetchAllPages(LOAN_APPLICATIONS_PATH, LOAN_APPS_PAGE_LIMIT, parseFinLinkSalesStates),
     ]);
+    const summaries = this.nurEigene(alleSummaries);
     // Hat ein Lead mehrere Anträge, gewinnt „active“, sonst der zuletzt gesehene.
     const salesStates = new Map<string, string>();
     for (const { leadId, salesState } of stateEntries) {
@@ -142,12 +180,26 @@ export class HttpFinLinkClient implements FinLinkClient {
   async fetchLeadsPage(limit: number): Promise<FinLinkLeadRoh[]> {
     // Eine Seite genügt: Die Liste kommt absteigend nach Eingang, und der
     // Abgleich interessiert sich nur für das Neue.
-    const body = await this.fetchJson(`${LEADS_PATH}?limit=${limit}&page=1`);
-    return parseFinLinkLeadsRoh(body);
+    const body = await this.fetchJson(this.mitBerater(`${LEADS_PATH}?limit=${limit}&page=1`));
+    return this.nurEigene(parseFinLinkLeadsRoh(body));
   }
 
   async fetchVorgang(externalId: string): Promise<FinLinkVorgangDTO> {
     const body = await this.fetchJson(`${LEADS_PATH}/${encodeURIComponent(externalId)}`);
+
+    /*
+     * Auch der Einzelabruf wird geprüft, nicht nur die Liste.
+     *
+     * Sonst wäre der Listenfilter wertlos: Wer eine fremde Lead-Id kennt — aus
+     * einem früheren, noch ungefilterten Import etwa —, käme über diese Adresse
+     * weiterhin an die Daten eines fremden Beraters.
+     */
+    const berater = parseFinLinkLeadBeraterId(body);
+    if (berater !== this.config.advisorId) {
+      console.warn(`[finlink] Einzelabruf abgelehnt: Lead gehoert einem anderen Berater.`);
+      throw new FinLinkApiError("Dieser Vorgang gehört einem anderen Berater und wird nicht importiert.");
+    }
+
     let dto: FinLinkVorgangDTO;
     try {
       dto = parseFinLinkSingleLeadResponse(body);
@@ -184,12 +236,23 @@ const DEFAULT_BASE_URL = "https://api.finlink.de/partner-api";
 
 /**
  * Baut den Client aus der Umgebung. Gibt null zurück, wenn FinLink nicht
- * konfiguriert ist (FINLINK_API_KEY fehlt); FINLINK_BASE_URL ist optional
- * und übersteuert nur die Standard-Partner-API-URL.
+ * konfiguriert ist; FINLINK_BASE_URL ist optional und übersteuert nur die
+ * Standard-Partner-API-URL.
+ *
+ * `FINLINK_ADVISOR_ID` ist Pflicht, und das Fehlen schaltet den Import AB,
+ * statt ihn ungefiltert laufen zu lassen. Der umgekehrte Weg wäre bequemer
+ * und würde genau den Fehler wiederherstellen, den dieser Filter behebt:
+ * Mit Administrationsrechten liefert die API die Leads aller Berater.
+ * Lieber gar kein Import als der Import fremder Kundendaten.
  */
 export function getFinLinkClient(fetchImpl: FetchLike = fetch): FinLinkClient | null {
   const apiKey = process.env.FINLINK_API_KEY;
+  const advisorId = process.env.FINLINK_ADVISOR_ID;
   if (!apiKey) return null;
+  if (!advisorId) {
+    console.warn("[finlink] FINLINK_ADVISOR_ID fehlt – Import bleibt aus, um keine fremden Leads zu holen.");
+    return null;
+  }
   const baseUrl = process.env.FINLINK_BASE_URL || DEFAULT_BASE_URL;
-  return new HttpFinLinkClient({ baseUrl, apiKey }, fetchImpl);
+  return new HttpFinLinkClient({ baseUrl, apiKey, advisorId }, fetchImpl);
 }

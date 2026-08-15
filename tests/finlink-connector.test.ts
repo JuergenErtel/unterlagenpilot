@@ -1,4 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+/**
+ * Berater, dem die Testdaten gehoeren. Seit dem 15.08.2026 importiert der
+ * Client nur noch Leads des konfigurierten Beraters – ohne diese Kennung an
+ * Client UND Antwort faellt jeder Lead durch den Filter.
+ */
+const BERATER = "advisor-test-1";
 import {
   HttpFinLinkClient,
   FinLinkNotFoundError,
@@ -35,7 +42,7 @@ function apiLeadBody(id: string) {
           created_at: "2026-07-01T10:00:00Z",
           updated_at: "2026-07-01T10:00:00Z",
         },
-        relationships: { advisor: { data: null }, contact: { data: null }, loan_applications: { data: [] } },
+        relationships: { advisor: { data: { id: BERATER } }, contact: { data: null }, loan_applications: { data: [] } },
       },
     ],
   };
@@ -60,7 +67,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("HttpFinLinkClient.fetchVorgang", () => {
   it("ruft /leads/{id} mit X-API-Key auf", async () => {
     const fetchMock = mockFetch(200, apiSingleLeadBody("FL-1"));
-    const client = new HttpFinLinkClient({ baseUrl: "https://api.finlink.test/partner-api", apiKey: "secret" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://api.finlink.test/partner-api", apiKey: "secret", advisorId: BERATER }, fetchMock);
     const dto = await client.fetchVorgang("FL-1");
     expect(dto.id).toBe("FL-1");
     expect(dto.antragsteller[0]?.vorname).toBe("Anna");
@@ -72,7 +79,7 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
 
   it("reichert Antragsteller über /loan_applications/{id}/applicants an", async () => {
     const leadBody = apiSingleLeadBody("FL-1") as any;
-    leadBody.data.relationships = { loan_applications: { data: [{ id: "LA-7" }] } };
+    leadBody.data.relationships = { advisor: { data: { id: BERATER } }, loan_applications: { data: [{ id: "LA-7" }] } };
     const applicants = {
       data: [
         { attributes: { first_name: "Anna", last_name: "Muster", dob: "1990-04-29T00:00:00.000+02:00" } },
@@ -83,7 +90,7 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
       [/\/loan_applications\/LA-7\/applicants$/, { status: 200, body: applicants }],
       [/\/leads\/FL-1$/, { status: 200, body: leadBody }],
     ]);
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
     const dto = await client.fetchVorgang("FL-1");
     expect(dto.antragsteller).toHaveLength(2);
     expect(dto.antragsteller[0]?.geburtsdatum).toBe("1990-04-29");
@@ -92,37 +99,42 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
 
   it("fällt auf Lead-Daten zurück, wenn der Antragsteller-Detailabruf scheitert", async () => {
     const leadBody = apiSingleLeadBody("FL-1") as any;
-    leadBody.data.relationships = { loan_applications: { data: [{ id: "LA-7" }] } };
+    leadBody.data.relationships = { advisor: { data: { id: BERATER } }, loan_applications: { data: [{ id: "LA-7" }] } };
     const fetchMock = mockFetchRouting([
       [/\/loan_applications\/LA-7\/applicants$/, { status: 500, body: {} }],
       [/\/leads\/FL-1$/, { status: 200, body: leadBody }],
     ]);
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
     const dto = await client.fetchVorgang("FL-1");
     expect(dto.antragsteller[0]?.vorname).toBe("Anna");
     expect(dto.antragsteller).toHaveLength(1);
   });
 
   it("wirft FinLinkNotFoundError bei 404 (unbekannte ID)", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(404, {}));
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, mockFetch(404, {}));
     await expect(client.fetchVorgang("nope")).rejects.toBeInstanceOf(FinLinkNotFoundError);
   });
 
   it("wirft FinLinkAuthError bei 401/403", async () => {
-    const c401 = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(401, {}));
+    const c401 = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, mockFetch(401, {}));
     await expect(c401.fetchVorgang("x")).rejects.toBeInstanceOf(FinLinkAuthError);
   });
 
   it("wirft FinLinkApiError bei unerwartetem Schema", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, { unerwartet: true }));
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, mockFetch(200, { unerwartet: true }));
     await expect(client.fetchVorgang("x")).rejects.toBeInstanceOf(FinLinkApiError);
   });
 
-  it("braucht nur FINLINK_API_KEY – Base-URL hat die Partner-API als Default", async () => {
+  it("braucht Schlüssel UND Berater-Kennung – Base-URL hat die Partner-API als Default", async () => {
+    // Bis zum 15.08.2026 genügte der Schlüssel allein. Das war der Fehler:
+    // Mit Administrationsrechten liefert die API die Leads aller Berater,
+    // und ohne Kennung wurden sie ungefiltert importiert.
     const { getFinLinkClient } = await import("@/lib/platforms/finlink/client");
     const prevKey = process.env.FINLINK_API_KEY;
     const prevUrl = process.env.FINLINK_BASE_URL;
+    const prevAdvisor = process.env.FINLINK_ADVISOR_ID;
     process.env.FINLINK_API_KEY = "k";
+    process.env.FINLINK_ADVISOR_ID = BERATER;
     delete process.env.FINLINK_BASE_URL;
     try {
       const fetchMock = mockFetch(200, apiSingleLeadBody("FL-9"));
@@ -133,12 +145,14 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
     } finally {
       if (prevKey === undefined) delete process.env.FINLINK_API_KEY;
       else process.env.FINLINK_API_KEY = prevKey;
+      if (prevAdvisor === undefined) delete process.env.FINLINK_ADVISOR_ID;
+      else process.env.FINLINK_ADVISOR_ID = prevAdvisor;
       if (prevUrl !== undefined) process.env.FINLINK_BASE_URL = prevUrl;
     }
   });
 
   it("leakt den API-Key nicht in Fehlermeldungen", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "supersecret" }, mockFetch(500, {}));
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "supersecret", advisorId: BERATER }, mockFetch(500, {}));
     const err = (await client.fetchVorgang("x").catch((e) => e)) as Error;
     expect(err.message).not.toContain("supersecret");
   });
@@ -158,7 +172,7 @@ describe("HttpFinLinkClient.listLeads", () => {
       [/\/loan_applications\?/, { status: 200, body: loanApps }],
       [/\/leads\?/, { status: 200, body }],
     ]);
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
     const leads = await client.listLeads();
     expect(leads).toHaveLength(1);
     expect(leads[0]).toMatchObject({
@@ -185,7 +199,7 @@ describe("HttpFinLinkClient.listLeads", () => {
       [/\/loan_applications\?/, { status: 200, body: loanApps }],
       [/\/leads\?/, { status: 200, body: apiLeadBody("FL-1") }],
     ]);
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
     const leads = await client.listLeads();
     expect(leads[0]?.salesState).toBe("active");
   });
@@ -195,18 +209,18 @@ describe("HttpFinLinkClient.listLeads", () => {
       [/\/loan_applications\?/, { status: 200, body: { data: [] } }],
       [/\/leads\?/, { status: 200, body: apiLeadBody("FL-2") }],
     ]);
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, fetchMock);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
     const leads = await client.listLeads();
     expect(leads[0]?.salesState).toBeUndefined();
   });
 
   it("mappt 401 auf FinLinkAuthError", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(401, {}));
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, mockFetch(401, {}));
     await expect(client.listLeads()).rejects.toBeInstanceOf(FinLinkAuthError);
   });
 
   it("wirft FinLinkApiError bei unerwartetem Format", async () => {
-    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k" }, mockFetch(200, { kaputt: true }));
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, mockFetch(200, { kaputt: true }));
     await expect(client.listLeads()).rejects.toBeInstanceOf(FinLinkApiError);
   });
 });

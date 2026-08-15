@@ -5,6 +5,9 @@ import type { FinLinkLeadRoh } from "@/lib/platforms/finlink/dto";
 function lead(id: string, createdAt: string | null): FinLinkLeadRoh {
   return {
     id,
+    // Die Auswahl bekommt nur, was der Client schon gefiltert hat – hier steht
+    // deshalb immer der eigene Berater.
+    beraterId: "advisor-test-1",
     createdAt,
     sourceType: null,
     source: null,
