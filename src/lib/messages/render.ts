@@ -15,6 +15,7 @@ export const PLACEHOLDERS: Array<{ token: string; description: string }> = [
   { token: "{{uploadLink}}", description: "Sicherer Upload-Link" },
   { token: "{{dokument}}", description: "Betroffenes Dokument (bei Rückfragen)" },
   { token: "{{signatur}}", description: "Ihre Signatur (aus den Organisationsdaten)" },
+  { token: "{{anfrageLink}}", description: "Link zu Ihrem Anfrageformular" },
 ];
 
 export function renderTemplate(body: string, vars: Record<string, string>): string {
@@ -27,6 +28,7 @@ export interface TemplateVarInput {
   signatur?: string;
   dokument?: string;
   items?: Array<{ title: string }>;
+  anfrageLink?: string;
 }
 
 export function buildTemplateVars(input: TemplateVarInput): Record<string, string> {
@@ -41,6 +43,7 @@ export function buildTemplateVars(input: TemplateVarInput): Record<string, strin
       : "—",
     dokument: input.dokument ?? "",
     signatur: input.signatur ?? "",
+    anfrageLink: input.anfrageLink ?? "{{anfrageLink}}",
   };
 }
 
@@ -153,6 +156,20 @@ Hinweise zum Upload:
 Absender:
 {{signatur}}`,
   },
+  [templateKey("selbstauskunft_einladung", "email")]: {
+    subject: "Ihre Baufinanzierung – Ihre Angaben in wenigen Minuten",
+    body: `{{anrede}}
+
+vielen Dank für Ihr Interesse. Damit ich Ihnen ein passendes Angebot rechnen kann, brauche ich ein paar Angaben zu Ihrem Vorhaben.
+
+Über diesen Link können Sie sie in Ruhe selbst eintragen – das dauert nur wenige Minuten, und Sie können jederzeit unterbrechen und später weitermachen:
+{{anfrageLink}}
+
+Bei Fragen melden Sie sich gerne jederzeit.
+
+Viele Grüße
+{{signatur}}`,
+  },
 };
 
 /** Bearbeitbare Vorlagen mit Anzeigename (Reihenfolge = Anzeige im Editor). */
@@ -168,6 +185,7 @@ export const EDITABLE_TEMPLATES: Array<{
   { type: "datei_veraltet", channel: "email", label: "Datei veraltet (E-Mail)" },
   { type: "erstnachforderung", channel: "whatsapp", label: "Nachforderung (WhatsApp)" },
   { type: "pdf_checkliste", channel: "pdf", label: "Unterlagen-Checkliste (PDF)" },
+  { type: "selbstauskunft_einladung", channel: "email", label: "Einladung zum Anfrageformular (E-Mail)" },
 ];
 
 /** Baut eine Signatur aus den Organisationsdaten. */
