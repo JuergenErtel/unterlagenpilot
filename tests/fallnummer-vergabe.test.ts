@@ -32,16 +32,25 @@ describe("mitFallnummer", () => {
     expect(nummer).toBe("UP-2026-10001");
   });
 
-  it("versucht es nach einer Nummernkollision erneut", async () => {
-    findMany.mockResolvedValue([{ caseNumber: "UP-2026-0001" }]);
-    let aufrufe = 0;
+  it("berechnet die Nummer beim Wiederholversuch NEU", async () => {
+    // Der Kern des Rahmens: Bei einem Zusammenstoss darf nicht dieselbe
+    // Nummer erneut geschrieben werden. Deshalb liefert findMany beim
+    // zweiten Aufruf einen fortgeschrittenen Stand – wer die Nummer einmal
+    // vor der Schleife berechnete, wuerde hier rot.
+    findMany
+      .mockResolvedValueOnce([{ caseNumber: "UP-2026-0001" }])
+      .mockResolvedValueOnce([{ caseNumber: "UP-2026-0002" }]);
+
+    const versuchte: string[] = [];
     const ergebnis = await mitFallnummer("org-A", 2026, async (n) => {
-      aufrufe++;
-      if (aufrufe === 1) throw p2002;
+      versuchte.push(n);
+      if (versuchte.length === 1) throw p2002;
       return n;
     });
-    expect(aufrufe).toBe(2);
-    expect(ergebnis).toBe("UP-2026-0002");
+
+    expect(versuchte).toEqual(["UP-2026-0002", "UP-2026-0003"]);
+    expect(ergebnis).toBe("UP-2026-0003");
+    expect(findMany).toHaveBeenCalledTimes(2);
   });
 
   it("gibt einen fremden Fehler unveraendert weiter", async () => {
