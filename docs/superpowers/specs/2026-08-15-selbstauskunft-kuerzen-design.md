@@ -154,6 +154,31 @@ Das gilt gleichermaßen für die Fallgeburt aus dem Anfrageformular
 der diese Schlüssel wörtlich behauptet, ist die Versicherung: Er wird rot, wenn
 eine Stelle vergessen wird.
 
+## Der dritte Verbraucher: die Erstgesprächs-Maske
+
+`src/lib/erstgespraech/maske.ts` baut die geführte Telefonmaske aus **demselben
+Katalog** — „Es gibt EINEN Katalog", steht dort im Kopfkommentar. Ein Schnitt am
+Katalog trifft sie also mit. Zwei Festlegungen:
+
+**Die Maske läuft immer im vollen Umfang.** Sie ist das Werkzeug des
+Vermittlers am Telefon; dort kann jede Frage drankommen, und eine Maske, die
+nur die kurzen Seiten zeigt, wäre am Telefon wertlos. Dieselbe Regel wie bei
+der Übernahme: Wer *liest* oder *alles zeigt*, nimmt die volle Kette.
+
+**Ihre fest verdrahteten Schritt-IDs ziehen mit.** Die Maske nennt
+`beruf_arbeitgeber`, `beruf_dauer`, `beruf_selbststaendig` und
+`anzahl_antragsteller.anzahl` beim Namen (`maske.ts:160,201,204`); die
+Übernahme nennt `haushalt_kinder` (`takeover.ts:96`, die Kinderzahl gilt dem
+Haushalt und geht an beide Antragsteller). Sie alle bekommen die neuen
+Seiten-IDs. Wo eine Bedingung sich auf einen Schritt bezog, der jetzt Teil
+einer größeren Seite ist, wird sie zur Bedingung auf dem **Feld** — die
+Beschäftigungsart entscheidet weiterhin, ob nach Arbeitgeber oder nach
+Selbständigen-Angaben gefragt wird.
+
+Das ist der Preis von „ein Katalog": Er hält die Fragen an einem Ort, aber ein
+Schnitt daran ist nie nur eine Sache der Kundenansicht. Das ist der Grund, warum
+diese Arbeit den vollen Weg nimmt und nicht als kleine Änderung durchgeht.
+
 ## Was bewusst NICHT gebaut wird
 
 - **Keine Wanderung alter Antworten.** In der Produktion liegt genau ein Bogen
@@ -202,3 +227,7 @@ eine Stelle vergessen wird.
   Test mit den wörtlichen Schlüsseln wird mitgezogen).
 - Regression: Ein voll ausgefüllter Bogen am persönlichen Link verhält sich wie
   bisher — Vorbelegung, Speichern, Absenden, Übernahme-Eingang.
+- Regression Erstgesprächs-Maske: Sie zeigt weiterhin jedes Feld mit Zielfeld,
+  in Katalogreihenfolge, mit den Bedingungen der Beschäftigungsart — und bei
+  zwei Antragstellern beide Personen. Die bestehenden Masken-Tests laufen
+  unverändert.
