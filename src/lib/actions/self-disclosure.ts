@@ -96,8 +96,15 @@ export async function speichereAntwort(
 /**
  * Schließt den Bogen ab. Lücken sind ausdrücklich erlaubt – der Eingang zeigt
  * sie dem Vermittler als Nachfassliste. Ab hier ist der Bogen nur noch lesbar.
+ *
+ * `formData` trägt beim Anfrageformular die Pflichtangaben und die
+ * Einwilligung (Kontaktfelder, Häkchen `einwilligung`) – ausgewertet wird das
+ * erst in Aufgabe 9, wenn aus dem Bogen ein Fall entsteht.
  */
-export async function sendeAb(token: string): Promise<{ error?: string } | undefined> {
+export async function sendeAb(
+  token: string,
+  formData?: FormData
+): Promise<{ error?: string } | undefined> {
   const access = await resolveSelfDisclosureToken(token);
   if (!access) return { error: "Der Link ist ungültig oder abgelaufen." };
 
