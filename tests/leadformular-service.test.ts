@@ -38,6 +38,15 @@ describe("slugNormalisieren", () => {
     // nachfragen, statt eine unsinnige oeffentliche Adresse zu vergeben.
     expect(slugNormalisieren("???")).toBe("");
   });
+
+  it("normalisiert zerlegt eingegebene Umlaute (macOS-Zwischenablage)", () => {
+    // Ein aus macOS kopiertes "Müller" liegt oft als u + kombinierender
+    // Trema vor (NFD), nicht als das eine Zeichen "ü" (NFC). Getippt landet
+    // im Quelltext praktisch immer NFC – die zerlegte Form erzeugen wir
+    // deshalb bewusst aus der normalen Schreibweise heraus.
+    const zerlegt = "Müller".normalize("NFD");
+    expect(slugNormalisieren(zerlegt)).toBe("mueller");
+  });
 });
 
 describe("anfrageUrl", () => {

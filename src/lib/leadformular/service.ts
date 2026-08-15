@@ -24,6 +24,12 @@ export interface FormularStand {
   /** Öffentliche Adresse; null, solange kein Formular eingerichtet ist. */
   url: string | null;
   einladungen: Array<{ email: string; am: string }>;
+  /**
+   * Ob der Slug noch gefahrlos geändert werden darf: nur solange noch kein
+   * Bogen daran hängt. Hängt schon einer, ist der Link bereits in der Welt
+   * (Visitenkarte, Mailsignatur) – dann bleibt er endgültig.
+   */
+  kannSlugAendern: boolean;
 }
 
 /**
@@ -34,6 +40,11 @@ export interface FormularStand {
  */
 export function slugNormalisieren(roh: string): string {
   return roh
+    // Ein aus macOS kopiertes "Müller" liegt oft ZERLEGT vor (u + kombinierender
+    // Trema, NFD) statt als ein Zeichen (NFC) – die Umlaut-Ersetzung unten
+    // prüft aber auf das eine Zeichen "ü" und träfe sonst daneben ("mu-ller"
+    // statt "mueller"). NFC muss deshalb der erste Schritt sein.
+    .normalize("NFC")
     .toLowerCase()
     .replace(/ä/g, "ae")
     .replace(/ö/g, "oe")
@@ -72,4 +83,19 @@ export async function formularDerOrganisation(
     orderBy: { createdAt: "asc" },
     select: { id: true, slug: true, aktiv: true },
   });
+}
+
+/**
+ * Ob der Slug eines Formulars noch geändert werden darf: nur solange noch
+ * kein Bogen daran hängt (kein `SelfDisclosureLink` mit dieser `formularId`).
+ * Sobald der erste Besucher abgesendet hat, ist der Link bereits in der Welt
+ * – ein Tippfehler wäre dann nur noch per Datenbankzugriff zu korrigieren,
+ * also bleibt der Slug ab da gesperrt.
+ */
+export async function formularSlugAenderbar(formularId: string): Promise<boolean> {
+  const bogen = await prisma.selfDisclosureLink.findFirst({
+    where: { formularId },
+    select: { id: true },
+  });
+  return !bogen;
 }

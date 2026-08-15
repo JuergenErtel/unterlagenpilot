@@ -71,6 +71,28 @@ export function FormularKarte({ stand }: { stand: FormularStand }) {
             </button>
           </div>
 
+          {stand.kannSlugAendern && (
+            <form
+              action={(fd) =>
+                startTransition(async () => {
+                  const res = await formularEinrichten(fd);
+                  setMeldung(res.error ? { text: res.error } : { ok: true, text: "Adresse geändert." });
+                })
+              }
+              className="flex items-end gap-2"
+            >
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="slug-aendern" className="text-xs">
+                  Adresse ändern (noch niemand hat abgesendet)
+                </Label>
+                <Input id="slug-aendern" name="slug" defaultValue={stand.slug ?? ""} />
+              </div>
+              <Button type="submit" size="sm" variant="outline" disabled={pending}>
+                Ändern
+              </Button>
+            </form>
+          )}
+
           <form
             action={(fd) =>
               startTransition(async () => {

@@ -12,6 +12,7 @@ const findFirst = vi.fn();
 const create = vi.fn();
 const update = vi.fn();
 const auditFindMany = vi.fn();
+const linkFindFirst = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     leadformular: {
@@ -20,6 +21,7 @@ vi.mock("@/lib/db", () => ({
       update: (...a: unknown[]) => update(...a),
     },
     auditLog: { findMany: (...a: unknown[]) => auditFindMany(...a) },
+    selfDisclosureLink: { findFirst: (...a: unknown[]) => linkFindFirst(...a) },
   },
 }));
 
@@ -32,8 +34,10 @@ function form(werte: Record<string, string>) {
 }
 
 beforeEach(() => {
-  [findFirst, create, update, auditFindMany, auditMock].forEach((m) => m.mockReset());
+  [findFirst, create, update, auditFindMany, auditMock, linkFindFirst].forEach((m) => m.mockReset());
   auditFindMany.mockResolvedValue([]);
+  // Standard: kein Bogen haengt am Formular, der Slug bleibt aenderbar.
+  linkFindFirst.mockResolvedValue(null);
 });
 
 describe("ladeFormularStand", () => {
@@ -50,6 +54,18 @@ describe("ladeFormularStand", () => {
     const stand = await ladeFormularStand();
     expect(stand.url).toBe("https://baufidesk.de/anfrage/ertel");
     expect(stand.einladungen[0]?.email).toBe("max@example.de");
+  });
+
+  it("meldet den Slug als aenderbar, solange kein Bogen dranhaengt", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: true });
+    linkFindFirst.mockResolvedValue(null);
+    await expect(ladeFormularStand()).resolves.toMatchObject({ kannSlugAendern: true });
+  });
+
+  it("meldet den Slug als gesperrt, sobald ein Bogen dranhaengt", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "ertel", aktiv: true });
+    linkFindFirst.mockResolvedValue({ id: "link-1" });
+    await expect(ladeFormularStand()).resolves.toMatchObject({ kannSlugAendern: false });
   });
 });
 
@@ -73,6 +89,32 @@ describe("formularEinrichten", () => {
     findFirst.mockResolvedValue(null);
     create.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
     const res = await formularEinrichten(form({ slug: "ertel" }));
+    expect(res.error).toMatch(/vergeben/i);
+  });
+
+  it("aendert den Slug eines vorhandenen Formulars, solange kein Bogen dranhaengt", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "alt", aktiv: true });
+    linkFindFirst.mockResolvedValue(null);
+    update.mockResolvedValue({ id: "form-1" });
+    const res = await formularEinrichten(form({ slug: "Neuer Name" }));
+    expect(res.error).toBeUndefined();
+    expect(update).toHaveBeenCalledWith({ where: { id: "form-1" }, data: { slug: "neuer-name" } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("verweigert die Slug-Aenderung, sobald ein Bogen dranhaengt", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "alt", aktiv: true });
+    linkFindFirst.mockResolvedValue({ id: "link-1" });
+    const res = await formularEinrichten(form({ slug: "neu" }));
+    expect(res.error).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("meldet eine bereits vergebene neue Adresse beim Aendern verstaendlich", async () => {
+    findFirst.mockResolvedValue({ id: "form-1", slug: "alt", aktiv: true });
+    linkFindFirst.mockResolvedValue(null);
+    update.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
+    const res = await formularEinrichten(form({ slug: "vergeben" }));
     expect(res.error).toMatch(/vergeben/i);
   });
 });

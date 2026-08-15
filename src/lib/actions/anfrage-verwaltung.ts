@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import {
   anfrageUrl,
   formularDerOrganisation,
+  formularSlugAenderbar,
   slugNormalisieren,
   type FormularStand,
 } from "@/lib/leadformular/service";
@@ -31,24 +32,48 @@ export async function ladeFormularStand(): Promise<FormularStand> {
     am: e.createdAt.toLocaleDateString("de-DE"),
   }));
 
-  if (!formular) return { slug: null, aktiv: false, url: null, einladungen };
+  if (!formular) return { slug: null, aktiv: false, url: null, einladungen, kannSlugAendern: false };
   return {
     slug: formular.slug,
     aktiv: formular.aktiv,
     url: anfrageUrl(formular.slug),
     einladungen,
+    kannSlugAendern: await formularSlugAenderbar(formular.id),
   };
 }
 
+/**
+ * Richtet das Formular ein – oder ändert seinen Slug, solange noch kein Bogen
+ * daran hängt. Genau eines je Organisation: Die Oberfläche verwaltet nicht
+ * mehr, und ein zweites Formular wäre ein zweiter öffentlicher Eingang, den
+ * niemand kennt.
+ */
 export async function formularEinrichten(formData: FormData): Promise<{ error?: string }> {
   const ctx = await requireContext();
   const slug = slugNormalisieren(String(formData.get("slug") ?? ""));
   if (!slug) return { error: "Bitte eine Adresse aus Buchstaben und Ziffern wählen." };
 
   const vorhanden = await formularDerOrganisation(ctx.organizationId);
-  // Genau eines je Organisation: Die Oberfläche verwaltet nicht mehr, und ein
-  // zweites Formular wäre ein zweiter öffentlicher Eingang, den niemand kennt.
-  if (vorhanden) return { error: "Es gibt bereits ein Anfrageformular." };
+
+  if (vorhanden) {
+    // Hängt schon ein Bogen dran, ist der Link bereits in der Welt
+    // (Visitenkarte, Mailsignatur) – dann bleibt er endgültig gesperrt. Ohne
+    // Bogen ist ein Tippfehler im Slug noch ohne Datenbankzugriff korrigierbar.
+    if (!(await formularSlugAenderbar(vorhanden.id))) {
+      return { error: "Es gibt bereits ein Anfrageformular." };
+    }
+    try {
+      await prisma.leadformular.update({ where: { id: vorhanden.id }, data: { slug } });
+    } catch (e) {
+      if ((e as { code?: string }).code === "P2002") {
+        return { error: "Diese Adresse ist bereits vergeben. Bitte eine andere wählen." };
+      }
+      throw e;
+    }
+    revalidatePath("/settings");
+    revalidatePath("/cases/new");
+    return {};
+  }
 
   try {
     await prisma.leadformular.create({
