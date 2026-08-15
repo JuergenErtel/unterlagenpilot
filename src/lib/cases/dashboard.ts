@@ -3,8 +3,13 @@ import { getCaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
 import { selectDueFollowups, type DueFollowup } from "@/lib/cases/reminders";
-import { computeNextStep } from "@/lib/cases/next-step";
-import { kontaktStand, kontaktEinstellungen } from "@/lib/cases/kontakt";
+import { computeNextStep, type NextStep } from "@/lib/cases/next-step";
+import {
+  kontaktStand,
+  kontaktEinstellungen,
+  kontaktStartAb,
+  giltKontaktaufnahmeFuer,
+} from "@/lib/cases/kontakt";
 import { isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { countDocumentsWithoutAiResult, countRunningClassifications } from "@/lib/documents/processing";
 import { ladeSelbstauskunftStandBatch } from "@/lib/cases/selbstauskunft-stand";
@@ -188,6 +193,9 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   // sonst werden Grenzfälle (Abstand/Frist gerade abgelaufen) unerklärlich.
   const jetzt = new Date();
   const kontaktEinstellungenWert = kontaktEinstellungen();
+  // Stichtag ebenfalls EINMAL je Aufruf (siehe kontakt.ts): Bestandsfaelle von
+  // vor der Einfuehrung bekommen gar keinen Kontaktstand.
+  const kontaktStartAbWert = kontaktStartAb();
 
   const enriched = await Promise.all(
     todoCandidates.map(async (c) => {
@@ -221,12 +229,16 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       const docsLaufend = countRunningClassifications(docs);
       // Kontaktstand: fertig gerechnet hereingegeben, damit next-step.ts ohne
       // eigene Uhr auskommt (dieselbe Herleitung wie auf der Fallseite).
-      const stand = kontaktStand(
-        c.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
-        c.createdAt,
-        jetzt,
-        kontaktEinstellungenWert
-      );
+      // Vor dem Stichtag bleibt er `null` – der Fall verhaelt sich dann exakt
+      // wie vor der Einfuehrung der Kontaktaufnahme (siehe kontakt.ts).
+      const stand = giltKontaktaufnahmeFuer(c.createdAt, kontaktStartAbWert)
+        ? kontaktStand(
+            c.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
+            c.createdAt,
+            jetzt,
+            kontaktEinstellungenWert
+          )
+        : null;
       let step = computeNextStep({
         caseId: c.id,
         status: c.status,
@@ -260,10 +272,9 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
           offeneAngaben: erstgespraechReife.gesamt - erstgespraechReife.gefuellt,
           gefuehrtAm: c.erstgespraechGefuehrtAm,
         },
-        kontakt: {
-          stand,
-          telefon: c.applicants[0]?.phone ?? c.customer?.phone ?? null,
-        },
+        kontakt: stand
+          ? { stand, telefon: c.applicants[0]?.phone ?? c.customer?.phone ?? null }
+          : undefined,
         wiedervorlageFaellig: c.wiedervorlage != null && c.wiedervorlage <= jetzt,
         verloren: c.verlorenAm != null,
       });
@@ -293,7 +304,11 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
    * Anrufe alles andere. Das ist fuer den Moment richtig – falls es stoert,
    * ist der Deckel die Stellschraube, nicht die Sortierung.
    */
-  const KONTAKT_SCHRITTE = new Set(["kontakt_aufnehmen", "kontakt_aufgeben"]);
+  // Als Set der ECHTEN Schluessel typisiert, nicht als Set<string>: Der
+  // frueher hier mitgefuehrte "kontakt_aufgeben" existierte laengst nicht mehr
+  // (der Abbruch ist seit der Nachbesserung nur ein Hinweis in `wartet`), und
+  // `tsc` schwieg dazu, weil jede Zeichenkette passte.
+  const KONTAKT_SCHRITTE = new Set<NextStep["key"]>(["kontakt_aufnehmen"]);
   const rang = (e: (typeof enriched)[number]) => (KONTAKT_SCHRITTE.has(e.step.key) ? 0 : 1);
 
   // To-dos priorisiert (Kontaktschritte zuerst, danach niedrigster Score / meiste Lücken zuerst)

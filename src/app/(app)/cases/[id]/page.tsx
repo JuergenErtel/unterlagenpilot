@@ -36,7 +36,12 @@ import { FallbildAnsicht } from "@/components/case/fallbild";
 import { baueFallbild } from "@/lib/cases/fallbild";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
-import { kontaktStand, kontaktEinstellungen } from "@/lib/cases/kontakt";
+import {
+  kontaktStand,
+  kontaktEinstellungen,
+  kontaktStartAb,
+  giltKontaktaufnahmeFuer,
+} from "@/lib/cases/kontakt";
 import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorbereiten-button";
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
@@ -281,12 +286,18 @@ export default async function CaseCockpitPage({
   // Wiedervorlage-Prüfung als auch kontaktStand, damit beide denselben
   // Zeitpunkt sehen.
   const jetzt = new Date();
-  const kontaktStandFall = kontaktStand(
-    caseRow.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
-    caseRow.createdAt,
-    jetzt,
-    kontaktEinstellungen()
-  );
+  // Vor dem Stichtag (KONTAKT_START_AB) bleibt der Stand `null`: Ein
+  // Bestandsfall kann keinen "erreicht"-Vermerk haben – die Spalte entstand
+  // erst mit diesem Zweig –, und die Kontaktsprosse haette am Tag des Deploys
+  // ueber JEDEM alten Fall gestanden und alles darunter verdeckt (kontakt.ts).
+  const kontaktStandFall = giltKontaktaufnahmeFuer(caseRow.createdAt, kontaktStartAb())
+    ? kontaktStand(
+        caseRow.caseNotes.map((n) => ({ ergebnis: n.ergebnis!, createdAt: n.createdAt })),
+        caseRow.createdAt,
+        jetzt,
+        kontaktEinstellungen()
+      )
+    : null;
 
   /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
@@ -412,10 +423,7 @@ export default async function CaseCockpitPage({
             offeneAngaben: erstgespraechOffen,
             gefuehrtAm: caseRow.erstgespraechGefuehrtAm,
           },
-          kontakt: {
-            stand: kontaktStandFall,
-            telefon,
-          },
+          kontakt: kontaktStandFall ? { stand: kontaktStandFall, telefon } : undefined,
           wiedervorlageFaellig: caseRow.wiedervorlage != null && caseRow.wiedervorlage <= jetzt,
           verloren: caseRow.verlorenAm != null,
         });

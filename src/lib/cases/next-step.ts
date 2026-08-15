@@ -231,9 +231,17 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
     !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
     c.status !== "bank_nachforderung"
   ) {
+    /*
+     * Ziel ist das BOARD, nicht die Fallseite: "verloren" wird ausschliesslich
+     * ueber den `LossDialog` im Lead-Board gesetzt (`setzeVerloren`,
+     * pipeline/lead-board.tsx unter /dashboard). Der Hinweis zeigte frueher
+     * auf `/cases/<id>` – dort gibt es keinen Weg, den Fall aufzugeben, der
+     * Vorschlag hatte also keine Ausfahrt. Der Text nennt deshalb auch, WAS
+     * dort zu tun ist.
+     */
     wartet.push({
-      label: `Kunde seit ${c.kontakt.stand.fristTage} Tagen nicht erreichbar – aufgeben?`,
-      href: `/cases/${c.caseId}`,
+      label: `Kunde seit ${c.kontakt.stand.fristTage} Tagen nicht erreichbar – im Board als verloren markieren?`,
+      href: "/dashboard",
     });
   }
   return wartet;
@@ -264,6 +272,13 @@ function kontaktSchritt(c: NextStepInput): NextStep | null {
   if (c.verloren) return null;
   if (LOCKED_CASE_STATUSES.has(c.status as CaseStatus)) return null;
   if (c.status === "bank_nachforderung") return null;
+
+  // Ein gefuehrtes Erstgespraech IST der Beweis, dass Kontakt bestand – auch
+  // ohne einen daneben angeklickten "erreicht"-Vermerk. Ohne diese Zeile
+  // widerspricht sich die Leiter an genau einer Stelle: Sie ruft zum ERSTEN
+  // Anruf ("Der Lead ist frisch"), waehrend dasselbe Gespraech in der Maske
+  // als gefuehrt abgehakt ist.
+  if (c.erstgespraech?.gefuehrtAm) return null;
 
   const { stand, telefon } = c.kontakt;
   if (stand.jeErreicht) return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kontaktStand, type Kontaktversuch } from "@/lib/cases/kontakt";
+import { giltKontaktaufnahmeFuer, kontaktStand, type Kontaktversuch } from "@/lib/cases/kontakt";
 
 const EINSTELLUNGEN = { abstandStunden: 12, fristTage: 3 };
 const LEAD = new Date("2026-08-10T09:00:00Z");
@@ -79,5 +79,29 @@ describe("kontaktStand", () => {
 
     const andereFrist = kontaktStand([], LEAD, jetzt(1), { ...EINSTELLUNGEN, fristTage: 5 });
     expect(andereFrist.fristTage).toBe(5);
+  });
+});
+
+/**
+ * Der Stichtag (KONTAKT_START_AB) ist der Schnitt zwischen Bestand und
+ * Neugeschaeft. Vor der Einfuehrung gab es die Spalte `ergebnis` am Vermerk
+ * nicht – KEIN Bestandsfall kann also einen "erreicht"-Vermerk haben. Ohne den
+ * Schnitt waeren am Tag des Deploys schlagartig alle aktiven Faelle faellig
+ * (und nach Fristablauf sogar Abbruchkandidaten), und die Kontaktsprosse
+ * verdeckte in der Prioritaetsleiter Machbarkeit, Luecken, Fristen und
+ * Einreichung – sie zeigt bauartbedingt nur EINEN Schritt.
+ */
+describe("giltKontaktaufnahmeFuer", () => {
+  const STICHTAG = new Date("2026-08-15T00:00:00Z");
+
+  it("laesst Bestandsfaelle von vor dem Stichtag unberuehrt", () => {
+    expect(giltKontaktaufnahmeFuer(new Date("2026-07-16T10:00:00Z"), STICHTAG)).toBe(false);
+    // Auch die letzte Sekunde davor gehoert noch zum Bestand.
+    expect(giltKontaktaufnahmeFuer(new Date("2026-08-14T23:59:59Z"), STICHTAG)).toBe(false);
+  });
+
+  it("gilt fuer Faelle ab dem Stichtag", () => {
+    expect(giltKontaktaufnahmeFuer(STICHTAG, STICHTAG)).toBe(true);
+    expect(giltKontaktaufnahmeFuer(new Date("2026-08-20T08:00:00Z"), STICHTAG)).toBe(true);
   });
 });

@@ -492,6 +492,28 @@ describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgab
     expect(todo?.nextStep).toBe("Kunden anrufen");
   });
 
+  /**
+   * Der Stichtag (KONTAKT_START_AB, Vorgabe 2026-08-15). Ein Bestandsfall aus
+   * dem Juli hat NIE einen "erreicht"-Vermerk – die Spalte entstand erst mit
+   * diesem Zweig. Ohne den Schnitt waere am Tag des Deploys jeder aktive Fall
+   * "Kunden anrufen — Der Lead ist frisch", und das Dashboard sortierte
+   * praktisch alles nach oben.
+   */
+  it("laesst Bestandsfaelle von vor dem Stichtag unberuehrt – kein Anruf-Schritt", async () => {
+    mehrereFaelle([
+      frischerLead({
+        id: "c-bestandsfall",
+        caseNumber: "UP-0200",
+        createdAt: new Date("2026-07-16T09:00:00Z"),
+      }),
+    ]);
+
+    const data = await getDashboardData("org-1");
+    const todo = data.todos.find((t) => t.caseId === "c-bestandsfall");
+    expect(todo).toBeDefined();
+    expect(todo?.nextStep).not.toBe("Kunden anrufen");
+  });
+
   it("sortiert faellige Kontaktschritte nach oben – auch vor einem besseren Reifegrad", async () => {
     mehrereFaelle([frischerLead(), falleMitDokument()]);
     documentFindMany.mockReset().mockResolvedValue([

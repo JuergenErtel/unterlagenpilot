@@ -237,6 +237,30 @@ describe("Marke für den nächsten Schritt", () => {
     );
     expect(b.naechstes.ziel).toEqual({ label: "Review-Center öffnen", href: "/review?case=c1" });
   });
+
+  it("reicht die wartenden Schritte durch", () => {
+    // Ab der lg-Breite zeigt die Fallseite NUR das Fallbild. Wurde das Feld
+    // hier nicht uebertragen, war "Wartet ausserdem" auf jedem gewoehnlichen
+    // Desktop unsichtbar – samt Abbruchvorschlag und offener Dokumentfreigabe.
+    const b = baueFallbild(
+      eingabe({
+        schritt: schritt({
+          wartet: [
+            { label: "3 Dokumente prüfen & freigeben", href: "/review?case=c1" },
+            { label: "Kunde seit 3 Tagen nicht erreichbar – im Board als verloren markieren?", href: "/dashboard" },
+          ],
+        }),
+      })
+    );
+    expect(b.naechstes.wartet).toEqual([
+      { label: "3 Dokumente prüfen & freigeben", href: "/review?case=c1" },
+      { label: "Kunde seit 3 Tagen nicht erreichbar – im Board als verloren markieren?", href: "/dashboard" },
+    ]);
+  });
+
+  it("laesst wartet weg, wenn der Schritt keine verdraengten Schritte hat", () => {
+    expect(baueFallbild(eingabe()).naechstes.wartet).toBeUndefined();
+  });
 });
 
 describe("Erstkontakt", () => {

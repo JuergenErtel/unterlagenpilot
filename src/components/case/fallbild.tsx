@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -344,6 +344,29 @@ export function FallbildAnsicht({
             <p className="mt-0.5 text-sm text-muted-foreground">
               {gewaehltesElement ? gewaehltesElement.detail : bild.naechstes.grund}
             </p>
+            {/* Verdrängte Schritte – dieselbe Zeile wie in `NextStepCard`: als
+                Link-Zeile, nicht als zweiter Knopf, sonst stünden zwei
+                Hauptaktionen nebeneinander. Ohne sie war "Wartet außerdem" ab
+                der `lg`-Breite unsichtbar, also auf jedem gewöhnlichen
+                Desktop – samt Abbruchvorschlag und offener Dokumentfreigabe.
+                Nur bei der Empfehlung: Ein angeklicktes Tor erzählt seine
+                eigene Geschichte, dort wäre die Zeile fehl am Platz. */}
+            {!gewaehltesElement && bild.naechstes.wartet && bild.naechstes.wartet.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="eyebrow text-muted-foreground">Wartet außerdem</span>
+                {bild.naechstes.wartet.map((w) => (
+                  <Link
+                    key={`${w.href}|${w.label}`}
+                    href={w.href}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-ai/40 bg-card px-3 py-1 text-sm font-medium text-foreground transition-colors hover:border-ai hover:bg-ai/10"
+                  >
+                    <ScanSearch className="h-3.5 w-3.5 text-ai" />
+                    {w.label}
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {gewaehltesElement ? (

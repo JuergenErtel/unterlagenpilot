@@ -49,14 +49,32 @@ describe("waLink", () => {
     expect(waLink("089 12345")).toBe("https://wa.me/498912345");
   });
 
-  it("akzeptiert internationale Nummern nach 00-Strippen (auch mit Tippfehler)", () => {
+  it("deutet die doppelte Null vor einer Mobilnummer als Tippfehler, nicht als Ausland", () => {
     // "00170 1234567" → nach Ziffernfilter: 001701234567 (12 Ziffern)
-    // → nach 00-Strippen: 1701234567 (10 Ziffern)
-    // Internationale Nummern: 8–15 Ziffern erlaubt. 10 Ziffern sind OK.
-    // HINWEIS: Das ist technisch ein Tippfehler (doppelte statt einfacher Null),
-    // aber echte deutsche Festnetznummern zu verwerfen kostet sicher; dieser seltene
-    // Fehler wird akzeptiert. Besser als Kollateralschaden.
-    expect(waLink("00170 1234567")).toBe("https://wa.me/1701234567");
+    // → nach 00-Strippen: 1701234567 (10 Ziffern).
+    // Frueher galt das als Auslandsnummer und ergab einen Link auf eine
+    // nordamerikanisch aussehende FREMDE Nummer – genau das, was der
+    // Dateikopf ausschliessen will. Es gibt keinen Laendercode 15/16/17;
+    // zehnstellig und mit einer deutschen Mobilvorwahl beginnend ist das
+    // fast sicher "0170 1234567" mit einer Null zu viel.
+    expect(waLink("00170 1234567")).toBe("https://wa.me/491701234567");
+    expect(waLink("00160 1234567")).toBe("https://wa.me/491601234567");
+  });
+
+  it("greift bewusst NUR bei genau zehn Ziffern", () => {
+    // Eine elfstellige Restnummer ("00151 12345678") waere zwar auch als
+    // deutsche Mobilnummer denkbar – aber genauso als nordamerikanische
+    // Nummer (Laendercode 1 + zehn Ziffern). Bei Gleichstand gilt der
+    // Dateikopf: im Zweifel die Nummer NICHT umdeuten.
+    expect(waLink("00151 12345678")).toBe("https://wa.me/15112345678");
+  });
+
+  it("laesst echte Auslandsnummern nach dem 00-Strippen unangetastet", () => {
+    // Wien-Mobil: "0043 664 1234567" → 436641234567 (12 Ziffern, beginnt mit 43).
+    expect(waLink("0043 664 1234567")).toBe("https://wa.me/436641234567");
+    // Nordamerika: "001 555 1234567" → 15551234567 (11 Ziffern) – die
+    // Ausnahme greift nur bei GENAU zehn Ziffern.
+    expect(waLink("001 555 1234567")).toBe("https://wa.me/15551234567");
   });
 
   it("akzeptiert gueltige 13-stellige internationale Nummern", () => {

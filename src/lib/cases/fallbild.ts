@@ -74,6 +74,17 @@ export interface Fallbild {
     ton: Tone;
     ziel?: Ziel;
     /**
+     * Verdrängte, aber sofort erledigbare Schritte – reine Durchreichung von
+     * `NextStep["wartet"]` (siehe Dateikopf: hier wird nichts gerechnet).
+     *
+     * Muss mit: Ab der `lg`-Breite zeigt die Fallseite NUR das Fallbild. Ohne
+     * dieses Feld blieben auf jedem gewöhnlichen Desktop sowohl der
+     * Abbruchvorschlag als auch der Altbestand ("N Dokumente prüfen &
+     * freigeben", "Erstgespräch führen") unsichtbar – dieselbe Falle, wegen
+     * der es "Wartet außerdem" überhaupt gibt.
+     */
+    wartet?: Ziel[];
+    /**
      * Der rohe Schlüssel der Prioritätsleiter – reine Durchreichung von
      * `NextStep["key"]`, ohne etwas Neues zu berechnen (siehe Dateikopf).
      * `FallbildAnsicht` braucht ihn, um bei "Kunden anrufen" dieselbe
@@ -169,6 +180,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
       grund: e.schritt.reason,
       ton: e.schritt.tone,
       ziel: e.schritt.cta ? { label: e.schritt.cta.label, href: e.schritt.cta.href } : undefined,
+      wartet: e.schritt.wartet?.map((w) => ({ label: w.label, href: w.href })),
       schluessel: e.schritt.key,
     },
   };

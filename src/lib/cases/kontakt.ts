@@ -50,6 +50,36 @@ export function kontaktEinstellungen(): KontaktEinstellungen {
   return { abstandStunden: env.KONTAKT_ABSTAND_STUNDEN, fristTage: env.KONTAKT_FRIST_TAGE };
 }
 
+/**
+ * Der Stichtag, ab dem die gefuehrte Kontaktaufnahme gilt (`KONTAKT_START_AB`).
+ *
+ * Bewusst getrennt von `kontaktEinstellungen`: Der Stichtag geht die Rechnung
+ * in `kontaktStand` nichts an – er entscheidet eine Stufe FRUEHER, ob ein Fall
+ * ueberhaupt einen Kontaktstand bekommt.
+ */
+export function kontaktStartAb(): Date {
+  return getEnv().KONTAKT_START_AB;
+}
+
+/**
+ * Gilt die gefuehrte Kontaktaufnahme fuer diesen Fall?
+ *
+ * Faelle, die VOR dem Stichtag angelegt wurden, bekommen von den Aufrufern
+ * `kontakt: undefined` durchgereicht und verhalten sich damit exakt wie vor
+ * der Einfuehrung. Der Grund: Bis dahin konnte kein Vermerk ein `ergebnis`
+ * tragen – kein Bestandsfall hat also einen "erreicht"-Vermerk, und
+ * `kontaktStand` haette fuer alle `faellig: true` und (weil der Leadeingang
+ * lange her ist) `abbruchFaellig: true` geliefert. Am Tag des Deploys stuende
+ * dann ueber einem einreichungsfertigen Fall aus dem Juli "Kunden anrufen –
+ * Der Lead ist frisch", und alles darunter waere verdeckt.
+ *
+ * `startAb` kommt als Parameter herein, damit der Aufrufer ihn EINMAL je
+ * Aufruf bildet – dieselbe Regel wie bei `jetzt`.
+ */
+export function giltKontaktaufnahmeFuer(fallAngelegtAm: Date, startAb: Date): boolean {
+  return fallAngelegtAm.getTime() >= startAb.getTime();
+}
+
 export function kontaktStand(
   versuche: Kontaktversuch[],
   leadEingangAm: Date,

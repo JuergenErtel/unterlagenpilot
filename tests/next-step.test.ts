@@ -672,6 +672,37 @@ describe("Kontaktaufnahme in der Leiter", () => {
     expect(schritt.title).toContain("3. Versuch");
   });
 
+  it("tritt zurueck, sobald das Erstgespraech als gefuehrt abgehakt ist", () => {
+    // Ein gefuehrtes Gespraech IST der Beweis, dass Kontakt bestand – auch
+    // wenn niemand daneben "Erreicht" angeklickt hat. Ohne diese Regel
+    // widersprach sich die Leiter: Sie rief zum ERSTEN Anruf auf, waehrend
+    // dasselbe Gespraech nebenan als gefuehrt vermerkt war.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: true, versendet: false },
+        erstgespraech: { offeneAngaben: 12, gefuehrtAm: new Date("2026-08-15") },
+        kontakt: { stand: stand(), telefon: "0170 1234567" },
+      })
+    );
+    expect(schritt.key).not.toBe("kontakt_aufnehmen");
+    expect(schritt.key).toBe("erstkontakt_entwurf");
+  });
+
+  it("verlinkt den Abbruchvorschlag ins Board, wo der Fall als verloren markiert werden kann", () => {
+    // Die Fallseite kennt keinen Weg zu "verloren" – `setzeVerloren` haengt
+    // ausschliesslich am LossDialog des Boards (/dashboard). Ein Vorschlag
+    // ohne Ausfahrt ist keiner.
+    const schritt = computeNextStep(
+      cockpit({
+        erstkontakt: { empfaenger: "kunde@example.de", vorbereitet: false, versendet: false },
+        kontakt: { stand: stand({ versuche: 4, abbruchFaellig: true }), telefon: "0170 1234567" },
+      })
+    );
+    const hinweis = (schritt.wartet ?? []).find((w) => w.label.includes("nicht erreichbar"));
+    expect(hinweis?.href).toBe("/dashboard");
+    expect(hinweis?.label).toContain("verloren");
+  });
+
   it("tritt zurueck, sobald der Kunde erreicht wurde", () => {
     const schritt = computeNextStep(
       cockpit({
@@ -708,8 +739,8 @@ describe("Kontaktaufnahme in der Leiter", () => {
     );
     expect(schritt.key).toBe("kontakt_aufnehmen");
     expect(schritt.wartet).toContainEqual({
-      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
-      href: "/cases/c1",
+      label: "Kunde seit 3 Tagen nicht erreichbar – im Board als verloren markieren?",
+      href: "/dashboard",
     });
   });
 
@@ -730,8 +761,8 @@ describe("Kontaktaufnahme in der Leiter", () => {
     );
     expect(schritt.key).toBe("einreichung");
     expect(schritt.wartet).toContainEqual({
-      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
-      href: "/cases/c1",
+      label: "Kunde seit 3 Tagen nicht erreichbar – im Board als verloren markieren?",
+      href: "/dashboard",
     });
   });
 
@@ -773,8 +804,8 @@ describe("Kontaktaufnahme in der Leiter", () => {
     );
     expect(schritt.key).not.toBe("kontakt_aufnehmen");
     expect(schritt.wartet ?? []).not.toContainEqual({
-      label: "Kunde seit 3 Tagen nicht erreichbar – aufgeben?",
-      href: "/cases/c1",
+      label: "Kunde seit 3 Tagen nicht erreichbar – im Board als verloren markieren?",
+      href: "/dashboard",
     });
   });
 

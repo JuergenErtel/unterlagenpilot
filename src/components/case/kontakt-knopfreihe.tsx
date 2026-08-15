@@ -46,6 +46,18 @@ export function KontaktKnopfreihe({ caseId, telefon }: { caseId: string; telefon
           </a>
         </Button>
       )}
+      {/* Nummer da, aber für keinen der beiden Links deutbar (getarnte
+          Durchwahl, Tippfehler, Freitext): Dann darf sie NICHT stumm
+          verschwinden – der Vermittler sähe sonst nur zwei Ergebnis-Knöpfe und
+          keine Nummer, und der Hinweis "keine Telefonnummer hinterlegt" in
+          `next-step.ts` greift hier nicht (er prüft auf `telefon === null`).
+          Als Text kann man sie wenigstens ablesen und von Hand wählen. */}
+      {!anrufLink && !whatsappLink && telefon && telefon.trim() !== "" && (
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+          <Phone className="h-4 w-4 shrink-0" />
+          {telefon}
+        </span>
+      )}
       <form action={kontaktVersuchErfassen.bind(null, caseId)} className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="kanal" value="telefon" />
         <input type="hidden" name="ergebnis" value="erreicht" />

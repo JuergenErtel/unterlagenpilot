@@ -108,6 +108,18 @@ const envSchema = z.object({
   // und Frist ab Leadeingang, nach der ohne Kontakt der Abbruch vorgeschlagen wird.
   KONTAKT_ABSTAND_STUNDEN: z.coerce.number().int().min(1).default(12),
   KONTAKT_FRIST_TAGE: z.coerce.number().int().min(1).default(3),
+  // Stichtag der gefuehrten Kontaktaufnahme (ISO-Datum). Nur Faelle, die AB
+  // diesem Tag angelegt wurden, bekommen Anruf-Schritt und Abbruchvorschlag.
+  //
+  // Warum ueberhaupt ein Stichtag: Vor der Einfuehrung gab es die Spalte
+  // `ergebnis` am Vermerk nicht – KEIN Bestandsfall kann also einen
+  // "erreicht"-Vermerk haben. Ohne diesen Schnitt waeren am Tag des Deploys
+  // schlagartig alle aktiven Faelle "faellig" und (weil der Leadeingang lange
+  // her ist) sogar Abbruchkandidaten; die Kontaktsprosse verdeckte in der
+  // Prioritaetsleiter Machbarkeit, Luecken, Fristen und Einreichung, weil die
+  // Leiter bauartbedingt nur EINEN Schritt zeigt. Bewusst ein Stichtag statt
+  // eines Backfills: In Produktivdaten wird nichts nachtraeglich erfunden.
+  KONTAKT_START_AB: z.coerce.date().default(new Date("2026-08-15T00:00:00.000Z")),
 });
 
 export type Env = z.infer<typeof envSchema>;

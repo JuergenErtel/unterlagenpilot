@@ -178,7 +178,12 @@ export async function kontaktVersuchErfassen(caseId: string, formData: FormData)
     entityId: caseId,
   });
 
-  revalidatePath(`/cases/${caseId}`);
+  // `revalidateCase` statt eines blossen `revalidatePath("/cases/<id>")`: Der
+  // Versuch IST ein Vermerk, und die Vermerkliste steht auf
+  // /cases/<id>/verwaltung – ausgerechnet die Seite, wegen der es ein
+  // `CaseNote` geworden ist, blieb sonst auf dem alten Stand. Das Dashboard
+  // kommt dazu, weil der Kontaktstand dort die To-do-Reihenfolge bestimmt.
+  revalidateCase(caseId);
   revalidatePath("/dashboard");
 }
 

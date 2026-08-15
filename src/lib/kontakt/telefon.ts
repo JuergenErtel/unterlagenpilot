@@ -27,6 +27,17 @@ const MAX_LAENGE_DEUTSCH = 13;
 /** Minimum für internationale Nummern (nach Normalisierung). */
 const MIN_LAENGE_INTERNATIONAL = 8;
 
+/**
+ * Deutsche Mobilfunk-Vorwahlen ohne führende Null – zusammen mit
+ * `LAENGE_DEUTSCHE_MOBIL_OHNE_NULL` das Erkennungsmerkmal für die doppelte
+ * Null (siehe `waLink`). Es gibt keine Ländervorwahl 15/16/17, deshalb kostet
+ * diese Ausnahme keine gültige Auslandsnummer.
+ */
+const DEUTSCHE_MOBIL_PRAEFIXE = ["15", "16", "17"];
+
+/** Länge einer deutschen Mobilnummer ohne führende Null: z. B. 170 1234567. */
+const LAENGE_DEUTSCHE_MOBIL_OHNE_NULL = 10;
+
 function ziffern(nummer: string): string {
   return nummer.replace(/\D/g, "");
 }
@@ -58,6 +69,18 @@ export function waLink(nummer: string | null): string | null {
   let istDeutsch = false;
   if (roh.startsWith("00")) {
     roh = roh.slice(2);
+    // "00170 1234567" ist ein Tippfehler (eine Null zu viel), keine
+    // Auslandsnummer: Nach dem Strippen bliebe "1701234567" stehen und ergäbe
+    // einen Link auf eine nordamerikanisch aussehende FREMDE Nummer – genau
+    // das, was der Dateikopf ausschließt. Zehnstellig und mit deutscher
+    // Mobilvorwahl beginnend gibt es keine Auslandsdeutung, die passte.
+    if (
+      roh.length === LAENGE_DEUTSCHE_MOBIL_OHNE_NULL &&
+      DEUTSCHE_MOBIL_PRAEFIXE.some((p) => roh.startsWith(p))
+    ) {
+      roh = `49${roh}`;
+      istDeutsch = true;
+    }
   } else if (roh.startsWith("0")) {
     // Deutsche Nummern mit führender 0 dürfen maximal 12 Ziffern haben
     // (sonst können Durchwahlen getarnt sein). Das verhindert z.B. "030 12345678-100".
