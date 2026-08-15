@@ -99,4 +99,19 @@ describe("speichereAntwort", () => {
     const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
     expect(arg.update.currentStep).toBe("zusammenfassung");
   });
+
+  it("speichert einen Schritt auch ohne Fall", async () => {
+    // Formular-Bogen: Der Fall entsteht erst beim Absenden. Bis dahin darf
+    // kein Schreibvorgang eine caseId verlangen.
+    resolve.mockResolvedValue({ linkId: "link-1", caseId: null, organizationId: "org-A" });
+    findUnique.mockResolvedValue({ answers: {}, submittedAt: null });
+
+    await speichereAntwort("TOK", "finanzierungsart", form({ art: "kauf_bestand" }));
+
+    const daten = upsert.mock.calls[0]![0] as { create: { caseId?: string | null; linkId: string } };
+    // Nicht nur "null" – das Feld darf beim falllosen Bogen gar nicht erst
+    // gesetzt werden, sonst verlangt Prisma spaeter faelschlich einen Wert.
+    expect("caseId" in daten.create).toBe(false);
+    expect(daten.create.linkId).toBe("link-1");
+  });
 });

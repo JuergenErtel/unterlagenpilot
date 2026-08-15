@@ -79,7 +79,14 @@ export async function speichereAntwort(
 
   await prisma.selfDisclosure.upsert({
     where: { linkId: access.linkId },
-    create: { linkId: access.linkId, caseId: access.caseId, answers: neu as object, currentStep },
+    // caseId nur setzen, wenn es einen Fall gibt. Beim Anfrageformular
+    // entsteht er erst beim Absenden.
+    create: {
+      linkId: access.linkId,
+      ...(access.caseId ? { caseId: access.caseId } : {}),
+      answers: neu as object,
+      currentStep,
+    },
     update: { answers: neu as object, currentStep },
   });
 
