@@ -53,6 +53,7 @@ enum LeadSource {
   vergleich_de
   manuell
   unbekannt
+  webformular
 }
 
 /**
@@ -253,6 +254,7 @@ enum MessageTemplateType {
   status_eingereicht
   status_nachforderung
   status_genehmigt
+  selbstauskunft_einladung
 }
 
 enum PlanTier {
@@ -332,6 +334,7 @@ model Organization {
   auditLogs            AuditLog[]
   leadSyncStates       LeadSyncState[]
   machbarkeitsAnnahmen MachbarkeitsAnnahmen?
+  leadformulare        Leadformular[]
 
   @@map("organizations")
 }
@@ -1321,18 +1324,45 @@ model WohnflaechenBerechnung {
  * Magic Link für die Selbstauskunft – bewusst getrennt vom Upload-Link, damit
  * ein Token nie versehentlich für den jeweils anderen Weg gilt.
  */
+/// Öffentliches Anfrageformular einer Organisation: ein Dauerlink, der Bögen
+/// ERZEUGT statt selbst einer zu sein. Nur so kann ein Link von mehreren
+/// benutzt werden, ohne dass der zweite Interessent die Antworten des ersten
+/// sieht – jeder bekommt beim ersten abgesendeten Schritt sein eigenes Token.
+model Leadformular {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Wem die Fälle aus diesem Formular gehören.
+  brokerId       String
+  /// Teil der öffentlichen URL: /anfrage/<slug>
+  slug           String       @unique
+  aktiv          Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  links SelfDisclosureLink[]
+
+  @@index([organizationId])
+  @@map("leadformulare")
+}
+
 model SelfDisclosureLink {
-  id        String   @id @default(cuid())
-  caseId    String
-  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
-  expiresAt DateTime
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String        @id @default(cuid())
+  /// Gesetzt beim persönlichen Link aus einer Fallakte. Null beim
+  /// Formular-Link: dort entsteht der Fall erst beim Absenden.
+  caseId     String?
+  case       Case?         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  /// Gesetzt beim Formular-Link. Genau eines von caseId/formularId ist gesetzt.
+  formularId String?
+  formular   Leadformular? @relation(fields: [formularId], references: [id], onDelete: Cascade)
+  tokenHash  String        @unique
+  expiresAt  DateTime
+  active     Boolean       @default(true)
+  createdAt  DateTime      @default(now())
 
   disclosure SelfDisclosure?
 
   @@index([caseId])
+  @@index([formularId])
   @@map("self_disclosure_links")
 }
 
@@ -1341,17 +1371,24 @@ model SelfDisclosureLink {
  * erzeugt einen neuen Durchgang, der erste bleibt als belegter Stand erhalten.
  */
 model SelfDisclosure {
-  id          String             @id @default(cuid())
-  linkId      String             @unique
-  link        SelfDisclosureLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
-  caseId      String
-  case        Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  answers     Json               @default("{}")
-  currentStep String?
-  submittedAt DateTime?
-  takenOverAt DateTime?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id                  String             @id @default(cuid())
+  linkId              String             @unique
+  link                SelfDisclosureLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  /// Null, solange der Bogen aus einem Anfrageformular stammt und noch
+  /// niemand abgesendet hat. Beim Absenden entsteht der Fall und wird
+  /// nachgetragen.
+  caseId              String?
+  case                Case?              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  answers             Json               @default("{}")
+  currentStep         String?
+  submittedAt         DateTime?
+  takenOverAt         DateTime?
+  /// Datenschutz-Einwilligung des Formular-Wegs. Ohne Zeitpunkt und Fassung
+  /// ist eine Einwilligung nicht nachweisbar.
+  einwilligungAm      DateTime?
+  einwilligungFassung String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([caseId])
   @@map("self_disclosures")
