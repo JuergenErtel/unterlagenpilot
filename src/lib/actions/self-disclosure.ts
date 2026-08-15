@@ -20,6 +20,8 @@ import {
 } from "@/lib/self-disclosure/takeover";
 import type { Antworten } from "@/lib/self-disclosure/types";
 import { schreibeVorschlaege } from "@/lib/self-disclosure/schreiben";
+import { gebaereFall } from "@/lib/leadformular/fallgeburt";
+import { fehlendeKontaktangaben, KONTAKT_SCHLUESSEL } from "@/lib/self-disclosure/pflichtangaben";
 
 export interface SchrittState {
   error?: string;
@@ -97,36 +99,74 @@ export async function speichereAntwort(
  * Schließt den Bogen ab. Lücken sind ausdrücklich erlaubt – der Eingang zeigt
  * sie dem Vermittler als Nachfassliste. Ab hier ist der Bogen nur noch lesbar.
  *
- * `formData` trägt beim Anfrageformular die Pflichtangaben und die
- * Einwilligung (Kontaktfelder, Häkchen `einwilligung`) – ausgewertet wird das
- * erst in Aufgabe 9, wenn aus dem Bogen ein Fall entsteht.
+ * Stammt der Bogen aus einem Anfrageformular, entsteht hier – und nur hier –
+ * der Fall. `formData` trägt dann die nachgefragten Kontaktdaten und das
+ * Einwilligungs-Häkchen; beim fallgebundenen Bogen bleibt sie leer.
  */
 export async function sendeAb(
   token: string,
   formData?: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<{ error?: string; fieldErrors?: Record<string, string> } | undefined> {
   const access = await resolveSelfDisclosureToken(token);
   if (!access) return { error: "Der Link ist ungültig oder abgelaufen." };
 
   const bogen = await prisma.selfDisclosure.findUnique({
     where: { linkId: access.linkId },
-    select: { id: true, submittedAt: true },
+    select: {
+      id: true,
+      submittedAt: true,
+      answers: true,
+      link: { select: { formular: { select: { id: true, organizationId: true, brokerId: true } } } },
+    },
   });
   if (!bogen) return { error: "Es sind noch keine Angaben gespeichert." };
   if (bogen.submittedAt) return { error: "Ihre Angaben wurden bereits übermittelt." };
 
-  await prisma.selfDisclosure.update({
-    where: { id: bogen.id },
-    data: { submittedAt: new Date(), currentStep: "zusammenfassung" },
+  const formular = bogen.link.formular;
+  let antworten = (bogen.answers as Antworten) ?? {};
+
+  if (formular) {
+    if (String(formData?.get("einwilligung") ?? "") !== "ja") {
+      return { error: "Bitte bestätigen Sie die Datenschutzhinweise." };
+    }
+    // Nachgereichte Kontaktdaten in DIESELBEN Antwortschlüssel schreiben –
+    // nicht daneben. Sonst gäbe es zwei Wahrheiten über den Namen.
+    const nachgereicht: Antworten = { ...antworten };
+    for (const [feld, schluesselName] of Object.entries(KONTAKT_SCHLUESSEL)) {
+      const wert = String(formData?.get(feld) ?? "").trim();
+      if (wert) nachgereicht[schluesselName] = wert;
+    }
+    antworten = nachgereicht;
+
+    const fehlt = fehlendeKontaktangaben(antworten);
+    if (fehlt.length > 0) {
+      return {
+        error: "Bitte ergänzen Sie Ihre Kontaktdaten.",
+        fieldErrors: Object.fromEntries(fehlt.map((f) => [f, "Bitte ausfüllen"])),
+      };
+    }
+  }
+
+  const jetzt = new Date();
+  // Versand-Slot ATOMAR reservieren, bevor der Fall entsteht: Zwei Klicks
+  // kurz hintereinander duerfen nicht zwei Faelle erzeugen.
+  const reserviert = await prisma.selfDisclosure.updateMany({
+    where: { id: bogen.id, submittedAt: null },
+    data: { submittedAt: jetzt, currentStep: "zusammenfassung", answers: antworten as object },
   });
+  if (reserviert.count !== 1) return { error: "Ihre Angaben wurden bereits übermittelt." };
+
+  const caseId = formular
+    ? await gebaereFall(bogen.id, antworten, formular, jetzt)
+    : access.caseId;
 
   await audit({
     organizationId: access.organizationId,
     userId: null,
-    action: "case.updated",
+    action: formular ? "case.created" : "case.updated",
     entityType: "case",
-    entityId: access.caseId,
-    metadata: { quelle: "selbstauskunft", ereignis: "eingegangen" },
+    entityId: caseId,
+    metadata: { quelle: formular ? "anfrageformular" : "selbstauskunft", ereignis: "eingegangen" },
   });
 }
 
