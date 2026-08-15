@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { FormularKarte } from "@/components/anfrage/formular-karte";
+import { ladeFormularStand } from "@/lib/actions/anfrage-verwaltung";
 import {
   FINANCING_TYPES,
   FINANCING_TYPE_LABELS,
@@ -13,13 +15,13 @@ import {
   PROPERTY_TYPE_LABELS,
 } from "@/lib/domain/enums";
 
-export default function NewCasePage() {
+export default async function NewCasePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         eyebrow="Neuer Vorgang"
         title="Neuen Fall anlegen"
-        subtitle="Lege einen Fall manuell an (z. B. aus E-Mail oder WhatsApp). Danach kannst du Dokumente hochladen oder einen Upload-Link erstellen."
+        subtitle="Lege einen Fall manuell an (z. B. aus E-Mail oder WhatsApp) oder lass den Kunden seine Angaben selbst eintragen. Danach kannst du Dokumente hochladen oder einen Upload-Link erstellen."
       />
 
       <Card>
@@ -82,6 +84,8 @@ export default function NewCasePage() {
           </form>
         </CardContent>
       </Card>
+
+      <FormularKarte stand={await ladeFormularStand()} />
     </div>
   );
 }
