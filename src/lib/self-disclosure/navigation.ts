@@ -1,4 +1,5 @@
 import { KATALOG, anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
+import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import type { Antworten, SichtbarerSchritt } from "@/lib/self-disclosure/types";
 
 /** Antwortschlüssel aus Schritt-ID (ggf. mit Personenpräfix) und Feld-ID. */
@@ -68,7 +69,7 @@ export function offeneFelder(
 ): Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> {
   const out: Array<{ schrittId: string; feldId: string; label: string; abschnitt: string }> = [];
   for (const s of sichtbareSchritte(antworten)) {
-    for (const feld of s.schritt.felder) {
+    for (const feld of sichtbareFelder(s.schritt, antworten, s.person)) {
       const v = antworten[schluessel(s.id, feld.id)];
       const leer = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
       if (!leer) continue;

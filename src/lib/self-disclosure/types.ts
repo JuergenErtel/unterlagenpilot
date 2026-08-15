@@ -29,6 +29,15 @@ export interface Feld {
   hinweis?: string;
   optionen?: { wert: string; label: string }[];
   ziel?: Ziel;
+  /**
+   * Prüft NUR ausdrücklich gegebene Antworten – fehlt die Steuerantwort,
+   * bleibt das Feld zu. Gleiche Regel wie bei `Schritt.sichtbar`.
+   *
+   * Gebraucht, seit Seiten mehrere Fragen bündeln: Auf „Objekt & Preis"
+   * stehen Kaufpreis, Baukosten und Restschuld nebeneinander, aber je nach
+   * Vorhaben gehört genau eines davon dorthin.
+   */
+  sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
 }
 
 export type Abschnitt =
