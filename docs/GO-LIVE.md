@@ -108,3 +108,37 @@ Verkaufsargument wird.**
   Sachsen mit dem Stand vor 2023) stehen im Modulkommentar. Der Ersatzsatz für
   unbekannte Bundesländer ist seither per Test an den höchsten Landessatz
   gebunden — er darf nie günstiger sein.
+
+## Nachträge zum Anfrageformular (15.08.2026)
+
+Beim Schlussreview gefunden, bewusst zurückgestellt — keiner davon blockiert
+den Betrieb, alle sind vor dem ersten fremden Vermittler zu erledigen:
+
+- **Der Mailversand hat keine eigene verifizierte Domain.** Im Resend-Konto
+  sind nur `miau-app.de` und `immocockpit24.de` verifiziert; das Domain-Limit
+  des Tarifs ist damit erreicht. Kundenmails gehen derzeit über Resends
+  Test-Absender hinaus und würden an echte Empfänger im Spam landen. Vor der
+  Live-Schaltung: Tarif erweitern oder einen Platz freimachen, dann
+  `baufidesk.de` verifizieren und `EMAIL_FROM` darauf setzen. Der Anzeigename
+  kommt seither aus der Organisation, die Adresse aus `EMAIL_FROM`.
+- **Kundenmails haben kein Reply-To.** Antwortet ein Interessent auf die
+  Einladung, läuft die Antwort auf die Absenderadresse statt zum Vermittler.
+- **Eine Slug-Änderung schreibt keinen Protokolleintrag** — der öffentliche
+  Eingang einer Organisation wechselt ohne Spur.
+- **`LegalPageShell` verlinkt das Logo auf `/`**, das hinter dem Gate liegt:
+  Wer die Datenschutzerklärung vom Formular aus liest und aufs Logo klickt,
+  landet in der Passwortabfrage.
+- **`fallwertLesen` (`takeover.ts`) vergleicht den rohen Enum-Wert des Falls
+  mit dem Katalogwert des Kunden** — für die Finanzierungsart sieht der
+  Vermittler dauerhaft eine Schein-Abweichung („kauf → kauf_bestand").
+- **Der Auskunftsexport (`/api/cases/[id]/dsgvo`) kennt `SelfDisclosure`
+  nicht.** Für einen aus dem Formular geborenen Fall fehlen damit die
+  Antworten ohne Zielfeld und der Einwilligungsnachweis.
+- **Kein Impressum, keine `robots.txt`.** Mit dem Formular gibt es erstmals
+  eine öffentliche, gewerblich genutzte Seite; § 5 DDG wird damit fällig.
+- **Der `selfEmployment`-Schreibzweig des gemeinsamen Schreibkerns ist von
+  keinem Test berührt**, ebenso die Update-Zweige von `income` und
+  `employment`.
+- **Die Fallnummern-Race-Logik existiert zweimal**: als `mitFallnummer` und
+  als eigene Schleife in `src/lib/platforms/case-writer.ts`, die der
+  FinLink-Lead-Abgleich alle 15 Minuten benutzt.
