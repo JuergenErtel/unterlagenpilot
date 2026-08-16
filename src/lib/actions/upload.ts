@@ -161,8 +161,17 @@ export async function brokerUploadOne(caseId: string, formData: FormData): Promi
     return { uploaded: 0, rejected: [], error: "Keine Datei empfangen." };
   }
 
-  // Antragsteller-Zuordnung auflösen (Vorauswahl 1; "none" = keine Zuordnung).
-  const position = String(formData.get("applicantPosition") ?? "1");
+  /*
+   * Antragsteller-Zuordnung auflösen. "none" oder ein fehlendes Feld heißt:
+   * keine Zuordnung – die Namenserkennung der Pipeline entscheidet.
+   *
+   * Der frühere Rückfall auf "1" war ein stiller Griff ins Blinde: Eine
+   * mitgegebene Zuordnung wird als "manuell" gestempelt, und was "manuell"
+   * ist, korrigiert die Namenserkennung nie wieder (applicant-match.ts). Ein
+   * vergessenes Formularfeld hätte damit dauerhaft alle Dokumente an
+   * Antragsteller 1 genagelt.
+   */
+  const position = String(formData.get("applicantPosition") ?? "none");
   let applicantId: string | null = null;
   let applicantName: string | null = null;
   if (position === "1" || position === "2") {

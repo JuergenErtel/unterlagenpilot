@@ -9,53 +9,21 @@ seinen eigenen Entwurf.
 
 ---
 
-## Fehler: Die Prioritätsleiter mahnt Dinge an, die längst erledigt sind
+## Fehler: Falsch eingestufte Dokumente (aus dem Topcic-Fund)
 
-**Aufgenommen:** 15.08.2026
+**Aufgenommen:** 16.08.2026
 
-Steht ein Fall auf „Kredit zugesagt", darf die Leiter nicht weiter behaupten, ein
-Erstgespräch sei offen oder es fehlten Unterlagen.
+Beim Aufräumen des Topcic-Falls gefunden und bewusst nicht mitbehoben:
+`Ausweis_Mate.pdf` ist als **Grundbuchauszug** eingestuft. Folge ist nicht nur
+ein fehlender Ausweis, sondern auch ein **falsches Grün**: Die Position
+„Grundbuchauszug" steht auf „vorhanden", obwohl im Fall keiner liegt.
 
-**Warum das passiert:** Nicht jeder Schritt läuft durch BaufiDesk. Kunden
-schicken Unterlagen oft per Mail, und Jürgen pflegt sie direkt in Europace ein.
-Häufig wird nur das Erstgespräch hier geführt — nach dem Absprung nach Europace
-wird in BaufiDesk nichts mehr aktualisiert.
-
-**Was daran zu bedenken ist:** Es genügt nicht, den einen Status abzufragen. Die
-Leiter rechnet aus mehreren Quellen (Checkliste, Erstgespräch, Dokumentenstand),
-und jede davon weiß nichts von Europace. Die eigentliche Frage lautet: **Ab
-welchem Punkt hört BaufiDesk auf, den Fall zu führen** — und wie sagt es das,
-ohne den Fall zu verstecken, den Jürgen später doch wieder anfassen will. Siehe
-`LOCKED_CASE_STATUSES` in `src/lib/domain/enums.ts`; dort steht bereits eine
-Antwort auf eine verwandte Frage.
-
-## Fehler: Freigegebene Dokumente bleiben als Nachforderung stehen
-
-**Aufgenommen:** 16.08.2026 · **Beobachtet von Jürgen im Fall Topcic**
-
-Die Personalausweise wurden hochgeladen **und freigegeben** — trotzdem steht
-der Punkt weiter als Nachforderung da.
-
-**Was daran zu bedenken ist:** Zwischen „Dokument ist freigegeben" und
-„Checklistenpunkt ist erfüllt" liegen mehrere Übersetzungsschritte, und jeder
-davon kann der Schuldige sein. Vor jedem Fix ist zu klären, **welcher**:
-
-1. **Zuordnung zum Antragsteller.** Genau hier lag schon einmal die Ursache
-   eines „Perso fehlt"-Rätsels — siehe die Notiz zur Checkliste pro
-   Antragsteller. Bei zwei Antragstellern zählt ein Ausweis nur für die
-   Person, der er zugeordnet ist; hängt er am Fall statt an der Person oder an
-   der falschen Person, bleibt die Zeile der anderen offen.
-2. **Dokumenttyp.** Erkennt die KI den Ausweis als `personalausweis`, oder ist
-   er als `sonstige` eingestuft und erfüllt deshalb keinen Punkt?
-3. **Wer die Nachforderung anzeigt.** „Nachforderung" kann zweierlei heißen:
-   ein offener `CaseChecklistItem` oder ein `MissingDocumentRequest`. Ein
-   einmal erzeugter Anforderungsdatensatz wird nicht von selbst `resolved` —
-   möglicherweise stimmt die Checkliste längst und nur die alte Anforderung
-   steht noch herum.
-
-**Erster Schritt:** Den Fall Topcic in der Produktionsdatenbank ansehen
-(`scripts/supabase-sql.sh`) und die drei Ebenen einzeln prüfen, statt am
-Verhalten zu raten. Die Antwort auf „welche der drei" bestimmt den Fix.
+**Was daran zu bedenken ist:** Das ist die KI-Einstufung, nicht die
+Checklistenlogik. Zu klären wäre, ob eine niedrige Zuversicht
+(`Document.confidence`) sichtbar gemacht werden sollte — eine
+Falscheinstufung, die als erfüllt zählt, ist gefährlicher als eine, die
+gar nichts erfüllt. Die Freigabe im Review-Center bestätigt heute den
+Dokumenttyp mit, ohne ihn zu betonen.
 
 ## Wunsch: Finanzierungszertifikat
 

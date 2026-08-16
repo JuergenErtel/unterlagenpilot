@@ -40,8 +40,25 @@ export function BrokerUploadForm({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [result, setResult] = useState<UploadOutcome | null>(null);
+  /*
+   * Bei MEHREREN Antragstellern steht hier bewusst KEINE Person, sondern die
+   * automatische Erkennung.
+   *
+   * Vorher war Antragsteller 1 vorausgewählt. Ein Stapel gemischter Dateien
+   * landete damit geschlossen bei der ersten Person – und schlimmer: Der
+   * Upload stempelt eine mitgegebene Zuordnung als "manuell" (pipeline.ts),
+   * und was "manuell" ist, fasst die Namenserkennung nie wieder an
+   * (applicant-match.ts). Die Voreinstellung sperrte also dauerhaft die
+   * Korrektur aus, die den Fehler geheilt hätte. Fall UP-2026-0015
+   * (16.08.2026): zehn Dokumente auf Antragsteller 1, darunter der Ausweis
+   * von Antragsteller 2 – die Ausweisposition blieb offen, egal wie oft
+   * nachgeladen wurde.
+   *
+   * Bei genau EINER Person bleibt sie vorausgewählt: Dort kann die Zuordnung
+   * nicht falsch sein, und die Erkennung müsste dasselbe Ergebnis erraten.
+   */
   const [applicantPosition, setApplicantPosition] = useState<string>(
-    applicants.length > 0 ? String(applicants[0]!.position) : "none"
+    applicants.length === 1 ? String(applicants[0]!.position) : "none"
   );
   const hiddenInput = useRef<HTMLInputElement>(null);
 
@@ -107,12 +124,16 @@ export function BrokerUploadForm({
             disabled={busy}
             className="h-9 rounded-md border bg-background px-3 text-sm"
           >
+            {/*
+              Die Erkennung steht ZUERST, weil sie die Voreinstellung ist –
+              eine vorausgewählte Zeile am Listenende liest niemand.
+            */}
+            <option value="none">Automatisch aus dem Dokument erkennen</option>
             {applicants.map((a) => (
               <option key={a.position} value={String(a.position)}>
                 {a.name || `Antragsteller ${a.position}`}
               </option>
             ))}
-            <option value="none">Nicht zuordnen</option>
           </select>
         </label>
       ) : null}

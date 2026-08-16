@@ -52,6 +52,20 @@ export interface ResolvedChecklistItem extends ChecklistItemDef {
   customerVisible: boolean;
   /** Tatsächlich verlangte Anzahl (bei perApplicant × Anzahl Antragsteller). */
   effectiveRequiredCount: number;
+  /**
+   * Bei personenbezogenen Positionen: die Antragsteller, deren Soll NICHT
+   * erfüllt ist. Sonst leer.
+   *
+   * Warum das eigens ausgewiesen wird: `matchedDocuments` und
+   * `effectiveRequiredCount` zählen über den GANZEN Fall, der Status wird bei
+   * `perApplicant` aber je Person gerechnet. Hängen im Fall zwei Ausweise, die
+   * beide derselben Person gehören, meldet die Liste „2 von 2" und trotzdem
+   * „unvollständig" – ein Widerspruch, aus dem niemand ableiten kann, wer
+   * gemeint ist. Genau daran ist der Fall UP-2026-0015 aufgelaufen
+   * (16.08.2026): Beide Ausweisdateien hingen an Antragsteller 1, und der
+   * Vermittler lud immer wieder nach.
+   */
+  offeneAntragsteller: string[];
 }
 
 /** Wählt die relevanten Template-Keys für einen Fall. */
@@ -267,22 +281,33 @@ function resolveStatus(
   const effectiveRequiredCount = perApplicant ? perPerson * applicantCount : perPerson;
 
   let status: ResolvedChecklistItem["status"] = "offen";
+  let offeneAntragsteller: string[] = [];
 
-  if (matches.length > 0) {
-    if (perApplicant && applicantIds.length > 0) {
-      // Jede Person muss ihr eigenes Soll erfüllen. Nicht zugeordnete Dokumente
-      // können keiner Person gutgeschrieben werden – der Vermittler ordnet sie
-      // im Review-Center zu. Sonst gälte die Position als erfüllt, obwohl von
-      // Antragsteller 2 nichts vorliegt.
-      const perResults = applicantIds.map((id) =>
-        evaluateMatches(def, matches.filter((m) => m.applicantId === id), perPerson)
-      );
-      const allFulfilled = perResults.every((r) => r.fulfilled);
-      status = allFulfilled ? (perResults.some((r) => r.tooOld) ? "nicht_aktuell" : "vorhanden") : "unvollstaendig";
-    } else {
-      const { fulfilled, tooOld } = evaluateMatches(def, matches, effectiveRequiredCount);
-      status = fulfilled ? (tooOld ? "nicht_aktuell" : "vorhanden") : "unvollstaendig";
+  // Je Person auswerten – auch OHNE Treffer. Steht gar nichts im Fall, ist die
+  // Position für jede Person offen, und genau das soll die Anzeige sagen
+  // können. Die frühere Fassung rechnete das nur innerhalb von
+  // `matches.length > 0` und ließ die Frage „für wen?" im häufigsten Fall
+  // unbeantwortet.
+  if (perApplicant && applicantIds.length > 0) {
+    const perResults = applicantIds.map((id) => ({
+      id,
+      ...evaluateMatches(def, matches.filter((m) => m.applicantId === id), perPerson),
+    }));
+    // Nicht zugeordnete Dokumente können keiner Person gutgeschrieben werden –
+    // der Vermittler ordnet sie im Review-Center zu. Sonst gälte die Position
+    // als erfüllt, obwohl von Antragsteller 2 nichts vorliegt.
+    offeneAntragsteller = perResults.filter((r) => !r.fulfilled).map((r) => r.id);
+    if (matches.length > 0) {
+      status =
+        offeneAntragsteller.length === 0
+          ? perResults.some((r) => r.tooOld)
+            ? "nicht_aktuell"
+            : "vorhanden"
+          : "unvollstaendig";
     }
+  } else if (matches.length > 0) {
+    const { fulfilled, tooOld } = evaluateMatches(def, matches, effectiveRequiredCount);
+    status = fulfilled ? (tooOld ? "nicht_aktuell" : "vorhanden") : "unvollstaendig";
   }
 
   return {
@@ -290,6 +315,7 @@ function resolveStatus(
     status,
     matchedDocuments: matches.length,
     effectiveRequiredCount,
+    offeneAntragsteller,
     // KO-/Risikobewertungen sind intern; reine Unterlagen-Checkliste ist für Kunde sichtbar.
     customerVisible: def.scope !== "bankbezogen",
   };
@@ -306,6 +332,33 @@ function rank(level: RequirementLevel): number {
     case "optional":
       return 1;
   }
+}
+
+/**
+ * Der Zusatz „Fehlt noch für: …" zu einer personenbezogenen Position.
+ *
+ * `null`, wenn es nichts zu sagen gibt – bei fallweiten Positionen, bei einem
+ * einzelnen Antragsteller oder wenn alle ihr Soll erfüllt haben. Ein Satz, der
+ * nur „Fehlt noch für:" ohne Namen lautet, wäre schlimmer als keiner.
+ *
+ * Namenlose Antragsteller (im Lead steht oft nur eine E-Mail) bekommen ihre
+ * Position: „Antragsteller 2" ist eine brauchbare Auskunft, eine leere
+ * Zeichenkette nicht.
+ */
+export function fehltFuerSatz(
+  offeneAntragsteller: string[],
+  applicants: Array<{ id: string; position: number; vorname?: string | null; nachname?: string | null }>
+): string | null {
+  if (offeneAntragsteller.length === 0 || applicants.length < 2) return null;
+  const namen = offeneAntragsteller
+    .map((id) => applicants.find((a) => a.id === id))
+    .filter((a): a is (typeof applicants)[number] => a !== undefined)
+    .map(
+      (a) =>
+        [a.vorname, a.nachname].filter(Boolean).join(" ").trim() || `Antragsteller ${a.position}`
+    );
+  if (namen.length === 0) return null;
+  return `Fehlt noch für: ${namen.join(" und ")}.`;
 }
 
 /** Plattformbezug einer Position (für Nachforderungsfilter). */

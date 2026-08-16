@@ -19,6 +19,7 @@ const position = (
   matchedDocuments: 0,
   customerVisible: true,
   effectiveRequiredCount: 1,
+  offeneAntragsteller: [],
 });
 
 const anforderung = (

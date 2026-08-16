@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getCaseAggregate, type CaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { readinessTone, type Tone } from "@/lib/ui/tone";
+import { fehltFuerSatz } from "@/lib/checklists/engine";
 import type { Auslaufband } from "@/lib/machbarkeit/bewertung";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
 import { ladeSelbstauskunftStand } from "./selbstauskunft-stand";
@@ -227,7 +228,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   nextActions.push({ title: "Europace-Kopiermaske vorbereiten", detail: "Geprüfte Felder für die Einreichung übernehmen.", href: `/cases/${caseId}/export?platform=europace`, tone: "neutral" });
 
   // Fehlende Unterlagen gruppiert
-  const missingGroups = buildMissingGroups(agg.missing, missingRequests);
+  const missingGroups = buildMissingGroups(agg.missing, missingRequests, caseRow.applicants);
 
   const band = readinessTone(agg.readiness.score);
   return {
@@ -264,11 +265,25 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
 
 function buildMissingGroups(
   aggMissing: Awaited<ReturnType<typeof getCaseAggregate>>["missing"],
-  requests: Array<{ requirementKey: string; title: string; reason: string; level: string; platform: string | null }>
+  requests: Array<{ requirementKey: string; title: string; reason: string; level: string; platform: string | null }>,
+  applicants: Array<{ id: string; position: number; vorname: string | null; nachname: string | null }>
 ): CockpitData["missingGroups"] {
   const sofort = aggMissing.filter((m) => m.level === "zwingend");
   const spaeter = aggMissing.filter((m) => m.level === "spaeter");
   const bank = aggMissing.filter((m) => m.level === "bankabhaengig");
+
+  /*
+   * Bei personenbezogenen Positionen MUSS dazustehen, für wen sie offen ist.
+   * Die Zahlen daneben (`matchedDocuments` / `effectiveRequiredCount`) zählen
+   * über den ganzen Fall, der Status wird je Person gerechnet – ohne diesen
+   * Zusatz meldet die Karte „2 von 2" und trotzdem „fehlt". Fall UP-2026-0015,
+   * 16.08.2026: Beide Ausweise hingen an Antragsteller 1, und aus der Anzeige
+   * war nicht abzuleiten, dass es um Antragsteller 2 ging.
+   */
+  const grund = (m: (typeof aggMissing)[number], standard: string): string => {
+    const zusatz = fehltFuerSatz(m.offeneAntragsteller ?? [], applicants);
+    return zusatz ? `${standard} ${zusatz}` : standard;
+  };
 
   const reqItems = requests.map((r) => ({
     key: r.requirementKey,
@@ -278,9 +293,9 @@ function buildMissingGroups(
   }));
 
   const groups: CockpitData["missingGroups"] = [
-    { key: "sofort", title: "Sofort erforderlich", tone: "blocker", items: reqItems.length ? reqItems : sofort.map((m) => ({ key: m.key, title: m.name, reason: "Pflichtunterlage – blockiert die Einreichung.", platform: (m.platforms[0] ?? "allgemein") as Platform | "allgemein" })) },
-    { key: "spaeter", title: "Später erforderlich", tone: "review", items: spaeter.map((m) => ({ key: m.key, title: m.name, reason: "Wird im weiteren Verlauf benötigt.", platform: (m.platforms[0] ?? "allgemein") as Platform | "allgemein" })) },
-    { key: "bank", title: "Nur für bestimmte Banken", tone: "neutral", items: bank.map((m) => ({ key: m.key, title: m.name, reason: "Je nach Bankanforderung erforderlich.", platform: "allgemein" as const })) },
+    { key: "sofort", title: "Sofort erforderlich", tone: "blocker", items: reqItems.length ? reqItems : sofort.map((m) => ({ key: m.key, title: m.name, reason: grund(m, "Pflichtunterlage – blockiert die Einreichung."), platform: (m.platforms[0] ?? "allgemein") as Platform | "allgemein" })) },
+    { key: "spaeter", title: "Später erforderlich", tone: "review", items: spaeter.map((m) => ({ key: m.key, title: m.name, reason: grund(m, "Wird im weiteren Verlauf benötigt."), platform: (m.platforms[0] ?? "allgemein") as Platform | "allgemein" })) },
+    { key: "bank", title: "Nur für bestimmte Banken", tone: "neutral", items: bank.map((m) => ({ key: m.key, title: m.name, reason: grund(m, "Je nach Bankanforderung erforderlich."), platform: "allgemein" as const })) },
   ];
   return groups.filter((g) => g.items.length > 0);
 }
