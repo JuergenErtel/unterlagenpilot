@@ -83,6 +83,37 @@ export function schrittFinden(id: string, antworten: Antworten, umfang: Umfang):
   return i < 0 ? null : kette[i]!;
 }
 
+/**
+ * Die Zusammenfassung ist ein gueltiges Ziel, aber keine Katalogseite: Wer die
+ * letzte Seite abgeschickt, den Bogen aber nicht abgesendet hat, steht dort.
+ */
+const ZUSAMMENFASSUNG = "zusammenfassung";
+
+/**
+ * Wohin der Einstieg (`/selbstauskunft/<token>`) weiterleitet.
+ *
+ * Warum das geprueft werden MUSS: Die Einstiegsseite schickte ungeprueft auf
+ * `bogen.currentStep`, und die Schrittseite schickt bei Unbekanntem zurueck auf
+ * den Einstieg. Von den vierunddreissig Schritt-IDs vor dem Katalogschnitt
+ * ueberleben genau zwei, und `findeInKette` faengt nur die Form "p1.<id>" ab.
+ * Ein Bogen mit `currentStep: "kaufpreis"` lief damit in
+ * ERR_TOO_MANY_REDIRECTS statt sich zu heilen – `currentStep` wird nur beim
+ * Speichern neu geschrieben, und dazu kam der Kunde ja nie.
+ *
+ * Der Rueckfall ist bewusst die erste Seite der KETTE, nicht `KATALOG[0]`: Er
+ * soll den Umfang und die Bedingungen dieses Bogens achten.
+ */
+export function einstiegsSchritt(
+  currentStep: string | null | undefined,
+  antworten: Antworten,
+  umfang: Umfang
+): string {
+  if (currentStep === ZUSAMMENFASSUNG) return ZUSAMMENFASSUNG;
+  const kette = sichtbareSchritte(antworten, umfang);
+  const i = currentStep ? findeInKette(kette, currentStep) : -1;
+  return (i < 0 ? kette[0] : kette[i])!.id;
+}
+
 export function naechsterSchritt(id: string, antworten: Antworten, umfang: Umfang): SichtbarerSchritt | null {
   const kette = sichtbareSchritte(antworten, umfang);
   const i = kette.findIndex((s) => s.id === id);

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
-import { sichtbareSchritte } from "@/lib/self-disclosure/navigation";
+import { einstiegsSchritt } from "@/lib/self-disclosure/navigation";
 import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -34,6 +34,9 @@ export default async function SelbstauskunftEinstieg({
 
   const antworten = ((bogen?.answers as Antworten | null) ?? {}) as Antworten;
   const umfang = umfangDesBogens({ formularId: bogen?.link?.formularId ?? null });
-  const ziel = bogen?.currentStep ?? sichtbareSchritte(antworten, umfang)[0]!.id;
+  // GEPRUEFT, nicht bloss weitergereicht: Ein `currentStep`, den es nicht mehr
+  // gibt, schickte die Schrittseite zurueck hierher und diese Seite sofort
+  // wieder dorthin – ERR_TOO_MANY_REDIRECTS ohne Selbstheilung.
+  const ziel = einstiegsSchritt(bogen?.currentStep, antworten, umfang);
   redirect(`/selbstauskunft/${token}/${ziel}`);
 }

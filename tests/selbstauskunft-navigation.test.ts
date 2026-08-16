@@ -7,6 +7,7 @@ import {
   fortschritt,
   schluessel,
   personenSchluessel,
+  einstiegsSchritt,
 } from "@/lib/self-disclosure/navigation";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
@@ -168,5 +169,50 @@ describe("Alte currentStep-Werte mit Personen-Praefix (vor dieser Aufgabe gespei
     expect(f.position).toBe(
       sichtbareSchritte(zuZweit, "voll").findIndex((s) => s.id === "einnahmen") + 1
     );
+  });
+});
+
+/**
+ * Wohin der Einstieg (`/selbstauskunft/<token>`) weiterleitet.
+ *
+ * Der Fund: Die Einstiegsseite schickte UNGEPRUEFT auf `bogen.currentStep`,
+ * und die Schrittseite schickt bei Unbekanntem zurueck auf den Einstieg. Von
+ * den vierunddreissig alten Schritt-IDs ueberleben nach dem Katalogschnitt
+ * genau zwei; `findeInKette` faengt nur die Form "p1.<id>" ab. Ein Bogen mit
+ * `currentStep: "kaufpreis"` lief damit in ERR_TOO_MANY_REDIRECTS – ohne jede
+ * Selbstheilung, denn `currentStep` wird nur beim Speichern neu geschrieben,
+ * und dazu kam der Kunde ja nie.
+ */
+describe("Einstieg", () => {
+  const leereAntworten: Antworten = {};
+
+  it("faellt bei einem currentStep, den es nicht mehr gibt, auf die erste Seite", () => {
+    expect(einstiegsSchritt("kaufpreis", leereAntworten, "voll")).toBe("vorhaben");
+  });
+
+  it("faellt auch ohne gemerkten Schritt auf die erste Seite", () => {
+    expect(einstiegsSchritt(null, leereAntworten, "voll")).toBe("vorhaben");
+  });
+
+  it("nimmt einen Schritt, den es noch gibt", () => {
+    expect(einstiegsSchritt("finanzierungswunsch", leereAntworten, "voll")).toBe(
+      "finanzierungswunsch"
+    );
+  });
+
+  it("normalisiert den alten Personen-Praefix statt ihn weiterzureichen", () => {
+    expect(einstiegsSchritt("p1.personen", leereAntworten, "voll")).toBe("personen");
+  });
+
+  it("faellt auf die erste Seite, wenn der gemerkte Schritt im kurzen Weg fehlt", () => {
+    // Ein Bogen kann vom persoenlichen Link auf einen Formular-Link wechseln;
+    // "konditionen" gibt es dort nicht.
+    expect(einstiegsSchritt("konditionen", leereAntworten, "kurz")).toBe("vorhaben");
+  });
+
+  it("laesst die Zusammenfassung stehen", () => {
+    // Sie ist keine Katalogseite, aber ein gueltiges Ziel: Wer die letzte Seite
+    // abgeschickt, aber nicht abgesendet hat, steht genau dort.
+    expect(einstiegsSchritt("zusammenfassung", leereAntworten, "voll")).toBe("zusammenfassung");
   });
 });
