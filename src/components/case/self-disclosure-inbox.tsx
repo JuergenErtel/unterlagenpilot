@@ -150,9 +150,15 @@ export function SelfDisclosureInbox({
       {ohneZiel.length > 0 && (
         <section className="space-y-2">
           <h4 className="text-sm font-semibold">Nur zur Kenntnis</h4>
+          {/* Zweierlei steht hier, seit die Übernahme bei zwei Antworten auf
+              dieselbe Spalte die gerade sichtbare bevorzugt: Angaben ohne
+              Speicherort UND überholte Beträge, die sehr wohl ein Feld haben.
+              Der Vermittler muss beides sehen, geschrieben wird keines. */}
           <p className="text-xs text-muted-foreground">
-            Angaben ohne eigenes Feld in der Fallakte – etwa Warmmiete, Unterhalt und die freien
-            Listen.
+            Angaben, die nichts in der Fallakte überschreiben: solche ohne eigenes Feld (Warmmiete,
+            Unterhalt, die freien Listen) und ältere Antworten, die inzwischen von einer neueren auf
+            dasselbe Feld überholt wurden – etwa eine Restschuld, nachdem der Kunde auf Kauf
+            umgestellt hat.
           </p>
           <dl className="space-y-1 text-sm">
             {ohneZiel.map((o) => (
