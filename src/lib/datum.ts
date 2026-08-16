@@ -33,3 +33,41 @@ export function datumDe(wert: string | Date | null | undefined): string {
   if (Number.isNaN(datum.getTime())) return "—";
   return FORMAT.format(datum);
 }
+
+/**
+ * Der Kalendertag eines Zeitpunkts in Berliner Zeit, als `JJJJ-MM-TT`.
+ *
+ * `en-CA` liefert genau dieses Format – die Alternative wäre, aus den Teilen
+ * einer `formatToParts`-Liste selbst eine Zeichenkette zu bauen.
+ *
+ * Gebraucht überall dort, wo „heute", „überfällig" oder „diese Woche"
+ * entschieden wird. Die naheliegende Rechnung über `getTime()` und 86400000
+ * ist dafür falsch: Der Server läuft in UTC, und eine Frist, die am 16.08. um
+ * 01:00 Berliner Zeit gesetzt wurde, liegt in UTC noch am 15.08. Sie wäre
+ * einen Tag zu früh überfällig – jede Nacht zwischen 0 und 2 Uhr, und im
+ * Sommer eine Stunde länger.
+ */
+const TAG_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "Europe/Berlin",
+});
+
+export function berlinerTag(wert: Date): string {
+  return TAG_FORMAT.format(wert);
+}
+
+/**
+ * Ganze Kalendertage zwischen zwei Zeitpunkten, in Berliner Zeit gezählt:
+ * positiv, wenn `a` später liegt als `b`.
+ *
+ * Gerechnet wird über zwei künstliche UTC-Mitternachten der jeweiligen
+ * Kalendertage. Dadurch fällt die Sommerzeit heraus – zwischen zwei echten
+ * Berliner Mitternachten liegen im März 23 und im Oktober 25 Stunden, eine
+ * Division durch 24 Stunden zählte dort einen Tag zu wenig bzw. zu viel.
+ */
+export function tageDifferenz(a: Date, b: Date): number {
+  const alsUtc = (d: Date) => Date.parse(`${berlinerTag(d)}T00:00:00Z`);
+  return Math.round((alsUtc(a) - alsUtc(b)) / 86_400_000);
+}
