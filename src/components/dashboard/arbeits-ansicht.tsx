@@ -1,20 +1,18 @@
 import Link from "next/link";
-import { Plus, PlayCircle, CalendarClock } from "lucide-react";
+import { Plus, PlayCircle, ListTodo } from "lucide-react";
 import { getDashboardData } from "@/lib/cases/dashboard";
 import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Kennzahlenband } from "@/components/dashboard/kennzahlenband";
-import { TodoCaseCard } from "@/components/dashboard/todo-case-card";
 import { Pipeline } from "@/components/case/pipeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
- * Die Arbeitssicht der Arbeitszentrale: priorisierte To-dos, heute Fälliges,
- * der Statustrichter und das Kennzahlenband.
+ * Die Arbeitssicht der Arbeitszentrale: Statustrichter und Kennzahlenband.
  *
  * Bis zum 12.08.2026 war das die gesamte Dashboard-Seite; seither liegt sie
- * unter `?ansicht=tabelle` neben dem Board.
+ * unter `?ansicht=tabelle` neben dem Board. Seit dem 16.08.2026 zeigt sie
+ * keine Aufgaben mehr – die stehen unter /heute.
  */
 export async function ArbeitsAnsicht({
   organizationId,
@@ -38,87 +36,50 @@ export async function ArbeitsAnsicht({
 
   return (
     <>
-      {/* 1) Priorisierte To-do-Liste */}
-      <div>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="eyebrow">Heute dran</h2>
-          <Button asChild variant="link" size="sm"><Link href="/cases">Alle Fälle ansehen</Link></Button>
-        </div>
-        <div className="space-y-3">
-          {data.todos.length === 0 && keineFaelle ? (
-            // Erstnutzung: der leere Zustand muss sagen, WAS zu tun ist.
-            <Card>
-              <CardContent className="space-y-4 p-8">
-                <div className="text-center">
-                  <p className="text-base font-semibold">Willkommen bei BaufiDesk.</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    In drei Schritten ist Ihr erster Fall bankfertig.
-                  </p>
-                </div>
-                <ol className="mx-auto grid max-w-lg gap-3 text-sm">
-                  <OnboardingStep n={1} title="Fall anlegen" text="Name und Finanzierungsart genügen – alles Weitere ergänzt die KI aus den Unterlagen." />
-                  <OnboardingStep n={2} title="Upload-Link an den Kunden senden" text="Im Fall unter „Sicherer Upload-Link“. Der Kunde lädt ohne Login hoch." />
-                  <OnboardingStep n={3} title="Prüfen und exportieren" text="KI-Prüfung starten, Vorschläge bestätigen, Paket für die Bank erzeugen." />
-                </ol>
-                <div className="flex justify-center gap-2 pt-1">
-                  <Button asChild><Link href="/cases/new"><Plus />Ersten Fall anlegen</Link></Button>
-                  {demoCaseId && (
-                    <Button asChild variant="outline">
-                      <Link href={`/cases/${demoCaseId}`}><PlayCircle />Demo-Fall ansehen</Link>
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : data.todos.length === 0 ? (
-            <Card>
-              <CardContent className="p-10 text-center">
-                <p className="text-sm font-medium">Nichts Dringendes offen.</p>
-                <p className="mt-1 text-sm text-muted-foreground">Alle aktiven Fälle sind auf Kurs. Neuen Fall anlegen, um loszulegen.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            data.todos.map((t) => <TodoCaseCard key={t.caseId} item={t} />)
-          )}
-        </div>
-      </div>
+      {/*
+        Erstnutzung: der leere Zustand muss sagen, WAS zu tun ist.
 
-      {/* Wiedervorlagen / Fristen / Bank-Nachforderungen */}
-      {data.followups.length > 0 && (
+        Die beiden Abschnitte "Heute dran" und "Heute faellig", die hier bis
+        zum 16.08.2026 standen, sind nach /heute UMGEZOGEN. Sie beantworteten
+        dieselbe Frage in zwei Listen – ein Fall mit ueberfaelliger
+        Wiedervorlage stand in beiden –, waren bei sechs Eintraegen gedeckelt
+        und nach nichts sortiert, was mit Dringlichkeit zu tun hatte. Wer sie
+        hier wieder einbaut, hat sie zum zweiten Mal.
+      */}
+      {keineFaelle ? (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarClock className="h-4 w-4" /> Heute fällig
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {data.followups.map((f) => (
-              <Link
-                key={`${f.caseId}-${f.grund}`}
-                href={`/cases/${f.caseId}/verwaltung`}
-                className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm hover:bg-accent"
-              >
-                <div>
-                  <span className="font-medium">{f.kundenName}</span>
-                  <span className="ml-2 font-mono text-xs text-muted-foreground">{f.caseNumber}</span>
-                  {/* Ein stabiler <span> je Grund – React manipuliert nie rohe
-                      Textknoten-Geschwister, die ein Auto-Übersetzer wegziehen
-                      könnte (parentNode-Crash). */}
-                  <div className="text-xs text-muted-foreground">
-                    {f.grund === "wiedervorlage" && <span>Wiedervorlage fällig</span>}
-                    {f.grund === "frist" && <span>Frist: {f.naechsteFrist?.title ?? "—"}</span>}
-                    {f.grund === "bank_nachforderung" && <span>{f.offeneBankforderungen} offene Bank-Nachforderung(en)</span>}
-                  </div>
-                </div>
-                {f.faelligAm && (
-                  <Badge variant={f.faelligAm < new Date() ? "warning" : "neutral"}>
-                    {f.faelligAm.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                  </Badge>
-                )}
-              </Link>
-            ))}
+          <CardContent className="space-y-4 p-8">
+            <div className="text-center">
+              <p className="text-base font-semibold">Willkommen bei BaufiDesk.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                In drei Schritten ist Ihr erster Fall bankfertig.
+              </p>
+            </div>
+            <ol className="mx-auto grid max-w-lg gap-3 text-sm">
+              <OnboardingStep n={1} title="Fall anlegen" text="Name und Finanzierungsart genügen – alles Weitere ergänzt die KI aus den Unterlagen." />
+              <OnboardingStep n={2} title="Upload-Link an den Kunden senden" text="Im Fall unter „Sicherer Upload-Link“. Der Kunde lädt ohne Login hoch." />
+              <OnboardingStep n={3} title="Prüfen und exportieren" text="KI-Prüfung starten, Vorschläge bestätigen, Paket für die Bank erzeugen." />
+            </ol>
+            <div className="flex justify-center gap-2 pt-1">
+              <Button asChild><Link href="/cases/new"><Plus />Ersten Fall anlegen</Link></Button>
+              {demoCaseId && (
+                <Button asChild variant="outline">
+                  <Link href={`/cases/${demoCaseId}`}><PlayCircle />Demo-Fall ansehen</Link>
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
+          <div className="flex items-center gap-2 text-sm">
+            <ListTodo className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>Was heute zu tun ist, steht in der Tagesliste – nach Dringlichkeit sortiert.</span>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/heute">Zu den To Dos</Link>
+          </Button>
+        </div>
       )}
 
       {/* 2) Statustrichter */}

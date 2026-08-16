@@ -184,8 +184,8 @@ function termin(
   if (a.naechsteFrist) {
     kandidaten.push({ am: a.naechsteFrist.dueDate, grund: "frist", fristTitel: a.naechsteFrist.title });
   }
-  if (kandidaten.length === 0) return null;
-  return kandidaten.sort((x, y) => x.am.getTime() - y.am.getTime())[0];
+  const frueheste = kandidaten.sort((x, y) => x.am.getTime() - y.am.getTime())[0];
+  return frueheste ?? null;
 }
 
 function einstufen(

@@ -67,7 +67,7 @@ describe("ordneAufgaben – welche Aufgaben überhaupt erscheinen", () => {
 
 describe("ordneAufgaben – Dringlichkeit", () => {
   it("stuft eine vergangene Wiedervorlage als überfällig ein und zählt die Tage", () => {
-    const [a] = ordneAufgaben([roh({ caseId: "1", wiedervorlage: tag("2026-08-16") })], JETZT);
+    const a = ordneAufgaben([roh({ caseId: "1", wiedervorlage: tag("2026-08-16") })], JETZT)[0]!;
     expect(a.dringlichkeit).toBe("ueberfaellig");
     expect(a.tageUeberfaellig).toBe(3);
   });
@@ -75,7 +75,7 @@ describe("ordneAufgaben – Dringlichkeit", () => {
   it("stuft eine heute fällige Wiedervorlage als heute ein, nicht als überfällig", () => {
     // Fällig heute früh um 9, jetzt ist es 10 – der Zeitpunkt liegt in der
     // Vergangenheit, der KALENDERTAG aber ist heute.
-    const [a] = ordneAufgaben([roh({ caseId: "1", wiedervorlage: tag("2026-08-19") })], JETZT);
+    const a = ordneAufgaben([roh({ caseId: "1", wiedervorlage: tag("2026-08-19") })], JETZT)[0]!;
     expect(a.dringlichkeit).toBe("heute");
     expect(a.tageUeberfaellig).toBe(0);
   });
@@ -83,38 +83,38 @@ describe("ordneAufgaben – Dringlichkeit", () => {
   it("zählt Tage in Berliner Zeit, nicht in UTC", () => {
     // 01:30 Berliner Zeit am 19.08. ist in UTC noch der 18.08. – eine
     // Rechnung über UTC-Tage hielte diese Wiedervorlage für gestern.
-    const [a] = ordneAufgaben(
+    const a = ordneAufgaben(
       [roh({ caseId: "1", wiedervorlage: new Date("2026-08-19T01:30:00+02:00") })],
       JETZT
-    );
+    )[0]!;
     expect(a.dringlichkeit).toBe("heute");
   });
 
   it("stuft eine Frist in sechs Tagen als diese Woche ein", () => {
-    const [a] = ordneAufgaben(
+    const a = ordneAufgaben(
       [roh({ caseId: "1", naechsteFrist: { title: "Zinsbindung", dueDate: tag("2026-08-25") } })],
       JETZT
-    );
+    )[0]!;
     expect(a.dringlichkeit).toBe("diese_woche");
   });
 
   it("stuft eine Frist in acht Tagen als ohne Termin ein", () => {
-    const [a] = ordneAufgaben(
+    const a = ordneAufgaben(
       [roh({ caseId: "1", naechsteFrist: { title: "Zinsbindung", dueDate: tag("2026-08-27") } })],
       JETZT
-    );
+    )[0]!;
     expect(a.dringlichkeit).toBe("ohne_termin");
   });
 
   it("behandelt eine offene Bank-Nachforderung als überfällig", () => {
     // Die Bank wartet – ein Datum steht dafür nirgends, aber liegen lassen
     // darf man es nicht.
-    const [a] = ordneAufgaben([roh({ caseId: "1", offeneBankforderungen: 2 })], JETZT);
+    const a = ordneAufgaben([roh({ caseId: "1", offeneBankforderungen: 2 })], JETZT)[0]!;
     expect(a.dringlichkeit).toBe("ueberfaellig");
   });
 
   it("nimmt bei mehreren Terminen den frühesten", () => {
-    const [a] = ordneAufgaben(
+    const a = ordneAufgaben(
       [
         roh({
           caseId: "1",
@@ -123,7 +123,7 @@ describe("ordneAufgaben – Dringlichkeit", () => {
         }),
       ],
       JETZT
-    );
+    )[0]!;
     expect(a.dringlichkeit).toBe("ueberfaellig");
     expect(a.tageUeberfaellig).toBe(2);
   });
@@ -131,15 +131,15 @@ describe("ordneAufgaben – Dringlichkeit", () => {
   it("stellt eine fällige Kontaktaufnahme auf heute, auch ohne Termin am Fall", () => {
     // Ein frischer Lead hat naturgemäß keinen Termin und einen niedrigen
     // Reifegrad. Ohne diese Regel versänke der Anruf unter „ohne Termin".
-    const [a] = ordneAufgaben(
+    const a = ordneAufgaben(
       [roh({ caseId: "1", step: schritt("kontakt_aufnehmen"), readiness: 5 })],
       JETZT
-    );
+    )[0]!;
     expect(a.dringlichkeit).toBe("heute");
   });
 
   it("lässt alles Übrige ohne Termin", () => {
-    const [a] = ordneAufgaben([roh({ caseId: "1", step: schritt("erstgespraech") })], JETZT);
+    const a = ordneAufgaben([roh({ caseId: "1", step: schritt("erstgespraech") })], JETZT)[0]!;
     expect(a.dringlichkeit).toBe("ohne_termin");
     expect(a.faelligAm).toBeNull();
   });

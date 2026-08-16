@@ -19,6 +19,7 @@ const documentFindMany = vi.fn();
 const selfDisclosureLinkFindMany = vi.fn();
 const generatedMessageFindMany = vi.fn();
 const caseFindingGroupBy = vi.fn();
+const aufgabeErledigtFindMany = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -40,6 +41,9 @@ vi.mock("@/lib/db", () => ({
     caseFinding: {
       groupBy: (...a: unknown[]) => caseFindingGroupBy(...a),
     },
+    aufgabeErledigt: {
+      findMany: (...a: unknown[]) => aufgabeErledigtFindMany(...a),
+    },
   },
 }));
 
@@ -57,7 +61,7 @@ vi.mock("@/lib/platforms/mapping", () => ({
   buildPlatformMapping: () => ({ missingRequiredFields: [] }),
 }));
 
-import { getDashboardData } from "@/lib/cases/dashboard";
+import { ladeHeute } from "@/lib/cases/heute-daten";
 
 const VOR_5_TAGEN = new Date(Date.now() - 5 * 86_400_000);
 const VOR_30_TAGEN = new Date(Date.now() - 30 * 86_400_000);
@@ -91,7 +95,7 @@ function applicant(email: string) {
  * fünf der neun Je-Person-Angaben hängen (beschaeftigungsart, inProbezeit,
  * befristet, nettoMonatlich, sonstigeEinnahmen).
  *
- * Wichtig: Diese Vorrichtung ist nur die ROHZEILE. Was `getDashboardData`
+ * Wichtig: Diese Vorrichtung ist nur die ROHZEILE. Was `ladeHeute`
  * davon zu sehen bekommt, entscheidet `projiziere()` anhand des tatsächlichen
  * `include` der Abfrage – sonst prüfte der Test gegen Daten, die die echte
  * Abfrage nie lädt (genau der Fehler, an dem der erste Anlauf unbemerkt
@@ -174,6 +178,18 @@ function projiziere(row: Record<string, unknown>, include: Record<string, unknow
   // unbemerkt durchrutschen (dieselbe Falle wie bei employment/income, A4).
   if (include?.caseNotes) projected.caseNotes = caseNotes;
   if (include?.customer) projected.customer = customer;
+  /*
+   * Termine, Bank-Nachforderungen und bereits gesetzte Haken speisen seit dem
+   * 16.08.2026 die Dringlichkeit der Heute-Liste. Auch hier gilt die Regel von
+   * oben: nur weiterreichen, wenn die Abfrage sie anfordert. Der Rückfall auf
+   * leere Werte spart es, jede einzelne Vorrichtung anzufassen – eine Frist
+   * oder ein Haken muss ausdrücklich gesetzt werden, um zu wirken.
+   */
+  if (include?.deadlines) projected.deadlines = (row.deadlines as unknown[]) ?? [];
+  if (include?._count) projected._count = row._count ?? { missingRequests: 0 };
+  if (include?.erledigteAufgaben) {
+    projected.erledigteAufgaben = (row.erledigteAufgaben as unknown[]) ?? [];
+  }
   return projected;
 }
 
@@ -196,6 +212,7 @@ beforeEach(() => {
   caseCount.mockReset().mockResolvedValue(0);
   documentFindMany.mockReset().mockResolvedValue([]);
   caseFindingGroupBy.mockReset().mockResolvedValue([]);
+  aufgabeErledigtFindMany.mockReset().mockResolvedValue([]);
   generatedMessageFindMany.mockReset().mockResolvedValue([
     { id: "msg-1", sent: true },
     { id: "msg-2", sent: true },
@@ -263,7 +280,7 @@ beforeEach(() => {
   });
 });
 
-describe("getDashboardData – Selbstauskunfts-Signal (ladeSelbstauskunftStandBatch)", () => {
+describe("ladeHeute – Selbstauskunfts-Signal (ladeSelbstauskunftStandBatch)", () => {
   it("zeigt 'Selbstauskunft nachfassen' für einen Fall mit gültigem, ungeöffnetem Link", async () => {
     selfDisclosureLinkFindMany.mockResolvedValue([
       {
@@ -276,9 +293,9 @@ describe("getDashboardData – Selbstauskunfts-Signal (ladeSelbstauskunftStandBa
       },
     ]);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c1-link-unbearbeitet");
-    expect(todo?.nextStep).toBe("Selbstauskunft nachfassen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c1-link-unbearbeitet");
+    expect(todo?.titel).toBe("Selbstauskunft nachfassen");
   });
 
   it("zeigt KEIN Nachfass-Signal für einen Fall mit bereits eingegangenem (ausgefülltem) Bogen", async () => {
@@ -298,23 +315,23 @@ describe("getDashboardData – Selbstauskunfts-Signal (ladeSelbstauskunftStandBa
       },
     ]);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c2-bogen-ausgefuellt");
-    expect(todo?.nextStep).not.toBe("Selbstauskunft nachfassen");
-    expect(todo?.nextStep).toBe("Selbstauskunft prüfen & übernehmen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c2-bogen-ausgefuellt");
+    expect(todo?.titel).not.toBe("Selbstauskunft nachfassen");
+    expect(todo?.titel).toBe("Selbstauskunft prüfen & übernehmen");
   });
 
   it("zeigt KEIN Nachfass-Signal für einen Fall ohne jeden Link", async () => {
     selfDisclosureLinkFindMany.mockResolvedValue([]);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c3-kein-link");
-    expect(todo?.nextStep).not.toBe("Selbstauskunft nachfassen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c3-kein-link");
+    expect(todo?.titel).not.toBe("Selbstauskunft nachfassen");
   });
 
   it("lädt den Selbstauskunfts-Stand für alle Kandidaten in EINER Abfrage (Batch statt N Einzelabfragen)", async () => {
     selfDisclosureLinkFindMany.mockResolvedValue([]);
-    await getDashboardData("org-1");
+    await ladeHeute("org-1");
     expect(selfDisclosureLinkFindMany).toHaveBeenCalledTimes(1);
   });
 });
@@ -333,7 +350,7 @@ describe("getDashboardData – Selbstauskunfts-Signal (ladeSelbstauskunftStandBa
  * wäre nicht behoben, sondern umgedreht worden. Die Tests unten prüfen
  * deshalb die TATSÄCHLICH abgefragten Includes und einen vollständigen Fall.
  */
-describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
+describe("ladeHeute – Erstgespräch-Stufe der Fallreise (A4)", () => {
   function kandidat(overrides: Record<string, unknown> = {}) {
     return {
       id: "c-erstgespraech",
@@ -371,7 +388,7 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
 
   it("fragt für die To-do-Kandidaten genau dieselben Relationen ab wie die Fallseite und die Review-Seite", async () => {
     nurDiesenFall(kandidat());
-    await getDashboardData("org-1");
+    await ladeHeute("org-1");
 
     const todoCall = caseFindMany.mock.calls.find(
       (call) => (call[0] as { include?: Record<string, unknown> }).include
@@ -403,8 +420,8 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
   it("zeigt 'Erstgespräch führen', solange Angaben für ein Angebot fehlen – wie auf der Fallseite", async () => {
     nurDiesenFall(kandidat());
 
-    const data = await getDashboardData("org-1");
-    expect(data.todos.find((t) => t.caseId === "c-erstgespraech")?.nextStep).toBe("Erstgespräch führen");
+    const data = await ladeHeute("org-1");
+    expect(data.aufgaben.find((t) => t.caseId === "c-erstgespraech")?.titel).toBe("Erstgespräch führen");
   });
 
   it("zeigt für einen Fall mit vollständigen Angaben KEIN 'Erstgespräch führen'", async () => {
@@ -415,10 +432,10 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
       })
     );
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-erstgespraech");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-erstgespraech");
     expect(todo).toBeDefined();
-    expect(todo?.nextStep).not.toBe("Erstgespräch führen");
+    expect(todo?.titel).not.toBe("Erstgespräch führen");
   });
 });
 
@@ -429,7 +446,7 @@ describe("getDashboardData – Erstgespräch-Stufe der Fallreise (A4)", () => {
  * Aufrufer die neue Kontaktsprosse. Faellige Kontaktschritte stehen danach
  * ganz oben in der To-do-Liste, auch vor einem besseren Reifegrad.
  */
-describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgabe 7)", () => {
+describe("ladeHeute – Kontaktstand speist die Prioritätsleiter (Aufgabe 7)", () => {
   function mehrereFaelle(rows: Array<Record<string, unknown>>) {
     caseFindMany.mockReset().mockImplementation((args: { include?: Record<string, unknown> }) => {
       if (args.include) return Promise.resolve(rows.map((row) => projiziere(row, args.include)));
@@ -487,9 +504,9 @@ describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgab
   it("nennt fuer einen frischen Lead ohne Kontaktversuch das Anrufen", async () => {
     mehrereFaelle([frischerLead()]);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-frischer-lead");
-    expect(todo?.nextStep).toBe("Kunden anrufen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-frischer-lead");
+    expect(todo?.titel).toBe("Kunden anrufen");
   });
 
   /**
@@ -508,10 +525,10 @@ describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgab
       }),
     ]);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-bestandsfall");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-bestandsfall");
     expect(todo).toBeDefined();
-    expect(todo?.nextStep).not.toBe("Kunden anrufen");
+    expect(todo?.titel).not.toBe("Kunden anrufen");
   });
 
   it("sortiert faellige Kontaktschritte nach oben – auch vor einem besseren Reifegrad", async () => {
@@ -541,8 +558,8 @@ describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgab
       })
     );
 
-    const data = await getDashboardData("org-1");
-    expect(data.todos[0]?.caseId).toBe("c-frischer-lead");
+    const data = await ladeHeute("org-1");
+    expect(data.aufgaben[0]?.caseId).toBe("c-frischer-lead");
   });
 });
 
@@ -553,7 +570,7 @@ describe("getDashboardData – Kontaktstand speist die Prioritätsleiter (Aufgab
  * Prüfung wurde unterbrochen", während dasselbe Dashboard-Todo für immer bei
  * "KI-Auswertung läuft" stehen blieb – derselbe Fall, zwei Aussagen.
  */
-describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen", () => {
+describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () => {
   function nurDiesenFall(row: Record<string, unknown>) {
     caseFindMany.mockReset().mockImplementation((args: { include?: Record<string, unknown> }) => {
       if (args.include) return Promise.resolve([projiziere(row, args.include)]);
@@ -593,9 +610,9 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
   it("zeigt 'KI-Auswertung läuft' für einen frischen Lauf", async () => {
     nurDiesenFall(ki_pruefung_kandidat({ updatedAt: new Date() }));
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.nextStep).toBe("KI-Auswertung läuft");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.titel).toBe("KI-Auswertung läuft");
   });
 
   it("zeigt 'KI-Prüfung wurde unterbrochen' statt endlos 'KI-Auswertung läuft', wenn der Lauf laut updatedAt hängengeblieben ist – wie auf der Fallseite", async () => {
@@ -603,9 +620,9 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
       ki_pruefung_kandidat({ updatedAt: new Date(Date.now() - 11 * 60_000) })
     );
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.nextStep).toBe("KI-Prüfung wurde unterbrochen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.titel).toBe("KI-Prüfung wurde unterbrochen");
   });
 
   /*
@@ -635,9 +652,9 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
     );
     laufendesDokument(30_000);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.nextStep).toBe("KI-Auswertung läuft");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.titel).toBe("KI-Auswertung läuft");
   });
 
   it("meldet einen gestorbenen Einzel-Upload als 'ohne KI-Ergebnis' – der Neustart-Weg darf nicht verschwinden", async () => {
@@ -646,8 +663,8 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
     );
     laufendesDokument(11 * 60_000);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
     /*
      * Bewusst die STUFE geprüft, nicht nur die Abwesenheit von "läuft": Ein
      * Dokument, das nach einem harten Abbruch für immer auf "laeuft"
@@ -659,7 +676,7 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
      * Review-Center meldete "Alles freigegeben" und das Fallbild 100 %.
      * Ein "not.toBe('KI-Auswertung läuft')" wäre dabei grün geblieben.
      */
-    expect(todo?.nextStep).toBe("1 Dokument ohne KI-Ergebnis");
+    expect(todo?.titel).toBe("1 Dokument ohne KI-Ergebnis");
   });
 
   it("bleibt bei einem hängengebliebenen Sammel-Lauf 'unterbrochen', auch wenn Dokumente auf 'laeuft' stehengeblieben sind", async () => {
@@ -668,8 +685,8 @@ describe("getDashboardData – Stale-Schutz für hängengebliebene KI-Prüfungen
     );
     laufendesDokument(11 * 60_000);
 
-    const data = await getDashboardData("org-1");
-    const todo = data.todos.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.nextStep).toBe("KI-Prüfung wurde unterbrochen");
+    const data = await ladeHeute("org-1");
+    const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
+    expect(todo?.titel).toBe("KI-Prüfung wurde unterbrochen");
   });
 });
