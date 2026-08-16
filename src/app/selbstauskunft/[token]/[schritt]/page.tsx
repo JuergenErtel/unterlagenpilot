@@ -13,7 +13,8 @@ import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 // Aus `spalten.ts`, NICHT aus `step-form.tsx`: Jene Datei traegt "use client",
 // und Next ersetzt Client-Module im Server-Graph durch einen Proxy – der
 // Aufruf von `spaltenPersonen` warf hier bei jedem echten Request.
-import { spaltenPersonen, personenSchluessel } from "@/lib/self-disclosure/spalten";
+import { spaltenPersonen, personenSchluessel, type Spalte } from "@/lib/self-disclosure/spalten";
+import { fuerAnzeige } from "@/lib/self-disclosure/anzeige";
 import { StepForm } from "@/components/self-disclosure/step-form";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -67,15 +68,17 @@ export default async function SelbstauskunftSchritt({
   // duerfen die Person auswerten. Eine gemeinsame Liste zeigte der zweiten
   // Spalte die Felder der ersten – ein Paar mit verschiedenen
   // Beschaeftigungsarten bekaeme die falschen Fragen.
-  const spalten = spaltenPersonen(aktuell.personen).map((person) => ({
+  const spaltenRoh = spaltenPersonen(aktuell.personen).map((person) => ({
     person,
     felder: sichtbareFelder(aktuell.schritt, antworten, person),
   }));
   // Ein flacher Schluessel-Raum ueber ALLE Spalten: `defaults` traegt bei
   // zwei Spalten die Antworten beider Personen unter ihrem jeweils
   // vollstaendigen Schluessel (siehe schritt-felder.tsx).
+  // Aus den ROHEN Feldern gerechnet: `vorbelegung` braucht das `ziel`, das
+  // ueber die Grenze bewusst nicht mitgeht.
   const defaults: Record<string, string> = {};
-  for (const { person, felder } of spalten) {
+  for (const { person, felder } of spaltenRoh) {
     for (const feld of felder) {
       const key = personenSchluessel(aktuell.schritt.id, feld.id, person);
       const eigene = antworten[key];
@@ -85,6 +88,14 @@ export default async function SelbstauskunftSchritt({
           : vorbelegung(stand, feld, person ?? 1);
     }
   }
+
+  // Ab hier nur noch reine Daten: `Feld` traegt Funktionen (`sichtbar`), und
+  // die zerbrechen an der Serialisierungsgrenze zu `StepForm` – daran ist die
+  // gesamte Kundenstrecke einmal gestorben (siehe anzeige.ts).
+  const spalten: Spalte[] = spaltenRoh.map(({ person, felder }) => ({
+    person,
+    felder: felder.map(fuerAnzeige),
+  }));
 
   // Bereits bekannte Vornamen, damit die Spaltenueberschrift bei jedem
   // Schritt den Namen zeigt, sobald "Wie heissen Sie?" beantwortet ist.

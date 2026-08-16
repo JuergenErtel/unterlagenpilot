@@ -3,6 +3,7 @@ import { Logo } from "@/components/brand/logo";
 import { ERSTER_SCHRITT, formularZuSlug } from "@/lib/leadformular/service";
 import { schrittFinden } from "@/lib/self-disclosure/navigation";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
+import { fuerAnzeige } from "@/lib/self-disclosure/anzeige";
 import { EinstiegFormular } from "@/components/anfrage/einstieg-formular";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,11 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
         // Ohne Antworten – aber ueber `sichtbareFelder`, damit die Seite
         // dieselbe Regel anwendet wie jede andere: Was eine Bedingung traegt,
         // die noch nicht erfuellt ist, erscheint hier nicht.
-        felder={sichtbareFelder(schritt.schritt, {})}
+        //
+        // `fuerAnzeige` ist PFLICHT und keine Bequemlichkeit: Ein rohes `Feld`
+        // traegt Funktionen, die sich nicht ueber die Server/Client-Grenze
+        // serialisieren lassen – diese Seite antwortete deshalb mit HTTP 500.
+        felder={sichtbareFelder(schritt.schritt, {}).map(fuerAnzeige)}
       />
       <p className="mt-auto text-xs text-muted-foreground">
         Ihre Angaben werden verschlüsselt übertragen und ausschließlich zur Bearbeitung Ihrer

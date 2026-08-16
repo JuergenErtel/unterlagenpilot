@@ -1,4 +1,4 @@
-import type { Feld } from "@/lib/self-disclosure/types";
+import type { AnzeigeFeld } from "@/lib/self-disclosure/anzeige";
 
 /**
  * Die Spaltenregeln der Personenseiten – bewusst OHNE React und OHNE Katalog.
@@ -57,10 +57,15 @@ export function spaltenPersonen(personen?: (1 | 2)[]): Array<1 | 2 | undefined> 
  * Arbeitgeber-, die selbstaendige Partnerin die Firmenfragen. Eine gemeinsame
  * Liste fuer beide Spalten fragte eine von beiden nach dem Falschen – und ihre
  * Antworten landeten als falsche `employment`-Werte im Fall.
+ *
+ * `AnzeigeFeld` und nicht `Feld`: Diese Struktur wird als Requisite an eine
+ * Client-Komponente gereicht. `Feld` traegt Funktionen, und die zerbrechen an
+ * der Serialisierungsgrenze – genau daran ist die Produktion einmal gestorben
+ * (siehe anzeige.ts).
  */
 export interface Spalte {
   person?: 1 | 2;
-  felder: Feld[];
+  felder: AnzeigeFeld[];
 }
 
 /**

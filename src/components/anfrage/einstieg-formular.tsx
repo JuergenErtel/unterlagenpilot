@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { starteAnfrage } from "@/lib/actions/anfrage";
 import { SchrittFelder, istEinzelneAuswahl } from "@/components/self-disclosure/schritt-felder";
 import type { AnfrageStart } from "@/lib/leadformular/service";
-import type { Feld } from "@/lib/self-disclosure/types";
+// `AnzeigeFeld`, nicht `Feld`: Diese Requisite reist ueber die
+// Server/Client-Grenze, und `Feld` traegt Funktionen (`sichtbar`). Genau hier
+// hat es die oeffentliche Einstiegsseite mit HTTP 500 zerlegt (siehe
+// anzeige.ts).
+import type { AnzeigeFeld } from "@/lib/self-disclosure/anzeige";
 
 function WeiterButton() {
   const { pending } = useFormStatus();
@@ -26,7 +30,7 @@ export function EinstiegFormular({
   slug: string;
   schrittId: string;
   frage: string;
-  felder: Feld[];
+  felder: AnzeigeFeld[];
 }) {
   const [state, action] = useActionState<AnfrageStart, FormData>(
     async (_prev, fd) => (await starteAnfrage(slug, fd)) ?? {},

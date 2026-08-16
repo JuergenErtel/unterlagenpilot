@@ -6,7 +6,11 @@ import { Label } from "@/components/ui/label";
 // (rund 700 Zeilen Fragen, Optionen, Hinweise) und wanderte ueber diese
 // Client-Komponente ins Buendel der oeffentlichen Kundenstrecke.
 import { personenSchluessel } from "@/lib/self-disclosure/spalten";
-import type { Feld } from "@/lib/self-disclosure/types";
+// `AnzeigeFeld`, nicht `Feld`: Was hier ankommt, ist ueber die
+// Server/Client-Grenze gereist. `Feld` traegt Funktionen (`sichtbar`) und
+// laesst sich nicht serialisieren – daran ist die Produktion einmal
+// gestorben (siehe anzeige.ts).
+import type { AnzeigeFeld } from "@/lib/self-disclosure/anzeige";
 
 /**
  * Eine einzelne Auswahl bekommt die großen Kacheln von FinLink und schickt
@@ -17,7 +21,7 @@ import type { Feld } from "@/lib/self-disclosure/types";
  * zweite Spalte überhaupt ausgefüllt ist – dort bleibt es bei der normalen
  * Auswahlliste mit explizitem "Weiter".
  */
-export function istEinzelneAuswahl(felder: Feld[], mehrspaltig?: boolean): boolean {
+export function istEinzelneAuswahl(felder: AnzeigeFeld[], mehrspaltig?: boolean): boolean {
   return !mehrspaltig && felder.length === 1 && felder[0]!.typ === "auswahl";
 }
 
@@ -44,7 +48,7 @@ export function SchrittFelder({
   schrittId: string;
   person?: 1 | 2;
   mehrspaltig?: boolean;
-  felder: Feld[];
+  felder: AnzeigeFeld[];
   defaults: Record<string, string>;
   fieldErrors?: Record<string, string>;
 }) {
