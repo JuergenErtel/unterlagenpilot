@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { CASE_STATUSES } from "@/lib/domain/enums";
-import { computeNextStep } from "@/lib/cases/next-step";
+import { computeNextStep, laeuftAusserhalb } from "@/lib/cases/next-step";
 import type { NextStepInput } from "@/lib/cases/next-step";
 import type { CockpitData } from "@/lib/cases/cockpit";
 import type { KontaktStand } from "@/lib/cases/kontakt";
@@ -976,10 +976,51 @@ describe("Vertrieb laeuft ausserhalb", () => {
     expect(schritt.key).toBe("ki_fehler");
   });
 
+  it("bietet auch keine Nebenaufgaben mehr an", () => {
+    /*
+     * Der erste Anlauf am 16.08.2026 stellte nur die HAUPTsprosse still. Die
+     * Liste "Wartet ausserdem" wird von einer eigenen Funktion gebaut, die nur
+     * den Fallstatus liest – sie sagte weiter "Erstgespraech fuehren", obwohl
+     * die Karte darueber schon "Zusage liegt vor" meldete. Genau das hat
+     * Juergen gemeldet.
+     */
+    const schritt = computeNextStep(
+      cockpit({ ...laufend, leadPhase: "zusage", counts: { ...laufend.counts, pruefbereit: 2 } })
+    );
+    expect(schritt.key).toBe("vertrieb_laeuft");
+    expect(schritt.wartet ?? []).toEqual([]);
+  });
+
   it("bleibt bei abgeschlossenen Faellen bei der Abschlussmeldung", () => {
     const schritt = computeNextStep(
       cockpit({ ...laufend, leadPhase: "zusage", status: "abgeschlossen" })
     );
     expect(schritt.key).toBe("erledigt");
+  });
+});
+
+describe("laeuftAusserhalb", () => {
+  /*
+   * Eigene Ausfuhr, weil dasselbe Wissen sonst ein viertes Mal gerechnet wuerde:
+   * Die Lead-Karte im Kanban hatte ihre EIGENE Regel fuer "Erstgespraech
+   * fuehren" (kein Gespraech + keine Nachricht) und kannte die Phase nicht –
+   * deshalb stand der Knopf am 16.08.2026 weiter auf Karten in "Zusage",
+   * obwohl die Leiter laengst schwieg.
+   */
+  it("gilt ab dem Finanzierungsvorschlag", () => {
+    for (const p of ["finanzierungsvorschlag", "kreditpruefung_eingereicht", "zusage", "abgeschlossen"]) {
+      expect(laeuftAusserhalb(p)).toBe(true);
+    }
+  });
+
+  it("gilt davor nicht", () => {
+    for (const p of ["neu", "anfrage_erstellt", "selbstauskunft_laeuft"]) {
+      expect(laeuftAusserhalb(p)).toBe(false);
+    }
+  });
+
+  it("gilt ohne Angabe nicht", () => {
+    expect(laeuftAusserhalb(undefined)).toBe(false);
+    expect(laeuftAusserhalb("")).toBe(false);
   });
 });

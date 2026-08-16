@@ -169,6 +169,18 @@ const PHASEN_AUSSERHALB: Record<string, string> = {
   abgeschlossen: "Finanzierung abgeschlossen",
 };
 
+/**
+ * Führt BaufiDesk diesen Fall noch, oder läuft er außerhalb?
+ *
+ * Ausdrücklich ausgeführt, damit dieselbe Frage nicht ein viertes Mal
+ * beantwortet wird: Die Lead-Karte im Kanban hatte ihre eigene Regel für
+ * „Erstgespräch führen" und kannte die Phase nicht – der Knopf stand deshalb
+ * weiter auf Karten in „Zusage", obwohl die Leiter längst schwieg.
+ */
+export function laeuftAusserhalb(leadPhase: string | undefined): boolean {
+  return Boolean(leadPhase && PHASEN_AUSSERHALB[leadPhase]);
+}
+
 export function computeNextStep(c: NextStepInput): NextStep {
   const schritt = ermittleSchritt(c);
   const wartet = ermittleWartende(c, schritt);
@@ -185,7 +197,15 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
   // Dokumente tauchen gleich wieder auf, ein Hinweis wäre irreführend. Bei
   // einem erledigten Fall ist ohnehin nichts mehr zu tun; dort wäre eine
   // offene Freigabe ein Hinweis auf Arbeit, die niemand mehr braucht.
-  const stumm = schritt.key === "ki_laeuft" || schritt.key === "erledigt";
+  const stumm =
+    schritt.key === "ki_laeuft" ||
+    schritt.key === "erledigt" ||
+    // Fuehrt BaufiDesk den Fall nicht mehr (Phase ab "Finanzierungsvorschlag"),
+    // gilt das auch fuer die Nebenaufgaben. Der erste Anlauf am 16.08.2026
+    // stellte nur die Hauptsprosse still – "Wartet ausserdem" sagte weiter
+    // "Erstgespraech fuehren", waehrend die Karte darueber "Zusage liegt vor"
+    // meldete. Wer die Fuehrung abgibt, gibt sie ganz ab.
+    schritt.key === "vertrieb_laeuft";
   if (!stumm && schritt.key !== "dokumente_freigeben" && c.counts.pruefbereit > 0) {
     wartet.push({
       label: `${c.counts.pruefbereit} Dokument${c.counts.pruefbereit === 1 ? "" : "e"} prüfen & freigeben`,
@@ -478,7 +498,7 @@ function ermittleSchritt(c: NextStepInput): NextStep {
    * wichtig, wenn der Fall bei der Bank liegt.
    */
   const ausserhalb = c.leadPhase ? PHASEN_AUSSERHALB[c.leadPhase] : undefined;
-  if (ausserhalb && c.status !== "bank_nachforderung") {
+  if (ausserhalb && laeuftAusserhalb(c.leadPhase) && c.status !== "bank_nachforderung") {
     return {
       key: "vertrieb_laeuft",
       title: ausserhalb,

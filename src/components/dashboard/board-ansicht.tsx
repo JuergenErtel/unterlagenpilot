@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
+import { laeuftAusserhalb } from "@/lib/cases/next-step";
 import { ampelFuer } from "@/lib/machbarkeit/ampel";
 import { ladeAnnahmen } from "@/lib/machbarkeit/annahmen";
 import { LeadBoard } from "@/components/pipeline/lead-board";
@@ -196,7 +197,14 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       },
       machbarkeitsAnnahmen
     ),
-    erstgespraechOffen: !c.erstgespraechGefuehrtAm && c.generatedMessages.length === 0,
+    // Die Phase gehoert in diese Regel: Ab dem Finanzierungsvorschlag fuehrt
+    // BaufiDesk den Fall nicht mehr (siehe next-step.ts). Ohne sie stand der
+    // Knopf "Erstgespraech fuehren" auch auf Karten in "Zusage" – die Karte
+    // rechnete dieselbe Frage anders als die Prioritaetsleiter.
+    erstgespraechOffen:
+      !laeuftAusserhalb(c.leadPhase) &&
+      !c.erstgespraechGefuehrtAm &&
+      c.generatedMessages.length === 0,
     vorschlag: schlagePhaseVor({
       leadPhase: c.leadPhase,
       verlorenAm: c.verlorenAm,
