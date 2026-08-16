@@ -143,31 +143,6 @@ export const KATALOG: Schritt[] = [
           { wert: "gemischt", label: "Teilweise vermieten" },
         ],
       },
-      {
-        /*
-         * Die Ja/Nein-Frage steht HIER und nicht neben ihrer Hoehe auf
-         * "Objekt & Preis": Dort standen Steuerantwort und abhaengiges Feld auf
-         * derselben Seite, und das Prozentfeld war im Ablauf unerreichbar – der
-         * Server rechnet die Feldliste vor dem Absenden und springt danach auf
-         * die FOLGENDE Seite. Fehlt die Provision, rechnet die Machbarkeit mit
-         * 0 % Courtage: Die Ampel wird nicht grau, sondern zu optimistisch.
-         *
-         * Mit der Frage auf Seite 1 kreuzt die Abhaengigkeit wieder eine
-         * Seitengrenze – so, wie sie es vor dem Katalogschnitt tat (eigener
-         * Schritt direkt hinter der Ja/Nein-Frage). Fragetext, Optionen und
-         * Zielfeld bleiben woertlich, wie der Entwurf es verlangt.
-         */
-        id: "makler",
-        label: "Maklergebühr",
-        typ: "auswahl",
-        sichtbar: istKauf,
-        abhaengigVon: "vorhaben.art",
-        optionen: [
-          { wert: "ja", label: "Ja, es fällt eine an" },
-          { wert: "nein", label: "Provisionsfrei" },
-          { wert: "unbekannt", label: "Weiß ich nicht" },
-        ],
-      },
     ],
   },
   {
@@ -283,14 +258,32 @@ export const KATALOG: Schritt[] = [
         abhaengigVon: "vorhaben.stand",
       },
       {
-        // Die zugehoerige Ja/Nein-Frage steht auf Seite 1 ("vorhaben.makler") –
-        // siehe die Begruendung dort. Auf DIESER Seite waere sie unerreichbar.
-        id: "makler_hoehe",
-        label: "Maklergebühr in Prozent",
-        typ: "prozent_oder_betrag",
-        ziel: { entitaet: "financingRequest", feld: "maklerprovisionProzent" },
-        sichtbar: (a) => wert(a, "vorhaben.makler") === "ja",
-        abhaengigVon: "vorhaben.makler",
+        /*
+         * Die Ja/Nein-Frage steht HIER, ihre HOEHE eine Seite weiter auf
+         * "Wie soll die Finanzierung aussehen?".
+         *
+         * Sie standen einmal beide auf dieser Seite, und das Prozentfeld war
+         * damit im Ablauf unerreichbar: Der Server rechnet die Feldliste vor
+         * dem Absenden, es gibt keine clientseitige Neuauswertung, und
+         * `speichereAntwort` springt danach auf die FOLGENDE Seite. Fehlt die
+         * Provision, rechnet die Machbarkeit mit 0 % Courtage – die Ampel wird
+         * nicht grau, sondern zu OPTIMISTISCH.
+         *
+         * Die Hoehe wandert und nicht diese Frage: Auf Seite 1 stuende sonst
+         * eine vierte Frage, und zwar bevor der Besucher ueberhaupt gesagt hat,
+         * was er finanzieren will – dort ist jede zusaetzliche Frage am
+         * teuersten (siehe Kopf dieser Datei).
+         */
+        id: "makler",
+        label: "Maklergebühr",
+        typ: "auswahl",
+        sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
+        optionen: [
+          { wert: "ja", label: "Ja, es fällt eine an" },
+          { wert: "nein", label: "Provisionsfrei" },
+          { wert: "unbekannt", label: "Weiß ich nicht" },
+        ],
       },
     ],
   },
@@ -331,6 +324,21 @@ export const KATALOG: Schritt[] = [
         label: "Wunschrate monatlich",
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "wunschrateMonatlich" },
+      },
+      {
+        /*
+         * Steht auf DIESER Seite, obwohl die Maklergebuehr inhaltlich zum
+         * Objekt gehoert: Ihre Steuerantwort ("objekt_preis.makler") liegt eine
+         * Seite davor, und nur so kreuzt die Abhaengigkeit eine Seitengrenze.
+         * Nebeneinander waere das Feld im Ablauf unerreichbar – siehe die
+         * Begruendung bei "objekt_preis.makler".
+         */
+        id: "makler_hoehe",
+        label: "Maklergebühr in Prozent",
+        typ: "prozent_oder_betrag",
+        ziel: { entitaet: "financingRequest", feld: "maklerprovisionProzent" },
+        sichtbar: (a) => wert(a, "objekt_preis.makler") === "ja",
+        abhaengigVon: "objekt_preis.makler",
       },
     ],
   },

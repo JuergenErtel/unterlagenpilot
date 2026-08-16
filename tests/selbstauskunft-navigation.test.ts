@@ -24,6 +24,10 @@ const leer: Antworten = {};
 const preisFelder = (a: Antworten) =>
   sichtbareFelder(KATALOG.find((s) => s.id === "objekt_preis")!, a).map((f) => f.id);
 
+/** Dasselbe fuer die Folgeseite – dort steht die Hoehe der Maklergebuehr. */
+const wunschFelder = (a: Antworten) =>
+  sichtbareFelder(KATALOG.find((s) => s.id === "finanzierungswunsch")!, a).map((f) => f.id);
+
 describe("Katalog-Navigation", () => {
   it("beginnt mit dem Vorhaben", () => {
     expect(sichtbareSchritte(leer, "voll")[0]!.id).toBe("vorhaben");
@@ -44,14 +48,14 @@ describe("Katalog-Navigation", () => {
   });
 
   it("überspringt die Höhe der Maklergebühr, solange keine anfällt", () => {
-    // Die Ja/Nein-Frage steht auf Seite 1 ("vorhaben.makler"), das Prozentfeld
-    // auf Seite 2 – erst diese Seitengrenze macht es im Ablauf erreichbar.
-    expect(preisFelder({ "vorhaben.makler": "nein" })).not.toContain("makler_hoehe");
-    expect(preisFelder({ "vorhaben.makler": "ja" })).toContain("makler_hoehe");
+    // Die Ja/Nein-Frage steht auf "objekt_preis", das Prozentfeld eine Seite
+    // weiter – erst diese Seitengrenze macht es im Ablauf erreichbar.
+    expect(wunschFelder({ "objekt_preis.makler": "nein" })).not.toContain("makler_hoehe");
+    expect(wunschFelder({ "objekt_preis.makler": "ja" })).toContain("makler_hoehe");
   });
 
   it("hält den Zweig zu, wenn die Steuerfrage übersprungen wurde", () => {
-    expect(preisFelder(leer)).not.toContain("makler_hoehe");
+    expect(wunschFelder(leer)).not.toContain("makler_hoehe");
   });
 
   it("liefert den nächsten und vorherigen Schritt entlang der sichtbaren Kette", () => {
