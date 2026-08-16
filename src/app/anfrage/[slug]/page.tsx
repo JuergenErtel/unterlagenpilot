@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { ERSTER_SCHRITT, formularZuSlug } from "@/lib/leadformular/service";
 import { schrittFinden } from "@/lib/self-disclosure/navigation";
+import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { EinstiegFormular } from "@/components/anfrage/einstieg-formular";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,10 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
         slug={slug}
         schrittId={schritt.id}
         frage={schritt.schritt.frage}
-        felder={schritt.schritt.felder}
+        // Ohne Antworten – aber ueber `sichtbareFelder`, damit die Seite
+        // dieselbe Regel anwendet wie jede andere: Was eine Bedingung traegt,
+        // die noch nicht erfuellt ist, erscheint hier nicht.
+        felder={sichtbareFelder(schritt.schritt, {})}
       />
       <p className="mt-auto text-xs text-muted-foreground">
         Ihre Angaben werden verschlüsselt übertragen und ausschließlich zur Bearbeitung Ihrer

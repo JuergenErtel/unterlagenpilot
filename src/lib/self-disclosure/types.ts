@@ -78,7 +78,7 @@ export interface Schritt {
    * Beide Antragsteller nebeneinander auf EINEM Bildschirm, je eine Spalte.
    *
    * Vorher hieß das `jeAntragsteller` und erzeugte ZWEI Einträge in der
-   * Schrittkette ("p1.person_name", "p2.person_name") – der Kunde beantwortete
+   * Schrittkette ("p1.personen", "p2.personen") – der Kunde beantwortete
    * erst alles für sich, dann dasselbe für den Partner. Ein Paar, das
    * gemeinsam am Rechner sitzt, erwartet beide nebeneinander.
    */
@@ -90,7 +90,7 @@ export type ListenEintrag = Record<string, string | number | boolean | null>;
 
 export type AntwortWert = string | number | boolean | ListenEintrag[] | null;
 
-/** Schlüssel: "<schrittId>.<feldId>", bei Personenschritten "p2.person_name.vorname". */
+/** Schlüssel: "<schrittId>.<feldId>", bei Personenschritten "p2.personen.vorname". */
 export type Antworten = Record<string, AntwortWert>;
 
 /** Eine konkrete Ausprägung eines Schritts (bei personenSpalten mit beiden Spalten). */

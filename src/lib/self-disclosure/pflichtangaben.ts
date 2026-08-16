@@ -12,9 +12,9 @@ import type { Antworten } from "@/lib/self-disclosure/types";
  * und lässt damit jeden Bogen durch.
  */
 export const KONTAKT_SCHLUESSEL = {
-  nachname: schluessel("p1.person_name", "nachname"),
-  email: schluessel("p1.person_kontakt", "email"),
-  telefon: schluessel("p1.person_kontakt", "telefon"),
+  nachname: schluessel("p1.personen", "nachname"),
+  email: schluessel("p1.personen", "email"),
+  telefon: schluessel("p1.personen", "telefon"),
 } as const;
 
 export type Kontaktangabe = keyof typeof KONTAKT_SCHLUESSEL;

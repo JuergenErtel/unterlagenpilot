@@ -102,8 +102,9 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
         }
 
         // Die Kinderzahl gilt dem Haushalt: sie geht an beide Antragsteller.
+        // (Die Seite "haushalt" traegt nur haushaltsweite Angaben.)
         const zielPersonen: Array<1 | 2> =
-          s.schritt.id === "haushalt_kinder"
+          s.schritt.id === "haushalt"
             ? (stand.applicants
                 .map((a) => a.position)
                 .filter((p): p is 1 | 2 => p === 1 || p === 2)

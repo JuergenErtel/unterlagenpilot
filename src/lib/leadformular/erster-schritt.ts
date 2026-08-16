@@ -9,4 +9,4 @@
  * werden müsste. `service.ts` re-exportiert die Konstante trotzdem, damit
  * jede andere Stelle sie unverändert von dort beziehen kann.
  */
-export const ERSTER_SCHRITT = "finanzierungsart";
+export const ERSTER_SCHRITT = "vorhaben";

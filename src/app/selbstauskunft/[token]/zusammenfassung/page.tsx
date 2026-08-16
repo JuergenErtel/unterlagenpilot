@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AbsendenFormular } from "@/components/self-disclosure/absenden-formular";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
 import { sichtbareSchritte, personenSchluessel } from "@/lib/self-disclosure/navigation";
+import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { fehlendeKontaktangaben } from "@/lib/self-disclosure/pflichtangaben";
 import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
 import type { Antworten } from "@/lib/self-disclosure/types";
@@ -60,13 +61,17 @@ export default async function Zusammenfassung({
 
   const schritte = sichtbareSchritte(antworten, umfang);
   const fehlend = access.caseId === null ? fehlendeKontaktangaben(antworten) : [];
+  // `sichtbareFelder` je Spalte, nicht `schritt.felder`: Auf einer gebuendelten
+  // Seite gehoert je nach Vorhaben nur ein Teil der Felder zu diesem Bogen.
+  // Ungefiltert stuenden hier "Restschuld – noch offen" beim Hauskauf und die
+  // Arbeitgeberfragen bei der Selbstaendigen.
   const offen = schritte.reduce(
     (n, s) =>
       n +
       (s.personen ?? [undefined]).reduce(
         (m, person) =>
           m +
-          s.schritt.felder.filter((feld) => {
+          sichtbareFelder(s.schritt, antworten, person).filter((feld) => {
             const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];
             return v === undefined || v === null || v === "";
           }).length,
@@ -101,7 +106,7 @@ export default async function Zusammenfassung({
             </div>
             <dl className="mt-2 space-y-1">
               {(s.personen ?? [undefined]).flatMap((person) =>
-                s.schritt.felder.map((feld) => {
+                sichtbareFelder(s.schritt, antworten, person).map((feld) => {
                   const v = antworten[personenSchluessel(s.schritt.id, feld.id, person)];
                   const leer = v === undefined || v === null || v === "";
                   const label = person ? `${feld.label} (Antragsteller ${person})` : feld.label;

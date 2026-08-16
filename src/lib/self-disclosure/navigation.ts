@@ -27,11 +27,13 @@ export function personenSchluessel(schrittId: string, feldId: string, person?: 1
  * und dann sie.
  *
  * `personen` ist dabei eine ECHTE Teilmenge: Bei einem gemischten Paar (eine
- * Person angestellt, die andere selbstständig) bekommt `beruf_arbeitgeber`
- * nur Person 1 und `beruf_selbststaendig` nur Person 2 – nicht beide Spalten
- * für beide, sonst würde die Selbstständige nach Arbeitgeber statt nach ihrer
- * Firma gefragt und ihre Antworten landeten als falsche `employment`-Werte im
- * Fall. Trägt kein Antragsteller die Bedingung, entfällt der Schritt ganz.
+ * Person angestellt, die andere selbstständig) bekommt `beruf_details` nur
+ * für die Personen, die überhaupt einen Berufszweig tragen – innerhalb der
+ * Spalte entscheidet dann `Feld.sichtbar`, ob die Arbeitgeber- oder die
+ * Firmenfragen erscheinen. Sonst würde die Selbstständige nach Arbeitgeber
+ * statt nach ihrer Firma gefragt und ihre Antworten landeten als falsche
+ * `employment`-Werte im Fall. Trägt kein Antragsteller die Bedingung,
+ * entfällt der Schritt ganz.
  *
  * `umfang` ist bewusst PFLICHT, kein Vorgabewert: Wer ihn vergisst, soll einen
  * Übersetzungsfehler bekommen statt eine Kette, die still auf "voll" fällt.
@@ -58,7 +60,7 @@ export function sichtbareSchritte(antworten: Antworten, umfang: Umfang): Sichtba
 }
 
 /**
- * Alte Schritt-IDs mit Personen-Präfix ("p1.person_name") auf die neue Form
+ * Alte Schritt-IDs mit Personen-Präfix ("p1.personen") auf die neue Form
  * ohne Präfix abbilden.
  *
  * `currentStep` steht in der Datenbank und wird nur beim Speichern neu

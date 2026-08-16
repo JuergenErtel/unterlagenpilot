@@ -46,24 +46,36 @@ export function spaltenPersonen(personen?: (1 | 2)[]): Array<1 | 2 | undefined> 
   return (personen?.length ?? 0) > 1 ? personen! : [personen?.[0]];
 }
 
+/**
+ * Eine Spalte des Schritts: die Person und die Felder, die GENAU SIE sieht.
+ *
+ * Die Feldliste haengt seit dem Katalogschnitt an der Spalte, nicht mehr am
+ * Schritt: Auf "Was machen Sie beruflich?" bekommt der angestellte Partner die
+ * Arbeitgeber-, die selbstaendige Partnerin die Firmenfragen. Eine gemeinsame
+ * Liste fuer beide Spalten fragte eine von beiden nach dem Falschen – und ihre
+ * Antworten landeten als falsche `employment`-Werte im Fall.
+ */
+export interface Spalte {
+  person?: 1 | 2;
+  felder: Feld[];
+}
+
 export function StepForm({
   token,
   schrittId,
   frage,
   hinweis,
-  felder,
+  spalten,
   defaults,
-  personen,
   vornamen,
 }: {
   token: string;
   schrittId: string;
   frage: string;
   hinweis?: string;
-  felder: Feld[];
+  /** Aus `spaltenPersonen` gebaut – eine Spalte, oder zwei nebeneinander. */
+  spalten: Spalte[];
   defaults: Record<string, string>;
-  /** Spalten dieses Schritts – fehlt bei Schritten ohne Personenbezug. */
-  personen?: (1 | 2)[];
   /** Bereits bekannte Vornamen je Person, für die Spaltenüberschrift. */
   vornamen?: Partial<Record<1 | 2, string>>;
 }) {
@@ -75,12 +87,11 @@ export function StepForm({
     Object.values(defaults).some((v) => v !== "")
   );
 
-  const spalten = spaltenPersonen(personen);
   const mehrspaltig = spalten.length > 1;
   // Eine einzelne Auswahl bekommt die großen Kacheln von FinLink und schickt
   // direkt ab – ein Klick, ein Schritt weiter. Bei zwei Spalten nicht (siehe
   // schritt-felder.tsx).
-  const einzelneAuswahl = istEinzelneAuswahl(felder, mehrspaltig);
+  const einzelneAuswahl = istEinzelneAuswahl(spalten[0]?.felder ?? [], mehrspaltig);
 
   return (
     <form
@@ -98,16 +109,16 @@ export function StepForm({
 
       {mehrspaltig ? (
         <div className="grid gap-6 sm:grid-cols-2">
-          {spalten.map((person) => (
-            <div key={person} className="space-y-4">
+          {spalten.map((spalte) => (
+            <div key={spalte.person} className="space-y-4">
               <h2 className="text-sm font-medium text-muted-foreground">
-                {spaltenUeberschrift(person as 1 | 2, vornamen?.[person as 1 | 2])}
+                {spaltenUeberschrift(spalte.person as 1 | 2, vornamen?.[spalte.person as 1 | 2])}
               </h2>
               <SchrittFelder
                 schrittId={schrittId}
-                person={person}
+                person={spalte.person}
                 mehrspaltig
-                felder={felder}
+                felder={spalte.felder}
                 defaults={defaults}
                 fieldErrors={state.fieldErrors}
               />
@@ -117,8 +128,8 @@ export function StepForm({
       ) : (
         <SchrittFelder
           schrittId={schrittId}
-          person={spalten[0]}
-          felder={felder}
+          person={spalten[0]?.person}
+          felder={spalten[0]?.felder ?? []}
           defaults={defaults}
           fieldErrors={state.fieldErrors}
         />

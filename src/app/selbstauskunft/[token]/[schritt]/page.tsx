@@ -14,7 +14,7 @@ import {
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { ladeVorbelegung, vorbelegung } from "@/lib/self-disclosure/prefill";
 import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
-import { StepForm } from "@/components/self-disclosure/step-form";
+import { StepForm, spaltenPersonen } from "@/components/self-disclosure/step-form";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -62,13 +62,20 @@ export default async function SelbstauskunftSchritt({
   // Vorbelegung: die eigene frühere Antwort schlägt den Fallstand. Was der Fall
   // schon weiß, muss niemand abtippen.
   const stand = await ladeVorbelegung(access.caseId);
-  const felder = sichtbareFelder(aktuell.schritt, antworten);
-  const personen = aktuell.personen ?? [undefined];
+  // Die sichtbaren Felder werden JE SPALTE gerechnet, nicht einmal fuer den
+  // ganzen Schritt: Seit dem Katalogschnitt haengen Bedingungen am Feld und
+  // duerfen die Person auswerten. Eine gemeinsame Liste zeigte der zweiten
+  // Spalte die Felder der ersten – ein Paar mit verschiedenen
+  // Beschaeftigungsarten bekaeme die falschen Fragen.
+  const spalten = spaltenPersonen(aktuell.personen).map((person) => ({
+    person,
+    felder: sichtbareFelder(aktuell.schritt, antworten, person),
+  }));
   // Ein flacher Schluessel-Raum ueber ALLE Spalten: `defaults` traegt bei
   // zwei Spalten die Antworten beider Personen unter ihrem jeweils
   // vollstaendigen Schluessel (siehe schritt-felder.tsx).
   const defaults: Record<string, string> = {};
-  for (const person of personen) {
+  for (const { person, felder } of spalten) {
     for (const feld of felder) {
       const key = personenSchluessel(aktuell.schritt.id, feld.id, person);
       const eigene = antworten[key];
@@ -83,7 +90,7 @@ export default async function SelbstauskunftSchritt({
   // Schritt den Namen zeigt, sobald "Wie heissen Sie?" beantwortet ist.
   const vornamen: Partial<Record<1 | 2, string>> = {};
   for (const person of [1, 2] as const) {
-    const v = antworten[personenSchluessel("person_name", "vorname", person)];
+    const v = antworten[personenSchluessel("personen", "vorname", person)];
     if (typeof v === "string" && v.trim() !== "") vornamen[person] = v.trim();
   }
 
@@ -95,9 +102,8 @@ export default async function SelbstauskunftSchritt({
         schrittId={aktuell.id}
         frage={aktuell.schritt.frage}
         hinweis={aktuell.schritt.hinweis}
-        felder={felder}
+        spalten={spalten}
         defaults={defaults}
-        personen={aktuell.personen}
         vornamen={vornamen}
       />
       <div className="mt-auto space-y-2">

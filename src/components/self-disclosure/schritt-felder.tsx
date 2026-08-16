@@ -8,7 +8,7 @@ import type { Feld } from "@/lib/self-disclosure/types";
 /**
  * Eine einzelne Auswahl bekommt die großen Kacheln von FinLink und schickt
  * beim Klick direkt ab – kein Extraklick auf einen "Weiter"-Knopf. Gilt auch
- * für den allerersten Schritt (`finanzierungsart`), der genau dieser Fall ist.
+ * für den allerersten Schritt (`vorhaben`), sobald dort nur eine Frage steht.
  *
  * Bei zwei Spalten NICHT: Ein Klick sendet die ganze Seite ab, bevor die
  * zweite Spalte überhaupt ausgefüllt ist – dort bleibt es bei der normalen
