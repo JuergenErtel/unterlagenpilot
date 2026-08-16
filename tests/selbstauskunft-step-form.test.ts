@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { spaltenPersonen } from "@/components/self-disclosure/step-form";
+// Aus `spalten.ts`, nicht mehr aus `step-form.tsx`: Jene Datei traegt
+// "use client". Dass ein Test sie trotzdem importieren konnte, war der Grund,
+// warum niemandem auffiel, dass die Schrittseite `spaltenPersonen()` beim
+// echten Request gar nicht aufrufen kann (Client-Referenz im Server-Graph).
+import {
+  spaltenPersonen,
+  personenSchluessel,
+  zeigeSpaltenUeberschrift,
+} from "@/lib/self-disclosure/spalten";
 import { schrittSchema } from "@/lib/self-disclosure/schema";
-import { personenSchluessel } from "@/lib/self-disclosure/navigation";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
 
 /**
@@ -46,5 +53,34 @@ describe("spaltenPersonen", () => {
       const geprueft = schrittSchema(schritt, personen).parse(daten);
       expect(Object.keys(geprueft)).toHaveLength(spalten.length);
     }
+  });
+});
+
+/**
+ * Der Fund: `SichtbarerSchritt.personen` ist eine ECHTE Teilmenge. Bei
+ * "Person 1 Rentnerin, Person 2 angestellt" traegt die Berufsseite
+ * `personen === [2]` – EINE Spalte, die die Fragen des Partners zeigt. Ohne
+ * Ueberschrift traegt die Rentnerin dort ihre eigenen Angaben ein, und sie
+ * landen unter "p2." beim zweiten Antragsteller.
+ */
+describe("zeigeSpaltenUeberschrift", () => {
+  it("zeigt eine Ueberschrift ueber jeder von zwei Spalten", () => {
+    expect(zeigeSpaltenUeberschrift(2, 1, true)).toBe(true);
+    expect(zeigeSpaltenUeberschrift(2, 2, true)).toBe(true);
+  });
+
+  it("zeigt sie auch ueber einer EINZELNEN Spalte, wenn der Haushalt zu zweit ist", () => {
+    expect(zeigeSpaltenUeberschrift(1, 2, true)).toBe(true);
+    expect(zeigeSpaltenUeberschrift(1, 1, true)).toBe(true);
+  });
+
+  it("laesst sie beim einzigen Antragsteller weg", () => {
+    // "Sie" ueber der einzigen Spalte des einzigen Antragstellers erklaert
+    // nichts und macht die Seite nur voller.
+    expect(zeigeSpaltenUeberschrift(1, 1, false)).toBe(false);
+  });
+
+  it("laesst sie bei einer Seite ohne Personenbezug weg", () => {
+    expect(zeigeSpaltenUeberschrift(1, undefined, true)).toBe(false);
   });
 });

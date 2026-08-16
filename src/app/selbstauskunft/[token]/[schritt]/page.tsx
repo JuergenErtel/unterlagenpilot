@@ -5,16 +5,16 @@ import { prisma } from "@/lib/db";
 import { Logo } from "@/components/brand/logo";
 import { Card, CardContent } from "@/components/ui/card";
 import { resolveSelfDisclosureToken } from "@/lib/security/self-disclosure-link";
-import {
-  schrittFinden,
-  vorherigerSchritt,
-  fortschritt,
-  personenSchluessel,
-} from "@/lib/self-disclosure/navigation";
+import { schrittFinden, vorherigerSchritt, fortschritt } from "@/lib/self-disclosure/navigation";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
+import { anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
 import { ladeVorbelegung, vorbelegung } from "@/lib/self-disclosure/prefill";
 import { umfangDesBogens } from "@/lib/self-disclosure/umfang";
-import { StepForm, spaltenPersonen } from "@/components/self-disclosure/step-form";
+// Aus `spalten.ts`, NICHT aus `step-form.tsx`: Jene Datei traegt "use client",
+// und Next ersetzt Client-Module im Server-Graph durch einen Proxy – der
+// Aufruf von `spaltenPersonen` warf hier bei jedem echten Request.
+import { spaltenPersonen, personenSchluessel } from "@/lib/self-disclosure/spalten";
+import { StepForm } from "@/components/self-disclosure/step-form";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
 export const dynamic = "force-dynamic";
@@ -105,6 +105,7 @@ export default async function SelbstauskunftSchritt({
         spalten={spalten}
         defaults={defaults}
         vornamen={vornamen}
+        zweiAntragsteller={anzahlAntragsteller(antworten) === 2}
       />
       <div className="mt-auto space-y-2">
         <div className="h-1.5 w-full rounded-full bg-muted">

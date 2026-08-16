@@ -5,7 +5,12 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { speichereAntwort, type SchrittState } from "@/lib/actions/self-disclosure";
 import { SchrittFelder, istEinzelneAuswahl } from "@/components/self-disclosure/schritt-felder";
-import type { Feld } from "@/lib/self-disclosure/types";
+// `Spalte`, `spaltenPersonen` und `personenSchluessel` liegen in `spalten.ts`,
+// nicht hier: Diese Datei traegt "use client", und die Schrittseite (eine
+// Server-Komponente) ruft `spaltenPersonen` auf. Next ersetzt jedes
+// Client-Modul im Server-Graph durch einen Proxy – der Aufruf warf bei jedem
+// echten Request ("Attempted to call spaltenPersonen() from the server").
+import { zeigeSpaltenUeberschrift, type Spalte } from "@/lib/self-disclosure/spalten";
 
 /**
  * Der Knopf sagt, was passiert: Leerlassen ist erlaubt, soll aber sichtbar
@@ -29,37 +34,6 @@ function spaltenUeberschrift(person: 1 | 2, vorname?: string): string {
   return person === 1 ? "Sie" : "Mitantragsteller/in";
 }
 
-/**
- * Welche Person(en) SchrittFelder bekommt.
- *
- * Exportiert, damit ein Test bewacht, dass diese Liste zu dem Präfix passt,
- * den `defaults` (Schrittseite) und `schrittSchema` (Server-Aktion) für
- * denselben Schritt erwarten: `schritt.personen` fehlt bei Schritten ohne
- * Personenbezug (EIN Aufruf ohne Präfix); bei `personenSpalten` UND nur einem
- * Antragsteller ist es `[1]` – auch dann EIN Aufruf, aber MIT Präfix "p1.".
- * Nur bei zwei Spalten wird wirklich zweimal gerendert. Wer hier eine Spalte
- * ohne Person rendert, obwohl der Schritt personenSpalten trägt, erzeugt
- * Formularnamen ohne Präfix – die Antwort verschwindet dann lautlos hinter
- * `schrittSchema.strip()` (siehe schema.ts).
- */
-export function spaltenPersonen(personen?: (1 | 2)[]): Array<1 | 2 | undefined> {
-  return (personen?.length ?? 0) > 1 ? personen! : [personen?.[0]];
-}
-
-/**
- * Eine Spalte des Schritts: die Person und die Felder, die GENAU SIE sieht.
- *
- * Die Feldliste haengt seit dem Katalogschnitt an der Spalte, nicht mehr am
- * Schritt: Auf "Was machen Sie beruflich?" bekommt der angestellte Partner die
- * Arbeitgeber-, die selbstaendige Partnerin die Firmenfragen. Eine gemeinsame
- * Liste fuer beide Spalten fragte eine von beiden nach dem Falschen – und ihre
- * Antworten landeten als falsche `employment`-Werte im Fall.
- */
-export interface Spalte {
-  person?: 1 | 2;
-  felder: Feld[];
-}
-
 export function StepForm({
   token,
   schrittId,
@@ -68,6 +42,7 @@ export function StepForm({
   spalten,
   defaults,
   vornamen,
+  zweiAntragsteller,
 }: {
   token: string;
   schrittId: string;
@@ -78,6 +53,12 @@ export function StepForm({
   defaults: Record<string, string>;
   /** Bereits bekannte Vornamen je Person, für die Spaltenüberschrift. */
   vornamen?: Partial<Record<1 | 2, string>>;
+  /**
+   * Hat der Haushalt zwei Antragsteller? Entscheidet zusammen mit der
+   * Spaltenzahl über die Überschrift – eine EINZELNE Spalte kann dem zweiten
+   * Antragsteller gehören (siehe `zeigeSpaltenUeberschrift`).
+   */
+  zweiAntragsteller?: boolean;
 }) {
   const [state, action] = useActionState<SchrittState, FormData>(
     async (_prev, fd) => (await speichereAntwort(token, schrittId, fd)) ?? {},
@@ -107,33 +88,28 @@ export function StepForm({
         {hinweis && <p className="text-sm text-muted-foreground">{hinweis}</p>}
       </div>
 
-      {mehrspaltig ? (
-        <div className="grid gap-6 sm:grid-cols-2">
-          {spalten.map((spalte) => (
-            <div key={spalte.person} className="space-y-4">
+      <div className={mehrspaltig ? "grid gap-6 sm:grid-cols-2" : undefined}>
+        {spalten.map((spalte) => (
+          <div key={spalte.person ?? "ohne"} className="space-y-4">
+            {/* Auch ueber einer EINZELNEN Spalte, wenn sie einer Person eines
+                Paares gehoert: Sonst traegt die Rentnerin ihre Angaben in die
+                stumme Spalte ihres angestellten Partners ein. */}
+            {zeigeSpaltenUeberschrift(spalten.length, spalte.person, !!zweiAntragsteller) && (
               <h2 className="text-sm font-medium text-muted-foreground">
                 {spaltenUeberschrift(spalte.person as 1 | 2, vornamen?.[spalte.person as 1 | 2])}
               </h2>
-              <SchrittFelder
-                schrittId={schrittId}
-                person={spalte.person}
-                mehrspaltig
-                felder={spalte.felder}
-                defaults={defaults}
-                fieldErrors={state.fieldErrors}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <SchrittFelder
-          schrittId={schrittId}
-          person={spalten[0]?.person}
-          felder={spalten[0]?.felder ?? []}
-          defaults={defaults}
-          fieldErrors={state.fieldErrors}
-        />
-      )}
+            )}
+            <SchrittFelder
+              schrittId={schrittId}
+              person={spalte.person}
+              mehrspaltig={mehrspaltig}
+              felder={spalte.felder}
+              defaults={defaults}
+              fieldErrors={state.fieldErrors}
+            />
+          </div>
+        ))}
+      </div>
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       {!einzelneAuswahl && <WeiterButton etwasEingetragen={eingetragen} />}

@@ -1,21 +1,20 @@
 import { KATALOG, anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
+import { personenSchluessel } from "@/lib/self-disclosure/spalten";
 import type { Umfang } from "@/lib/self-disclosure/umfang";
 import type { Antworten, SichtbarerSchritt } from "@/lib/self-disclosure/types";
+
+/**
+ * `personenSchluessel` wohnt in `spalten.ts` – katalogfrei, damit die
+ * Client-Komponente `schritt-felder.tsx` nicht den ganzen KATALOG ins Buendel
+ * der oeffentlichen Kundenstrecke zieht. Hier nur weitergereicht, damit die
+ * vorhandenen Aufrufer ihren Importpfad behalten.
+ */
+export { personenSchluessel };
 
 /** Antwortschlüssel aus Schritt-ID und Feld-ID, ohne Personenbezug. */
 export function schluessel(schrittId: string, feldId: string): string {
   return `${schrittId}.${feldId}`;
-}
-
-/**
- * Antwortschlüssel mit Personen-Präfix, wo einer nötig ist.
- *
- * Der Präfix steht seit den Spalten nicht mehr in der Schritt-ID: Ein Schritt
- * erscheint einmal und trägt beide Personen. Gebaut wird er deshalb hier.
- */
-export function personenSchluessel(schrittId: string, feldId: string, person?: 1 | 2): string {
-  return person ? `p${person}.${schrittId}.${feldId}` : `${schrittId}.${feldId}`;
 }
 
 /**

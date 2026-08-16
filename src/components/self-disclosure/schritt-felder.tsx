@@ -2,7 +2,10 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { personenSchluessel } from "@/lib/self-disclosure/navigation";
+// Aus `spalten.ts`, nicht aus `navigation.ts`: Dort haengt der KATALOG dran
+// (rund 700 Zeilen Fragen, Optionen, Hinweise) und wanderte ueber diese
+// Client-Komponente ins Buendel der oeffentlichen Kundenstrecke.
+import { personenSchluessel } from "@/lib/self-disclosure/spalten";
 import type { Feld } from "@/lib/self-disclosure/types";
 
 /**
