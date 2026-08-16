@@ -18,6 +18,7 @@ export interface NextStep {
     | "erstgespraech"
     | "kontakt_aufnehmen"
     | "wiedervorlage_faellig"
+    | "vertrieb_laeuft"
     | "selbstauskunft_eingegangen"
     | "dokumente_freigeben"
     | "kundendaten"
@@ -82,6 +83,17 @@ export interface NextStepInput {
     machbarkeitBlockiert: boolean;
   };
   missingCustomerFields: string[];
+  /**
+   * Vertriebsphase des Leads – die zweite Dimension neben `status`. Fehlt sie,
+   * verhält sich die Leiter wie zuvor.
+   *
+   * Sie gehört hierher aus demselben Grund wie `verloren`: Sie ist KEIN
+   * CaseStatus, und ohne sie sieht die Leiter nur die Unterlagenseite des
+   * Falls. „Zusage" setzt ausschließlich der Vermittler von Hand
+   * (`lead-phase.ts` schlägt sie bewusst nie vor) – ein Fall, den er dorthin
+   * gezogen hat, ist hier fertig.
+   */
+  leadPhase?: string;
   /** Stand der Selbstauskunft; fehlt bei Fällen ohne Link. */
   selbstauskunft?: {
     eingegangen: boolean;
@@ -144,6 +156,18 @@ export interface NextStepInput {
    */
   verloren?: boolean;
 }
+
+/**
+ * Phasen, ab denen der Fall außerhalb von BaufiDesk geführt wird – samt dem
+ * Satz, der dann auf der Karte steht. Reihenfolge und Auswahl sind Jürgens
+ * Entscheidung vom 15.08.2026: ab dem Finanzierungsvorschlag.
+ */
+const PHASEN_AUSSERHALB: Record<string, string> = {
+  finanzierungsvorschlag: "Finanzierungsvorschlag beim Kunden",
+  kreditpruefung_eingereicht: "Bei der Bank in Prüfung",
+  zusage: "Zusage liegt vor",
+  abgeschlossen: "Finanzierung abgeschlossen",
+};
 
 export function computeNextStep(c: NextStepInput): NextStep {
   const schritt = ermittleSchritt(c);
@@ -438,6 +462,33 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   // (der Entwurf enthält bereits die Checkliste). Solange er nicht versendet
   // ist, wäre jede andere Anweisung ("Kundendaten ergänzen", "Unterlagen
   // anfordern") vorschnell – der eigentliche erste Schritt fehlt noch.
+  /*
+   * Ab „Finanzierungsvorschlag" führt BaufiDesk den Fall nicht mehr: Ab da
+   * läuft die Arbeit in Europace, Unterlagen kommen per Mail und werden dort
+   * gepflegt (Jürgen, 15.08.2026).
+   *
+   * Die Leiter mahnte solche Fälle weiter an, weil sie nur den FALLSTATUS las
+   * und die LEADPHASE gar nicht kannte – und „Zusage" ist die eine Phase, die
+   * ausschließlich der Vermittler selbst setzt.
+   *
+   * Bewusst NICHT stillgestellt und deshalb VOR dieser Wache: die
+   * Abschlussmeldung, laufende KI-Prüfung und KI-Fehler sowie die fällige
+   * Wiedervorlage. Die Nachforderung der Bank steht weiter unten und wird hier
+   * ausdrücklich durchgelassen – sie kommt von außen und ist genau dann
+   * wichtig, wenn der Fall bei der Bank liegt.
+   */
+  const ausserhalb = c.leadPhase ? PHASEN_AUSSERHALB[c.leadPhase] : undefined;
+  if (ausserhalb && c.status !== "bank_nachforderung") {
+    return {
+      key: "vertrieb_laeuft",
+      title: ausserhalb,
+      reason:
+        "Dieser Fall wird außerhalb geführt – BaufiDesk mahnt hier nichts mehr an. " +
+        "Zieh die Phase im Kanban zurück, wenn du die Führung wieder brauchst.",
+      tone: "neutral",
+    };
+  }
+
   if (c.erstkontakt && !c.erstkontakt.versendet) {
     if (!c.erstkontakt.empfaenger) {
       return {

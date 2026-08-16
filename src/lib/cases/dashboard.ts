@@ -242,6 +242,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       let step = computeNextStep({
         caseId: c.id,
         status: c.status,
+        leadPhase: c.leadPhase,
         counts: {
           pruefbereit: docs.filter((d) => d.reviewStatus === "offen" && d.classificationStatus === "fertig").length,
           docsMissing: agg.missing.length,

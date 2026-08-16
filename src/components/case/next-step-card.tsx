@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, PhoneCall, CalendarClock, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowRight, PhoneCall, CalendarClock, Sparkles, AlertTriangle, ScanSearch, UserRound, Send, Mail, ClipboardList, ClipboardCheck, PackageCheck, FileSearch, Scale, CheckCircle2, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ const ICON: Record<NextStep["key"], typeof Sparkles> = {
   erstgespraech: PhoneCall,
   kontakt_aufnehmen: PhoneCall,
   wiedervorlage_faellig: CalendarClock,
+  // Bankgebaeude: Ab dem Finanzierungsvorschlag laeuft der Fall ausserhalb
+  // von BaufiDesk – die Karte meldet einen Stand, sie fordert nichts.
+  vertrieb_laeuft: Landmark,
   selbstauskunft_eingegangen: ClipboardCheck,
   selbstauskunft_wartet: ClipboardList,
   dokumente_freigeben: ScanSearch,

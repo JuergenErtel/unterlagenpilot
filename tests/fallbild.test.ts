@@ -8,6 +8,7 @@ const cockpit = (over: Partial<CockpitData> = {}): CockpitData => ({
   caseNumber: "UP-2026-0014",
   applicantNames: "Behrend",
   status: "unterlagen_fehlen",
+  leadPhase: "neu",
   score: 50,
   scoreTone: "review",
   scoreLabel: "Teilweise vollständig",

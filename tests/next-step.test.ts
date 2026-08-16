@@ -10,7 +10,12 @@ import type { KontaktStand } from "@/lib/cases/kontakt";
 type TestInput = CockpitData &
   Pick<
     NextStepInput,
-    "erstkontakt" | "erstgespraech" | "kontakt" | "wiedervorlageFaellig" | "verloren"
+    | "erstkontakt"
+    | "erstgespraech"
+    | "kontakt"
+    | "wiedervorlageFaellig"
+    | "verloren"
+    | "leadPhase"
   >;
 
 /** Minimal-Cockpit; Tests überschreiben nur, was für die jeweilige Stufe zählt. */
@@ -28,6 +33,7 @@ function cockpit(over: {
   kontakt?: NextStepInput["kontakt"];
   wiedervorlageFaellig?: NextStepInput["wiedervorlageFaellig"];
   verloren?: NextStepInput["verloren"];
+  leadPhase?: NextStepInput["leadPhase"];
 }): TestInput {
   return {
     caseId: "c1",
@@ -57,6 +63,7 @@ function cockpit(over: {
     },
     missingCustomerFields: over.missingCustomerFields ?? [],
     selbstauskunft: over.selbstauskunft,
+    leadPhase: over.leadPhase ?? "neu",
     erstkontakt: over.erstkontakt,
     erstgespraech: over.erstgespraech,
     kontakt: over.kontakt,
@@ -892,5 +899,87 @@ describe("Wiedervorlage in der Leiter", () => {
     );
     expect(schritt.key).toBe("wiedervorlage_faellig");
     expect(schritt.cta?.href).toBe("/cases/c1/verwaltung");
+  });
+});
+
+
+describe("Vertrieb laeuft ausserhalb", () => {
+  /*
+   * Juergens Befund vom 15.08.2026: Ein Fall, den er im Kanban auf "Zusage"
+   * gezogen hat, mahnte weiter Erstgespraech und fehlende Unterlagen an. Grund:
+   * Die Leiter las nur den FALLSTATUS (Unterlagen, Einreichung) und war fuer die
+   * LEADPHASE (Vertrieb) blind – dabei ist "Zusage" die eine Phase, die
+   * ausschliesslich er selbst setzt.
+   *
+   * Entscheidung: Ab "Finanzierungsvorschlag" fuehrt BaufiDesk den Fall nicht
+   * mehr; ab da laeuft die Arbeit in Europace.
+   */
+  const laufend = {
+    counts: { docsMissing: 3, pruefbereit: 2 },
+    missingCustomerFields: ["geburtsdatum"],
+    erstgespraech: { offeneAngaben: 12 },
+  };
+
+  for (const phase of ["finanzierungsvorschlag", "kreditpruefung_eingereicht", "zusage"]) {
+    it(`mahnt bei Phase ${phase} nichts mehr an`, () => {
+      const schritt = computeNextStep(cockpit({ ...laufend, leadPhase: phase }));
+      expect(schritt.key).toBe("vertrieb_laeuft");
+    });
+  }
+
+  it("nennt den Stand im Titel, statt eine leere Karte zu zeigen", () => {
+    expect(computeNextStep(cockpit({ ...laufend, leadPhase: "zusage" })).title).toContain("Zusage");
+    expect(
+      computeNextStep(cockpit({ ...laufend, leadPhase: "kreditpruefung_eingereicht" })).title
+    ).toContain("Bank");
+  });
+
+  it("sagt, wie man die Leiter zurueckholt", () => {
+    // Ohne diesen Hinweis waere die Sprosse eine Sackgasse: Wer die Fuehrung
+    // doch wieder braucht, muesste raten.
+    const schritt = computeNextStep(cockpit({ ...laufend, leadPhase: "zusage" }));
+    expect(schritt.reason).toMatch(/Phase/i);
+  });
+
+  for (const phase of ["neu", "anfrage_erstellt", "selbstauskunft_laeuft"]) {
+    it(`fuehrt bei Phase ${phase} unveraendert weiter`, () => {
+      const schritt = computeNextStep(cockpit({ ...laufend, leadPhase: phase }));
+      expect(schritt.key).not.toBe("vertrieb_laeuft");
+    });
+  }
+
+  it("fuehrt ohne Phasenangabe unveraendert weiter", () => {
+    // Aufrufer, die die Phase nicht laden, sollen sich verhalten wie bisher.
+    expect(computeNextStep(cockpit(laufend)).key).not.toBe("vertrieb_laeuft");
+  });
+
+  it("laesst eine Nachforderung der Bank durch", () => {
+    // Die kommt von aussen und ist genau dann wichtig, wenn der Fall bei der
+    // Bank liegt – sie darf nicht von der Stillstellung verdeckt werden.
+    const schritt = computeNextStep(
+      cockpit({ ...laufend, leadPhase: "zusage", status: "bank_nachforderung" })
+    );
+    expect(schritt.key).not.toBe("vertrieb_laeuft");
+  });
+
+  it("laesst eine faellige Wiedervorlage durch", () => {
+    const schritt = computeNextStep(
+      cockpit({ ...laufend, leadPhase: "zusage", wiedervorlageFaellig: true })
+    );
+    expect(schritt.key).toBe("wiedervorlage_faellig");
+  });
+
+  it("laesst einen KI-Fehler durch", () => {
+    const schritt = computeNextStep(
+      cockpit({ ...laufend, leadPhase: "zusage", counts: { ...laufend.counts, docsFehler: 1 } })
+    );
+    expect(schritt.key).toBe("ki_fehler");
+  });
+
+  it("bleibt bei abgeschlossenen Faellen bei der Abschlussmeldung", () => {
+    const schritt = computeNextStep(
+      cockpit({ ...laufend, leadPhase: "zusage", status: "abgeschlossen" })
+    );
+    expect(schritt.key).toBe("erledigt");
   });
 });

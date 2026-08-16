@@ -12,6 +12,8 @@ export interface CockpitData {
   caseNumber: string;
   applicantNames: string;
   status: string;
+  /** Vertriebsphase – zweite Dimension neben `status`, siehe next-step.ts. */
+  leadPhase: string;
   score: number;
   scoreTone: Tone;
   scoreLabel: string;
@@ -233,6 +235,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
     caseNumber: caseRow.caseNumber,
     applicantNames,
     status: caseRow.status,
+    leadPhase: caseRow.leadPhase,
     score: agg.readiness.score,
     scoreTone: band.tone,
     scoreLabel: band.label,
