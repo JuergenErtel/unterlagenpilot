@@ -76,3 +76,34 @@ abzulösende Summe, und bei einer reinen Modernisierung ist er gar nicht
 erfragt. Es ist also zu entscheiden, ob der Auslauf für diese Arten anders
 gerechnet, weggelassen oder ein Objektwert zusätzlich erfragt wird — sonst
 tauscht man eine graue Ampel gegen eine falsche.
+
+## Nachträge aus dem Katalogschnitt (16.08.2026)
+
+Beim Kürzen der Selbstauskunft gefunden, bewusst nicht mitgemacht:
+
+- **Ein Feld kann seine Steuerantwort auf derselben Seite haben.** Der Server
+  rechnet die Feldliste vor dem Absenden und springt danach weiter — wird eine
+  bereits gespeicherte Steuerantwort auf derselben Seite geändert, sieht der
+  Kunde das neu freigeschaltete Feld nie. Genau daran wäre die Maklergebühr nie
+  gefragt worden; ein Vertragstest verbietet das inzwischen für Felder, die ohne
+  Antwort verborgen sind. Offen bleibt der mildere Fall (`vorhaben.stand`,
+  `vorhaben.nutzung`): Ihre Bedingung ist ohne Antwort offen, sie können also
+  nur aus- statt eingeblendet werden. Saubere Behebung wäre, nach dem Speichern
+  die Feldliste der eigenen Seite neu zu rechnen und bei neu erschienenen
+  Feldern stehenzubleiben.
+- **`nurArbeitgeber` und `nurVertragsdauer` (`catalog.ts`) haben denselben
+  Rumpf** und sind nur durch ihre Identität als Funktion getrennt. Wer sie als
+  „offensichtliche Vereinfachung" zusammenzieht, gibt dem Minijob wieder die
+  Arbeitgeberfragen — kein Compilerfehler, kein roter Test. Nur die Kommentare
+  schützen davor.
+- **Drei Stellen teilen die Beschäftigungsarten verschieden ein** (`ANGESTELLT`
+  in `catalog.ts`, `ANGESTELLT` in `maske.ts`, `BESCHAEFTIGUNG_MIT_ARBEITSVERTRAG`
+  in `reife.ts`). Genau diese Divergenz hat dazu geführt, dass beim Minijob das
+  Eintrittsdatum aus der Telefonmaske fiel.
+- **Die Regel „wer liest, nimmt die volle Kette" gilt auf Feldebene, nicht auf
+  Personenebene.** Ändert eine Person nachträglich ihre Berufsart, fällt ihre
+  Spalte aus der sichtbaren Kette, und bereits gegebene Antworten verschwinden
+  aus der Übernahme.
+- **Die Abschnitte der Telefonmaske haben sich verschoben:** Das Nettoeinkommen
+  steht seit dem Schnitt unter „Zur Person" statt unter „Beruf und Einkommen",
+  weil der Abschnitt an der Seite hängt und nicht am Feld.
