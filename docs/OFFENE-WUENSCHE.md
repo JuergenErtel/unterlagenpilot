@@ -41,37 +41,51 @@ ein Versprechen mit Haftung. Vor dem Bauen ist zu klären, welche Formulierung
 Jürgen verantworten kann und welche Angaben aus dem Fall belegt sein müssen,
 bevor sich das Papier überhaupt erzeugen lässt.
 
-## Fehler: Die Machbarkeits-Ampel bleibt bei der Hälfte der Vorhabensarten grau
+## ~~Fehler: Die Machbarkeits-Ampel bleibt bei der Hälfte der Vorhabensarten grau~~
 
-**Aufgenommen:** 16.08.2026 · **Fachliche Auflösung von Jürgen liegt vor**
+**Aufgenommen:** 16.08.2026 · **Erledigt: 16.08.2026**
 
-Die Machbarkeitsrechnung (`baueEingabe`, `src/lib/machbarkeit/eingabe.ts`)
-verlangt **zwingend** einen Kaufpreis oder Baukosten; fehlt beides, liefert sie
-„grau" statt einer Aussage. Im kurzen Anfragebogen setzt aber bei drei der sechs
-Vorhabensarten kein Feld eines dieser Ziele. Betroffen sind
-**Anschlussfinanzierung, Kapitalbeschaffung und Modernisierung** — die Ampel
-kann dort nie grün oder rot werden, obwohl genau das der Zweck des kurzen
-Bogens ist.
+Die Machbarkeitsrechnung verlangte zwingend einen Kaufpreis; bei
+Anschlussfinanzierung, Kapitalbeschaffung und Modernisierung blieb die Ampel
+deshalb immer grau.
 
-**Was an die Stelle des Kaufpreises gehört (Jürgen, 16.08.2026):**
+**Die Wurzel** war nicht der fehlende Betrag — der stand im Bogen —, sondern
+dass der Kaufpreis **zwei Rollen zugleich** trug: das, was finanziert wird, und
+den Maßstab, an dem die Bank den Auslauf misst. Beim Kauf ist beides dieselbe
+Zahl, bei diesen drei Arten nicht. Die Rechnung trennt sie seitdem:
 
-| Vorhabensart | Grundbetrag der Rechnung |
-|---|---|
-| Modernisierung | Modernisierungskosten |
-| Kapitalbeschaffung | benötigte Darlehenssumme |
-| Anschlussfinanzierung | abzulösende Darlehenssumme |
+```
+darlehen       = Kaufpreis + Modernisierung + weiterer Bedarf + Nebenkosten
+                 + abzulösende Kredite − Eigenkapital − Eigenleistung
+beleihungswert = Objektwert − Inventar + Zusatzsicherheit
+auslauf        = (darlehen + vorrangige Restschuld) / beleihungswert
+```
 
-Alle drei Beträge **fragt der kurze Bogen bereits ab** — die Arbeit steckt also
-nicht im Fragenkatalog, sondern in der Rechnung: Sie muss den passenden Betrag
-als Grundlage nehmen, statt auf einen Kaufpreis zu bestehen.
+Beim Kauf ist `Objektwert = Kaufpreis` und alles Neue null — dort rechnet
+seitdem exakt dasselbe heraus wie vorher (Regressionsfall in
+`tests/machbarkeit-vorhabensarten.test.ts`).
 
-**Was vor der Umsetzung zu klären ist:** Der Solver rechnet den Auslauf als
-Verhältnis von Darlehen zu Objektwert. Bei einem Kauf ist der Objektwert der
-Kaufpreis; bei einer Anschlussfinanzierung ist er etwas anderes als die
-abzulösende Summe, und bei einer reinen Modernisierung ist er gar nicht
-erfragt. Es ist also zu entscheiden, ob der Auslauf für diese Arten anders
-gerechnet, weggelassen oder ein Objektwert zusätzlich erfragt wird — sonst
-tauscht man eine graue Ampel gegen eine falsche.
+**Zwei neue Fragen** im kurzen Bogen, beide nur bei den betroffenen Arten
+sichtbar — Käufer sehen keine einzige Frage mehr: der geschätzte **Wert der
+Immobilie** (`property.objektwert`) und, nur bei Kapitalbeschaffung und
+Modernisierung, die **Restschuld eines laufenden Darlehens darauf**
+(`property.bestehendeGrundschuld`). Die zweite entfällt bei der
+Anschlussfinanzierung, weil die Restschuld dort abgelöst wird und schon unter
+ihrem eigenen Namen im Bogen steht.
+
+**Drei Fallen, die dabei sichtbar wurden:**
+
+- Den Grundbetrag einfach in `kaufpreis` zu schreiben hätte 6,5 %
+  Grunderwerbsteuer und 2 % Notarkosten auf eine Modernisierung gerechnet.
+- Eine bestehende Grundschuld gehört in den **Zähler des Auslaufs, nie ins
+  Darlehen**: 100.000 € Kapitalbeschaffung auf ein Objekt von 300.000 € sind
+  33 % Auslauf — mit 200.000 € Altlast darauf aber 100 %. Mitfinanziert würde
+  ihre Rate doppelt zählen.
+- Der Rat „braucht X € mehr Eigenkapital" ist bei einer **Kapitalbeschaffung**
+  die eine Antwort, die niemand brauchen kann. Deshalb trägt die Eingabe ein
+  Merkmal `darlehensbedarfVerhandelbar`: Wo die Summe ein Wunsch ist, nennt die
+  Ampel zuerst „Darlehen bis X €"; wo sie eine Tatsache ist
+  (Anschlussfinanzierung), bleibt die Eigenmittel-Lücke die richtige Auskunft.
 
 ## Nachträge aus dem Katalogschnitt (16.08.2026)
 

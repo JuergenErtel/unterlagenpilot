@@ -6,6 +6,10 @@ import type { SolverEingabe } from "@/lib/machbarkeit/types";
 const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   kaufpreis: 400_000,
   modernisierungskosten: 0,
+  objektwert: null,
+  weitererDarlehensbedarf: 0,
+  darlehensbedarfVerhandelbar: false,
+  vorrangigeRestschuld: 0,
   inventarAnteil: 0,
   nebenkostenErfasst: null,
   maklerprovisionProzent: 0,
@@ -63,7 +67,7 @@ describe("Diagnose", () => {
 describe("Hebelliste", () => {
   it("listet alle Hebel, auch die nicht anwendbaren", () => {
     const r = loese(eingabe(), VORGABE_ANNAHMEN, false);
-    expect(r.hebel).toHaveLength(10);
+    expect(r.hebel).toHaveLength(11);
   });
 
   it("begruendet, warum ein Hebel nicht anwendbar ist", () => {

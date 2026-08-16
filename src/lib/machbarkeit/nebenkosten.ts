@@ -11,7 +11,11 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * Eigenkapital "eigentlich reichen muesste".
  */
 export function berechneNebenkosten(e: SolverEingabe, a: Annahmen): NebenkostenAufstellung {
-  const steuersatzUnsicher = e.grunderwerbsteuerProzentOverride == null && e.bundesland == null;
+  // Ohne Kaufpreis faellt keine Grunderwerbsteuer an – dann ist auch ein
+  // unbekannter Satz kein Problem, ueber das die Maske warnen muesste
+  // (Anschlussfinanzierung, Kapitalbeschaffung, Modernisierung).
+  const steuersatzUnsicher =
+    e.kaufpreis > 0 && e.grunderwerbsteuerProzentOverride == null && e.bundesland == null;
   const satz =
     e.grunderwerbsteuerProzentOverride ??
     (e.bundesland ? GRUNDERWERBSTEUER[e.bundesland] : a.grEStFallbackProzent);

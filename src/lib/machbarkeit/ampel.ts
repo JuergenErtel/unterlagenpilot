@@ -4,7 +4,7 @@ import { baueEingabe } from "./eingabe";
 import { bewerte } from "./bewertung";
 import { kleinsterWert } from "./suche";
 import { HEBEL } from "./hebel";
-import type { Annahmen } from "./types";
+import type { Annahmen, SolverEingabe } from "./types";
 
 export type AmpelFarbe = "gruen" | "gelb" | "rot" | "grau";
 
@@ -39,6 +39,32 @@ const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits:
  * und die Ampel sortierte nichts mehr.
  */
 const GRUEN_BIS_AUSLAUF = 100;
+
+/**
+ * "Wie viel Darlehen traegt der Fall?" – das Gegenstueck zu "Objekt bis X"
+ * fuer die Arten ohne Kaufpreis. Der Kunde besitzt die Immobilie bereits; ihm
+ * ein kleineres Objekt zu empfehlen, waere kein Rat.
+ */
+function darlehensHebel(
+  e: SolverEingabe,
+  a: Annahmen,
+  ziel: (u: { machbar: boolean }) => boolean
+): Ampel | null {
+  const h = HEBEL.find((x) => x.key === "darlehenssumme");
+  const gefunden = h ? kleinsterWert(h, e, a, ziel) : null;
+  if (!gefunden) return null;
+
+  const tragbar = Math.max(e.weitererDarlehensbedarf - gefunden.wert, 0);
+  return {
+    farbe: "gelb",
+    text: `Darlehen bis ${eur(tragbar)}`,
+    grund: `Statt ${eur(e.weitererDarlehensbedarf)} trägt der Fall ein Darlehen bis ${eur(
+      tragbar
+    )} – bei ${pct(gefunden.urteil.auslauf)} Beleihungsauslauf und ${eur(
+      gefunden.urteil.ueberschuss
+    )} Haushaltsüberschuss.`,
+  };
+}
 
 /**
  * Verkuerzte Sicht auf den Machbarkeits-Solver fuer eine Kanban-Karte.
@@ -92,6 +118,15 @@ export function ampelFuer(c: CanonicalCase, opts: AmpelOptionen, a: Annahmen): A
 
   const ziel = (u: { machbar: boolean }) => u.machbar;
 
+  // Bei einer Kapitalbeschaffung steht die Darlehenssumme VOR dem
+  // Eigenkapital: Wer Kapital beschaffen will, hat keines uebrig – "braucht
+  // 70.000 € mehr EK" waere die einzige Antwort, die ihm sicher nichts nuetzt.
+  // Er will wissen, wie viel er bekommt.
+  if (e.darlehensbedarfVerhandelbar) {
+    const vorab = darlehensHebel(e, a, ziel);
+    if (vorab) return vorab;
+  }
+
   const ekHebel = HEBEL.find((h) => h.key === "eigenkapital");
   const ek = ekHebel ? kleinsterWert(ekHebel, e, a, ziel) : null;
   if (ek) {
@@ -118,6 +153,9 @@ export function ampelFuer(c: CanonicalCase, opts: AmpelOptionen, a: Annahmen): A
       )} statt ${eur(e.kaufpreis)} trägt der Fall.`,
     };
   }
+
+  const dl = darlehensHebel(e, a, ziel);
+  if (dl) return dl;
 
   return {
     farbe: "rot",

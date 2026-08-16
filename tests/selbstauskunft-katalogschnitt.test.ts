@@ -15,7 +15,7 @@ const VOLL_ZUSAETZLICH = [
 ];
 
 /**
- * Die 63 Felder des Katalogs als Fixtur: Seite, Feld-ID, Zielspalte.
+ * Die 65 Felder des Katalogs als Fixtur: Seite, Feld-ID, Zielspalte.
  *
  * Der Grund, warum diese Liste hier ausgeschrieben steht statt aus dem Katalog
  * gerechnet zu werden: "Kein Feld darf verlorengehen" ist die haerteste Zusage
@@ -41,6 +41,11 @@ const FELDER: Array<[seite: string, feld: string, ziel: string | null]> = [
   ["objekt_preis", "modernisierung", "financingRequest.modernisierungskosten"],
   ["objekt_preis", "restschuld", "financingRequest.darlehenswunsch"],
   ["objekt_preis", "kapitalbedarf", "financingRequest.darlehenswunsch"],
+  // Seit 16.08.2026: der Nenner des Beleihungsauslaufs, wo es keinen Kaufpreis
+  // gibt. Ohne diese beiden blieb die Machbarkeits-Ampel bei drei von sechs
+  // Vorhabensarten grau.
+  ["objekt_preis", "objektwert", "property.objektwert"],
+  ["objekt_preis", "bestehende_grundschuld", "property.bestehendeGrundschuld"],
   ["objekt_preis", "wohnflaeche", "property.wohnflaeche"],
   ["objekt_preis", "makler", null],
   ["finanzierungswunsch", "eigenkapital", "financingRequest.eigenkapital"],
@@ -133,7 +138,7 @@ describe("Katalogschnitt", () => {
     expect(KATALOG.slice(6).every((s) => s.umfang === "voll")).toBe(true);
   });
 
-  it("traegt genau die 63 Felder von frueher – Seite, ID und Zielspalte", () => {
+  it("traegt genau die 65 Felder von frueher – Seite, ID und Zielspalte", () => {
     const ist = KATALOG.flatMap((s) =>
       s.felder.map((f) => {
         const ziel = !f.ziel ? null : "liste" in f.ziel ? `${f.ziel.entitaet}[]` : `${f.ziel.entitaet}.${f.ziel.feld}`;

@@ -7,6 +7,44 @@ import type { Bundesland } from "./bundesland";
 export interface SolverEingabe {
   kaufpreis: number;
   modernisierungskosten: number;
+  /**
+   * Geschaetzter Wert der Immobilie – der Massstab, an dem die Bank den
+   * Auslauf misst. `null` heisst: Es gibt keinen eigenen Wert, der Kaufpreis
+   * ist der Massstab.
+   *
+   * Beim Kauf tragen beide Rollen denselben Betrag, und genau das hat die
+   * Rechnung bis zum 16.08.2026 verwechselt: Sie kannte nur den Kaufpreis und
+   * blieb deshalb bei Anschlussfinanzierung, Kapitalbeschaffung und
+   * Modernisierung immer grau. Getrennt gehalten, weil beim Kauf ein
+   * nachverhandelter Preis den Massstab mitsenkt, ein erfasster Objektwert
+   * dagegen nicht (siehe Hebel "kaufpreis").
+   */
+  objektwert: number | null;
+  /**
+   * Darlehensbedarf, der sich NICHT aus Kaufpreis und Baukosten ergibt: die
+   * abzuloesende Restschuld bei einer Anschlussfinanzierung, der benoetigte
+   * Betrag bei einer Kapitalbeschaffung. Erhoeht das Darlehen, hebt aber den
+   * Beleihungswert nicht.
+   */
+  weitererDarlehensbedarf: number;
+  /**
+   * Ist dieser Bedarf ein Wunsch (Kapitalbeschaffung) oder eine Tatsache
+   * (Anschlussfinanzierung)?
+   *
+   * Entscheidet, welchen Rat die Ampel zuerst gibt. Wer Kapital beschaffen
+   * will, dem "mehr Eigenkapital" zu empfehlen, ist die eine Antwort, die er
+   * sicher nicht brauchen kann – dort zaehlt, wie viel er bekommt. Eine
+   * abzuloesende Restschuld dagegen steht fest; dort ist die Eigenmittel-
+   * Luecke die richtige Auskunft.
+   */
+  darlehensbedarfVerhandelbar: boolean;
+  /**
+   * Auf dem Objekt bleibende Restschuld eines laufenden Darlehens
+   * (Kapitalbeschaffung, Modernisierung). Sie verbraucht Beleihungsraum, geht
+   * aber nicht ins neue Darlehen – ihre Rate steht bei den laufenden Krediten
+   * und darf nicht doppelt zaehlen.
+   */
+  vorrangigeRestschuld: number;
   /** Aus dem Kaufpreis herausgerechnetes Inventar (nicht beleihbar). */
   inventarAnteil: number;
   /** Am Fall erfasste Nebenkosten. Gesetzt => es wird nicht gerechnet. */

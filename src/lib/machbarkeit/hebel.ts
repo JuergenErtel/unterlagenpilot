@@ -27,6 +27,13 @@ export interface HebelDefinition {
 
 const eur = (n: number) => `${Math.round(n).toLocaleString("de-DE")} €`;
 
+/**
+ * Groessenordnung des Vorhabens – Obergrenze fuer die Suchraeume der Hebel.
+ * Ohne Kaufpreis (Anschlussfinanzierung, Kapitalbeschaffung, Modernisierung)
+ * gibt der Objektwert den Massstab; sonst suchten die Hebel im Bereich 0.
+ */
+const massstab = (e: SolverEingabe) => Math.max(e.objektwert ?? 0, e.kaufpreis);
+
 /** Die fuenf wirksamsten Kredite – mehr Kombinationen lohnen nicht. */
 const kreditKandidaten = (e: SolverEingabe) =>
   [...e.kredite].sort((x, y) => y.rate - x.rate).slice(0, 5);
@@ -37,7 +44,7 @@ export const HEBEL: HebelDefinition[] = [
     titel: "Mehr Eigenkapital einbringen",
     sorte: "hypothetisch",
     diskret: false,
-    anwendbar: (e) => ({ ok: true, max: Math.max(e.kaufpreis, 50_000), schritt: 100 }),
+    anwendbar: (e) => ({ ok: true, max: Math.max(massstab(e), 50_000), schritt: 100 }),
     anwenden: (e, w) => ({ ...e, eigenkapital: e.eigenkapital + w }),
     formatWert: (_e, w) => `${eur(w)} zusätzlich`,
     preis: () => "Der Betrag muss verfügbar und gegenüber der Bank nachweisbar sein.",
@@ -113,17 +120,52 @@ export const HEBEL: HebelDefinition[] = [
     titel: "Kaufpreis nachverhandeln",
     sorte: "datengestuetzt",
     diskret: false,
-    anwendbar: (e) => ({ ok: true, max: Math.round(e.kaufpreis * 0.2), schritt: 100 }),
+    anwendbar: (e) =>
+      e.kaufpreis > 0
+        ? { ok: true, max: Math.round(e.kaufpreis * 0.2), schritt: 100 }
+        : { ok: false, grund: "Kein Kaufpreis erfasst – hier ist nichts zu verhandeln." },
     anwenden: (e, w) => ({ ...e, kaufpreis: Math.max(e.kaufpreis - w, 0) }),
     formatWert: (e, w) => `${eur(w)} weniger (${eur(e.kaufpreis)} → ${eur(e.kaufpreis - w)})`,
     preis: () => "Der Verkäufer muss mitgehen – ohne Zusage ist das kein belastbarer Weg.",
+  },
+  {
+    /*
+     * Das Gegenstueck zu "kaufpreis" fuer die Arten ohne Kaufpreis: Wer eine
+     * Kapitalbeschaffung anfragt, besitzt die Immobilie bereits – "Objekt bis
+     * 250.000 Euro" waere dort ein sinnloser Rat. Verhandelbar ist nicht das
+     * Objekt, sondern die Summe, die er sich auszahlen laesst.
+     */
+    key: "darlehenssumme",
+    titel: "Weniger Darlehen aufnehmen",
+    sorte: "datengestuetzt",
+    diskret: false,
+    anwendbar: (e) => {
+      if (e.weitererDarlehensbedarf <= 0)
+        return { ok: false, grund: "Die Darlehenssumme ergibt sich hier aus Kaufpreis und Kosten." };
+      if (!e.darlehensbedarfVerhandelbar)
+        return { ok: false, grund: "Die abzulösende Restschuld steht fest – sie ist kein Hebel." };
+      return { ok: true, max: e.weitererDarlehensbedarf, schritt: 100 };
+    },
+    anwenden: (e, w) => ({
+      ...e,
+      weitererDarlehensbedarf: Math.max(e.weitererDarlehensbedarf - w, 0),
+    }),
+    formatWert: (e, w) =>
+      `${eur(w)} weniger (${eur(e.weitererDarlehensbedarf)} → ${eur(
+        e.weitererDarlehensbedarf - w
+      )})`,
+    preis: () =>
+      "Der nicht aufgenommene Teil muss aus eigenen Mitteln kommen oder das Vorhaben schrumpfen.",
   },
   {
     key: "inventar",
     titel: "Inventar aus dem Kaufpreis herausrechnen",
     sorte: "datengestuetzt",
     diskret: false,
-    anwendbar: (e) => ({ ok: true, max: Math.round(e.kaufpreis * 0.15), schritt: 100 }),
+    anwendbar: (e) =>
+      e.kaufpreis > 0
+        ? { ok: true, max: Math.round(e.kaufpreis * 0.15), schritt: 100 }
+        : { ok: false, grund: "Ohne Kaufpreis gibt es nichts herauszurechnen." },
     anwenden: (e, w) => ({ ...e, inventarAnteil: e.inventarAnteil + w }),
     formatWert: (_e, w) => `${eur(w)} als Inventar ausweisen`,
     preis: () =>
@@ -134,7 +176,10 @@ export const HEBEL: HebelDefinition[] = [
     titel: "Nebenkosten über einen Ratenkredit finanzieren",
     sorte: "hypothetisch",
     diskret: false,
-    anwendbar: (e) => ({ ok: true, max: Math.round(e.kaufpreis * 0.15), schritt: 100 }),
+    anwendbar: (e) =>
+      e.kaufpreis > 0
+        ? { ok: true, max: Math.round(e.kaufpreis * 0.15), schritt: 100 }
+        : { ok: false, grund: "Ohne Kaufnebenkosten gibt es nichts umzuschichten." },
     anwenden: (e, w) => ({ ...e, ratenkreditAnteil: e.ratenkreditAnteil + w }),
     formatWert: (_e, w) => `${eur(w)} über einen Ratenkredit`,
     preis: () => "Kurze Laufzeit und hoher Zins – die Rate belastet den Haushalt spürbar.",
@@ -169,7 +214,7 @@ export const HEBEL: HebelDefinition[] = [
     titel: "Weiteres Objekt als Zusatzsicherheit stellen",
     sorte: "hypothetisch",
     diskret: false,
-    anwendbar: (e) => ({ ok: true, max: Math.max(e.kaufpreis, 100_000), schritt: 1_000 }),
+    anwendbar: (e) => ({ ok: true, max: Math.max(massstab(e), 100_000), schritt: 1_000 }),
     anwenden: (e, w) => ({
       ...e,
       zusatzsicherheitBeleihungsraum: e.zusatzsicherheitBeleihungsraum + w,

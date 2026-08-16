@@ -87,6 +87,7 @@ export function bewerte(e: SolverEingabe, a: Annahmen): Urteil {
     Math.max(
       e.kaufpreis +
         e.modernisierungskosten +
+        e.weitererDarlehensbedarf +
         nebenkosten.summe +
         e.abzuloesendeRestschuld -
         e.eigenkapital -
@@ -97,11 +98,18 @@ export function bewerte(e: SolverEingabe, a: Annahmen): Urteil {
   );
 
   // Inventar ist nicht beleihbar; eine Zusatzsicherheit erweitert den Nenner.
+  // Ohne eigenen Objektwert ist der Kaufpreis der Massstab – so rechnet ein
+  // Kauf nach der Trennung der beiden Rollen unveraendert weiter.
   const beleihungswert = r2(
-    Math.max(e.kaufpreis - e.inventarAnteil, 0) + e.zusatzsicherheitBeleihungsraum
+    Math.max((e.objektwert ?? e.kaufpreis) - e.inventarAnteil, 0) + e.zusatzsicherheitBeleihungsraum
   );
 
-  const auslauf = beleihungswert > 0 ? r2((darlehen / beleihungswert) * 100) : Infinity;
+  // Eine vorrangige Grundschuld steht im Rang VOR dem neuen Darlehen: Sie
+  // verbraucht Beleihungsraum, ohne mitfinanziert zu werden. Nur im Zaehler
+  // des Auslaufs, nie im Darlehen – sonst zahlte der Haushalt ihre Rate
+  // zweimal.
+  const auslauf =
+    beleihungswert > 0 ? r2(((darlehen + e.vorrangigeRestschuld) / beleihungswert) * 100) : Infinity;
   const band = bandFuer(auslauf);
 
   // Ein konkreter Sollzins gilt fuer das AKTUELLE Band; andere Baender ergeben

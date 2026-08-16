@@ -83,6 +83,19 @@ export interface CanonicalProperty {
   mieteinnahmenMonatlich?: number;
   nutzung?: UsageType;
   vermieteterAnteilProzent?: number;
+  /**
+   * Geschaetzter Wert der Immobilie. Nur dort erfragt, wo es keinen Kaufpreis
+   * gibt (Anschlussfinanzierung, Kapitalbeschaffung, Modernisierung) – sonst
+   * ist der Kaufpreis der Massstab fuer den Beleihungsauslauf.
+   */
+  objektwert?: number;
+  /**
+   * Restschuld eines auf der Immobilie laufenden Darlehens, das BESTEHEN
+   * BLEIBT. Verbraucht Beleihungsraum, wird aber nicht mitfinanziert. Bei der
+   * Anschlussfinanzierung gehoert die Restschuld nicht hierher, sondern in
+   * `financing.darlehenswunsch` – dort wird sie abgeloest.
+   */
+  bestehendeGrundschuld?: number;
 }
 
 export interface CanonicalFinancing {

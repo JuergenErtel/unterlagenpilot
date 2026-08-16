@@ -31,6 +31,8 @@ const ZAHLENFELDER = [
   "maklerprovisionProzent",
   "hausgeldMonatlich",
   "mieteinnahmenMonatlich",
+  "objektwert",
+  "bestehendeGrundschuld",
   "nettoMonatlich",
   "bruttoMonatlich",
   "sonstigeEinnahmen",

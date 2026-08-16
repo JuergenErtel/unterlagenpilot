@@ -679,6 +679,15 @@ model Property {
   mieteinnahmenMonatlich   Float?
   nutzung                  UsageType?
   vermieteterAnteilProzent Int?
+  /// Geschaetzter Wert der Immobilie. Nur erfragt, wo es keinen Kaufpreis gibt
+  /// (Anschlussfinanzierung, Kapitalbeschaffung, Modernisierung) - dort ist er
+  /// der Massstab fuer den Beleihungsauslauf, sonst der Kaufpreis.
+  objektwert               Float?
+  /// Restschuld eines auf der Immobilie laufenden Darlehens, das BESTEHEN
+  /// BLEIBT. Verbraucht Beleihungsraum, wird aber nicht mitfinanziert. Bei der
+  /// Anschlussfinanzierung gehoert die Restschuld nicht hierher, sondern in
+  /// FinancingRequest.darlehenswunsch - dort wird sie abgeloest.
+  bestehendeGrundschuld    Float?
   /// Manuell bestaetigtes Bundesland, falls die PLZ mehrdeutig ist.
   bundesland               String?
   createdAt                DateTime      @default(now())

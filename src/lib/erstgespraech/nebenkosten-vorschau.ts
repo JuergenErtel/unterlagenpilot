@@ -47,6 +47,10 @@ export function nebenkostenVorschau(eingabe: VorschauEingabe): NebenkostenAufste
   const solverEingabe: SolverEingabe = {
     kaufpreis: eingabe.kaufpreis,
     modernisierungskosten: 0,
+    objektwert: null,
+    weitererDarlehensbedarf: 0,
+    darlehensbedarfVerhandelbar: false,
+    vorrangigeRestschuld: 0,
     inventarAnteil: 0,
     nebenkostenErfasst: eingabe.nebenkostenErfasst ?? null,
     maklerprovisionProzent: eingabe.maklerprovisionProzent ?? 0,

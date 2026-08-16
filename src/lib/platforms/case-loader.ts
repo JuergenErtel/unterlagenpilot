@@ -111,6 +111,8 @@ export function mapCaseToCanonical(c: CaseWithRelations): CanonicalCase {
           mieteinnahmenMonatlich: c.property.mieteinnahmenMonatlich ?? undefined,
           nutzung: c.property.nutzung ?? undefined,
           vermieteterAnteilProzent: c.property.vermieteterAnteilProzent ?? undefined,
+          objektwert: c.property.objektwert ?? undefined,
+          bestehendeGrundschuld: c.property.bestehendeGrundschuld ?? undefined,
         }
       : undefined,
     financing: {
