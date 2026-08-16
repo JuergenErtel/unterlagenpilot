@@ -36,7 +36,7 @@ describe("fehlendeKontaktangaben", () => {
   it("liest die Angaben des ERSTEN Antragstellers", () => {
     // Die Personenschritte tragen das Praefix p1./p2. – wer das vergisst,
     // prueft ein Feld, das es nie gibt, und laesst jeden Bogen durch.
-    expect(KONTAKT_SCHLUESSEL.nachname).toBe("p1.person_name.nachname");
-    expect(KONTAKT_SCHLUESSEL.email).toBe("p1.person_kontakt.email");
+    expect(KONTAKT_SCHLUESSEL.nachname).toBe("p1.personen.nachname");
+    expect(KONTAKT_SCHLUESSEL.email).toBe("p1.personen.email");
   });
 });

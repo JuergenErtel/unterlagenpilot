@@ -63,12 +63,30 @@ describe("ladeSelbstauskunftStand", () => {
       active: true,
       expiresAt: MORGEN,
       createdAt: VOR_5_TAGEN,
-      disclosure: { currentStep: "objektstand", answers: {}, submittedAt: null, takenOverAt: null },
+      disclosure: { currentStep: "objekt_preis", answers: {}, submittedAt: null, takenOverAt: null },
     });
     const stand = await ladeSelbstauskunftStand("case-1");
     expect(stand.begonnen).toBe(true);
     expect(stand.eingegangen).toBe(false);
     expect(stand.fortschritt).not.toBeNull();
+    expect(stand.label).toContain("begonnen, Schritt");
+  });
+
+  it("zeigt den Fortschritt auch fuer einen alten currentStep mit Personen-Praefix, statt 0 % zu melden", async () => {
+    // Regression aus der Umstellung auf Personen-Spalten: `currentStep` steht
+    // in der DB und wird nur beim Speichern neu geschrieben. Ein VOR dieser
+    // Aufgabe begonnener Bogen traegt noch "p1.personen" – ohne
+    // Normalisierung in `fortschritt` faende sich die ID nie wieder, und der
+    // Fortschrittsbalken des Vermittlers zeigt faelschlich 0 %.
+    findFirst.mockResolvedValue({
+      id: "link-1",
+      active: true,
+      expiresAt: MORGEN,
+      createdAt: VOR_5_TAGEN,
+      disclosure: { currentStep: "p1.personen", answers: {}, submittedAt: null, takenOverAt: null },
+    });
+    const stand = await ladeSelbstauskunftStand("case-1");
+    expect(stand.fortschritt?.position).toBeGreaterThan(0);
     expect(stand.label).toContain("begonnen, Schritt");
   });
 

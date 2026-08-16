@@ -102,21 +102,36 @@ describe.runIf(RUN)("Selbstauskunft (PGlite)", () => {
       }
     };
 
-    await ohneRedirect(speichereAntwort(token, "finanzierungsart", form({ art: "kauf_bestand" })));
-    await ohneRedirect(speichereAntwort(token, "kaufpreis", form({ betrag: "400.000" })));
-    await ohneRedirect(speichereAntwort(token, "objekt_ort", form({ plz: "", ort: "" })));
     await ohneRedirect(
-      speichereAntwort(token, "anzahl_antragsteller", form({ anzahl: "2" }))
+      speichereAntwort(token, "vorhaben", form({ "vorhaben.art": "kauf_bestand" }))
     );
-    await ohneRedirect(speichereAntwort(token, "p2.person_name", form({ vorname: "Thomas" })));
-    await ohneRedirect(speichereAntwort(token, "p1.einkommen", form({ netto: "3200" })));
+    await ohneRedirect(speichereAntwort(token, "objekt_preis", form({ "objekt_preis.kaufpreis": "400.000" })));
+    await ohneRedirect(
+      speichereAntwort(token, "objekt_preis", form({ "objekt_preis.plz": "", "objekt_preis.ort": "" }))
+    );
+    await ohneRedirect(
+      speichereAntwort(
+        token,
+        "haushalt",
+        form({ "haushalt.anzahl": "2" })
+      )
+    );
+    // "personen" ist seit den Personen-Spalten EIN Schritt mit beiden
+    // Spalten – die Antworten unterscheiden sich nur noch durch den
+    // Personen-Praefix im Feldnamen, nicht mehr durch die Schritt-ID.
+    await ohneRedirect(
+      speichereAntwort(token, "personen", form({ "p2.personen.vorname": "Thomas" }))
+    );
+    await ohneRedirect(
+      speichereAntwort(token, "personen", form({ "p1.personen.netto": "3200" }))
+    );
 
     const bogen = await prisma.selfDisclosure.findFirst({ where: { caseId } });
-    expect(bogen.answers["finanzierungsart.art"]).toBe("kauf_bestand");
-    expect(bogen.answers["kaufpreis.betrag"]).toBe(400000);
-    expect(bogen.answers["p2.person_name.vorname"]).toBe("Thomas");
+    expect(bogen.answers["vorhaben.art"]).toBe("kauf_bestand");
+    expect(bogen.answers["objekt_preis.kaufpreis"]).toBe(400000);
+    expect(bogen.answers["p2.personen.vorname"]).toBe("Thomas");
     // Übersprungener Schritt: nichts gespeichert.
-    expect(bogen.answers["objekt_ort.plz"]).toBeUndefined();
+    expect(bogen.answers["objekt_preis.plz"]).toBeUndefined();
   }, 60_000);
 
   it("übernimmt nur die ausgewählten Angaben und legt Antragsteller 2 dabei an", async () => {

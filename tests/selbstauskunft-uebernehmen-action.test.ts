@@ -134,13 +134,13 @@ beforeEach(() => {
   disclosureFindFirst.mockResolvedValue({
     id: "sd-1",
     caseId: "case-A",
-    answers: { "p1.person_name.vorname": "Thomas" },
+    answers: { "p1.personen.vorname": "Thomas" },
   });
 });
 
 describe("uebernehmen", () => {
   it("schreibt nur die ausgewählten Vorschläge", async () => {
-    await uebernehmen("case-A", ["p1.person_name.vorname"]);
+    await uebernehmen("case-A", ["p1.personen.vorname"]);
     const arg = applicantUpdate.mock.calls[0]![0] as {
       where: { id: string };
       data: Record<string, unknown>;
@@ -158,9 +158,9 @@ describe("uebernehmen", () => {
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "anzahl_antragsteller.anzahl": "2", "p2.person_name.vorname": "Laura" },
+      answers: { "haushalt.anzahl": "2", "p2.personen.vorname": "Laura" },
     });
-    await uebernehmen("case-A", ["p2.person_name.vorname"]);
+    await uebernehmen("case-A", ["p2.personen.vorname"]);
     expect(applicantCreate).toHaveBeenCalled();
     const arg = applicantUpdate.mock.calls[0]![0] as { where: { id: string } };
     expect(arg.where.id).toBe("a2");
@@ -170,9 +170,9 @@ describe("uebernehmen", () => {
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "kaufpreis.betrag": 400000, "p1.person_geburt.geburtsdatum": "1985-04-12" },
+      answers: { "objekt_preis.kaufpreis": 400000, "p1.person_details.geburtsdatum": "1985-04-12" },
     });
-    await uebernehmen("case-A", ["kaufpreis.betrag", "p1.person_geburt.geburtsdatum"]);
+    await uebernehmen("case-A", ["objekt_preis.kaufpreis", "p1.person_details.geburtsdatum"]);
     const fin = financingUpsert.mock.calls[0]![0] as { update: { kaufpreis: number } };
     expect(fin.update.kaufpreis).toBe(400000);
     const app = applicantUpdate.mock.calls[0]![0] as { data: { geburtsdatum: Date } };
@@ -183,9 +183,9 @@ describe("uebernehmen", () => {
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "p1.einkommen.netto": 3200 },
+      answers: { "p1.personen.netto": 3200 },
     });
-    await uebernehmen("case-A", ["p1.einkommen.netto"]);
+    await uebernehmen("case-A", ["p1.personen.netto"]);
     const arg = incomeCreate.mock.calls[0]![0] as {
       data: { applicantId: string; nettoMonatlich: number };
     };
@@ -197,9 +197,9 @@ describe("uebernehmen", () => {
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "p1.beruf_art.art": "handwerker" },
+      answers: { "p1.personen.beruf_art": "handwerker" },
     });
-    await uebernehmen("case-A", ["p1.beruf_art.art"]);
+    await uebernehmen("case-A", ["p1.personen.beruf_art"]);
     const arg = employmentCreate.mock.calls[0]![0] as {
       data: { beschaeftigungsart: string };
     };
@@ -207,15 +207,15 @@ describe("uebernehmen", () => {
   });
 
   it("schreibt die Finanzierungsart in den Fall (Ziel-Entitaet 'case')", async () => {
-    // Fund der Pruefung: planUebernahme erzeugt fuer "finanzierungsart.art"
+    // Fund der Pruefung: planUebernahme erzeugt fuer "vorhaben.art"
     // einen Vorschlag mit ziel.entitaet "case", schreibeVorschlaege hatte
     // dafuer aber keinen Zweig – der Wert verschwand im "default: break".
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "finanzierungsart.art": "kauf_bestand" },
+      answers: { "vorhaben.art": "kauf_bestand" },
     });
-    await uebernehmen("case-A", ["finanzierungsart.art"]);
+    await uebernehmen("case-A", ["vorhaben.art"]);
     const arg = caseUpdate.mock.calls[0]![0] as {
       where: { id: string };
       data: { financingType: string };
@@ -228,9 +228,9 @@ describe("uebernehmen", () => {
     disclosureFindFirst.mockResolvedValue({
       id: "sd-1",
       caseId: "case-A",
-      answers: { "p1.beruf_art.art": "freiberufler" },
+      answers: { "p1.personen.beruf_art": "freiberufler" },
     });
-    await uebernehmen("case-A", ["p1.beruf_art.art"]);
+    await uebernehmen("case-A", ["p1.personen.beruf_art"]);
     const arg = employmentCreate.mock.calls[0]![0] as {
       data: { beschaeftigungsart: string };
     };
@@ -239,20 +239,20 @@ describe("uebernehmen", () => {
 
   it("verweigert die Übernahme bei gesperrtem Fall", async () => {
     caseFindUnique.mockResolvedValue({ status: "exportiert", financingType: null });
-    const res = await uebernehmen("case-A", ["p1.person_name.vorname"]);
+    const res = await uebernehmen("case-A", ["p1.personen.vorname"]);
     expect(res.error).toBeTruthy();
     expect(applicantUpdate).not.toHaveBeenCalled();
   });
 
   it("markiert den Bogen als übernommen", async () => {
-    await uebernehmen("case-A", ["p1.person_name.vorname"]);
+    await uebernehmen("case-A", ["p1.personen.vorname"]);
     const arg = disclosureUpdate.mock.calls[0]![0] as { data: { takenOverAt: Date } };
     expect(arg.data.takenOverAt).toBeInstanceOf(Date);
   });
 
   it("meldet einen Fehler, wenn keine eingegangene Selbstauskunft vorliegt", async () => {
     disclosureFindFirst.mockResolvedValue(null);
-    const res = await uebernehmen("case-A", ["p1.person_name.vorname"]);
+    const res = await uebernehmen("case-A", ["p1.personen.vorname"]);
     expect(res.error).toBeTruthy();
   });
 });

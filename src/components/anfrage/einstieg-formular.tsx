@@ -17,7 +17,17 @@ function WeiterButton() {
   );
 }
 
-export function EinstiegFormular({ slug, frage, felder }: { slug: string; frage: string; felder: Feld[] }) {
+export function EinstiegFormular({
+  slug,
+  schrittId,
+  frage,
+  felder,
+}: {
+  slug: string;
+  schrittId: string;
+  frage: string;
+  felder: Feld[];
+}) {
   const [state, action] = useActionState<AnfrageStart, FormData>(
     async (_prev, fd) => (await starteAnfrage(slug, fd)) ?? {},
     {}
@@ -44,7 +54,7 @@ export function EinstiegFormular({ slug, frage, felder }: { slug: string; frage:
         <label htmlFor="firmenzusatz">Firmenzusatz</label>
         <input id="firmenzusatz" name="firmenzusatz" type="text" tabIndex={-1} autoComplete="off" />
       </div>
-      <SchrittFelder felder={felder} defaults={{}} fieldErrors={state.fieldErrors} />
+      <SchrittFelder schrittId={schrittId} felder={felder} defaults={{}} fieldErrors={state.fieldErrors} />
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       {/* Eine einzelne Auswahl sendet mit dem Klick auf die Kachel bereits ab
           (siehe SchrittFelder) – ein zweiter Knopf darunter waere doppelt. */}

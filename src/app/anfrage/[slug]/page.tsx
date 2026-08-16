@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { ERSTER_SCHRITT, formularZuSlug } from "@/lib/leadformular/service";
 import { schrittFinden } from "@/lib/self-disclosure/navigation";
+import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { EinstiegFormular } from "@/components/anfrage/einstieg-formular";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +14,23 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
   const formular = await formularZuSlug(slug);
   if (!formular) notFound();
 
-  const schritt = schrittFinden(ERSTER_SCHRITT, {});
+  // Fest "kurz": diese Seite IST der oeffentliche Anfragebogen, es gibt hier
+  // noch keinen Link, aus dem sich der Umfang ableiten liesse.
+  const schritt = schrittFinden(ERSTER_SCHRITT, {}, "kurz");
   if (!schritt) notFound();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-8 p-6">
       <Logo />
-      <EinstiegFormular slug={slug} frage={schritt.schritt.frage} felder={schritt.schritt.felder} />
+      <EinstiegFormular
+        slug={slug}
+        schrittId={schritt.id}
+        frage={schritt.schritt.frage}
+        // Ohne Antworten – aber ueber `sichtbareFelder`, damit die Seite
+        // dieselbe Regel anwendet wie jede andere: Was eine Bedingung traegt,
+        // die noch nicht erfuellt ist, erscheint hier nicht.
+        felder={sichtbareFelder(schritt.schritt, {})}
+      />
       <p className="mt-auto text-xs text-muted-foreground">
         Ihre Angaben werden verschlüsselt übertragen und ausschließlich zur Bearbeitung Ihrer
         Anfrage verwendet. Mehr dazu in der{" "}

@@ -10,7 +10,7 @@ import { formularZuSlug, type AnfrageStart } from "@/lib/leadformular/service";
 // bereit; ERSTER_SCHRITT wäre dort ein am Mock scheiternder Zugriff.
 import { ERSTER_SCHRITT } from "@/lib/leadformular/erster-schritt";
 import { createAnfrageLink } from "@/lib/security/self-disclosure-link";
-import { schrittFinden, naechsterSchritt, schluessel } from "@/lib/self-disclosure/navigation";
+import { schrittFinden, naechsterSchritt } from "@/lib/self-disclosure/navigation";
 import { schrittSchema } from "@/lib/self-disclosure/schema";
 import type { Antworten } from "@/lib/self-disclosure/types";
 
@@ -53,10 +53,14 @@ export async function starteAnfrage(
   const formular = await formularZuSlug(slug);
   if (!formular) return { error: "Dieses Formular ist derzeit nicht verfügbar." };
 
-  const schritt = schrittFinden(ERSTER_SCHRITT, {});
+  // Fest "kurz": Dieser Weg IST das oeffentliche Anfrageformular, es gibt
+  // hier noch keinen Link, aus dem sich der Umfang ableiten liesse.
+  const schritt = schrittFinden(ERSTER_SCHRITT, {}, "kurz");
   if (!schritt) throw new Error(`Erster Schritt "${ERSTER_SCHRITT}" fehlt im Katalog.`);
 
-  const geprueft = schrittSchema(schritt.schritt).safeParse(Object.fromEntries(formData.entries()));
+  const geprueft = schrittSchema(schritt.schritt, schritt.personen).safeParse(
+    Object.fromEntries(formData.entries())
+  );
   if (!geprueft.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of geprueft.error.issues) {
@@ -66,10 +70,12 @@ export async function starteAnfrage(
     return { error: "Bitte prüfen Sie die markierten Felder.", fieldErrors };
   }
 
+  // Die Schlüssel aus `geprueft.data` sind schon die fertigen Antwortschlüssel
+  // (siehe speichereAntwort) – nicht erneut zusammensetzen.
   const antworten: Antworten = {};
-  for (const [feldId, value] of Object.entries(geprueft.data)) {
+  for (const [k, value] of Object.entries(geprueft.data)) {
     if (value === null || value === undefined || value === "") continue;
-    antworten[schluessel(schritt.id, feldId)] = value as Antworten[string];
+    antworten[k] = value as Antworten[string];
   }
 
   const link = await createAnfrageLink(
@@ -78,7 +84,7 @@ export async function starteAnfrage(
     { organizationId: formular.organizationId }
   );
 
-  const weiter = naechsterSchritt(schritt.id, antworten);
+  const weiter = naechsterSchritt(schritt.id, antworten, "kurz");
   const currentStep = weiter?.id ?? "zusammenfassung";
   await prisma.selfDisclosure.create({
     data: { linkId: link.linkId, answers: antworten as object, currentStep },

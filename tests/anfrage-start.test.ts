@@ -66,7 +66,7 @@ beforeEach(() => {
 
 describe("starteAnfrage", () => {
   it("legt Link und Bogen an und schickt auf den naechsten Schritt", async () => {
-    const { ziel } = await starten("ertel", { art: "kauf_bestand" });
+    const { ziel } = await starten("ertel", { "vorhaben.art": "kauf_bestand" });
     expect(createAnfrageLink).toHaveBeenCalledTimes(1);
     // Non-null-Assertions: noUncheckedIndexedAccess macht Mock-Aufrufe sonst
     // "possibly undefined" -- hier ist der Aufruf durch die Erwartung oben
@@ -74,16 +74,19 @@ describe("starteAnfrage", () => {
     expect(disclosureCreate.mock.calls[0]![0]!.data.linkId).toBe("link-1");
     expect(disclosureCreate.mock.calls[0]![0]!.data.caseId).toBeUndefined();
     expect(disclosureCreate.mock.calls[0]![0]!.data.answers).toEqual({
-      "finanzierungsart.art": "kauf_bestand",
+      "vorhaben.art": "kauf_bestand",
     });
-    expect(ziel).toBe("/selbstauskunft/TOK/objektstand");
+    expect(ziel).toBe("/selbstauskunft/TOK/objekt_preis");
   });
 
   it("legt nichts an, wenn das Honigtoepfchen gefuellt ist", async () => {
     // Und meldet trotzdem Erfolg: Wer "erkannt" zurueckgibt, verraet seine
     // Erkennung an den naechsten Versuch. Feld heisst bewusst nicht
     // "website" – Passwortmanager fuellen so benannte Felder gern selbst.
-    const { ergebnis } = await starten("ertel", { art: "kauf_bestand", firmenzusatz: "http://spam" });
+    const { ergebnis } = await starten("ertel", {
+      "vorhaben.art": "kauf_bestand",
+      firmenzusatz: "http://spam",
+    });
     expect(ergebnis).toEqual({ danke: true });
     expect(createAnfrageLink).not.toHaveBeenCalled();
     expect(disclosureCreate).not.toHaveBeenCalled();
@@ -91,7 +94,7 @@ describe("starteAnfrage", () => {
 
   it("legt nichts an, wenn die IP-Grenze erreicht ist", async () => {
     checkRateLimit.mockResolvedValue({ ok: false, remaining: 0, retryAfterSec: 3600 });
-    const { ergebnis } = await starten("ertel", { art: "kauf_bestand" });
+    const { ergebnis } = await starten("ertel", { "vorhaben.art": "kauf_bestand" });
     expect(ergebnis?.error).toBeTruthy();
     expect(createAnfrageLink).not.toHaveBeenCalled();
   });
@@ -100,19 +103,19 @@ describe("starteAnfrage", () => {
     // Sonst kostet jede abgewiesene Anfrage trotzdem eine Datenbank-Runde –
     // genau die Last, vor der die Grenze schuetzen soll.
     checkRateLimit.mockResolvedValue({ ok: false, remaining: 0, retryAfterSec: 3600 });
-    await starten("ertel", { art: "kauf_bestand" });
+    await starten("ertel", { "vorhaben.art": "kauf_bestand" });
     expect(formularZuSlug).not.toHaveBeenCalled();
   });
 
   it("legt nichts an, wenn das Formular unbekannt oder abgeschaltet ist", async () => {
     formularZuSlug.mockResolvedValue(null);
-    const { ergebnis } = await starten("gibtsnicht", { art: "kauf_bestand" });
+    const { ergebnis } = await starten("gibtsnicht", { "vorhaben.art": "kauf_bestand" });
     expect(ergebnis?.error).toBeTruthy();
     expect(createAnfrageLink).not.toHaveBeenCalled();
   });
 
   it("weist einen ungueltigen Wert ab, statt ihn zu speichern", async () => {
-    const { ergebnis } = await starten("ertel", { art: "brieftaube" });
+    const { ergebnis } = await starten("ertel", { "vorhaben.art": "brieftaube" });
     expect(ergebnis?.fieldErrors).toBeTruthy();
     expect(createAnfrageLink).not.toHaveBeenCalled();
   });
@@ -132,8 +135,8 @@ describe("starteAnfrage", () => {
       .mockResolvedValueOnce({ linkId: "link-A", token: "TOK-A", url: "u", expiresAt: new Date() })
       .mockResolvedValueOnce({ linkId: "link-B", token: "TOK-B", url: "u", expiresAt: new Date() });
 
-    const erster = await starten("ertel", { art: "kauf_bestand" });
-    const zweiter = await starten("ertel", { art: "kauf_bestand" });
+    const erster = await starten("ertel", { "vorhaben.art": "kauf_bestand" });
+    const zweiter = await starten("ertel", { "vorhaben.art": "kauf_bestand" });
 
     expect(disclosureCreate.mock.calls[0]![0]!.data.linkId).toBe("link-A");
     expect(disclosureCreate.mock.calls[1]![0]!.data.linkId).toBe("link-B");

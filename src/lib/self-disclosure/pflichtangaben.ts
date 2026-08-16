@@ -7,14 +7,14 @@ import type { Antworten } from "@/lib/self-disclosure/types";
  * sitzt hier, am Absenden, und ausschließlich beim Formular-Weg: Ein Lead
  * ohne Rückweg ist keiner.
  *
- * Die Personenschritte tragen das Präfix "p1."/"p2." (siehe
- * `sichtbareSchritte`). Wer das vergisst, prüft Schlüssel, die es nie gibt,
+ * Die Antworten der ersten Person tragen das Präfix "p1." (siehe
+ * `personenSchluessel`). Wer das vergisst, prüft Schlüssel, die es nie gibt,
  * und lässt damit jeden Bogen durch.
  */
 export const KONTAKT_SCHLUESSEL = {
-  nachname: schluessel("p1.person_name", "nachname"),
-  email: schluessel("p1.person_kontakt", "email"),
-  telefon: schluessel("p1.person_kontakt", "telefon"),
+  nachname: schluessel("p1.personen", "nachname"),
+  email: schluessel("p1.personen", "email"),
+  telefon: schluessel("p1.personen", "telefon"),
 } as const;
 
 export type Kontaktangabe = keyof typeof KONTAKT_SCHLUESSEL;

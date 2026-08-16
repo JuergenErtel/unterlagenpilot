@@ -81,14 +81,14 @@ describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
   function antwortenEinerPerson() {
     return {
       // Case-Zweig: die erste Frage des Bogens landet auf Case.financingType.
-      "finanzierungsart.art": "kauf_bestand",
-      "p1.person_name.nachname": "Mustermann",
-      "p1.person_kontakt.email": "max@example.de",
-      "p1.person_kontakt.telefon": "0170 1234567",
+      "vorhaben.art": "kauf_bestand",
+      "p1.personen.nachname": "Mustermann",
+      "p1.personen.email": "max@example.de",
+      "p1.personen.telefon": "0170 1234567",
       // Property-Zweig: Objektort und Kaufpreis landen auf Property/FinancingRequest.
-      "objekt_ort.plz": "80331",
-      "objekt_ort.ort": "München",
-      "kaufpreis.betrag": "400000",
+      "objekt_preis.plz": "80331",
+      "objekt_preis.ort": "München",
+      "objekt_preis.kaufpreis": "400000",
     };
   }
 
@@ -120,7 +120,7 @@ describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
     expect(fall?.property?.city).toBe("München");
     expect(fall?.property?.zip).toBe("80331");
     expect(fall?.financingRequest?.kaufpreis).toBe(400000);
-    // Case-Zweig: Beleg, dass "finanzierungsart.art" wirklich im Fall landet
+    // Case-Zweig: Beleg, dass "vorhaben.art" wirklich im Fall landet
     // und nicht mehr im gemeinsamen Schreibkern verschwindet.
     expect(fall?.financingType).toBe("kauf");
 
@@ -138,8 +138,8 @@ describe.runIf(RUN)("Anfrageformular-Fallgeburt (PGlite)", () => {
     });
     const antworten = {
       ...antwortenEinerPerson(),
-      "anzahl_antragsteller.anzahl": "2",
-      "p2.person_name.nachname": "Musterfrau",
+      "haushalt.anzahl": "2",
+      "p2.personen.nachname": "Musterfrau",
     };
     const bogen = await prisma.selfDisclosure.create({ data: { linkId: link.id, answers: antworten } });
 

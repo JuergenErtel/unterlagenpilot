@@ -1,3 +1,5 @@
+import type { Umfang } from "@/lib/self-disclosure/umfang";
+
 /**
  * Der Fragenkatalog der Selbstauskunft ist reine Datenbeschreibung: Ein Schritt
  * ist ein Bildschirm, ein Feld eine Eingabe. Verzweigungen sind Funktionen über
@@ -29,6 +31,30 @@ export interface Feld {
   hinweis?: string;
   optionen?: { wert: string; label: string }[];
   ziel?: Ziel;
+  /**
+   * Prüft NUR ausdrücklich gegebene Antworten – fehlt die Steuerantwort,
+   * bleibt das Feld zu. Gleiche Regel wie bei `Schritt.sichtbar`.
+   *
+   * Gebraucht, seit Seiten mehrere Fragen bündeln: Auf „Objekt & Preis"
+   * stehen Kaufpreis, Baukosten und Restschuld nebeneinander, aber je nach
+   * Vorhaben gehört genau eines davon dorthin.
+   */
+  sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
+  /**
+   * An WELCHEM Antwortschlüssel `sichtbar` hängt – deklariert, nicht gemessen.
+   * Ohne Personen-Präfix notiert (`personen.beruf_art`), weil dieselbe Regel
+   * für beide Spalten gilt.
+   *
+   * Die Angabe dient AUSSCHLIESSLICH dem Vertragstest
+   * (`selbstauskunft-feldabhaengigkeit.test.ts`); ausgewertet wird weiterhin
+   * die Funktion. Sie ist die Bremse dagegen, dass beim nächsten Bündeln
+   * lautlos wieder ein Feld hinter eine Steuerantwort DERSELBEN Seite rutscht:
+   * Der Server rechnet die Feldliste vor dem Absenden, und danach geht es auf
+   * die folgende Seite – ein so verstecktes Feld bekommt niemand je zu sehen.
+   * Genau das war der Maklerprovision passiert, und die Machbarkeits-Ampel
+   * wurde davon nicht grau, sondern zu optimistisch.
+   */
+  abhaengigVon?: string;
 }
 
 export type Abschnitt =
@@ -40,19 +66,38 @@ export type Abschnitt =
   | "objekt";
 
 export interface Schritt {
-  /** Zugleich URL-Segment (bei Personenschritten mit Präfix "p1."/"p2."). */
+  /** Zugleich URL-Segment. */
   id: string;
+  /**
+   * "kurz" erscheint in BEIDEN Wegen, "voll" nur hinter dem persönlichen Link.
+   *
+   * Pflichtangabe ohne Vorgabewert: Ein Vorgabewert schöbe jede neu ergänzte
+   * Frage stillschweigend in den kurzen Bogen – dorthin, wo jede zusätzliche
+   * Frage am teuersten ist.
+   */
+  umfang: Umfang;
   abschnitt: Abschnitt;
   frage: string;
   hinweis?: string;
   felder: Feld[];
   /**
    * Prüft NUR ausdrücklich gegebene Antworten. Fehlt die Steuerantwort, bleibt
-   * der Zweig zu. `person` ist gesetzt, wenn der Schritt je Antragsteller läuft.
+   * der Zweig zu. `person` ist gesetzt, wenn der Schritt `personenSpalten`
+   * trägt – die Bedingung entscheidet dann JE SPALTE, nicht für den ganzen
+   * Schritt: Bei einem gemischten Paar (eine Person angestellt, die andere
+   * selbstständig) bekommt jede Person nur ihre eigene Berufsfrage
+   * (`sichtbareSchritte` berechnet `personen` als echte Teilmenge).
    */
   sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
-  /** Läuft zweimal, wenn zwei Antragsteller angegeben sind. */
-  jeAntragsteller?: boolean;
+  /**
+   * Beide Antragsteller nebeneinander auf EINEM Bildschirm, je eine Spalte.
+   *
+   * Vorher hieß das `jeAntragsteller` und erzeugte ZWEI Einträge in der
+   * Schrittkette ("p1.personen", "p2.personen") – der Kunde beantwortete
+   * erst alles für sich, dann dasselbe für den Partner. Ein Paar, das
+   * gemeinsam am Rechner sitzt, erwartet beide nebeneinander.
+   */
+  personenSpalten?: boolean;
 }
 
 /** Ein Eintrag einer Liste (Verpflichtungen, Eigenkapital). */
@@ -60,13 +105,14 @@ export type ListenEintrag = Record<string, string | number | boolean | null>;
 
 export type AntwortWert = string | number | boolean | ListenEintrag[] | null;
 
-/** Schlüssel: "<schrittId>.<feldId>", bei Personenschritten "p2.person_name.vorname". */
+/** Schlüssel: "<schrittId>.<feldId>", bei Personenschritten "p2.personen.vorname". */
 export type Antworten = Record<string, AntwortWert>;
 
-/** Eine konkrete Ausprägung eines Schritts (bei jeAntragsteller je Person eine). */
+/** Eine konkrete Ausprägung eines Schritts (bei personenSpalten mit beiden Spalten). */
 export interface SichtbarerSchritt {
-  /** URL-Segment und Schlüsselpräfix. */
+  /** URL-Segment. Traegt KEINEN Personen-Praefix mehr. */
   id: string;
   schritt: Schritt;
-  person?: 1 | 2;
+  /** Spalten dieses Schritts; fehlt bei Schritten ohne Personenbezug. */
+  personen?: (1 | 2)[];
 }
