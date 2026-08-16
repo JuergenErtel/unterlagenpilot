@@ -43,8 +43,10 @@ describe("Katalog-Navigation", () => {
   });
 
   it("überspringt die Höhe der Maklergebühr, solange keine anfällt", () => {
-    expect(preisFelder({ "objekt_preis.makler": "nein" })).not.toContain("makler_hoehe");
-    expect(preisFelder({ "objekt_preis.makler": "ja" })).toContain("makler_hoehe");
+    // Die Ja/Nein-Frage steht auf Seite 1 ("vorhaben.makler"), das Prozentfeld
+    // auf Seite 2 – erst diese Seitengrenze macht es im Ablauf erreichbar.
+    expect(preisFelder({ "vorhaben.makler": "nein" })).not.toContain("makler_hoehe");
+    expect(preisFelder({ "vorhaben.makler": "ja" })).toContain("makler_hoehe");
   });
 
   it("hält den Zweig zu, wenn die Steuerfrage übersprungen wurde", () => {

@@ -40,6 +40,21 @@ export interface Feld {
    * Vorhaben gehört genau eines davon dorthin.
    */
   sichtbar?: (a: Antworten, person?: 1 | 2) => boolean;
+  /**
+   * An WELCHEM Antwortschlüssel `sichtbar` hängt – deklariert, nicht gemessen.
+   * Ohne Personen-Präfix notiert (`personen.beruf_art`), weil dieselbe Regel
+   * für beide Spalten gilt.
+   *
+   * Die Angabe dient AUSSCHLIESSLICH dem Vertragstest
+   * (`selbstauskunft-feldabhaengigkeit.test.ts`); ausgewertet wird weiterhin
+   * die Funktion. Sie ist die Bremse dagegen, dass beim nächsten Bündeln
+   * lautlos wieder ein Feld hinter eine Steuerantwort DERSELBEN Seite rutscht:
+   * Der Server rechnet die Feldliste vor dem Absenden, und danach geht es auf
+   * die folgende Seite – ein so verstecktes Feld bekommt niemand je zu sehen.
+   * Genau das war der Maklerprovision passiert, und die Machbarkeits-Ampel
+   * wurde davon nicht grau, sondern zu optimistisch.
+   */
+  abhaengigVon?: string;
 }
 
 export type Abschnitt =

@@ -171,7 +171,9 @@ function ableiteAntworten(stand: Fallstand, antragstellerZahl: 1 | 2): Antworten
      * Zeile.
      */
     "vorhaben.stand": "gefunden",
-    "objekt_preis.makler": "ja",
+    // Steht seit der Behebung des Maklerfehlers auf Seite 1 des Bogens; die
+    // Hoehe der Provision haengt weiterhin daran (siehe catalog.ts).
+    "vorhaben.makler": "ja",
   };
   if (typeof art === "string" && art in ART_ZU_KATALOG) {
     a["vorhaben.art"] = ART_ZU_KATALOG[art as FinancingType];

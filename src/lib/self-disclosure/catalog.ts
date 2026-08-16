@@ -124,6 +124,7 @@ export const KATALOG: Schritt[] = [
         label: "Stand der Suche",
         typ: "auswahl",
         sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
         optionen: [
           { wert: "gefunden", label: "Immobilie gefunden" },
           { wert: "nicht_besichtigt", label: "Noch nicht besichtigt" },
@@ -135,10 +136,36 @@ export const KATALOG: Schritt[] = [
         typ: "auswahl",
         ziel: { entitaet: "property", feld: "nutzung" },
         sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
         optionen: [
           { wert: "selbstnutzung", label: "Selbst bewohnen" },
           { wert: "vermietet", label: "Vermieten" },
           { wert: "gemischt", label: "Teilweise vermieten" },
+        ],
+      },
+      {
+        /*
+         * Die Ja/Nein-Frage steht HIER und nicht neben ihrer Hoehe auf
+         * "Objekt & Preis": Dort standen Steuerantwort und abhaengiges Feld auf
+         * derselben Seite, und das Prozentfeld war im Ablauf unerreichbar – der
+         * Server rechnet die Feldliste vor dem Absenden und springt danach auf
+         * die FOLGENDE Seite. Fehlt die Provision, rechnet die Machbarkeit mit
+         * 0 % Courtage: Die Ampel wird nicht grau, sondern zu optimistisch.
+         *
+         * Mit der Frage auf Seite 1 kreuzt die Abhaengigkeit wieder eine
+         * Seitengrenze – so, wie sie es vor dem Katalogschnitt tat (eigener
+         * Schritt direkt hinter der Ja/Nein-Frage). Fragetext, Optionen und
+         * Zielfeld bleiben woertlich, wie der Entwurf es verlangt.
+         */
+        id: "makler",
+        label: "Maklergebühr",
+        typ: "auswahl",
+        sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
+        optionen: [
+          { wert: "ja", label: "Ja, es fällt eine an" },
+          { wert: "nein", label: "Provisionsfrei" },
+          { wert: "unbekannt", label: "Weiß ich nicht" },
         ],
       },
     ],
@@ -157,8 +184,16 @@ export const KATALOG: Schritt[] = [
           "Wenn Sie noch unsicher sind, genügt eine PLZ aus dem Bundesland – die Kaufnebenkosten unterscheiden sich je Bundesland.",
         ziel: { entitaet: "property", feld: "zip" },
         sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
       },
-      { id: "ort", label: "Ort", typ: "text", ziel: { entitaet: "property", feld: "city" }, sichtbar: istKauf },
+      {
+        id: "ort",
+        label: "Ort",
+        typ: "text",
+        ziel: { entitaet: "property", feld: "city" },
+        sichtbar: istKauf,
+        abhaengigVon: "vorhaben.art",
+      },
       {
         id: "kaufpreis",
         label: "Kaufpreis",
@@ -175,6 +210,7 @@ export const KATALOG: Schritt[] = [
           const art = wert(a, "vorhaben.art");
           return art === "" || art === "kauf_neubau" || art === "kauf_bestand";
         },
+        abhaengigVon: "vorhaben.art",
       },
       {
         /*
@@ -190,6 +226,7 @@ export const KATALOG: Schritt[] = [
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "kaufpreis" },
         sichtbar: istEigenesBauvorhaben,
+        abhaengigVon: "vorhaben.art",
       },
       {
         id: "bau",
@@ -197,14 +234,22 @@ export const KATALOG: Schritt[] = [
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "baukosten" },
         sichtbar: istEigenesBauvorhaben,
+        abhaengigVon: "vorhaben.art",
       },
-      { id: "vorhaben", label: "Geplante Arbeiten", typ: "text", sichtbar: istModernisierung },
+      {
+        id: "vorhaben",
+        label: "Geplante Arbeiten",
+        typ: "text",
+        sichtbar: istModernisierung,
+        abhaengigVon: "vorhaben.art",
+      },
       {
         id: "modernisierung",
         label: "Geschätzte Kosten",
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "modernisierungskosten" },
         sichtbar: istModernisierung,
+        abhaengigVon: "vorhaben.art",
       },
       {
         id: "restschuld",
@@ -219,6 +264,7 @@ export const KATALOG: Schritt[] = [
          * Darlehenssumme genau dann, wenn keines von beiden vorliegt.
          */
         sichtbar: istAnschlussfinanzierung,
+        abhaengigVon: "vorhaben.art",
       },
       {
         id: "kapitalbedarf",
@@ -226,6 +272,7 @@ export const KATALOG: Schritt[] = [
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "darlehenswunsch" },
         sichtbar: istArt("kapitalbeschaffung"),
+        abhaengigVon: "vorhaben.art",
       },
       {
         id: "wohnflaeche",
@@ -233,24 +280,17 @@ export const KATALOG: Schritt[] = [
         typ: "zahl",
         ziel: { entitaet: "property", feld: "wohnflaeche" },
         sichtbar: istGefunden,
+        abhaengigVon: "vorhaben.stand",
       },
       {
-        id: "makler",
-        label: "Maklergebühr",
-        typ: "auswahl",
-        sichtbar: istKauf,
-        optionen: [
-          { wert: "ja", label: "Ja, es fällt eine an" },
-          { wert: "nein", label: "Provisionsfrei" },
-          { wert: "unbekannt", label: "Weiß ich nicht" },
-        ],
-      },
-      {
+        // Die zugehoerige Ja/Nein-Frage steht auf Seite 1 ("vorhaben.makler") –
+        // siehe die Begruendung dort. Auf DIESER Seite waere sie unerreichbar.
         id: "makler_hoehe",
         label: "Maklergebühr in Prozent",
         typ: "prozent_oder_betrag",
         ziel: { entitaet: "financingRequest", feld: "maklerprovisionProzent" },
-        sichtbar: (a) => wert(a, "objekt_preis.makler") === "ja",
+        sichtbar: (a) => wert(a, "vorhaben.makler") === "ja",
+        abhaengigVon: "vorhaben.makler",
       },
     ],
   },
@@ -284,6 +324,7 @@ export const KATALOG: Schritt[] = [
           const art = wert(a, "vorhaben.art");
           return art !== "anschlussfinanzierung" && art !== "kapitalbeschaffung";
         },
+        abhaengigVon: "vorhaben.art",
       },
       {
         id: "wunschrate",
@@ -453,6 +494,7 @@ export const KATALOG: Schritt[] = [
         typ: "text",
         ziel: { entitaet: "employment", feld: "beruf" },
         sichtbar: nurArbeitgeber,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "arbeitgeber",
@@ -460,6 +502,7 @@ export const KATALOG: Schritt[] = [
         typ: "text",
         ziel: { entitaet: "employment", feld: "arbeitgeber" },
         sichtbar: nurArbeitgeber,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "arbeitgeber_adresse",
@@ -467,6 +510,7 @@ export const KATALOG: Schritt[] = [
         typ: "text",
         ziel: { entitaet: "employment", feld: "arbeitgeberAdresse" },
         sichtbar: nurArbeitgeber,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "seit",
@@ -474,6 +518,7 @@ export const KATALOG: Schritt[] = [
         typ: "datum",
         ziel: { entitaet: "employment", feld: "eintrittsdatum" },
         sichtbar: nurVertragsdauer,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         // Ankreuzfeld statt Datum: Ein Vertragsende ist fuer die Mehrheit der
@@ -486,6 +531,7 @@ export const KATALOG: Schritt[] = [
         typ: "ja_nein",
         ziel: { entitaet: "employment", feld: "befristet" },
         sichtbar: nurVertragsdauer,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "probezeit",
@@ -493,6 +539,7 @@ export const KATALOG: Schritt[] = [
         typ: "ja_nein",
         ziel: { entitaet: "employment", feld: "inProbezeit" },
         sichtbar: nurVertragsdauer,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "firma",
@@ -500,6 +547,7 @@ export const KATALOG: Schritt[] = [
         typ: "text",
         ziel: { entitaet: "selfEmployment", feld: "firma" },
         sichtbar: nurSelbststaendig,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "rechtsform",
@@ -507,6 +555,7 @@ export const KATALOG: Schritt[] = [
         typ: "text",
         ziel: { entitaet: "selfEmployment", feld: "rechtsform" },
         sichtbar: nurSelbststaendig,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "beteiligung",
@@ -514,6 +563,7 @@ export const KATALOG: Schritt[] = [
         typ: "zahl",
         ziel: { entitaet: "selfEmployment", feld: "beteiligungProzent" },
         sichtbar: nurSelbststaendig,
+        abhaengigVon: "personen.beruf_art",
       },
       {
         id: "gruendung",
@@ -521,6 +571,7 @@ export const KATALOG: Schritt[] = [
         typ: "datum",
         ziel: { entitaet: "selfEmployment", feld: "gruendungsdatum" },
         sichtbar: nurSelbststaendig,
+        abhaengigVon: "personen.beruf_art",
       },
     ],
   },
@@ -671,6 +722,7 @@ export const KATALOG: Schritt[] = [
         label: "Zinsbindung endet am",
         typ: "datum",
         sichtbar: istAnschlussfinanzierung,
+        abhaengigVon: "vorhaben.art",
       },
     ],
   },

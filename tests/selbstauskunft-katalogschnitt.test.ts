@@ -32,6 +32,10 @@ const FELDER: Array<[seite: string, feld: string, ziel: string | null]> = [
   ["vorhaben", "art", "case.financingType"],
   ["vorhaben", "stand", null],
   ["vorhaben", "nutzung", "property.nutzung"],
+  // Die Ja/Nein-Frage steht auf Seite 1, ihre Hoehe auf Seite 2: Standen beide
+  // auf "objekt_preis", war das Prozentfeld im Ablauf unerreichbar (der Server
+  // rechnet die Feldliste vor dem Absenden und springt danach weiter).
+  ["vorhaben", "makler", null],
   ["objekt_preis", "plz", "property.zip"],
   ["objekt_preis", "ort", "property.city"],
   ["objekt_preis", "kaufpreis", "financingRequest.kaufpreis"],
@@ -42,7 +46,6 @@ const FELDER: Array<[seite: string, feld: string, ziel: string | null]> = [
   ["objekt_preis", "restschuld", "financingRequest.darlehenswunsch"],
   ["objekt_preis", "kapitalbedarf", "financingRequest.darlehenswunsch"],
   ["objekt_preis", "wohnflaeche", "property.wohnflaeche"],
-  ["objekt_preis", "makler", null],
   ["objekt_preis", "makler_hoehe", "financingRequest.maklerprovisionProzent"],
   ["finanzierungswunsch", "eigenkapital", "financingRequest.eigenkapital"],
   ["finanzierungswunsch", "darlehen", "financingRequest.darlehenswunsch"],
