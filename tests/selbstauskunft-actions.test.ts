@@ -47,60 +47,60 @@ beforeEach(() => {
 
 describe("speichereAntwort", () => {
   it("schreibt die Antwort unter dem Schlüssel aus Schritt und Feld", async () => {
-    await speichereAntwort("tok", "finanzierungsart", form({ "finanzierungsart.art": "kauf_bestand" }));
+    await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
     const arg = upsert.mock.calls[0]![0] as { create: { answers: Record<string, unknown> } };
-    expect(arg.create.answers["finanzierungsart.art"]).toBe("kauf_bestand");
+    expect(arg.create.answers["vorhaben.art"]).toBe("kauf_bestand");
   });
 
   it("speichert beide Spalten eines personenSpalten-Schritts aus EINEM Formular", async () => {
     // Die Kernanforderung dieser Aufgabe, auf Aktionsebene: EIN Aufruf von
-    // speichereAntwort fuer EINEN Schritt ("person_name"), dessen Formular
+    // speichereAntwort fuer EINEN Schritt ("personen"), dessen Formular
     // beide Spalten traegt (p1.… UND p2.…) – nicht zwei Aufrufe fuer zwei
     // verschiedene Schritte wie im DB-Test.
     findUnique.mockResolvedValue({
-      answers: { "anzahl_antragsteller.anzahl": "2" },
+      answers: { "haushalt.anzahl": "2" },
       submittedAt: null,
     });
     await speichereAntwort(
       "tok",
-      "person_name",
-      form({ "p1.person_name.vorname": "Thomas", "p2.person_name.vorname": "Laura" })
+      "personen",
+      form({ "p1.personen.vorname": "Thomas", "p2.personen.vorname": "Laura" })
     );
     const arg = upsert.mock.calls[0]![0] as { update: { answers: Record<string, unknown> } };
-    expect(arg.update.answers["p1.person_name.vorname"]).toBe("Thomas");
-    expect(arg.update.answers["p2.person_name.vorname"]).toBe("Laura");
+    expect(arg.update.answers["p1.personen.vorname"]).toBe("Thomas");
+    expect(arg.update.answers["p2.personen.vorname"]).toBe("Laura");
   });
 
   it("lässt einen leeren Schritt zu und speichert nichts davon", async () => {
-    const res = await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "" }));
+    const res = await speichereAntwort("tok", "objekt_preis", form({ "objekt_preis.kaufpreis": "" }));
     expect(res).toBeUndefined();
     const arg = upsert.mock.calls[0]![0] as { create: { answers: Record<string, unknown> } };
-    expect(arg.create.answers["kaufpreis.betrag"]).toBeUndefined();
+    expect(arg.create.answers["objekt_preis.kaufpreis"]).toBeUndefined();
   });
 
   it("löscht mit einem leeren Feld keine frühere Antwort", async () => {
-    findUnique.mockResolvedValue({ answers: { "kaufpreis.betrag": 400000 }, submittedAt: null });
-    await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "" }));
+    findUnique.mockResolvedValue({ answers: { "objekt_preis.kaufpreis": 400000 }, submittedAt: null });
+    await speichereAntwort("tok", "objekt_preis", form({ "objekt_preis.kaufpreis": "" }));
     const arg = upsert.mock.calls[0]![0] as { update: { answers: Record<string, unknown> } };
-    expect(arg.update.answers["kaufpreis.betrag"]).toBe(400000);
+    expect(arg.update.answers["objekt_preis.kaufpreis"]).toBe(400000);
   });
 
   it("meldet einen unlesbaren Betrag zurück, ohne zu speichern", async () => {
-    const res = await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "dreitausend" }));
-    expect(res?.fieldErrors?.["kaufpreis.betrag"]).toBeTruthy();
+    const res = await speichereAntwort("tok", "objekt_preis", form({ "objekt_preis.kaufpreis": "dreitausend" }));
+    expect(res?.fieldErrors?.["objekt_preis.kaufpreis"]).toBeTruthy();
     expect(upsert).not.toHaveBeenCalled();
   });
 
   it("weist ein ungültiges Token ab", async () => {
     resolve.mockResolvedValue(null);
-    const res = await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "1" }));
+    const res = await speichereAntwort("tok", "objekt_preis", form({ "objekt_preis.kaufpreis": "1" }));
     expect(res?.error).toBeTruthy();
     expect(upsert).not.toHaveBeenCalled();
   });
 
   it("nimmt nach dem Absenden keine Änderung mehr an", async () => {
     findUnique.mockResolvedValue({ answers: {}, submittedAt: new Date() });
-    const res = await speichereAntwort("tok", "kaufpreis", form({ "kaufpreis.betrag": "1" }));
+    const res = await speichereAntwort("tok", "objekt_preis", form({ "objekt_preis.kaufpreis": "1" }));
     expect(res?.error).toBeTruthy();
     expect(upsert).not.toHaveBeenCalled();
   });
@@ -112,9 +112,9 @@ describe("speichereAntwort", () => {
   });
 
   it("merkt sich den erreichten Schritt", async () => {
-    await speichereAntwort("tok", "finanzierungsart", form({ "finanzierungsart.art": "kauf_bestand" }));
+    await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
     const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
-    expect(arg.update.currentStep).toBe("objektstand");
+    expect(arg.update.currentStep).toBe("objekt_preis");
   });
 
   it("schickt nach dem letzten Schritt zur Zusammenfassung", async () => {
@@ -129,13 +129,13 @@ describe("speichereAntwort", () => {
     // Seit dem Anfrageformular praegt sich jeder Besucher seinen eigenen Link
     // selbst - ohne Deckel waere das die groesste neue Angriffsflaeche.
     checkRateLimit.mockResolvedValue({ ok: false, remaining: 0, retryAfterSec: 1800 });
-    const res = await speichereAntwort("tok", "finanzierungsart", form({ "finanzierungsart.art": "kauf_bestand" }));
+    const res = await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
     expect(res?.error).toBeTruthy();
     expect(upsert).not.toHaveBeenCalled();
   });
 
   it("zaehlt die Grenze ueber die linkId, nicht die IP", async () => {
-    await speichereAntwort("tok", "finanzierungsart", form({ "finanzierungsart.art": "kauf_bestand" }));
+    await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
     expect(checkRateLimit.mock.calls[0]![0]).toBe("selbstauskunft:schritt:link-1");
   });
 
@@ -145,7 +145,7 @@ describe("speichereAntwort", () => {
     resolve.mockResolvedValue({ linkId: "link-1", caseId: null, organizationId: "org-A" });
     findUnique.mockResolvedValue({ answers: {}, submittedAt: null });
 
-    await speichereAntwort("TOK", "finanzierungsart", form({ "finanzierungsart.art": "kauf_bestand" }));
+    await speichereAntwort("TOK", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
 
     const daten = upsert.mock.calls[0]![0] as { create: { caseId?: string | null; linkId: string } };
     // Nicht nur "null" – das Feld darf beim falllosen Bogen gar nicht erst
