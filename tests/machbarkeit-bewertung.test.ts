@@ -6,6 +6,10 @@ import type { SolverEingabe } from "@/lib/machbarkeit/types";
 const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   kaufpreis: 400_000,
   modernisierungskosten: 0,
+  objektwert: null,
+  weitererDarlehensbedarf: 0,
+  darlehensbedarfVerhandelbar: false,
+  vorrangigeRestschuld: 0,
   inventarAnteil: 0,
   nebenkostenErfasst: null,
   maklerprovisionProzent: 0,

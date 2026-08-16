@@ -7,6 +7,10 @@ import type { SolverEingabe } from "@/lib/machbarkeit/types";
 const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   kaufpreis: 400_000,
   modernisierungskosten: 0,
+  objektwert: null,
+  weitererDarlehensbedarf: 0,
+  darlehensbedarfVerhandelbar: false,
+  vorrangigeRestschuld: 0,
   inventarAnteil: 0,
   nebenkostenErfasst: null,
   maklerprovisionProzent: 0,
@@ -41,12 +45,16 @@ const hebel = (key: string) => {
 };
 
 describe("Hebelkatalog", () => {
-  it("hat zehn Eintraege mit eindeutigen Schluesseln", () => {
-    // Neun fachliche Hebel; "Einnahmen erhoehen" steht mit seinen beiden
+  it("hat elf Eintraege mit eindeutigen Schluesseln", () => {
+    // Zehn fachliche Hebel; "Einnahmen erhoehen" steht mit seinen beiden
     // Auspraegungen als zwei Eintraege, weil sie unterschiedlich wirken:
     // der weitere Darlehensnehmer bringt seine Lebenshaltung mit.
-    expect(HEBEL).toHaveLength(10);
-    expect(new Set(HEBEL.map((h) => h.key)).size).toBe(10);
+    //
+    // "kaufpreis" und "darlehenssumme" sind Geschwister und schliessen sich
+    // gegenseitig aus: Wo ein Kaufpreis steht, ist er verhandelbar; wo keiner
+    // steht, ist es die Darlehenssumme (16.08.2026).
+    expect(HEBEL).toHaveLength(11);
+    expect(new Set(HEBEL.map((h) => h.key)).size).toBe(11);
   });
 
   it("kennzeichnet jeden Hebel als datengestuetzt oder hypothetisch", () => {

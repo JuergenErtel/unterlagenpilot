@@ -250,6 +250,54 @@ export const KATALOG: Schritt[] = [
         abhaengigVon: "vorhaben.art",
       },
       {
+        /*
+         * Der Nenner des Beleihungsauslaufs, wenn es keinen Kaufpreis gibt.
+         *
+         * Beim Kauf ist der Kaufpreis beides zugleich: das, was finanziert
+         * wird, UND der Massstab der Bank. Bei diesen drei Arten faellt das
+         * auseinander – der Kunde besitzt die Immobilie bereits. Ohne diese
+         * Frage blieb die Machbarkeits-Ampel bei der Haelfte aller
+         * Vorhabensarten grau (16.08.2026).
+         */
+        id: "objektwert",
+        label: "Geschätzter Wert der Immobilie",
+        typ: "betrag",
+        hinweis: "Ein Schätzwert genügt – was die Immobilie heute am Markt wert wäre.",
+        ziel: { entitaet: "property", feld: "objektwert" },
+        sichtbar: (a) => {
+          const art = wert(a, "vorhaben.art");
+          return (
+            art === "anschlussfinanzierung" ||
+            art === "kapitalbeschaffung" ||
+            art === "modernisierung"
+          );
+        },
+        abhaengigVon: "vorhaben.art",
+      },
+      {
+        /*
+         * NICHT bei der Anschlussfinanzierung: Dort WIRD die Restschuld
+         * abgeloest, sie steht eine Frage weiter oben unter ihrem eigenen
+         * Namen. Hier geht es um ein Darlehen, das BESTEHEN BLEIBT und
+         * Beleihungsraum verbraucht, den das neue nicht mehr hat.
+         *
+         * Ohne diese Frage waeren 100.000 Euro Kapitalbeschaffung auf eine
+         * Immobilie von 300.000 Euro immer 33 % Auslauf – auch wenn darauf
+         * noch 200.000 Euro liegen und es in Wahrheit 100 % sind.
+         */
+        id: "bestehende_grundschuld",
+        label: "Restschuld eines laufenden Darlehens auf dieser Immobilie",
+        typ: "betrag",
+        hinweis:
+          "Nur, wenn die Immobilie noch finanziert ist. Die Monatsrate bitte weiter hinten bei den laufenden Krediten angeben.",
+        ziel: { entitaet: "property", feld: "bestehendeGrundschuld" },
+        sichtbar: (a) => {
+          const art = wert(a, "vorhaben.art");
+          return art === "kapitalbeschaffung" || art === "modernisierung";
+        },
+        abhaengigVon: "vorhaben.art",
+      },
+      {
         id: "wohnflaeche",
         label: "Wohnfläche in m²",
         typ: "zahl",

@@ -6,6 +6,10 @@ import type { SolverEingabe } from "@/lib/machbarkeit/types";
 const eingabe = (over: Partial<SolverEingabe> = {}): SolverEingabe => ({
   kaufpreis: 400_000,
   modernisierungskosten: 0,
+  objektwert: null,
+  weitererDarlehensbedarf: 0,
+  darlehensbedarfVerhandelbar: false,
+  vorrangigeRestschuld: 0,
   inventarAnteil: 0,
   nebenkostenErfasst: null,
   maklerprovisionProzent: 3.57,
@@ -78,5 +82,25 @@ describe("Nebenkosten", () => {
   it("gibt den verwendeten Steuersatz mit aus", () => {
     const n = berechneNebenkosten(eingabe({ bundesland: "nordrhein_westfalen" }), VORGABE_ANNAHMEN);
     expect(n.grunderwerbsteuerProzent).toBe(6.5);
+  });
+});
+
+describe("Nebenkosten ohne Kaufpreis", () => {
+  it("meldet den Steuersatz nicht als unsicher, wo gar keine Steuer anfaellt", () => {
+    // Bei Modernisierung, Anschlussfinanzierung und Kapitalbeschaffung gibt es
+    // keinen Kaufpreis und damit keine Grunderwerbsteuer. Die Maske haenge
+    // sonst eine Warnung ueber einen Satz an, der nirgends angewendet wird –
+    // und fordert zu einer Angabe auf, die nichts aendert.
+    const n = berechneNebenkosten(eingabe({ kaufpreis: 0, bundesland: null }), VORGABE_ANNAHMEN);
+    expect(n.summe).toBe(0);
+    expect(n.steuersatzUnsicher).toBe(false);
+  });
+
+  it("meldet ihn weiterhin als unsicher, sobald ein Kaufpreis daran haengt", () => {
+    const n = berechneNebenkosten(
+      eingabe({ kaufpreis: 400_000, bundesland: null }),
+      VORGABE_ANNAHMEN
+    );
+    expect(n.steuersatzUnsicher).toBe(true);
   });
 });
