@@ -29,6 +29,34 @@ ohne den Fall zu verstecken, den Jürgen später doch wieder anfassen will. Sieh
 `LOCKED_CASE_STATUSES` in `src/lib/domain/enums.ts`; dort steht bereits eine
 Antwort auf eine verwandte Frage.
 
+## Fehler: Freigegebene Dokumente bleiben als Nachforderung stehen
+
+**Aufgenommen:** 16.08.2026 · **Beobachtet von Jürgen im Fall Topcic**
+
+Die Personalausweise wurden hochgeladen **und freigegeben** — trotzdem steht
+der Punkt weiter als Nachforderung da.
+
+**Was daran zu bedenken ist:** Zwischen „Dokument ist freigegeben" und
+„Checklistenpunkt ist erfüllt" liegen mehrere Übersetzungsschritte, und jeder
+davon kann der Schuldige sein. Vor jedem Fix ist zu klären, **welcher**:
+
+1. **Zuordnung zum Antragsteller.** Genau hier lag schon einmal die Ursache
+   eines „Perso fehlt"-Rätsels — siehe die Notiz zur Checkliste pro
+   Antragsteller. Bei zwei Antragstellern zählt ein Ausweis nur für die
+   Person, der er zugeordnet ist; hängt er am Fall statt an der Person oder an
+   der falschen Person, bleibt die Zeile der anderen offen.
+2. **Dokumenttyp.** Erkennt die KI den Ausweis als `personalausweis`, oder ist
+   er als `sonstige` eingestuft und erfüllt deshalb keinen Punkt?
+3. **Wer die Nachforderung anzeigt.** „Nachforderung" kann zweierlei heißen:
+   ein offener `CaseChecklistItem` oder ein `MissingDocumentRequest`. Ein
+   einmal erzeugter Anforderungsdatensatz wird nicht von selbst `resolved` —
+   möglicherweise stimmt die Checkliste längst und nur die alte Anforderung
+   steht noch herum.
+
+**Erster Schritt:** Den Fall Topcic in der Produktionsdatenbank ansehen
+(`scripts/supabase-sql.sh`) und die drei Ebenen einzeln prüfen, statt am
+Verhalten zu raten. Die Antwort auf „welche der drei" bestimmt den Fix.
+
 ## Wunsch: Finanzierungszertifikat
 
 **Aufgenommen:** 15.08.2026
