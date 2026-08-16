@@ -114,3 +114,57 @@ describe("planUebernahme", () => {
     expect(plan.vorschlaege.some((v) => v.schluessel === "objekt_preis.restschuld")).toBe(true);
   });
 });
+
+/**
+ * Zwei beantwortete Felder, EIN Zielfeld.
+ *
+ * Seit dem Katalogschnitt stehen `objekt_preis.kaufpreis` und
+ * `objekt_preis.grundstueck` (beide -> financingRequest.kaufpreis) sowie
+ * `restschuld`, `kapitalbedarf` und `darlehen` (alle ->
+ * financingRequest.darlehenswunsch) auf IMMER sichtbaren Seiten. Wer im Bogen
+ * zurueckgeht und die Vorhabensart wechselt, hat danach zwei Betraege in den
+ * Antworten. Weil `planUebernahme` bewusst ueber ALLE Felder laeuft ("eine
+ * gegebene Antwort darf nicht verschwinden"), wurden daraus zwei Vorschlaege
+ * auf dieselbe Spalte – geschrieben wird in Katalogreihenfolge, die letzte
+ * Zuweisung gewinnt. Beim oeffentlichen Weg ohne jede Rueckfrage.
+ *
+ * Die Regel: Das GERADE SICHTBARE Feld gewinnt, die anderen wandern nach
+ * `ohneZiel`. Dann geht nichts verloren und nichts ueberschreibt sich stumm.
+ */
+describe("planUebernahme bei zwei Antworten auf dasselbe Zielfeld", () => {
+  it("nimmt den Darlehenswunsch des sichtbaren Felds, nicht den der alten Vorhabensart", () => {
+    const antworten: Antworten = {
+      "vorhaben.art": "kauf_bestand",
+      // Gehoert zur Anschlussfinanzierung – der Kunde hatte sie zuerst gewaehlt.
+      "objekt_preis.restschuld": 250000,
+      "finanzierungswunsch.darlehen": 320000,
+    };
+    const plan = planUebernahme(antworten, leererStand);
+    const darlehen = plan.vorschlaege.filter((v) => v.ziel.feld === "darlehenswunsch");
+    expect(darlehen.map((v) => v.kundenwert)).toEqual(["320000"]);
+    // Verloren geht die andere Antwort trotzdem nicht.
+    expect(plan.ohneZiel.some((o) => o.wert === "250000")).toBe(true);
+  });
+
+  it("nimmt beim eigenen Bauvorhaben den Grundstueckspreis, nicht den alten Kaufpreis", () => {
+    const antworten: Antworten = {
+      "vorhaben.art": "eigenes_bauvorhaben",
+      "objekt_preis.kaufpreis": 400000,
+      "objekt_preis.grundstueck": 120000,
+    };
+    const plan = planUebernahme(antworten, leererStand);
+    const kaufpreis = plan.vorschlaege.filter((v) => v.ziel.feld === "kaufpreis");
+    expect(kaufpreis.map((v) => v.kundenwert)).toEqual(["120000"]);
+    expect(plan.ohneZiel.some((o) => o.wert === "400000")).toBe(true);
+  });
+
+  it("laesst eine einzelne Antwort auch dann Vorschlag sein, wenn sie unsichtbar ist", () => {
+    // Die Gegenrichtung: Ohne Konkurrenz gibt es nichts zu entscheiden, und die
+    // Regel "eine gegebene Antwort darf nicht verschwinden" gilt weiter.
+    const plan = planUebernahme(
+      { "vorhaben.art": "kauf_bestand", "objekt_preis.restschuld": 250000 },
+      leererStand
+    );
+    expect(plan.vorschlaege.some((v) => v.ziel.feld === "darlehenswunsch")).toBe(true);
+  });
+});
