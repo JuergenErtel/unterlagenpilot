@@ -6,6 +6,13 @@ import { KATALOG } from "@/lib/self-disclosure/catalog";
  * jemand ein Feld weg, das der Solver rechnet, bleibt die Ampel still grau –
  * und niemand weiss warum. Dieser Test ist die Bremse davor.
  *
+ * Was diese Liste bewacht: nicht nur, was die AMPELFARBE (`machbar`) bestimmt,
+ * sondern was der Kunde liefern muss, damit die Machbarkeitsrechnung
+ * VOLLSTAENDIG ist – inklusive der Angaben, die nur berichtet, aber nicht in
+ * die Farbe eingerechnet werden (siehe wunschrateMonatlich unten). Beide
+ * gehoeren in den kurzen Bogen: Faellt eines still heraus, fehlt entweder die
+ * Farbe oder das, was Juergen dem Kunden am Telefon zurueckspiegelt.
+ *
  * Die Liste ist gegen `SolverEingabe` (src/lib/machbarkeit/types.ts) und ihren
  * Aufbau in `baueEingabe` (src/lib/machbarkeit/eingabe.ts) geprueft, nicht nur
  * abgeschrieben. Eine Korrektur gegenueber dem urspruenglichen Aufgabenzuschnitt:
@@ -15,10 +22,21 @@ import { KATALOG } from "@/lib/self-disclosure/catalog";
  * (Kaufpreis + Nebenkosten − Eigenkapital, siehe bewertung.ts), er nimmt den
  * Darlehenswunsch nicht als Eingabe entgegen. Ein Vertrag, der ihn trotzdem
  * verlangt, wuerde eine Menge bewachen, die es im Solver gar nicht gibt.
+ *
+ * Gegenprobe (macht diesen Test rot): in catalog.ts bei
+ * "finanzierungswunsch.wunschrate" das `ziel` entfernen – dann faellt
+ * "fragt financingRequest.wunschrateMonatlich" rot, weil kein Feld des kurzen
+ * Bogens mehr dorthin zielt. Belegt in task-6-report.md.
  */
 const AMPEL_BRAUCHT = [
   "financingRequest.kaufpreis",
   "financingRequest.eigenkapital",
+  // Faerbt die Ampel selbst NICHT (bewertung.ts: "Die Wunschrate faerbt die
+  // Ampel NICHT ... machbar bleibt die Bankensicht", Entscheidung vom
+  // 13.08.2026). Bleibt trotzdem Pflicht fuer diese Liste: Der Solver liest
+  // sie (wunschrateAbweichung) und der kurze Bogen ist der einzige Ort, an dem
+  // der Kunde sie nennt – ohne sie kann Juergen am Telefon nicht sagen "Sie
+  // wollten X Euro, moeglich sind Y Euro".
   "financingRequest.wunschrateMonatlich",
   "financingRequest.maklerprovisionProzent",
   "property.zip",

@@ -2,13 +2,35 @@ import { describe, expect, it } from "vitest";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
 import { sichtbareSchritte } from "@/lib/self-disclosure/navigation";
 
+/**
+ * Alle Werte von "vorhaben.art" – aus dem Katalog SELBST gelesen, nicht
+ * abgeschrieben. Eine abgeschriebene Liste liefe beim naechsten neuen Wert
+ * (oder einer Umbenennung) still auseinander: `tsc` sieht das nicht, weil
+ * `Antworten` beliebige Strings zulaesst – ein Tippfehler wie "neubau" statt
+ * "kauf_neubau" waere kein Typfehler, sondern nur ein Zweig, der nie einen
+ * einzigen Test erreicht. Fehlte hier z. B. "eigenes_bauvorhaben", wuerde der
+ * einzige Zweig mit den Feldern `grundstueck`/`bau` nie geprueft.
+ */
+function vorhabenArten(): string[] {
+  const feld = KATALOG.find((s) => s.id === "vorhaben")?.felder.find((f) => f.id === "art");
+  const arten = feld?.optionen?.map((o) => o.wert) ?? [];
+  if (arten.length === 0) throw new Error("vorhaben.art hat keine Optionen mehr – Katalog umgebaut?");
+  return arten;
+}
+
 describe("Katalog-Vertrag", () => {
   it("kein Zielfeld wird von zwei gleichzeitig sichtbaren Feldern beschrieben", () => {
     // Kaufpreis, Restschuld, Kapitalbedarf und Darlehenswunsch zeigen alle auf
     // financingRequest.darlehenswunsch bzw. .kaufpreis. Ihre Bedingungen
     // muessen sich ausschliessen – sonst schreiben zwei Antworten in dasselbe
     // Feld, und welche gewinnt, entscheidet die Reihenfolge im Katalog.
-    for (const art of ["kauf_bestand", "neubau", "modernisierung", "anschlussfinanzierung", "kapitalbeschaffung"]) {
+    //
+    // Gegenprobe (macht diesen Test rot): in catalog.ts bei
+    // "objekt_preis.restschuld" `sichtbar: istAnschlussfinanzierung` durch
+    // `sichtbar: () => true` ersetzen – dann kollidiert das Feld bei
+    // "kauf_bestand" mit "finanzierungswunsch.darlehen" (beide zielen auf
+    // financingRequest.darlehenswunsch). Belegt in task-6-report.md.
+    for (const art of vorhabenArten()) {
       const antworten = { "vorhaben.art": art };
       const gesehen = new Map<string, string>();
       for (const s of sichtbareSchritte(antworten, "voll")) {
