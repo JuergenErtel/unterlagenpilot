@@ -36,6 +36,34 @@ const istArt =
   (a: Antworten): boolean =>
     arten.includes(wert(a, "vorhaben.art"));
 
+/*
+ * FELDGRUPPEN: Felder, die sich EINE Bedingung teilen – dieselbe Funktion,
+ * nicht bloss denselben Wortlaut.
+ *
+ * Das ist keine Sparsamkeit beim Tippen, sondern eine Aussage: Diese Fragen
+ * werden gemeinsam sichtbar und ergeben nur gemeinsam Sinn. Vor dem
+ * Katalogschnitt sagte das die Schrittgrenze ("Bei wem sind Sie
+ * beschaeftigt?" war EIN Bildschirm); seit die Fragen auf gebuendelten Seiten
+ * nebeneinanderstehen, sagt es die geteilte Bedingung.
+ *
+ * Die Maske fuers Erstgespraech liest diese Kopplung aus (`mitgehendeGeschwister`
+ * in erstgespraech/maske.ts): Zieht sie ein Feld einer Gruppe herein, weil die
+ * Reifeleiste es verlangt, kommt die ganze Gruppe mit. Ohne das fiel zweimal
+ * still etwas heraus – der ORT des Objekts ausserhalb des Kaufzweigs und
+ * "Beschaeftigt seit" bei der Beschaeftigungsart "sonstiges" (Minijob).
+ *
+ * Wer eine Gruppe aufloest, muss also wissen, was er tut. Wer eine Bedingung
+ * versehentlich zweimal notiert statt sie zu teilen, bekommt keinen Fehler,
+ * aber einen roten Test (siehe erstgespraech-maske.test.ts).
+ */
+
+/** Grundstueckspreis und Baukosten – frueher der Schritt "Was kosten Grundstück und Bau?". */
+const istEigenesBauvorhaben = istArt("eigenes_bauvorhaben");
+/** Geplante Arbeiten und ihre Kosten – frueher "Was möchten Sie modernisieren?". */
+const istModernisierung = istArt("modernisierung");
+/** Restschuld und Ende der Zinsbindung – frueher "Wie hoch ist Ihre Restschuld?". */
+const istAnschlussfinanzierung = istArt("anschlussfinanzierung");
+
 const ANGESTELLT = ["angestellter", "arbeiter", "beamter"];
 const SELBSTSTAENDIG = ["selbststaendiger", "handwerker", "freiberufler"];
 
@@ -50,6 +78,20 @@ const hatBerufsart = (a: Antworten, arten: string[], person: 1 | 2 = 1): boolean
 /** Trägt diese Person überhaupt einen der beiden Berufszweige? */
 const hatBerufszweig = (a: Antworten, person: 1 | 2 = 1): boolean =>
   hatBerufsart(a, ANGESTELLT, person) || hatBerufsart(a, SELBSTSTAENDIG, person);
+
+/*
+ * Drei Feldgruppen im Berufsteil – die drei frueheren Schritte. Beruf und
+ * Arbeitgeber bleiben bewusst von der Vertragsdauer getrennt: "Wer ist Ihr
+ * Arbeitgeber?" und "Seit wann, befristet, Probezeit?" sind zwei Fragen, und
+ * die Maske fuers Erstgespraech soll die zweite auch dann stellen koennen,
+ * wenn sie die erste nicht braucht (Minijob).
+ */
+const nurArbeitgeber = (a: Antworten, person?: 1 | 2): boolean =>
+  hatBerufsart(a, ANGESTELLT, person);
+const nurVertragsdauer = (a: Antworten, person?: 1 | 2): boolean =>
+  hatBerufsart(a, ANGESTELLT, person);
+const nurSelbststaendig = (a: Antworten, person?: 1 | 2): boolean =>
+  hatBerufsart(a, SELBSTSTAENDIG, person);
 
 const istGefunden = (a: Antworten): boolean => wert(a, "vorhaben.stand") === "gefunden";
 
@@ -147,22 +189,22 @@ export const KATALOG: Schritt[] = [
         label: "Grundstückspreis",
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "kaufpreis" },
-        sichtbar: istArt("eigenes_bauvorhaben"),
+        sichtbar: istEigenesBauvorhaben,
       },
       {
         id: "bau",
         label: "Baukosten",
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "baukosten" },
-        sichtbar: istArt("eigenes_bauvorhaben"),
+        sichtbar: istEigenesBauvorhaben,
       },
-      { id: "vorhaben", label: "Geplante Arbeiten", typ: "text", sichtbar: istArt("modernisierung") },
+      { id: "vorhaben", label: "Geplante Arbeiten", typ: "text", sichtbar: istModernisierung },
       {
         id: "modernisierung",
         label: "Geschätzte Kosten",
         typ: "betrag",
         ziel: { entitaet: "financingRequest", feld: "modernisierungskosten" },
-        sichtbar: istArt("modernisierung"),
+        sichtbar: istModernisierung,
       },
       {
         id: "restschuld",
@@ -176,7 +218,7 @@ export const KATALOG: Schritt[] = [
          * Anschlussfinanzierung, dort die Kapitalbeschaffung, und die
          * Darlehenssumme genau dann, wenn keines von beiden vorliegt.
          */
-        sichtbar: istArt("anschlussfinanzierung"),
+        sichtbar: istAnschlussfinanzierung,
       },
       {
         id: "kapitalbedarf",
@@ -410,28 +452,28 @@ export const KATALOG: Schritt[] = [
         label: "Beruf",
         typ: "text",
         ziel: { entitaet: "employment", feld: "beruf" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurArbeitgeber,
       },
       {
         id: "arbeitgeber",
         label: "Arbeitgeber",
         typ: "text",
         ziel: { entitaet: "employment", feld: "arbeitgeber" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurArbeitgeber,
       },
       {
         id: "arbeitgeber_adresse",
         label: "Anschrift des Arbeitgebers",
         typ: "text",
         ziel: { entitaet: "employment", feld: "arbeitgeberAdresse" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurArbeitgeber,
       },
       {
         id: "seit",
         label: "Beschäftigt seit",
         typ: "datum",
         ziel: { entitaet: "employment", feld: "eintrittsdatum" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurVertragsdauer,
       },
       {
         // Ankreuzfeld statt Datum: Ein Vertragsende ist fuer die Mehrheit der
@@ -443,42 +485,42 @@ export const KATALOG: Schritt[] = [
         label: "Arbeitsvertrag befristet?",
         typ: "ja_nein",
         ziel: { entitaet: "employment", feld: "befristet" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurVertragsdauer,
       },
       {
         id: "probezeit",
         label: "Noch in der Probezeit",
         typ: "ja_nein",
         ziel: { entitaet: "employment", feld: "inProbezeit" },
-        sichtbar: (a, person) => hatBerufsart(a, ANGESTELLT, person),
+        sichtbar: nurVertragsdauer,
       },
       {
         id: "firma",
         label: "Firma",
         typ: "text",
         ziel: { entitaet: "selfEmployment", feld: "firma" },
-        sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
+        sichtbar: nurSelbststaendig,
       },
       {
         id: "rechtsform",
         label: "Rechtsform",
         typ: "text",
         ziel: { entitaet: "selfEmployment", feld: "rechtsform" },
-        sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
+        sichtbar: nurSelbststaendig,
       },
       {
         id: "beteiligung",
         label: "Beteiligung in Prozent",
         typ: "zahl",
         ziel: { entitaet: "selfEmployment", feld: "beteiligungProzent" },
-        sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
+        sichtbar: nurSelbststaendig,
       },
       {
         id: "gruendung",
         label: "Gegründet am",
         typ: "datum",
         ziel: { entitaet: "selfEmployment", feld: "gruendungsdatum" },
-        sichtbar: (a, person) => hatBerufsart(a, SELBSTSTAENDIG, person),
+        sichtbar: nurSelbststaendig,
       },
     ],
   },
@@ -628,7 +670,7 @@ export const KATALOG: Schritt[] = [
         id: "zinsbindung_ende",
         label: "Zinsbindung endet am",
         typ: "datum",
-        sichtbar: istArt("anschlussfinanzierung"),
+        sichtbar: istAnschlussfinanzierung,
       },
     ],
   },

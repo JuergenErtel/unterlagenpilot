@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { baueMaske, formatiereWert } from "@/lib/erstgespraech/maske";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import { wandleWert } from "@/lib/actions/zielwert";
-import { FINANCING_TYPES } from "@/lib/domain/enums";
+import { EMPLOYMENT_TYPES, FINANCING_TYPES, PROPERTY_TYPES } from "@/lib/domain/enums";
+import { KATALOG } from "@/lib/self-disclosure/catalog";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
 
 const leererStand: Fallstand = {
@@ -44,6 +45,121 @@ describe("Maske fuers Erstgespraech", () => {
           expect(
             ziele.has(`${r.quelle}.${r.schluessel}.${r.person ?? 1}`),
             `${art ?? "ohne Art"}/${beruf ?? "ohne Beruf"}: ${r.quelle}.${r.schluessel} fehlt in der Maske`
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("bietet fuer JEDE Zielspalte des Katalogs irgendwo ein Eingabefeld", () => {
+    /*
+     * Die Gegenprobe zum Test darueber – und die Lehre aus dem Katalogschnitt:
+     * Jener prueft nur, was die REIFE zaehlt. Der Ort des Objekts
+     * (`property.city`) zaehlt sie nicht, also fiel er bei
+     * Anschlussfinanzierung, Umschuldung, Kapitalbeschaffung und
+     * Modernisierung still aus der Maske, als `ergaenzeUnerreichbare` von
+     * Schritt- auf Feldkoernung umgestellt wurde. Kein Test merkte es.
+     *
+     * Deshalb hier die staerkere Zusage: Was der Katalog in eine Spalte
+     * schreiben kann, muss der Vermittler am Telefon auch eintragen koennen –
+     * wenn schon nicht in jeder Finanzierungsart, dann wenigstens in EINER.
+     * Listenziele (Verpflichtungen, Eigenkapitalpositionen) bleiben draussen,
+     * sie haben eigene Masken.
+     */
+    const gesucht = new Set(
+      KATALOG.flatMap((s) => s.felder)
+        .filter((f) => f.ziel && "feld" in f.ziel)
+        .map((f) => `${f.ziel!.entitaet}.${(f.ziel as { feld: string }).feld}`)
+    );
+
+    const erreichbar = new Set<string>();
+    for (const art of [...FINANCING_TYPES, null]) {
+      for (const beruf of ["angestellter", "selbststaendiger", "freiberufler", "rentner", null]) {
+        for (const objektart of [...PROPERTY_TYPES, null]) {
+          const stand: Fallstand = {
+            applicants: [{ position: 1, employment: beruf ? [{ beschaeftigungsart: beruf }] : [] }],
+            property: objektart ? { objektart } : null,
+            financingRequest: null,
+            caseFelder: { financingType: art },
+          };
+          for (const f of alleFelder(stand)) erreichbar.add(`${f.ziel.entitaet}.${f.ziel.feld}`);
+        }
+      }
+    }
+
+    const fehlend = [...gesucht].filter((z) => !erreichbar.has(z)).sort();
+    expect(fehlend, `Zielspalten ohne Eingabefeld in JEDER Konstellation: ${fehlend.join(", ")}`)
+      .toEqual([]);
+  });
+
+  it("verliert kein Feld einer Feldgruppe – geteilte Bedingung heisst gemeinsam gefragt", () => {
+    /*
+     * DER Test zu dieser Regression. Der Fall darueber ("irgendwo eingebbar")
+     * reicht dafuer NICHT: `property.city` ist beim Kauf sehr wohl eingebbar,
+     * es fehlte nur ueberall sonst – und "in mindestens einer Art vorhanden"
+     * blieb deshalb gruen, auch mit dem Fehler drin. Nachgemessen.
+     *
+     * Die tragende Zusage ist eine andere: Felder, die sich im Katalog EINE
+     * Bedingung teilen (siehe "FELDGRUPPEN" in catalog.ts), werden gemeinsam
+     * sichtbar – also muss die Maske sie auch gemeinsam anbieten. Vorher
+     * sagte das die Schrittgrenze, und `ergaenzeUnerreichbare` zog ganze
+     * Schritte herein; feldweise gerechnet kam nur noch das eine Feld mit,
+     * nach dem die Reifeleiste gefragt hatte. Zweimal fiel dadurch still etwas
+     * heraus: der Ort des Objekts ausserhalb des Kaufzweigs und "Beschaeftigt
+     * seit" bei der Beschaeftigungsart "sonstiges" (Minijob).
+     *
+     * Geprueft wird auf ZIELSPALTEN, nicht auf Eingabefelder: Ein Zielfeld
+     * bekommt genau eine Eingabe, und beim Neubau nimmt "Kaufpreis" die Spalte
+     * `financingRequest.kaufpreis` dem "Grundstueckspreis" derselben Gruppe
+     * weg. Die Spalte ist trotzdem da – nur unter dem anderen Namen.
+     *
+     * Und aus demselben Grund zaehlen nur Spalten, die AUSSCHLIESSLICH diese
+     * Gruppe schreibt: "Grundstueckspreis" und "Baukosten" bilden zwar eine
+     * Gruppe, aber den Kaufpreis schreibt auch das Feld "Kaufpreis" daneben.
+     * Beim Kauf steht die Spalte deshalb zu Recht da, waehrend die Baukosten
+     * zu Recht fehlen – das ist keine zerrissene Gruppe, sondern eine geteilte
+     * Spalte.
+     */
+    const schreiberJeSpalte = new Map<string, number>();
+    for (const s of KATALOG) {
+      for (const f of s.felder) {
+        if (!f.ziel || !("feld" in f.ziel)) continue;
+        const spalte = `${f.ziel.entitaet}.${f.ziel.feld}`;
+        schreiberJeSpalte.set(spalte, (schreiberJeSpalte.get(spalte) ?? 0) + 1);
+      }
+    }
+
+    const gruppen: Array<{ seite: string; spalten: string[] }> = [];
+    for (const s of KATALOG) {
+      const nachBedingung = new Map<unknown, string[]>();
+      for (const f of s.felder) {
+        if (!f.sichtbar || !f.ziel || !("feld" in f.ziel)) continue;
+        const spalte = `${f.ziel.entitaet}.${f.ziel.feld}`;
+        if (schreiberJeSpalte.get(spalte) !== 1) continue; // geteilte Spalte, siehe oben
+        nachBedingung.set(f.sichtbar, [...(nachBedingung.get(f.sichtbar) ?? []), spalte]);
+      }
+      for (const spalten of nachBedingung.values()) {
+        if (spalten.length > 1) gruppen.push({ seite: s.id, spalten });
+      }
+    }
+    // Ohne Gruppen liefe der Test leer durch und behauptete trotzdem etwas.
+    expect(gruppen.length).toBeGreaterThan(0);
+
+    for (const art of [...FINANCING_TYPES, null]) {
+      for (const beruf of [...EMPLOYMENT_TYPES, null]) {
+        const stand: Fallstand = {
+          applicants: [{ position: 1, employment: beruf ? [{ beschaeftigungsart: beruf }] : [] }],
+          property: null,
+          financingRequest: null,
+          caseFelder: { financingType: art },
+        };
+        const da = new Set(alleFelder(stand).map((f) => `${f.ziel.entitaet}.${f.ziel.feld}`));
+        for (const g of gruppen) {
+          const vorhanden = g.spalten.filter((z) => da.has(z));
+          expect(
+            vorhanden.length === 0 || vorhanden.length === g.spalten.length,
+            `${art ?? "ohne Art"}/${beruf ?? "ohne Beruf"}: Seite "${g.seite}" zeigt nur ` +
+              `${vorhanden.join(", ")} von ${g.spalten.join(", ")} – eine Feldgruppe wurde zerrissen`
           ).toBe(true);
         }
       }

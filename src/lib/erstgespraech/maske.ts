@@ -267,6 +267,52 @@ function alleKandidaten(antragstellerZahl: 1 | 2): Kandidat[] {
 }
 
 /**
+ * Die Nachbarfelder, die mit einem nachgezogenen Feld MITGEHEN muessen.
+ *
+ * Der Fund, der diese Funktion erzwungen hat: Bei Anschlussfinanzierung,
+ * Umschuldung, Kapitalbeschaffung und Modernisierung fehlte der ORT des
+ * Objekts in der Maske. PLZ und Ort sind dort beide unsichtbar (kein
+ * Kaufzweig); die Reifeleiste verlangt `property.zip`, also wurde die PLZ
+ * nachgezogen – der Ort aber nicht, denn er ist nicht angebotsrelevant und
+ * wurde deshalb nie gesucht. Solange die Maske ganze SCHRITTE hereinzog, kam
+ * er als Nachbar im selben Schritt automatisch mit; feldweise nicht mehr.
+ *
+ * Zwei Bedingungen, damit genau das mitkommt und nichts weiter:
+ *
+ *  1. Das Nachbarfeld hat KEIN eigenes Reife-Ziel. Was die Leiste selbst
+ *     zaehlt, holt sich die Schleife oben ohnehin – und was sie fuer diesen
+ *     Fall NICHT zaehlt (die Grundstuecksgroesse einer Eigentumswohnung), ist
+ *     bewusst weggefallen und darf nicht durch die Hintertuer zurueck.
+ *  2. Es teilt sich die BEDINGUNG des nachgezogenen Felds – dieselbe Funktion,
+ *     nicht bloss derselbe Wert. Genau diese geteilte Bedingung ist die Spur
+ *     des alten Schritts: PLZ und Ort hingen beide an `istKauf` und wurden
+ *     immer gemeinsam sichtbar. Baukosten und Modernisierungskosten stehen
+ *     zwar auf derselben Seite, haben aber ihre eigenen Bedingungen – sie
+ *     gehoeren nicht zum Ort und sollen bei einer Anschlussfinanzierung auch
+ *     nicht danebenstehen.
+ *
+ * Bricht ein kuenftiger Umbau diese Kopplung (zwei gleich gemeinte, aber
+ * getrennt notierte Bedingungen sind NICHT dieselbe Funktion), faellt das
+ * nicht still aus: Der Test "jede Zielspalte des Katalogs ist in mindestens
+ * einer Finanzierungsart eingebbar" faengt es.
+ */
+function mitgehendeGeschwister(
+  traeger: Kandidat,
+  alle: Kandidat[],
+  abgedeckt: ReadonlySet<string>
+): Kandidat[] {
+  if (!traeger.feld.sichtbar) return [];
+  return alle.filter(
+    (n) =>
+      n.schrittIndex === traeger.schrittIndex &&
+      n.person === traeger.person &&
+      n.feld.sichtbar === traeger.feld.sichtbar &&
+      !ANGEBOTSRELEVANTE_ZIELE.has(`${n.feld.ziel.entitaet}.${n.feld.ziel.feld}`) &&
+      !abgedeckt.has(zielSchluessel(n.feld.ziel.entitaet, n.feld.ziel.feld, n.person))
+  );
+}
+
+/**
  * Nachziehen, was sonst unerreichbar waere.
  *
  * Die Verzweigungen des Katalogs blenden je nach Finanzierungsart Felder aus
@@ -293,6 +339,11 @@ function ergaenzeUnerreichbare(sichtbare: Kandidat[], reife: Reife, alle: Kandid
   );
 
   const ergaenzt = [...sichtbare];
+  const hinzu = (k: Kandidat) => {
+    ergaenzt.push(k);
+    abgedeckt.add(zielSchluessel(k.feld.ziel.entitaet, k.feld.ziel.feld, k.person));
+  };
+
   for (const r of reife.felder) {
     const gesucht = zielSchluessel(r.quelle, r.schluessel, r.person);
     if (abgedeckt.has(gesucht)) continue;
@@ -303,8 +354,8 @@ function ergaenzeUnerreichbare(sichtbare: Kandidat[], reife: Reife, alle: Kandid
         k.feld.ziel.feld === r.schluessel
     );
     if (!traeger) continue;
-    ergaenzt.push(traeger);
-    abgedeckt.add(gesucht);
+    hinzu(traeger);
+    for (const nachbar of mitgehendeGeschwister(traeger, alle, abgedeckt)) hinzu(nachbar);
   }
   return ergaenzt;
 }
