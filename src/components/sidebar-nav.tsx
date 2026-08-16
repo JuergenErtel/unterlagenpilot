@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   FolderOpen,
   ScanSearch,
-  Send,
+  ListTodo,
   ListChecks,
   FileStack,
   Plug,
@@ -25,12 +25,20 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
   {
     label: "Arbeit",
     items: [
+      // Ganz oben: Die Tagesliste ist der Einstieg in die Arbeit, das Board
+      // die Übersicht darüber.
+      { href: "/heute", label: "Heute", icon: ListTodo },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/cases", label: "Fälle", icon: FolderOpen },
       { href: "/review", label: "Review-Center", icon: ScanSearch },
-      { href: "/messages", label: "Nachrichten", icon: Send },
       // Die Pipeline hat seit dem 12.08.2026 keinen eigenen Menüpunkt mehr:
       // Sie IST das Dashboard (Standardsicht "Board").
+      //
+      // "Nachrichten" ist am 16.08.2026 gefolgt: Die Seite war ein Archiv der
+      // letzten 50 erzeugten Nachrichten, das nichts ausser dem Menue
+      // verlinkte. Erzeugt und versendet wird in der Fallakte
+      // (/cases/<id>/messages), und genau dorthin fuehren auch die
+      // Prioritaetsleiter und das Review-Center.
       { href: "/banken", label: "Banken-Wiki", icon: Landmark },
     ],
   },

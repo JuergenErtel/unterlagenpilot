@@ -360,10 +360,11 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  casesAsBroker Case[]      @relation("CaseBroker")
-  auditLogs     AuditLog[]
-  caseNotes     CaseNote[]
-  authTokens    AuthToken[]
+  casesAsBroker     Case[]            @relation("CaseBroker")
+  auditLogs         AuditLog[]
+  caseNotes         CaseNote[]
+  authTokens        AuthToken[]
+  erledigteAufgaben AufgabeErledigt[]
 
   @@index([organizationId])
   @@map("users")
@@ -542,6 +543,7 @@ model Case {
   documentReferences  DocumentReference[]
   findings            CaseFinding[]
   anforderungsAbrufe  BankAnforderungsAbruf[]
+  erledigteAufgaben   AufgabeErledigt[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -550,17 +552,49 @@ model Case {
   @@map("cases")
 }
 
+// Von Hand abgehakte Aufgabe der Heute-Liste.
+//
+// NUR fuer Schritte, die kein eigenes Tatsachenfeld haben. Wo BaufiDesk die
+// Tatsache selbst festhalten kann, trägt der Haken sie dort ein statt hier:
+// das Erstgespraech in `erstgespraechGefuehrtAm`, die Wiedervorlage in ihrem
+// eigenen Datum. Sonst wuesste nur die Heute-Liste Bescheid und Fallakte,
+// Kanban und Prioritaetsleiter behaupteten weiter das Gegenteil – genau der
+// Fehler, der bei "Kredit zugesagt" an vier Stellen gleichzeitig auftrat.
+//
+// Der Vermerk gilt fuer GENAU EINEN Schritt-Schluessel. Bewegt sich der Fall
+// weiter und die Leiter nennt einen anderen Schritt, ist das eine neue
+// Aufgabe – der alte Vermerk greift dann nicht mehr und muss auch nicht
+// aufgeraeumt werden.
+model AufgabeErledigt {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // Ein `NextStep["key"]`, bewusst als String: Ein neuer Schritt in
+  // next-step.ts soll keine Migration gegen die Produktionsdatenbank
+  // erzwingen. Der Preis ist, dass die Datenbank Tippfehler nicht abfaengt –
+  // dagegen steht ein Vertragstest ueber alle Schluessel.
+  schritt    String
+  erledigtAm DateTime @default(now())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Zweimal abhaken darf keinen zweiten Vermerk erzeugen: Das Rueckgaengig
+  // machen loescht sonst nur einen von beiden und die Aufgabe bliebe weg.
+  @@unique([caseId, schritt])
+  @@map("aufgaben_erledigt")
+}
+
 // Kontakthistorie / Notizen am Fall (Telefonnotizen, Wiedervorlagen, freie Notizen).
 model CaseNote {
-  id        String              @id @default(cuid())
+  id        String           @id @default(cuid())
   caseId    String
-  case      Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case      Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
   authorId  String?
-  author    User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  kind      CaseNoteKind        @default(notiz)
+  author    User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  kind      CaseNoteKind     @default(notiz)
   body      String
   ergebnis  KontaktErgebnis?
-  createdAt DateTime            @default(now())
+  createdAt DateTime         @default(now())
 
   @@index([caseId, createdAt])
   @@map("case_notes")
@@ -640,22 +674,22 @@ model Property {
 }
 
 model FinancingRequest {
-  id                       String   @id @default(cuid())
-  caseId                   String   @unique
-  case                     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  kaufpreis                Float?
-  baukosten                Float?
-  modernisierungskosten    Float?
-  nebenkosten              Float?
-  maklerprovisionProzent   Float?
-  eigenkapital             Float?
-  darlehenswunsch          Float?
+  id                            String   @id @default(cuid())
+  caseId                        String   @unique
+  case                          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kaufpreis                     Float?
+  baukosten                     Float?
+  modernisierungskosten         Float?
+  nebenkosten                   Float?
+  maklerprovisionProzent        Float?
+  eigenkapital                  Float?
+  darlehenswunsch               Float?
   /// Manuell gesetzter Grunderwerbsteuersatz, falls die Ableitung aus PLZ und
   /// Ort danebenliegt. Sichtbar im Machbarkeits-Ergebnis.
-  grunderwerbsteuerProzent Float?
+  grunderwerbsteuerProzent      Float?
   /// Gewuenschte Zinsbindung in Jahren. Freie Zahl, keine Auswahlliste:
   /// 5/10/15/20/30 sind ueblich, aber nicht die einzigen Werte.
-  zinsbindungJahre         Int?
+  zinsbindungJahre              Int?
   /// Gewuenschte jaehrliche Sondertilgung in Prozent des Darlehens. 5 % ist
   /// marktueblich. null = nicht gefragt, 0 = ausdruecklich keine gewuenscht.
   /// Prozent statt ja/nein, weil Europace (annuitaetendetails.
@@ -664,9 +698,9 @@ model FinancingRequest {
   sondertilgungProzentJaehrlich Float?
   /// Monatliche Wunschrate des Kunden. Nebenbedingung fuer den
   /// Machbarkeits-Solver: Er rechnet sonst nur gegen die TRAGBARE Rate.
-  wunschrateMonatlich      Float?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  wunschrateMonatlich           Float?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
 
   @@map("financing_requests")
 }
