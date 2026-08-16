@@ -528,3 +528,162 @@ export async function renderHandover(data: HandoverData): Promise<Buffer> {
   footer(doc, data.broker);
   return docToBuffer(doc);
 }
+
+// ---------------------------------------------------------------------------
+// H) Finanzierungszertifikat
+// ---------------------------------------------------------------------------
+
+export interface ZertifikatData {
+  caseNumber: string;
+  dateStr: string;
+  broker: BrokerInfo;
+  /** Bescheinigter Kaufpreis, fertig gesetzt („210.000 Euro"). */
+  betrag: string;
+  /** „Mate Topcic und Jadranka Topcic". */
+  namen: string;
+  /** Geburtsdaten in derselben Reihenfolge; leer, wenn keins gepflegt ist. */
+  geburtstage: string[];
+  /** „An der Bergwiese 1, 65307 Bad Schwalbach". */
+  objekt: string;
+  bescheinigung: string;
+  vorbehalt: string;
+  /** Berater: Name und Erreichbarkeit unter der Unterschrift. */
+  berater: { name: string; email?: string; telefon?: string };
+  /** Unterschriftsbild als Rohdaten; fehlt, solange keins hochgeladen ist. */
+  unterschrift?: Buffer;
+  /** Pflichtangaben des Vermittlers für den Fuß, wörtlich übernommen. */
+  rechtlicherHinweis?: string;
+}
+
+/**
+ * Das Papier für den Makler – nachgebaut nach dem Vorbild in FinLink.
+ *
+ * Bewusst NICHT mit `coverHeader`/`heading`/`footer` gebaut wie die übrigen
+ * sechs PDFs: Die sind Arbeitsunterlagen mit Registerbeschriftung und
+ * Abschnittslinien. Dieses Blatt ist ein Aushang – eine große Zahl, ein Name,
+ * eine Adresse. Dieselben Bausteine hätten es zu einem weiteren Formular
+ * gemacht.
+ */
+export async function renderZertifikat(data: ZertifikatData): Promise<Buffer> {
+  const doc = newDoc(`Finanzierungszertifikat ${data.caseNumber}`);
+  const L = 50;
+  const BREITE = 495;
+
+  // Kopf
+  doc.fillColor(COLORS.muted).fontSize(9.5).font("Helvetica").text(`Erstellungsdatum ${data.dateStr}`, L, 60);
+  doc.moveDown(0.3);
+  doc.fillColor(COLORS.text).fontSize(28).font("Helvetica-Bold").text("Finanzierungszertifikat", { width: BREITE });
+
+  // Vorgangsnummer in einem Rahmen – im Vorbild eine abgesetzte Kachel, kein
+  // Fließtext: Der Makler soll sie zitieren können.
+  doc.moveDown(0.6);
+  const kachelY = doc.y;
+  const beschriftung = "Vorgangsnummer: ";
+  doc.fontSize(9.5).font("Helvetica");
+  const kachelBreite =
+    doc.widthOfString(beschriftung) + doc.font("Helvetica-Bold").widthOfString(data.caseNumber) + 24;
+  doc.roundedRect(L, kachelY, kachelBreite, 22, 3).fillAndStroke("#f3f4f6", COLORS.rule);
+  doc.fillColor(COLORS.muted).font("Helvetica").fontSize(9.5).text(beschriftung, L + 12, kachelY + 6.5, { continued: true });
+  doc.fillColor(COLORS.text).font("Helvetica-Bold").text(data.caseNumber);
+  doc.y = kachelY + 22;
+
+  // Bescheinigungssatz
+  doc.moveDown(1.6);
+  doc.fillColor(COLORS.text).font("Helvetica").fontSize(11.5).text(data.bescheinigung, L, doc.y, {
+    width: BREITE,
+    lineGap: 4,
+  });
+
+  // Der hervorgehobene Block. Im Vorbild ein grau hinterlegtes Band über die
+  // volle Breite – erst wird die Höhe gemessen, dann die Fläche gezeichnet,
+  // sonst läge das Grau über dem Text.
+  doc.moveDown(1.4);
+  const blockOben = doc.y;
+  const geburtstagZeile =
+    data.geburtstage.length > 0 ? `Geburtstag: ${data.geburtstage.join(" · ")}` : "";
+  const hoehe =
+    26 + // Luft oben
+    34 + // Betrag
+    18 + // Namen
+    (geburtstagZeile ? 16 : 0) +
+    22 + // Objektzeile
+    doc.font("Helvetica").fontSize(8).heightOfString(data.vorbehalt, { width: BREITE - 24, lineGap: 2 }) +
+    26; // Luft unten
+  doc.rect(0, blockOben, 595, hoehe).fill("#f7f8fa");
+
+  let y = blockOben + 26;
+  doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(30).text(data.betrag, L, y, { width: BREITE });
+  y += 42;
+  doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(13).text(data.namen, L, y, { width: BREITE });
+  y += 20;
+  if (geburtstagZeile) {
+    doc.fillColor(COLORS.muted).font("Helvetica").fontSize(9.5).text(geburtstagZeile, L, y, { width: BREITE });
+    y += 16;
+  }
+  doc.fillColor(COLORS.text).font("Helvetica").fontSize(10.5).text("Gilt für eine Immobilie in ", L, y + 4, {
+    width: BREITE,
+    continued: true,
+  });
+  doc.font("Helvetica-Bold").text(data.objekt);
+  y += 26;
+  doc.fillColor(COLORS.muted).font("Helvetica").fontSize(8).text(data.vorbehalt, L, y, {
+    width: BREITE - 24,
+    lineGap: 2,
+  });
+
+  // Abschluss
+  doc.y = blockOben + hoehe;
+  doc.moveDown(1.8);
+  doc.fillColor(COLORS.text).font("Helvetica").fontSize(11).text(
+    "Wir würden uns freuen, den Immobilienkauf zu begleiten.",
+    L,
+    doc.y,
+    { width: BREITE }
+  );
+  doc.moveDown(1.2);
+  if (data.unterschrift) {
+    // Fehlerhafte Bilddaten dürfen das Zertifikat nicht kippen – dann fehlt
+    // eben die Unterschrift, das Papier bleibt gültig.
+    try {
+      doc.image(data.unterschrift, L, doc.y, { fit: [150, 45] });
+      doc.y += 48;
+    } catch {
+      doc.moveDown(1);
+    }
+  }
+  doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(11).text(data.berater.name, L, doc.y, { width: BREITE });
+  doc.fillColor(COLORS.muted).font("Helvetica").fontSize(9.5).text("Finanzierungsbestätigung", L, doc.y, { width: BREITE });
+  if (data.berater.email) {
+    doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(9).text("e: ", L, doc.y + 2, { continued: true });
+    doc.fillColor(COLORS.muted).font("Helvetica").text(data.berater.email);
+  }
+  if (data.berater.telefon) {
+    doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(9).text("m: ", L, doc.y, { continued: true });
+    doc.fillColor(COLORS.muted).font("Helvetica").text(data.berater.telefon);
+  }
+
+  // Fuß: fest am unteren Rand, damit das Blatt bei kurzen Namen nicht kippt.
+  const fussOben = 700;
+  doc.rect(0, fussOben, 595, 842 - fussOben).fill("#f7f8fa");
+  const anschrift = [
+    data.broker.name,
+    data.broker.website,
+    [data.broker.street, [data.broker.zip, data.broker.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  doc.fillColor(COLORS.text).font("Helvetica-Bold").fontSize(9).text(anschrift, L, fussOben + 26, {
+    width: BREITE,
+    align: "center",
+  });
+  if (data.rechtlicherHinweis) {
+    doc.moveDown(0.6);
+    doc.fillColor(COLORS.muted).font("Helvetica").fontSize(7.5).text(data.rechtlicherHinweis, L, doc.y, {
+      width: BREITE,
+      align: "center",
+      lineGap: 1.5,
+    });
+  }
+
+  return docToBuffer(doc);
+}

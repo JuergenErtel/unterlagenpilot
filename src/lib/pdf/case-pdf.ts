@@ -6,6 +6,15 @@ import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import { formatEUR } from "@/lib/utils";
 import { buildZipManifest } from "@/lib/documents/zip";
+import { getStorage } from "@/lib/storage";
+import {
+  zertifikatFehlendeAngaben,
+  namensZeile,
+  objektZeile,
+  bescheinigungsSatz,
+  euroGanz,
+  VORBEHALT,
+} from "@/lib/pdf/zertifikat";
 import { berechneHaushalt } from "@/lib/haushalt/rechnung";
 import {
   EMPLOYMENT_TYPE_LABELS,
@@ -23,11 +32,19 @@ import type {
   PlatformExportData,
   WohnflaecheData,
   HandoverData,
+  ZertifikatData,
 } from "@/lib/pdf/renderer";
 
 const ai = new AIService();
 
-export type CasePdfType = "bank-summary" | "checklist" | "audit" | "platform" | "wohnflaeche" | "handover";
+export type CasePdfType =
+  | "bank-summary"
+  | "checklist"
+  | "audit"
+  | "platform"
+  | "wohnflaeche"
+  | "handover"
+  | "zertifikat";
 
 function dateStr(d = new Date()): string {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -288,4 +305,79 @@ export async function buildWohnflaecheData(
     },
     fileName: pdfFileName("Wohnflaechenberechnung", caseRow.applicants),
   };
+}
+
+/**
+ * Finanzierungszertifikat – das Papier für den Makler.
+ *
+ * Wirft, wenn Angaben fehlen. Die Oberfläche fragt vorher über
+ * `zertifikatFehlendeAngaben` und sperrt den Knopf; dieser Wurf ist der
+ * zweite Riegel für den Fall, dass jemand die URL direkt aufruft.
+ */
+export async function buildZertifikatData(
+  caseId: string,
+  organizationId: string,
+  berater: { name: string; email?: string }
+): Promise<{ data: ZertifikatData; fileName: string }> {
+  const [c, broker, org] = await Promise.all([
+    prisma.case.findUniqueOrThrow({
+      where: { id: caseId },
+      select: {
+        caseNumber: true,
+        property: { select: { street: true, zip: true, city: true } },
+        financingRequest: { select: { kaufpreis: true } },
+        applicants: {
+          orderBy: { position: "asc" },
+          select: { vorname: true, nachname: true, geburtsdatum: true },
+        },
+      },
+    }),
+    getBrokerInfo(organizationId),
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { phone: true, rechtlicherHinweis: true, unterschriftKey: true },
+    }),
+  ]);
+
+  const eingabe = {
+    kaufpreis: c.financingRequest?.kaufpreis ?? null,
+    objektStrasse: c.property?.street ?? null,
+    objektPlz: c.property?.zip ?? null,
+    objektOrt: c.property?.city ?? null,
+    antragsteller: c.applicants.map((a) => ({ vorname: a.vorname, nachname: a.nachname })),
+  };
+  const fehlt = zertifikatFehlendeAngaben(eingabe);
+  if (fehlt.length > 0) {
+    throw new Error(`Finanzierungszertifikat nicht erzeugbar – es fehlt: ${fehlt.join(", ")}`);
+  }
+
+  // Ein fehlendes oder kaputtes Unterschriftsbild darf das Zertifikat nicht
+  // verhindern – dann steht eben nur der Name darunter.
+  let unterschrift: Buffer | undefined;
+  if (org?.unterschriftKey) {
+    try {
+      unterschrift = (await getStorage().get(org.unterschriftKey)) ?? undefined;
+    } catch {
+      unterschrift = undefined;
+    }
+  }
+
+  const data: ZertifikatData = {
+    caseNumber: c.caseNumber,
+    dateStr: dateStr(),
+    broker,
+    betrag: euroGanz(eingabe.kaufpreis!),
+    namen: namensZeile(eingabe.antragsteller),
+    geburtstage: c.applicants
+      .map((a) => (a.geburtsdatum ? dateStr(a.geburtsdatum) : null))
+      .filter((g): g is string => g !== null),
+    objekt: objektZeile(eingabe),
+    bescheinigung: bescheinigungsSatz(eingabe.antragsteller.length),
+    vorbehalt: VORBEHALT,
+    berater: { name: berater.name, email: berater.email, telefon: org?.phone ?? undefined },
+    unterschrift,
+    rechtlicherHinweis: org?.rechtlicherHinweis ?? undefined,
+  };
+
+  return { data, fileName: pdfFileName("Finanzierungszertifikat", c.applicants) };
 }

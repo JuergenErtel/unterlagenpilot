@@ -600,6 +600,10 @@ export const AUDIT_ACTIONS = [
   "finding.accepted",
   "finding.dismissed",
   "anfrage.eingeladen",
+  // Stammdaten des Hauses: Anschrift, rechtlicher Hinweis, Unterschriftsbild.
+  // Gehoert ins Log, weil diese Angaben auf jedem erzeugten Papier stehen -
+  // wer sie aendert, aendert rueckwirkend nichts, aber alles Kuenftige.
+  "organization.updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

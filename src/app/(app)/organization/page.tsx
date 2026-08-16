@@ -11,6 +11,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DokumentangabenForm } from "@/components/organization/dokumentangaben-form";
 import {
   Table,
   TableHeader,
@@ -133,6 +134,37 @@ export default async function OrganizationPage() {
                 )}
               </dd>
             </dl>
+          </CardContent>
+        </Card>
+
+        {/*
+          Angaben, die auf erzeugten Papieren erscheinen. Bis zum 16.08.2026
+          war die Organisationsseite reine Anzeige – Anschrift und Website
+          liessen sich gar nicht setzen, obwohl sie im Fuss jedes PDFs stehen.
+        */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-muted-foreground" />
+              Angaben für erzeugte Dokumente
+            </CardTitle>
+            <CardDescription>
+              Diese Angaben stehen im Kopf und Fuß der PDFs, die BaufiDesk erzeugt – unter anderem
+              auf dem Finanzierungszertifikat, das dein Kunde dem Makler vorlegt.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DokumentangabenForm
+              werte={{
+                street: org?.street ?? null,
+                zip: org?.zip ?? null,
+                city: org?.city ?? null,
+                website: org?.website ?? null,
+                phone: org?.phone ?? null,
+                rechtlicherHinweis: org?.rechtlicherHinweis ?? null,
+              }}
+              hatUnterschrift={Boolean(org?.unterschriftKey)}
+            />
           </CardContent>
         </Card>
 

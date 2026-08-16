@@ -9,6 +9,7 @@ import {
   renderPlatformExport,
   renderWohnflaeche,
   renderHandover,
+  renderZertifikat,
 } from "@/lib/pdf/renderer";
 import {
   buildBankSummaryData,
@@ -17,6 +18,7 @@ import {
   buildPlatformExportData,
   buildWohnflaecheData,
   buildHandoverData,
+  buildZertifikatData,
   type CasePdfType,
 } from "@/lib/pdf/case-pdf";
 import { PLATFORMS, type Platform } from "@/lib/domain/enums";
@@ -78,6 +80,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
         const { data, fileName: fn } = await buildPlatformExportData(id, ctx.organizationId, platformParam as Platform);
         buffer = await renderPlatformExport(data);
+        fileName = fn;
+        break;
+      }
+      case "zertifikat": {
+        /*
+         * Der Name unter der Unterschrift ist der ANGEMELDETE Nutzer, nicht
+         * die Organisation: Das Zertifikat ist eine persönliche Bestätigung
+         * des Beraters, und der Makler ruft die Nummer darunter an.
+         *
+         * `buildZertifikatData` wirft, wenn Kaufpreis, Objektadresse oder Name
+         * fehlen. Die Fallakte sperrt den Knopf schon vorher; das hier fängt
+         * den direkten Aufruf der URL ab.
+         */
+        const nutzer = await prisma.user.findUnique({
+          where: { id: ctx.userId },
+          select: { name: true, email: true },
+        });
+        const { data, fileName: fn } = await buildZertifikatData(id, ctx.organizationId, {
+          name: nutzer?.name ?? "",
+          email: nutzer?.email ?? undefined,
+        });
+        buffer = await renderZertifikat(data);
         fileName = fn;
         break;
       }

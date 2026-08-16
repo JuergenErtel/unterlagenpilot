@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
 export const maxDuration = 300;
-import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall } from "lucide-react";
+import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall, BadgeCheck } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
@@ -18,6 +18,7 @@ import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
 import { brauchtSelbststaendigenEinkommensnachweis } from "@/lib/checklists/case-input";
+import { zertifikatFehlendeAngaben } from "@/lib/pdf/zertifikat";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
 import { ladeUebernahmeplan } from "@/lib/actions/self-disclosure";
 import { ladeSelbstauskunftStand } from "@/lib/cases/selbstauskunft-stand";
@@ -258,6 +259,17 @@ export default async function CaseCockpitPage({
     name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
   }));
   const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
+
+  // Torpruefung fuer das Finanzierungszertifikat – dieselbe Funktion, die auch
+  // die PDF-Route anwendet, damit der Knopf nie etwas freigibt, was der Server
+  // danach verweigert.
+  const zertifikatFehlt = zertifikatFehlendeAngaben({
+    kaufpreis: caseRow.financingRequest?.kaufpreis ?? null,
+    objektStrasse: caseRow.property?.street ?? null,
+    objektPlz: caseRow.property?.zip ?? null,
+    objektOrt: caseRow.property?.city ?? null,
+    antragsteller: caseRow.applicants.map((a) => ({ vorname: a.vorname, nachname: a.nachname })),
+  });
 
   /*
    * Reife des Erstgespraechs fuer die Fallreise (next-step.ts). Dieselbe
@@ -803,6 +815,27 @@ export default async function CaseCockpitPage({
                 <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
               )}
               <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
+              {/*
+                Finanzierungszertifikat – das Blatt, das der Kaufinteressent
+                dem Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen
+                gibt es keins (wie im Vorbild bei FinLink): Der Knopf bleibt
+                gesperrt und sagt, was fehlt, statt ein Papier mit Lücken
+                auszugeben, das der Kunde aus der Hand gibt.
+              */}
+              {zertifikatFehlt.length === 0 ? (
+                <Button asChild variant="outline" className="w-full justify-start">
+                  <a href={`/api/cases/${id}/pdf?type=zertifikat`}><BadgeCheck />Finanzierungszertifikat</a>
+                </Button>
+              ) : (
+                <div>
+                  <Button variant="outline" className="w-full justify-start" disabled>
+                    <BadgeCheck />Finanzierungszertifikat
+                  </Button>
+                  <p className="mt-1 px-1 text-xs text-muted-foreground">
+                    Dafür fehlt noch: {zertifikatFehlt.join(", ")}.
+                  </p>
+                </div>
+              )}
               <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
             </CardContent>
           </Card>

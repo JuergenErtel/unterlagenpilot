@@ -315,6 +315,20 @@ model Organization {
   zip           String?
   city          String?
   website       String?
+  // Telefon des Hauses. Steht auf dem Finanzierungszertifikat unter dem Namen
+  // des Beraters – dort erwartet der Makler eine Nummer, unter der er anruft.
+  phone         String?
+  /// Pflichtangaben des Vermittlers für den Fuß erzeugter Papiere: Rechtsform,
+  /// zuständige IHK, Registernummer nach § 34i GewO.
+  ///
+  /// Bewusst EIN mehrzeiliges Freitextfeld und keine fünf Einzelfelder: Was
+  /// dort stehen muss, weiß der Vermittler; eine geratene Feldaufteilung
+  /// zwingt ihn nur, seine Angaben hineinzuquetschen. Wird wörtlich und
+  /// unverändert übernommen.
+  rechtlicherHinweis String?
+  /// Speicherschlüssel des hochgeladenen Unterschriftsbilds (PNG/JPG).
+  /// Erscheint auf dem Finanzierungszertifikat über dem Namen.
+  unterschriftKey    String?
   // Datenschutz: Aufbewahrungsfrist (0 = bis manuelle Loeschung)
   retentionDays Int      @default(0)
   isWhiteLabel  Boolean  @default(false)
