@@ -493,15 +493,46 @@ describe("computeNextStep – Erstgespräch", () => {
     expect(s.key).not.toBe("erstgespraech");
   });
 
-  it("bleibt nach dem Abhaken als wartender Schritt sichtbar, solange Angaben fehlen", () => {
-    // Zurueckgetreten heisst nicht verschwunden: die offenen Angaben sind weiter
-    // erledigbar und sollen auffindbar bleiben.
+  it("verschwindet nach dem Abhaken auch aus 'Wartet außerdem' – trotz offener Angaben", () => {
+    // Juergens Ansage vom 17.08.2026 (Fall UP-2026-0019, Beyerle): "Ich habe das
+    // Erstgespraech abgehakt – es steht aber immer noch als ToDo im Fall."
+    //
+    // Bis dahin war genau das Absicht: Die Sprosse trat zurueck, und
+    // `ermittleWartende` nahm sie ohne `gefuehrtAm`-Waechter sofort wieder auf,
+    // damit die ~35 offenen Angaben auffindbar bleiben. Aus Sicht des
+    // Vermittlers war der Haken damit wirkungslos – der Fall mahnte weiter
+    // dieselbe Aufgabe an, die er gerade erledigt gemeldet hatte.
+    //
+    // Auffindbar bleibt die Maske trotzdem: Die Werkzeugspalte der Fallseite
+    // hat einen Dauer-Einstieg "Erstgespräch führen" samt "N offen"
+    // (cases/[id]/page.tsx) – bewusst UNABHAENGIG von der Fallreise gebaut.
+    // Ein Werkzeug ist kein ToDo; nur die Fallreise mahnt.
     const s = computeNextStep(
       cockpit({
         erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
         erstgespraech: { offeneAngaben: 6, gefuehrtAm: new Date("2026-08-14") },
       })
     );
+    expect(s.key).not.toBe("erstgespraech");
+    expect(s.wartet ?? []).not.toContainEqual({
+      label: "Erstgespräch führen",
+      href: "/cases/c1/erstgespraech",
+    });
+  });
+
+  it("bleibt ohne Haken als wartender Schritt sichtbar, wenn ein hoeherer Schritt es verdraengt", () => {
+    // Die Gegenprobe zum Test darueber: OHNE Haken darf der verdraengte
+    // Schritt nicht spurlos verschwinden – die Leiter zeigt bauartbedingt nur
+    // EINEN Schritt (Fall UP-2026-0007). Nur der Haken bringt ihn zum
+    // Schweigen, nicht die Verdraengung.
+    const s = computeNextStep(
+      cockpit({
+        counts: { pruefbereit: 2 },
+        erstkontakt: { empfaenger: "k@example.de", vorbereitet: true, versendet: true },
+        erstgespraech: { offeneAngaben: 6 },
+      })
+    );
+    expect(s.key).not.toBe("erstgespraech");
     expect(s.wartet).toContainEqual({
       label: "Erstgespräch führen",
       href: "/cases/c1/erstgespraech",

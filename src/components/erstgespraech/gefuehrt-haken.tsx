@@ -16,9 +16,16 @@ import { Button } from "@/components/ui/button";
  * einem Fall, dessen Dokumente längst alle freigegeben waren.
  *
  * Bewusst ein Haken und keine Schwelle: Ob das Gespräch geführt ist, weiß der
- * Vermittler, nicht eine Zahl. Er schließt nichts ab – die Maske bleibt offen,
- * die offenen Angaben bleiben als wartender Schritt sichtbar – und er lässt
- * sich jederzeit wieder lösen.
+ * Vermittler, nicht eine Zahl. Er schließt nichts ab – die Maske bleibt offen
+ * und über den Dauer-Einstieg in der Werkzeugspalte der Fallseite jederzeit
+ * erreichbar ("Erstgespräch führen · N offen") – und er lässt sich jederzeit
+ * wieder lösen.
+ *
+ * Was er sehr wohl tut: die Fallreise vollständig zum Schweigen bringen. Bis
+ * zum 17.08.2026 blieben die offenen Angaben nach dem Abhaken als wartender
+ * Schritt stehen; für Jürgen las sich das so, als hätte der Haken nichts
+ * bewirkt ("abgehakt – steht aber immer noch als ToDo im Fall"). Wer abhakt,
+ * hat abgehakt.
  */
 export function GefuehrtHaken({
   caseId,

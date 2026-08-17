@@ -221,10 +221,26 @@ function ermittleWartende(c: NextStepInput, schritt: NextStep): Array<{ label: s
   // Fall UP-2026-0007). Dieselbe Sperre wie oben: fuer abgegebene Faelle
   // (schreibgeschuetzte Maske) und bei einer Bank-Nachforderung waere der
   // Hinweis kein erledigbarer Wegweiser, sondern eine Sackgasse.
+  //
+  // Der `gefuehrtAm`-Waechter ist Juergens Entscheidung vom 17.08.2026 (Fall
+  // UP-2026-0019): "Ich habe das Erstgespraech abgehakt – es steht aber immer
+  // noch als ToDo im Fall." Vorher fehlte er hier bewusst, damit die offenen
+  // Angaben auffindbar bleiben – nur machte das den Haken wirkungslos: Die
+  // Sprosse trat zurueck, und derselbe Satz stand eine Zeile tiefer wieder da.
+  // Auffindbar bleibt die Maske ueber den Dauer-Einstieg in der
+  // Werkzeugspalte der Fallseite ("Erstgespräch führen · N offen",
+  // cases/[id]/page.tsx), der genau dafuer unabhaengig von der Fallreise
+  // gebaut ist. Ein Werkzeug ist kein ToDo; nur die Fallreise mahnt.
+  //
+  // Damit haengen jetzt DREI Stellen an demselben Haken – die Sprosse
+  // (`erstgespraechSchritt`), die Kontaktstrecke (`kontaktstreckeLaeuft`) und
+  // dieser Hinweis. Jede weitere Stelle, die das Erstgespraech anmahnt, MUSS
+  // ihn ebenfalls lesen, sonst widerspricht sich der Fall wieder selbst.
   if (
     !stumm &&
     schritt.key !== "erstgespraech" &&
     c.erstgespraech &&
+    !c.erstgespraech.gefuehrtAm &&
     c.erstgespraech.offeneAngaben > 0 &&
     !LOCKED_CASE_STATUSES.has(c.status as CaseStatus) &&
     c.status !== "bank_nachforderung"
@@ -386,9 +402,11 @@ function kontaktSchritt(c: NextStepInput): NextStep | null {
  * zurueckgemeldet hat, gehoert auf "Fristen im Blick behalten", nicht zurueck
  * ins Erstgespraech.
  *
- * `gefuehrtAm` gesetzt heisst: abgehakt, die Stufe tritt zurueck. Sie
- * verschwindet dabei nicht – weil sie hier nicht mehr gewinnt, nimmt
- * `ermittleWartende` sie automatisch als wartenden Schritt auf.
+ * `gefuehrtAm` gesetzt heisst: abgehakt – die Stufe tritt zurueck und
+ * schweigt. Seit dem 17.08.2026 gilt das auch fuer den Hinweis in
+ * `ermittleWartende`, der den Schritt vorher sofort wieder aufnahm und den
+ * Haken damit wirkungslos machte (Begruendung dort). Erreichbar bleibt die
+ * Maske ueber den Dauer-Einstieg in der Werkzeugspalte der Fallseite.
  */
 function erstgespraechSchritt(c: NextStepInput): NextStep | null {
   if (!c.erstgespraech || c.erstgespraech.offeneAngaben <= 0) return null;
