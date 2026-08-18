@@ -89,15 +89,41 @@ export class AIService {
 
   // ---------------- Kern-LLM-Methoden ----------------
 
+  /**
+   * Stuft ein Dokument ein.
+   *
+   * Der **Dateiname gehoert dazu**: Vom Inhalt sehen wir nur die ersten 4.000
+   * Zeichen (`truncate`), und die koennen in die Irre fuehren. Gemessen am
+   * Fall Topcic (18.08.2026): "Einkommensteuererklaerung 2024.pdf" hat 56
+   * Seiten und beginnt mit einer Steuerberechnung – "Berechnung der
+   * Einkommensteuer", "Besteuerungsgrundlagen" –, die wortgleich wie ein
+   * Bescheid liest. Das Modell entschied auf *Einkommensteuerbescheid*, mit
+   * Konfidenz 1,00, und die Checkliste meldete genau das Papier als
+   * vorhanden, das die Bank verlangt. Der Dateiname war das einzige Merkmal,
+   * das den Unterschied trug – und er erreichte die KI gar nicht.
+   *
+   * Der Inhalt bleibt ausschlaggebend: Ein Dateiname kann falsch, generisch
+   * ("Scan_001.pdf") oder vom Kunden geraten sein. Er ist ein Hinweis, kein
+   * Befehl – genau so steht es in der Anweisung.
+   */
   classifyDocument(
     fileText: string,
-    metadata: { pageCount?: number; forceType?: DocumentType } = {}
+    metadata: { pageCount?: number; forceType?: DocumentType; originalName?: string } = {}
   ): Promise<ClassificationResult> {
+    const dateiname = metadata.originalName?.trim();
     return this.run(
       "classification",
       classificationSchema,
       "Du klassifizierst deutsche Baufinanzierungsunterlagen. Antworte nur als JSON.",
-      `Klassifiziere folgendes Dokument:\n${truncate(fileText)}`,
+      [
+        "Klassifiziere folgendes Dokument.",
+        dateiname
+          ? `Dateiname (Hinweis, kein Beweis – der Inhalt entscheidet; widersprechen sich beide eindeutig, folge dem Inhalt): ${dateiname}`
+          : null,
+        `Inhalt (ggf. gekürzt):\n${truncate(fileText)}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       { fileText, ...metadata }
     );
   }

@@ -44,93 +44,40 @@ geblieben: die Upload-Kette, der Lauf „KI-Prüfung starten" (der setzte
 `readable: true` fest und hätte den Fix bei jedem Lauf aufgehoben) und die
 Freigabe-Aktion selbst.
 
-## Fehler: Steuererklärung als Steuerbescheid eingestuft
+## ~~Fehler: Steuererklärung als Steuerbescheid eingestuft~~
 
-**Aufgenommen:** 18.08.2026 (beim Aufräumen des Topcic-Fundes gefunden)
+**Aufgenommen:** 18.08.2026 · **Erledigt: 18.08.2026**
 
-`Einkommensteuererklärung 2024.pdf` ist als **Einkommensteuerbescheid**
-eingestuft – mit Konfidenz 1,00, bei 56 Seiten und 144.799 Zeichen Text. Der
-Typ `einkommensteuererklaerung` existiert, das Modell hatte also die richtige
-Wahl. Dieselbe Gefahr wie beim Topcic-Fund, aber eine andere Wurzel: Hier lag
-reichlich Text vor, das Modell hat sich schlicht geirrt – und ausgerechnet in
-die Richtung, die die Bank verlangt. Die Checkliste meldet den Bescheid als
-vorhanden, eingereicht würde die Erklärung.
+`Einkommensteuererklärung 2024.pdf` war als **Einkommensteuerbescheid**
+eingestuft — Konfidenz 1,00, bei 56 Seiten und 144.799 Zeichen Text. Die
+Checkliste meldete damit ausgerechnet das Papier als vorhanden, das die Bank
+verlangt.
 
-**Was daran zu bedenken ist:** Die Textgrundlagen-Regel greift hier nicht. Zwei
-Wege bieten sich an, beide noch nicht entschieden:
+**Die Wurzel:** Der Dateiname erreichte die KI gar nicht —
+`AIService.classifyDocument` bekam nur den OCR-Text, und der wird auf 4.000
+Zeichen gekürzt. Die ersten Seiten dieses Dokuments sind eine Steuerberechnung
+(„Berechnung der Einkommensteuer", „Besteuerungsgrundlagen"), die wortgleich
+wie ein Bescheid liest. Aus dieser Sicht war die Einstufung nachvollziehbar;
+entschieden hätte allein der Dateiname.
 
-- **Der Dateiname geht heute gar nicht an die KI** (`AIService.classifyDocument`
-  bekommt nur den OCR-Text). „Einkommensteuererklärung 2024.pdf" hätte den
-  Irrtum vermutlich verhindert. Billig, aber ein Dateiname kann auch in die
-  Irre führen.
-- **Ein Widerspruchs-Abgleich Dateiname ↔ Typ** aus der bereits vorhandenen,
-  heute ungenutzten Schlüsselwortliste in `document-types.ts`. Gemessen an den
-  11 echten Dokumenten hätte er 3 markiert: zwei echte Fehler und einen
-  Fehlalarm („Jahresabschluss 2024.pdf" ist tatsächlich eine EÜR). Ein Drittel
-  der Dokumente mit einer Rückfrage zu belegen ist Reibung, die Jürgen wollen
-  muss.
-
-## ~~Wunsch: Finanzierungszertifikat~~
-
-**Aufgenommen:** 15.08.2026 · **Erledigt: 16.08.2026** (Commit `f3a1c36`)
-
-Ein Finanzierungszertifikat nach dem Vorbild in FinLink — das Papier, das ein
-Kaufinteressent dem Makler vorlegt, um zu zeigen, dass die Finanzierung steht.
-
-**Was daran zu bedenken ist:** Das Haus erzeugt PDFs bereits serverseitig
-(`src/lib/pdf/`, `GET /api/cases/[id]/pdf?type=…`) mit Briefkopf aus den
-Organisationsdaten — der Weg dahin existiert also. Die Arbeit steckt nicht im
-Erzeugen, sondern in der Frage, **was das Zertifikat behauptet und wer dafür
-geradesteht**: eine Zusage über eine Summe, die noch keine Bank gegeben hat, ist
-ein Versprechen mit Haftung. Vor dem Bauen ist zu klären, welche Formulierung
-Jürgen verantworten kann und welche Angaben aus dem Fall belegt sein müssen,
-bevor sich das Papier überhaupt erzeugen lässt.
-
-## ~~Fehler: Die Machbarkeits-Ampel bleibt bei der Hälfte der Vorhabensarten grau~~
-
-**Aufgenommen:** 16.08.2026 · **Erledigt: 16.08.2026**
-
-Die Machbarkeitsrechnung verlangte zwingend einen Kaufpreis; bei
-Anschlussfinanzierung, Kapitalbeschaffung und Modernisierung blieb die Ampel
-deshalb immer grau.
-
-**Die Wurzel** war nicht der fehlende Betrag — der stand im Bogen —, sondern
-dass der Kaufpreis **zwei Rollen zugleich** trug: das, was finanziert wird, und
-den Maßstab, an dem die Bank den Auslauf misst. Beim Kauf ist beides dieselbe
-Zahl, bei diesen drei Arten nicht. Die Rechnung trennt sie seitdem:
+**Gegen das echte Modell gemessen** (Probe auf genau diesem Dokument):
 
 ```
-darlehen       = Kaufpreis + Modernisierung + weiterer Bedarf + Nebenkosten
-                 + abzulösende Kredite − Eigenkapital − Eigenleistung
-beleihungswert = Objektwert − Inventar + Zusatzsicherheit
-auslauf        = (darlehen + vorrangige Restschuld) / beleihungswert
+ohne Dateiname -> einkommensteuerbescheid    (Konfidenz 0,99)  falsch
+mit  Dateiname -> einkommensteuererklaerung  (Konfidenz 0,99)  richtig
 ```
 
-Beim Kauf ist `Objektwert = Kaufpreis` und alles Neue null — dort rechnet
-seitdem exakt dasselbe heraus wie vorher (Regressionsfall in
-`tests/machbarkeit-vorhabensarten.test.ts`).
+**Was jetzt gilt:** Der Dateiname geht als ausdrücklich gekennzeichneter
+*Hinweis* mit — der Inhalt bleibt ausschlaggebend, und die Anweisung sagt das
+auch so. Sonst überstimmte ein geratener Kundenname („Grundbuch.pdf" für
+irgendeinen Scan) den Inhalt.
 
-**Zwei neue Fragen** im kurzen Bogen, beide nur bei den betroffenen Arten
-sichtbar — Käufer sehen keine einzige Frage mehr: der geschätzte **Wert der
-Immobilie** (`property.objektwert`) und, nur bei Kapitalbeschaffung und
-Modernisierung, die **Restschuld eines laufenden Darlehens darauf**
-(`property.bestehendeGrundschuld`). Die zweite entfällt bei der
-Anschlussfinanzierung, weil die Restschuld dort abgelöst wird und schon unter
-ihrem eigenen Namen im Bogen steht.
-
-**Drei Fallen, die dabei sichtbar wurden:**
-
-- Den Grundbetrag einfach in `kaufpreis` zu schreiben hätte 6,5 %
-  Grunderwerbsteuer und 2 % Notarkosten auf eine Modernisierung gerechnet.
-- Eine bestehende Grundschuld gehört in den **Zähler des Auslaufs, nie ins
-  Darlehen**: 100.000 € Kapitalbeschaffung auf ein Objekt von 300.000 € sind
-  33 % Auslauf — mit 200.000 € Altlast darauf aber 100 %. Mitfinanziert würde
-  ihre Rate doppelt zählen.
-- Der Rat „braucht X € mehr Eigenkapital" ist bei einer **Kapitalbeschaffung**
-  die eine Antwort, die niemand brauchen kann. Deshalb trägt die Eingabe ein
-  Merkmal `darlehensbedarfVerhandelbar`: Wo die Summe ein Wunsch ist, nennt die
-  Ampel zuerst „Darlehen bis X €"; wo sie eine Tatsache ist
-  (Anschlussfinanzierung), bleibt die Eigenmittel-Lücke die richtige Auskunft.
+**Der Widerspruchs-Abgleich Dateiname ↔ Typ bleibt offen** und ist bewusst
+nicht gebaut: Gemessen an den 11 echten Dokumenten hätte er 3 markiert — zwei
+echte Fehler und einen Fehlalarm („Jahresabschluss 2024.pdf" ist tatsächlich
+eine EÜR). Ein Drittel der Dokumente mit einer Rückfrage zu belegen ist
+Reibung, die Jürgen wollen muss. Die dafür nötige Schlüsselwortliste liegt seit
+jeher ungenutzt in `document-types.ts`.
 
 ## Nachträge aus dem Katalogschnitt (16.08.2026)
 

@@ -279,7 +279,10 @@ async function processAiCheckInBackground(params: {
       }
 
       try {
-        const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
+        const cls = await ai.classifyDocument(text, {
+          forceType: doc.documentType ?? undefined,
+          originalName: doc.originalName,
+        });
         const ext = await ai.extractFields(cls.documentType, text);
 
         // Dieselbe Regel wie beim nachträglichen Abgleich: nur unzugeordnete

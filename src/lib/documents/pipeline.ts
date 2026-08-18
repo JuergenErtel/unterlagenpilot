@@ -331,7 +331,10 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     // im Fall gar nicht lag. Lieber kein Typ als ein erfundener: Ein fehlendes
     // Dokument sieht man, ein falsches Gruen nicht.
     if (hatTextgrundlage(ocrResult.fullText)) {
-      cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
+      cls = await ai.classifyDocument(ocrResult.fullText, {
+        pageCount: ocrResult.pageCount,
+        originalName,
+      });
       ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
     }
   } catch {
