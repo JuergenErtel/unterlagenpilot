@@ -43,7 +43,7 @@ describe("Detektiv-Anstoss nach der Hintergrundanalyse", () => {
 
     // Die Aufrufstelle (nicht der Import!) steht NACH dem Dokument-Update und
     // in einem eigenen try/catch.
-    const idxUpdate = quelle.indexOf("extractionStatus: ext ?");
+    const idxUpdate = quelle.indexOf("extractionStatus: ext");
     const idxDetektiv = quelle.indexOf("await runReferenceExtraction(");
     expect(idxUpdate).toBeGreaterThan(-1);
     expect(idxDetektiv).toBeGreaterThan(idxUpdate);

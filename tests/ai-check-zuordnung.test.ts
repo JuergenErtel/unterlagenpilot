@@ -98,7 +98,16 @@ const gespeichertesDoc = {
   applicantId: null as string | null,
   applicantSource: null as string | null,
   documentType: "personalausweis",
-  pages: [{ ocrText: "Personalausweis Thomas Colell" }],
+  // Echter Ausweistext, kein Stichwort: Seit dem 18.08.2026 stuft der
+  // Prueflauf Dokumente ohne Textgrundlage gar nicht mehr ein (siehe
+  // textsubstanz.ts). Ein Zwei-Wort-Fixture liefe an dieser Regel auf und
+  // pruefte die Zuordnung dann gar nicht mehr.
+  pages: [
+    {
+      ocrText:
+        "BUNDESREPUBLIK DEUTSCHLAND PERSONALAUSWEIS IDENTITY CARD Name Colell Vorname Thomas Geburtsdatum 12.03.1981 Staatsangehoerigkeit DEUTSCH",
+    },
+  ],
   extractedFields: [],
 };
 

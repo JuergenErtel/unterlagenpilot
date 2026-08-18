@@ -44,7 +44,15 @@ vi.mock("@/lib/documents/heic", () => ({
 }));
 vi.mock("@/lib/ai", () => ({
   getOCRProvider: () => ({
-    extractText: async () => ({ fullText: "Gehaltsabrechnung Thomas Colell", pageCount: 1, pages: [] }),
+    // Echter Abrechnungstext: Ohne Textgrundlage stuft die Kette seit dem
+    // 18.08.2026 nicht mehr ein (siehe textsubstanz.ts), und der Test pruefte
+    // dann nicht mehr die Zuordnung, sondern nur noch die neue Sperre.
+    extractText: async () => ({
+      fullText:
+        "Entgeltabrechnung Mai 2026 Arbeitnehmer Thomas Colell Steuerklasse 1 Bruttobezuege 4.200,00 EUR Nettoverdienst 2.610,45 EUR Sozialversicherung",
+      pageCount: 1,
+      pages: [],
+    }),
   }),
 }));
 vi.mock("@/lib/ai/service", () => ({

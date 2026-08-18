@@ -31,6 +31,7 @@ import {
 import { getStorage } from "@/lib/storage";
 import { mitFallnummer } from "@/lib/cases/fallnummer-vergabe";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
+import { hatTextgrundlage } from "@/lib/documents/textsubstanz";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
 import { isAiCheckRunning } from "@/lib/cases/ai-check-status";
@@ -257,6 +258,26 @@ async function processAiCheckInBackground(params: {
     // Jedes Dokument ist ein eigener DB-Datensatz -> keine Schreibkonflikte.
     await mapLimit(docs, AI_CHECK_CONCURRENCY, async (doc) => {
       const text = doc.pages.map((p) => p.ocrText ?? "").join("\n");
+
+      // Ohne Textgrundlage nicht neu einstufen – aus demselben Grund wie in
+      // der Upload-Kette: Das Modell erfindet dann einen Typ und ist sich
+      // sicher. Der bereits gesetzte Typ bleibt unangetastet (er kann von Hand
+      // gesetzt worden sein), aber das Dokument gilt als nicht lesbar und
+      // erfuellt damit keine Checklistenposition. Ohne diesen Zweig haette
+      // jeder Lauf von "KI-Pruefung starten" `readable: true` zurueckgesetzt
+      // und das falsche Gruen neu erzeugt.
+      if (!hatTextgrundlage(text)) {
+        await prisma.document.update({
+          where: { id: doc.id },
+          data: {
+            readable: false,
+            classificationStatus: "fertig",
+            extractionStatus: "fertig",
+          },
+        });
+        return;
+      }
+
       try {
         const cls = await ai.classifyDocument(text, { forceType: doc.documentType ?? undefined });
         const ext = await ai.extractFields(cls.documentType, text);
@@ -469,12 +490,22 @@ export async function setDocumentReview(
   // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
   const owner = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { caseId: true, applicantId: true, case: { select: { organizationId: true } } },
+    select: {
+      caseId: true,
+      applicantId: true,
+      readable: true,
+      case: { select: { organizationId: true } },
+    },
   });
   if (!owner || owner.case.organizationId !== ctx.organizationId) {
     const { notFound } = await import("next/navigation");
     notFound();
   }
+  // Nichts freigeben, was keine Textgrundlage hat: Der erfundene Typ waere
+  // damit bestaetigt und faerbte eine Checklistenposition gruen. Die Oberflaeche
+  // bietet den Knopf gar nicht erst an – diese Pruefung deckt den direkten
+  // Aufruf ab. Ablehnen und Ersetzen bleiben moeglich, sie sind der Ausweg.
+  if (reviewStatus === "akzeptiert" && owner!.readable === false) return;
   const doc = await prisma.document.update({
     where: { id: documentId },
     data: {

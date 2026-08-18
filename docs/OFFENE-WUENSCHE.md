@@ -9,25 +9,70 @@ seinen eigenen Entwurf.
 
 ---
 
-## Fehler: Falsch eingestufte Dokumente (aus dem Topcic-Fund)
+## ~~Fehler: Falsch eingestufte Dokumente (aus dem Topcic-Fund)~~
 
-**Aufgenommen:** 16.08.2026
+**Aufgenommen:** 16.08.2026 · **Erledigt: 18.08.2026**
 
-Beim Aufräumen des Topcic-Falls gefunden und bewusst nicht mitbehoben:
-`Ausweis_Mate.pdf` ist als **Grundbuchauszug** eingestuft. Folge ist nicht nur
-ein fehlender Ausweis, sondern auch ein **falsches Grün**: Die Position
-„Grundbuchauszug" steht auf „vorhanden", obwohl im Fall keiner liegt.
+`Ausweis_Mate.pdf` war als **Grundbuchauszug** eingestuft – die Checkliste
+meldete „Grundbuchauszug vorhanden", obwohl im Fall keiner lag.
 
-**Was daran zu bedenken ist:** Das ist die KI-Einstufung, nicht die
-Checklistenlogik. Zu klären wäre, ob eine niedrige Zuversicht
-(`Document.confidence`) sichtbar gemacht werden sollte — eine
-Falscheinstufung, die als erfüllt zählt, ist gefährlicher als eine, die
-gar nichts erfüllt. Die Freigabe im Review-Center bestätigt heute den
-Dokumenttyp mit, ohne ihn zu betonen.
+**Die Wurzel** war weder das Modell noch die Freigabe, sondern die Grundlage:
+Die OCR hatte für diese Datei **nichts als Bildplatzhalter** geliefert – nach
+Abzug der Platzhalter blieben **4 Zeichen**. Das Klassifikationsschema verlangt
+aber einen Typ, also hat das Modell einen erfunden und sich seiner sicher
+gezeigt.
 
-## Wunsch: Finanzierungszertifikat
+**Warum der ursprünglich vermutete Weg nicht getragen hätte:** Die Konfidenz
+sichtbar zu machen hätte nichts gefangen. Alle 11 Dokumente der
+Produktionsdatenbank lagen bei **0,98 bis 1,00** – ausgerechnet das falsche bei
+0,98. Die Zahl trägt keine Information. Ebenso wenig hätte es geholfen, das
+Grün an die Freigabe zu binden: Das Dokument **war** freigegeben.
 
-**Aufgenommen:** 15.08.2026
+**Was jetzt gilt:** Ohne Textgrundlage wird gar nicht mehr eingestuft
+(`src/lib/documents/textsubstanz.ts`, Schwelle 40 Zeichen). Das Dokument gilt
+als nicht lesbar, erfüllt damit keine Checklistenposition, lässt sich nicht
+freigeben und trägt in Fallakte und Review-Center einen Hinweis. Der Weg
+heraus ist die Typ-Auswahl von Hand – wer sie benutzt, hat die Datei angesehen
+und macht das Dokument damit wieder zählbar.
+
+**Die Schwelle ist geeicht, nicht geraten:** falsche Datei 4 Zeichen, echter
+Personalausweis (das textärmste echte Dokument) 222, alle übrigen 4.600 bis
+144.799.
+
+**Drei Stellen mussten zusammen halten** – jede einzeln wäre eine Lücke
+geblieben: die Upload-Kette, der Lauf „KI-Prüfung starten" (der setzte
+`readable: true` fest und hätte den Fix bei jedem Lauf aufgehoben) und die
+Freigabe-Aktion selbst.
+
+## Fehler: Steuererklärung als Steuerbescheid eingestuft
+
+**Aufgenommen:** 18.08.2026 (beim Aufräumen des Topcic-Fundes gefunden)
+
+`Einkommensteuererklärung 2024.pdf` ist als **Einkommensteuerbescheid**
+eingestuft – mit Konfidenz 1,00, bei 56 Seiten und 144.799 Zeichen Text. Der
+Typ `einkommensteuererklaerung` existiert, das Modell hatte also die richtige
+Wahl. Dieselbe Gefahr wie beim Topcic-Fund, aber eine andere Wurzel: Hier lag
+reichlich Text vor, das Modell hat sich schlicht geirrt – und ausgerechnet in
+die Richtung, die die Bank verlangt. Die Checkliste meldet den Bescheid als
+vorhanden, eingereicht würde die Erklärung.
+
+**Was daran zu bedenken ist:** Die Textgrundlagen-Regel greift hier nicht. Zwei
+Wege bieten sich an, beide noch nicht entschieden:
+
+- **Der Dateiname geht heute gar nicht an die KI** (`AIService.classifyDocument`
+  bekommt nur den OCR-Text). „Einkommensteuererklärung 2024.pdf" hätte den
+  Irrtum vermutlich verhindert. Billig, aber ein Dateiname kann auch in die
+  Irre führen.
+- **Ein Widerspruchs-Abgleich Dateiname ↔ Typ** aus der bereits vorhandenen,
+  heute ungenutzten Schlüsselwortliste in `document-types.ts`. Gemessen an den
+  11 echten Dokumenten hätte er 3 markiert: zwei echte Fehler und einen
+  Fehlalarm („Jahresabschluss 2024.pdf" ist tatsächlich eine EÜR). Ein Drittel
+  der Dokumente mit einer Rückfrage zu belegen ist Reibung, die Jürgen wollen
+  muss.
+
+## ~~Wunsch: Finanzierungszertifikat~~
+
+**Aufgenommen:** 15.08.2026 · **Erledigt: 16.08.2026** (Commit `f3a1c36`)
 
 Ein Finanzierungszertifikat nach dem Vorbild in FinLink — das Papier, das ein
 Kaufinteressent dem Makler vorlegt, um zu zeigen, dass die Finanzierung steht.

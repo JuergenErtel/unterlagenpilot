@@ -185,7 +185,17 @@ export async function reclassifyDocument(
 
   await prisma.document.update({
     where: { id: documentId },
-    data: { documentType: newType, generatedName, classificationStatus: "fertig" },
+    // `readable: true` gehoert dazu: Ein Dokument ohne maschinell lesbaren Text
+    // wird als nicht lesbar gefuehrt und erfuellt keine Checklistenposition.
+    // Setzt ein Mensch den Typ von Hand, hat er die Datei angesehen und steht
+    // dafuer ein – dann soll sie wieder zaehlen. Sonst bliebe ein korrekt
+    // eingeordneter Bild-Scan fuer immer aus der Liste heraus.
+    data: {
+      documentType: newType,
+      generatedName,
+      classificationStatus: "fertig",
+      readable: true,
+    },
   });
 
   await audit({

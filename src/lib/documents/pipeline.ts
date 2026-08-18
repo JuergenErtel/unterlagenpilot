@@ -9,6 +9,7 @@ import { generateFileName } from "@/lib/documents/filename";
 import { validateUpload } from "@/lib/security/file-validation";
 import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
+import { hatTextgrundlage } from "./textsubstanz";
 import { matchApplicant } from "@/lib/documents/applicant-match";
 import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
 import { erkenneAufteilung } from "@/lib/aufteilung/service";
@@ -323,11 +324,25 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
       originalName,
       buffer,
     });
-    cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
-    ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+    // Ohne Textgrundlage NICHT einstufen. Das Klassifikationsschema verlangt
+    // einen Typ, also erfindet das Modell einen und zeigt sich seiner sicher –
+    // genau so wurde aus einem Ausweis-Scan ein "Grundbuchauszug" mit
+    // Konfidenz 0,98, und die Checkliste meldete Gruen fuer ein Dokument, das
+    // im Fall gar nicht lag. Lieber kein Typ als ein erfundener: Ein fehlendes
+    // Dokument sieht man, ein falsches Gruen nicht.
+    if (hatTextgrundlage(ocrResult.fullText)) {
+      cls = await ai.classifyDocument(ocrResult.fullText, { pageCount: ocrResult.pageCount });
+      ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+    }
   } catch {
     // KI/OCR nicht verfügbar – ohne Klartext loggen.
   }
+
+  // Eine Datei ohne erkannten Text ist maschinell nicht lesbar. Das Merkmal
+  // haelt sie aus der Erfuellung von Checklistenpositionen heraus
+  // (`evaluateMatches` zaehlt nur `readable !== false`) – auch dann, wenn ihr
+  // spaeter doch ein Typ zugewiesen wuerde.
+  const lesbar = ocrResult ? hatTextgrundlage(ocrResult.fullText) : null;
 
   // Antragsteller automatisch zuordnen, sofern der Vermittler nicht selbst
   // gewählt hat. Bei genau einem Antragsteller ist die Zuordnung trivial, bei
@@ -368,10 +383,13 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         detectedApplicant: cls?.detectedApplicant ?? null,
         ...(autoApplicantId ? { applicantId: autoApplicantId, applicantSource: "auto" } : {}),
         ocrStatus: ocrResult ? "fertig" : "fehler",
-        classificationStatus: cls ? "fertig" : "fehler",
-        extractionStatus: ext ? "fertig" : "fehler",
+        // Ohne Textgrundlage ist die Einstufung nicht gescheitert, sondern
+        // bewusst unterblieben: "fertig" ohne Typ. "fehler" wuerde zum
+        // Wiederholen einladen, und ein zweiter Lauf faende genauso wenig Text.
+        classificationStatus: cls || lesbar === false ? "fertig" : "fehler",
+        extractionStatus: ext || lesbar === false ? "fertig" : "fehler",
         confidence: cls?.confidence,
-        readable: ocrResult ? true : null,
+        readable: lesbar,
         period: cls?.period ?? undefined,
         pages: ocrResult
           ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) }

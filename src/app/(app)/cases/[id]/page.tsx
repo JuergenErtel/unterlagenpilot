@@ -578,7 +578,17 @@ export default async function CaseCockpitPage({
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
                             <TableCell>
                               {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
-                              {d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
+                              {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
+                                  Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
+                                  bekommt bewusst KEINEN Freigeben-Knopf – freigegeben wurde
+                                  genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
+                                  die Checkliste meldete Gruen fuer ein Dokument, das im Fall
+                                  nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
+                              {d.readable === false ? (
+                                <Badge variant="warning">
+                                  Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
+                                </Badge>
+                              ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
                                 <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
                               ) : d.reviewStatus === "offen" ? (
                                 // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher

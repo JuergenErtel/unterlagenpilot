@@ -245,11 +245,27 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                     Bildschirmhoehen unter dem Kartenkopf und war schlicht nicht
                     auffindbar. Hier steht er immer im Blick, bei jeder Breite.
                   */}
-                  <form action={acceptDocument.bind(null, d.id)}>
-                    <SubmitButton size="sm" pendingLabel="Wird übernommen …">
-                      Freigeben
-                    </SubmitButton>
-                  </form>
+                  {/*
+                    Kein Freigeben ohne Textgrundlage: Aus einer Datei, aus der
+                    die OCR nichts als Bildplatzhalter geholt hat, erfindet das
+                    Modell einen Typ und ist sich sicher. Genau so wurde aus
+                    einem Ausweis-Scan ein "Grundbuchauszug" mit Konfidenz 0,98,
+                    freigegeben, und die Checkliste meldete Gruen fuer ein
+                    Dokument, das im Fall nicht lag. Die Vorschau links und die
+                    Typ-Auswahl im Kopf sind der Weg heraus – wer den Typ von
+                    Hand setzt, gibt das Dokument damit wieder frei.
+                  */}
+                  {d.readable === false ? (
+                    <Badge variant="warning">
+                      Kein lesbarer Text – bitte oben den Typ von Hand setzen
+                    </Badge>
+                  ) : (
+                    <form action={acceptDocument.bind(null, d.id)}>
+                      <SubmitButton size="sm" pendingLabel="Wird übernommen …">
+                        Freigeben
+                      </SubmitButton>
+                    </form>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="grid gap-0 p-0 lg:grid-cols-[1fr_1.3fr_1fr]">
