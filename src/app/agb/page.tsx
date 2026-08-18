@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPageShell } from "@/components/legal/legal-page-shell";
+import { ANBIETER, ANBIETER_ZEILE } from "@/lib/legal/anbieter";
 
 export const dynamic = "force-static";
 
@@ -151,7 +152,7 @@ export default function AgbPage() {
       </p>
       <p>
         Die Kündigung ist formlos möglich, etwa per E-Mail an{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>. Den Eingang
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a>. Den Eingang
         bestätigen wir unverzüglich in Textform. Das Recht zur außerordentlichen Kündigung
         aus wichtigem Grund bleibt beiden Seiten unberührt.
       </p>
@@ -216,8 +217,9 @@ export default function AgbPage() {
       </p>
 
       <p className="text-xs">
-        Coding Brothers UG (haftungsbeschränkt), Ottstr. 9, 76744 Wörth,{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>
+        {ANBIETER_ZEILE},{" "}
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a> — vollständige
+        Anbieterangaben im <a href="/impressum">Impressum</a>.
       </p>
     </LegalPageShell>
   );

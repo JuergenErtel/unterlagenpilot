@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPageShell } from "@/components/legal/legal-page-shell";
+import { ANBIETER } from "@/lib/legal/anbieter";
 
 export const dynamic = "force-static";
 
@@ -17,10 +18,9 @@ export const metadata: Metadata = {
  * hat BaufiDesk eine oeffentlich zugaengliche, geschaeftsmaessig genutzte
  * Seite – und damit die Impressumspflicht.
  *
- * Alle Angaben sind am 18.08.2026 aus dem Impressum von codingbrothers.de
- * uebernommen – derselbe Betreiber, dieselbe Gesellschaft. Nicht aus AGB und
- * Datenschutzerklaerung: Die nennen den Ort verkuerzt als "76744 Woerth",
- * amtlich und im Register steht "Woerth am Rhein".
+ * Die Angaben stehen in `src/lib/legal/anbieter.ts` – EINE Quelle, aus der
+ * auch AGB und Datenschutzerklaerung lesen. Sie an drei Stellen
+ * auszuschreiben hat schon einmal zu einer Abweichung gefuehrt.
  *
  * Ein Unterschied ist Absicht: Dort steht "§ 5 TMG", hier "§ 5 DDG". Das TMG
  * ist im Mai 2024 im Digitale-Dienste-Gesetz aufgegangen; die Pflicht ist
@@ -36,17 +36,6 @@ export const metadata: Metadata = {
  *
  * Vor der Veroeffentlichung anwaltlich pruefen lassen.
  */
-const ANBIETER = {
-  firma: "Coding Brothers UG (haftungsbeschränkt)",
-  strasse: "Ottstr. 9",
-  ort: "76744 Wörth am Rhein",
-  email: "info@codingbrothers.de",
-  register: "Amtsgericht Landau, HRB 34581",
-  /** Beide Geschäftsführer, wie im Register eingetragen. */
-  vertreten: "Carsten Hater und Jürgen Ertel",
-  ustId: "DE 463262784",
-  telefon: "07271 / 5007547",
-};
 
 export default function ImpressumPage() {
   return (
@@ -59,7 +48,7 @@ export default function ImpressumPage() {
         <br />
         {ANBIETER.ort}
         <br />
-        Deutschland
+        {ANBIETER.land}
       </p>
 
       {ANBIETER.vertreten && (

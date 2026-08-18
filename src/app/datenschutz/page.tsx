@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPageShell } from "@/components/legal/legal-page-shell";
+import { ANBIETER, ANBIETER_ZEILE } from "@/lib/legal/anbieter";
 
 export const dynamic = "force-static";
 
@@ -61,8 +62,9 @@ export default function DatenschutzPage() {
 
       <h2>2. Verantwortlicher</h2>
       <p>
-        Coding Brothers UG (haftungsbeschränkt), Ottstr. 9, 76744 Wörth,{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>
+        {ANBIETER_ZEILE},{" "}
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a> — vollständige
+        Anbieterangaben im <a href="/impressum">Impressum</a>.
       </p>
 
       <h2>3. Registrierung und Nutzerkonto</h2>
@@ -265,7 +267,7 @@ export default function DatenschutzPage() {
         17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und
         Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21
         DSGVO). Wenden Sie sich dafür an{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>.
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a>.
       </p>
       <p>
         Betrifft Ihre Anfrage Unterlagen, die eine Vermittlerin oder ein Vermittler

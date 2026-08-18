@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPageShell } from "@/components/legal/legal-page-shell";
+import { ANBIETER, ANBIETER_ZEILE } from "@/lib/legal/anbieter";
 
 export const dynamic = "force-static";
 
@@ -39,7 +40,7 @@ export default function AvvPage() {
         Dieser Vertrag ist <strong>Voraussetzung</strong> für die Nutzung von BaufiDesk mit
         echten Kundendaten. Er wird derzeit außerhalb der Anwendung in Textform
         geschlossen; wenden Sie sich dafür an{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>.
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a>.
       </div>
 
       <h2>Zwischen den Parteien</h2>
@@ -49,9 +50,9 @@ export default function AvvPage() {
         den bei Vertragsschluss angegebenen Daten.
       </p>
       <p>
-        <strong>Auftragsverarbeiter</strong> (im Folgenden „Auftragnehmer&ldquo;): Coding
-        Brothers UG (haftungsbeschränkt), Ottstr. 9, 76744 Wörth,{" "}
-        <a href="mailto:info@codingbrothers.de">info@codingbrothers.de</a>.
+        <strong>Auftragsverarbeiter</strong> (im Folgenden „Auftragnehmer&ldquo;):{" "}
+        {ANBIETER_ZEILE},{" "}
+        <a href={`mailto:${ANBIETER.email}`}>{ANBIETER.email}</a>.
       </p>
 
       <h2>§ 1 Gegenstand und Dauer</h2>

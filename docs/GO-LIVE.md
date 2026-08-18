@@ -163,10 +163,19 @@ den Betrieb, alle sind vor dem ersten fremden Vermittler zu erledigen:
   Carsten Hater und Jürgen Ertel, Amtsgericht Landau HRB 34581, USt-IdNr.
   DE 463262784, Telefon und Anschrift. **Ein Unterschied ist Absicht:** Dort
   steht „§ 5 TMG", hier „§ 5 DDG" — das TMG ist im Mai 2024 im
-  Digitale-Dienste-Gesetz aufgegangen. **Und einer ist offen:** AGB und
-  Datenschutzerklärung nennen den Ort verkürzt als „76744 Wörth", amtlich und
-  im Register steht „Wörth am Rhein". Falsch ist die Kurzform nicht, einheitlich
-  wäre besser.
+  Digitale-Dienste-Gesetz aufgegangen.
+- **Anbieterangaben haben jetzt EINE Quelle** (`src/lib/legal/anbieter.ts`).
+  Anschrift und Kontakt standen in vier Rechtsseiten ausgeschrieben, und genau
+  daraus war eine Abweichung entstanden: AGB, Datenschutzerklärung und AVV
+  nannten den Ort verkürzt als „76744 Wörth", im Register steht „Wörth am
+  Rhein". Alle vier lesen seither aus dem Modul; AGB und Datenschutzerklärung
+  verweisen für die vollen Angaben aufs Impressum, statt sie zu wiederholen.
+  Ein Test (`tests/anbieterangaben.test.ts`) verbietet das erneute
+  Ausschreiben. **`AGB_VERSION` wurde bewusst NICHT hochgezählt:** Die
+  Vertragsbedingungen sind unverändert, es ist dieselbe Gesellschaft mit
+  derselben Registernummer — nur der Ortsname steht vollständig da. Wer das
+  anders sieht, zählt `AGB_VERSION` in `src/lib/auth/signup.ts` hoch und passt
+  die „Stand"-Zeile der AGB an.
 
 - **Der `selfEmployment`-Schreibzweig des gemeinsamen Schreibkerns ist von
   keinem Test berührt**, ebenso die Update-Zweige von `income` und
