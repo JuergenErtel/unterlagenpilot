@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
+import { antwortAdresse } from "@/lib/email/antwortadresse";
 import { getBrokerInfo } from "@/lib/organization/broker-info";
 import {
   buildSignature,
@@ -73,6 +74,9 @@ export async function versendeEinladung(
       // Im Posteingang steht der Vermittler, nicht das Werkzeug: Der
       // Interessent hat mit ihm gesprochen, von BaufiDesk hat er nie gehoert.
       absenderName: ctx.organizationName,
+      // Zum Formular gehoert noch kein Fall und damit kein Berater – die
+      // Antwort geht an den, der eingeladen hat.
+      replyTo: await antwortAdresse(ctx.userId),
     });
   } catch (e) {
     return { error: `Die Mail konnte nicht versendet werden: ${(e as Error).message}` };

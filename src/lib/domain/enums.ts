@@ -600,6 +600,11 @@ export const AUDIT_ACTIONS = [
   "finding.accepted",
   "finding.dismissed",
   "anfrage.eingeladen",
+  // Der oeffentliche Eingang einer Organisation: eingerichtet, umbenannt,
+  // an- oder abgeschaltet. Wer den Slug wechselt, macht jeden Link tot, der
+  // schon in einer Mailsignatur oder auf einer Visitenkarte steht - das darf
+  // nicht spurlos geschehen.
+  "anfrage.formular_geaendert",
   // Stammdaten des Hauses: Anschrift, rechtlicher Hinweis, Unterschriftsbild.
   // Gehoert ins Log, weil diese Angaben auf jedem erzeugten Papier stehen -
   // wer sie aendert, aendert rueckwirkend nichts, aber alles Kuenftige.

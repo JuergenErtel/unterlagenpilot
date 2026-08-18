@@ -35,6 +35,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       },
       generatedMessages: { orderBy: { createdAt: "asc" } },
       uploadLinks: { orderBy: { createdAt: "asc" } },
+      // Ohne die Boegen fehlen der Auskunft genau die Antworten, die kein
+      // Zielfeld im Fall haben – und der Einwilligungsnachweis.
+      selfDisclosures: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -122,6 +125,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     customerForm: caseRow.customerForm
       ? { data: caseRow.customerForm.data, submitted: caseRow.customerForm.submitted, createdAt: caseRow.customerForm.createdAt }
       : null,
+    selfDisclosures: caseRow.selfDisclosures.map((sd) => ({
+      answers: sd.answers,
+      submittedAt: sd.submittedAt,
+      takenOverAt: sd.takenOverAt,
+      einwilligungAm: sd.einwilligungAm,
+      einwilligungFassung: sd.einwilligungFassung,
+      createdAt: sd.createdAt,
+    })),
     auditLog: auditRows.map((a) => ({
       action: a.action,
       entityType: a.entityType,

@@ -70,13 +70,25 @@ export async function formularEinrichten(formData: FormData): Promise<{ error?: 
       }
       throw e;
     }
+    // Der alte Slug MUSS mit ins Protokoll: Nach der Aenderung antwortet er
+    // mit 404, und ohne Eintrag liesse sich hinterher nicht mehr feststellen,
+    // welcher Link in Mailsignatur und Visitenkarte tot ist.
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "anfrage.formular_geaendert",
+      entityType: "leadformular",
+      entityId: vorhanden.id,
+      metadata: { von: vorhanden.slug, nach: slug },
+    });
     revalidatePath("/settings");
     revalidatePath("/cases/new");
     return {};
   }
 
+  let angelegt;
   try {
-    await prisma.leadformular.create({
+    angelegt = await prisma.leadformular.create({
       data: { organizationId: ctx.organizationId, brokerId: ctx.userId, slug, aktiv: true },
     });
   } catch (e) {
@@ -85,6 +97,18 @@ export async function formularEinrichten(formData: FormData): Promise<{ error?: 
     }
     throw e;
   }
+  // Auch das Einrichten gehoert ins Protokoll: Ab diesem Moment kann jeder
+  // Fremde ohne Anmeldung Geburtsdatum, Einkommen und Verpflichtungen
+  // eintragen. Der Zeitpunkt, ab dem das moeglich war, ist eine Tatsache, die
+  // man spaeter braucht.
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "anfrage.formular_geaendert",
+    entityType: "leadformular",
+    entityId: angelegt.id,
+    metadata: { eingerichtet: slug },
+  });
 
   revalidatePath("/settings");
   revalidatePath("/cases/new");
@@ -104,7 +128,9 @@ export async function formularUmschalten(): Promise<void> {
   await audit({
     organizationId: ctx.organizationId,
     userId: ctx.userId,
-    action: "case.updated",
+    // War frueher "case.updated" – eine Aktion, die mit einem Fall nichts zu
+    // tun hat und den Eintrag in jeder Auswertung am falschen Ort einsortierte.
+    action: "anfrage.formular_geaendert",
     entityType: "leadformular",
     entityId: formular.id,
     metadata: { aktiv: !formular.aktiv },

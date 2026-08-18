@@ -24,6 +24,9 @@ vi.mock("@/lib/db", () => ({
       update: (...a: unknown[]) => messageUpdate(...a),
       updateMany: (...a: unknown[]) => messageUpdateMany(...a),
     },
+    // Speist das Reply-To (siehe email/antwortadresse.ts): Ohne Antwortadresse
+    // liefe die Antwort des Kunden auf EMAIL_FROM, wo niemand hineinschaut.
+    user: { findUnique: async () => ({ email: "berater@example.de", active: true }) },
   },
 }));
 

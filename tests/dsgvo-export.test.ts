@@ -26,6 +26,16 @@ const input: DsgvoInput = {
   messages: [{ channel: "email", templateType: "erstnachforderung", subject: "Betreff", body: "Text", sent: true, createdAt: "2026-06-03" }],
   uploadLinks: [{ createdAt: "2026-06-01", expiresAt: "2026-06-15", active: true, usedCount: 1, token: "GEHEIM-HASH" } as never],
   customerForm: { data: { beruf: "Ingenieur" }, submitted: true, createdAt: "2026-06-02" },
+  selfDisclosures: [
+    {
+      answers: { "vorhaben.art": "kauf_bestand", "haushalt.maklergebuehr": "3,57 %" },
+      submittedAt: "2026-06-04",
+      takenOverAt: null,
+      einwilligungAm: "2026-06-04T08:12:00.000Z",
+      einwilligungFassung: "2026-08-15",
+      createdAt: "2026-06-03",
+    },
+  ],
   auditLog: [{ action: "document.uploaded", entityType: "document", createdAt: "2026-06-02", metadata: { source: "kunde" } }],
 };
 
@@ -46,6 +56,37 @@ describe("buildDsgvoExport", () => {
     expect(out.nachrichten[0].subject).toBe("Betreff");
     expect(out.kundenformular.data).toEqual({ beruf: "Ingenieur" });
     expect(out.auskunftProtokoll[0].action).toBe("document.uploaded");
+  });
+
+  it("enthält die Selbstauskunft samt Einwilligungsnachweis", () => {
+    // Fuer einen aus dem Anfrageformular geborenen Fall stehen hier die
+    // Antworten, die KEIN Zielfeld im Fall haben – sonst tauchen sie in der
+    // Auskunft nirgends auf.
+    expect(out.selbstauskunft[0].antworten["haushalt.maklergebuehr"]).toBe("3,57 %");
+    expect(out.selbstauskunft[0].abgesendetAm).toBe("2026-06-04");
+    // Eine Einwilligung ohne Zeitpunkt UND Fassung ist nicht nachweisbar.
+    expect(out.selbstauskunft[0].einwilligung).toEqual({
+      erteiltAm: "2026-06-04T08:12:00.000Z",
+      fassung: "2026-08-15",
+    });
+  });
+
+  it("meldet eine fehlende Einwilligung als solche, nicht als leeres Datum", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ohne: any = buildDsgvoExport({
+      ...input,
+      selfDisclosures: [
+        {
+          answers: {},
+          submittedAt: null,
+          takenOverAt: null,
+          einwilligungAm: null,
+          einwilligungFassung: null,
+          createdAt: "2026-06-03",
+        },
+      ],
+    });
+    expect(ohne.selbstauskunft[0].einwilligung).toBeNull();
   });
 
   it("schließt Secrets (Upload-Link-Token) defensiv aus", () => {

@@ -146,7 +146,7 @@ describe("formularUmschalten", () => {
       expect.objectContaining({
         organizationId: "org-A",
         userId: "user-1",
-        action: "case.updated",
+        action: "anfrage.formular_geaendert",
         entityType: "leadformular",
         entityId: "form-1",
         metadata: { aktiv: false },

@@ -17,10 +17,18 @@ export function LegalPageShell({
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div className="mb-10 flex items-center justify-between gap-4">
-        <Link href="/" aria-label="Zur Startseite">
-          <Logo className="h-8 w-auto" />
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted-foreground">
+        {/*
+          Das Logo verlinkt bewusst NICHT auf "/": Die Startseite liegt hinter
+          dem Site-Gate, und wer die Datenschutzerklaerung vom oeffentlichen
+          Anfrageformular aus liest, landete beim Klick in einer Passwortabfrage
+          – ausgerechnet auf dem Weg, auf dem er seine Einwilligung nachlesen
+          will. Eine Rechtsseite ist ein Dokument, kein Eingang zur Anwendung.
+        */}
+        <Logo className="h-8 w-auto" />
+        <nav className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+          <Link href="/impressum" className="underline-offset-4 hover:underline">
+            Impressum
+          </Link>
           <Link href="/agb" className="underline-offset-4 hover:underline">
             AGB
           </Link>

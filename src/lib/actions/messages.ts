@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
+import { antwortAdresse } from "@/lib/email/antwortadresse";
 
 export interface SendMessageResult {
   ok: boolean;
@@ -33,6 +34,9 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
       case: {
         select: {
           organizationId: true,
+          // Ziel des Reply-To: Der Kunde kennt seinen Berater, nicht den, der
+          // gerade auf "Senden" gedrueckt hat.
+          brokerId: true,
           applicants: { orderBy: { position: "asc" }, select: { position: true, email: true } },
         },
       },
@@ -80,6 +84,8 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
       // Im Posteingang steht der Vermittler, nicht das Werkzeug: Der Kunde
       // kennt seinen Berater, von BaufiDesk hat er nie gehoert.
       absenderName: ctx.organizationName,
+      // ... und wenn er antwortet, muss die Antwort auch dort ankommen.
+      replyTo: await antwortAdresse(ctx.userId, message!.case.brokerId),
     });
   } catch (e) {
     console.error(`[messages] E-Mail-Versand für ${messageId} fehlgeschlagen:`, e);

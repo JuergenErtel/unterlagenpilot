@@ -12,7 +12,7 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  *  - `/upload/*`      Kunden-Upload-Links (Externe kennen das Gate-Passwort nicht)
  *  - `/selbstauskunft/*` Kunden-Selbstauskunft (gleicher Grund)
  *  - `/anfrage/*`     Oeffentliches Anfrageformular (Externe kennen das Gate-Passwort nicht)
- *  - `/datenschutz`, `/agb`, `/avv` Oeffentliche Rechtsseiten. Die oeffentliche
+ *  - `/datenschutz`, `/agb`, `/avv`, `/impressum` Oeffentliche Rechtsseiten. Die oeffentliche
  *    Kundenstrecke (`/anfrage`, `/selbstauskunft`) verlinkt neben dem
  *    Einwilligungs-Haekchen auf `/datenschutz` – landete der Klick hinter dem
  *    Gate, koennte die betroffene Person den Text nie lesen und die
@@ -32,6 +32,9 @@ const PUBLIC_PREFIXES = [
   "/datenschutz",
   "/agb",
   "/avv",
+  // Impressumspflicht laeuft ins Leere, wenn die Seite hinter einem Passwort
+  // liegt: Sie muss "leicht erkennbar, unmittelbar erreichbar" sein (§ 5 DDG).
+  "/impressum",
   "/api/cron",
   "/monitoring",
   "/gate",

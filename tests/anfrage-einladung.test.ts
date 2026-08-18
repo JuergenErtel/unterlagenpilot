@@ -21,7 +21,15 @@ vi.mock("@/lib/email/resend", () => ({
 }));
 
 vi.mock("@/lib/organization/broker-info", () => ({ getBrokerInfo: async () => ({}) }));
-vi.mock("@/lib/db", () => ({ prisma: { messageTemplate: { findFirst: async () => null } } }));
+// `user.findUnique` speist das Reply-To (siehe email/antwortadresse.ts): Ohne
+// Antwortadresse liefe die Antwort des Interessenten auf EMAIL_FROM, wo
+// niemand hineinschaut.
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    messageTemplate: { findFirst: async () => null },
+    user: { findUnique: async () => ({ email: "berater@example.de", active: true }) },
+  },
+}));
 
 import { versendeEinladung } from "@/lib/actions/anfrage-einladung";
 

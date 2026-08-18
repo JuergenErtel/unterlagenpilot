@@ -1,5 +1,6 @@
 import { sichtbareSchritte, personenSchluessel, offeneFelder } from "@/lib/self-disclosure/navigation";
 import type { Antworten, Feld, SichtbarerSchritt, Ziel } from "@/lib/self-disclosure/types";
+import { KATALOG_ZU_FINANZIERUNGSART } from "@/lib/self-disclosure/finanzierungsart";
 
 /**
  * Vergleicht die Antworten des Kunden mit dem aktuellen Fallstand und macht
@@ -192,7 +193,15 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
     const mehrfach = zielPersonen.length > 1;
     for (const zielPerson of zielPersonen) {
       const fallwert = fallwertLesen(stand, ziel, zielPerson);
-      if (fallwert === kundenwert) continue;
+      // Verglichen wird, was BEIM UEBERNEHMEN in der Spalte staende – nicht
+      // der Katalogwert selbst. Sonst stand "kauf" (Fall) gegen "kauf_bestand"
+      // (Katalog), und der Vermittler bekam dauerhaft eine Abweichung
+      // angezeigt, deren Uebernahme exakt nichts geaendert haette.
+      const alsSpaltenwert =
+        ziel.feld === "financingType"
+          ? (KATALOG_ZU_FINANZIERUNGSART[kundenwert] ?? kundenwert)
+          : kundenwert;
+      if (fallwert === alsSpaltenwert) continue;
       vorschlaege.push({
         schluessel: mehrfach ? `${k}#p${zielPerson}` : k,
         label: mehrfach ? `${feld.label} (Antragsteller ${zielPerson})` : label,

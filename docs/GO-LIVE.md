@@ -30,7 +30,8 @@ zeigen. Steht dort weiter „Mock (Demo)", fehlt der Schlüssel.
 
 Das Site-Gate (`/gate`) schützt die gesamte Anwendung, ausgenommen Kunden-Upload,
 Kunden-Selbstauskunft, das öffentliche Anfrageformular (`/anfrage`), die
-öffentlichen Rechtsseiten (`/datenschutz`, `/agb`, `/avv`), Cron und
+öffentlichen Rechtsseiten (`/datenschutz`, `/agb`, `/avv`, `/impressum`),
+Cron und
 Sentry-Tunnel. Es soll laut Jürgen bis zur Veröffentlichung bleiben —
 danach entfernen, sonst kommt kein angemeldeter Nutzer hinein.
 
@@ -121,21 +122,49 @@ den Betrieb, alle sind vor dem ersten fremden Vermittler zu erledigen:
   Live-Schaltung: Tarif erweitern oder einen Platz freimachen, dann
   `baufidesk.de` verifizieren und `EMAIL_FROM` darauf setzen. Der Anzeigename
   kommt seither aus der Organisation, die Adresse aus `EMAIL_FROM`.
-- **Kundenmails haben kein Reply-To.** Antwortet ein Interessent auf die
-  Einladung, läuft die Antwort auf die Absenderadresse statt zum Vermittler.
-- **Eine Slug-Änderung schreibt keinen Protokolleintrag** — der öffentliche
-  Eingang einer Organisation wechselt ohne Spur.
-- **`LegalPageShell` verlinkt das Logo auf `/`**, das hinter dem Gate liegt:
-  Wer die Datenschutzerklärung vom Formular aus liest und aufs Logo klickt,
-  landet in der Passwortabfrage.
-- **`fallwertLesen` (`takeover.ts`) vergleicht den rohen Enum-Wert des Falls
-  mit dem Katalogwert des Kunden** — für die Finanzierungsart sieht der
-  Vermittler dauerhaft eine Schein-Abweichung („kauf → kauf_bestand").
-- **Der Auskunftsexport (`/api/cases/[id]/dsgvo`) kennt `SelfDisclosure`
-  nicht.** Für einen aus dem Formular geborenen Fall fehlen damit die
-  Antworten ohne Zielfeld und der Einwilligungsnachweis.
-- **Kein Impressum, keine `robots.txt`.** Mit dem Formular gibt es erstmals
-  eine öffentliche, gewerblich genutzte Seite; § 5 DDG wird damit fällig.
+- ~~**Kundenmails haben kein Reply-To.**~~ **Erledigt 18.08.2026.** Beide
+  Kundenmails (Nachricht am Fall, Einladung zum Anfrageformular) tragen jetzt
+  ein Reply-To. Es zeigt auf den **Berater des Falls**, nicht auf den Absender:
+  Klickt eine Sachbearbeiterin die Nachforderung ab, kennt der Kunde trotzdem
+  nur seinen Berater. Ohne Berater am Fall fällt es auf den Absender zurück;
+  ist keine brauchbare Adresse zu finden, bleibt der Kopf weg — ein ungültiges
+  Reply-To lässt manche Empfänger die ganze Mail verwerfen
+  (`src/lib/email/antwortadresse.ts`).
+- ~~**Eine Slug-Änderung schreibt keinen Protokolleintrag.**~~ **Erledigt
+  18.08.2026.** Einrichten und Umbenennen schreiben jetzt
+  `anfrage.formular_geaendert` ins Prüfprotokoll, die Umbenennung **mit dem
+  alten Slug** — nach der Änderung antwortet er mit 404, und ohne Eintrag
+  ließe sich nicht mehr feststellen, welcher Link in Mailsignatur und
+  Visitenkarte tot ist. Das An-/Abschalten lief bisher unter `case.updated`
+  und ist mit umgezogen.
+- ~~**`LegalPageShell` verlinkt das Logo auf `/`.**~~ **Erledigt 18.08.2026.**
+  Das Logo ist kein Link mehr: Eine Rechtsseite ist ein Dokument, kein Eingang
+  zur Anwendung. Dafür steht das Impressum jetzt in der Kopfzeilen-Navigation.
+- ~~**`fallwertLesen` vergleicht den rohen Enum-Wert mit dem Katalogwert.**~~
+  **Erledigt 18.08.2026.** Verglichen wird jetzt, was beim Übernehmen in der
+  Spalte stände; die Übersetzung liegt seither einmal in
+  `src/lib/self-disclosure/finanzierungsart.ts` und wird von Schreib- UND
+  Vergleichsweg gelesen. Vorher war die Schein-Abweichung („kauf → kauf_bestand").
+- ~~**Der Auskunftsexport kennt `SelfDisclosure` nicht.**~~ **Erledigt
+  18.08.2026.** Die Bögen stehen jetzt unter `selbstauskunft` im Export, samt
+  Einwilligung (Zeitpunkt **und** Fassung — ohne beides ist sie nicht
+  nachweisbar). **Noch zu entscheiden:** ob auch die Vermerke (`CaseNote`) in
+  die Auskunft gehören. Es sind gespeicherte Angaben über die Person, zugleich
+  aber interne Gesprächsnotizen — eine rechtliche Abwägung, keine technische.
+- ~~**Keine `robots.txt`.**~~ **Erledigt 18.08.2026** (`src/app/robots.ts`):
+  Gesperrt sind `/upload/`, `/selbstauskunft/` und `/anfrage/` — die ersten
+  beiden tragen ihr Geheimnis IM PFAD, ein indizierter Link wäre der
+  öffentlich auffindbare Zugang zu den Unterlagen eines fremden Menschen. Dazu
+  `/api/`, `/gate` und `/monitoring`.
+- **Impressum angelegt, aber NOCH UNVOLLSTÄNDIG** (`/impressum`, außerhalb des
+  Gates — eine Impressumspflicht läuft ins Leere, wenn die Seite hinter einem
+  Passwort liegt). Firma, Anschrift und Kontakt stammen aus AGB und
+  Datenschutzerklärung. **Jürgen muss drei Angaben nachtragen** (Konstante
+  `ANBIETER` in `src/app/impressum/page.tsx`): Registergericht + HRB-Nummer,
+  vertretungsberechtigte Geschäftsführung und — falls vorhanden — die
+  USt-IdNr. nach § 27a UStG. Fehlende Werte lässt die Seite weg statt einen
+  Platzhalter zu veröffentlichen: Eine unvollständige Angabe ist ein Mangel,
+  eine erfundene wäre eine falsche Angabe.
 - **Der `selfEmployment`-Schreibzweig des gemeinsamen Schreibkerns ist von
   keinem Test berührt**, ebenso die Update-Zweige von `income` und
   `employment`.

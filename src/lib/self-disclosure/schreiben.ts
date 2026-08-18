@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { Vorschlag } from "@/lib/self-disclosure/takeover";
 import { wandleWert, UNLESBARER_WERT } from "@/lib/actions/zielwert";
+import { KATALOG_ZU_FINANZIERUNGSART } from "@/lib/self-disclosure/finanzierungsart";
 
 /**
  * Die neun Auswahlmöglichkeiten des Bogens auf die sieben Werte von
@@ -19,22 +20,6 @@ const BESCHAEFTIGUNG: Record<string, string> = {
   sonstiges: "sonstiges",
 };
 
-/**
- * Die sechs Auswahlmöglichkeiten des Bogens auf die fünf Werte von
- * `FinancingType` abbilden, die der Katalog tatsächlich erzeugen kann. Das
- * Schema kennt keinen eigenen Wert für "eigenes Bauvorhaben" – er landet wie
- * "Kauf Neubau" auf "neubau" (siehe auch die umgekehrte Abbildung in
- * `erstgespraech/maske.ts#ART_ZU_KATALOG`, die genau diese beiden Katalogwerte
- * ebenfalls zusammenfasst). "umschuldung" hat keine Entsprechung im Katalog.
- */
-const FINANZIERUNGSART: Record<string, string> = {
-  kauf_neubau: "neubau",
-  kauf_bestand: "kauf",
-  eigenes_bauvorhaben: "neubau",
-  modernisierung: "modernisierung",
-  anschlussfinanzierung: "anschlussfinanzierung",
-  kapitalbeschaffung: "kapitalbeschaffung",
-};
 
 /**
  * Wandelt den Textwert in den Typ, den das Zielfeld erwartet. Datum, Zahl und
@@ -53,7 +38,7 @@ const FINANZIERUNGSART: Record<string, string> = {
  */
 function konvertiere(feld: string, wert: string): unknown {
   if (feld === "beschaeftigungsart") return BESCHAEFTIGUNG[wert] ?? "sonstiges";
-  if (feld === "financingType") return FINANZIERUNGSART[wert] ?? null;
+  if (feld === "financingType") return KATALOG_ZU_FINANZIERUNGSART[wert] ?? null;
   const konvertiert = wandleWert(feld, wert, "maschinell");
   // Sollte laut obigem Vertrag nie eintreten (planUebernahme verwirft eine
   // Luecke des Kunden schon vor dem Vorschlag) – falls doch, lieber wie

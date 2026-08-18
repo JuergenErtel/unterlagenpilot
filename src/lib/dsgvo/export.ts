@@ -23,6 +23,24 @@ export interface DsgvoInput {
   messages: Array<Record<string, unknown>>;
   uploadLinks: Array<Record<string, unknown>>;
   customerForm?: { data: unknown; submitted: boolean; createdAt: unknown } | null;
+  /**
+   * Selbstauskunft-Boegen des Falls.
+   *
+   * Fehlten bis zum 18.08.2026 vollstaendig. Fuer einen Fall, der aus dem
+   * oeffentlichen Anfrageformular entstanden ist, ist das die Luecke mit den
+   * Folgen: Dort stehen die Antworten, die KEIN Zielfeld im Fall haben (sie
+   * tauchen sonst nirgends auf) – und der Einwilligungsnachweis. Eine
+   * Einwilligung ohne Zeitpunkt und Fassung ist nicht nachweisbar, und
+   * ausgerechnet die Auskunft nach Art. 15 verschwieg beides.
+   */
+  selfDisclosures: Array<{
+    answers: unknown;
+    submittedAt: unknown;
+    takenOverAt: unknown;
+    einwilligungAm: unknown;
+    einwilligungFassung: unknown;
+    createdAt: unknown;
+  }>;
   auditLog: Array<{ action: string; entityType: string; createdAt: unknown; metadata: unknown }>;
 }
 
@@ -63,6 +81,16 @@ export function buildDsgvoExport(input: DsgvoInput) {
       maxUploads: l.maxUploads ?? null,
     })),
     kundenformular: input.customerForm ?? null,
+    selbstauskunft: input.selfDisclosures.map((sd) => ({
+      antworten: sd.answers,
+      abgesendetAm: sd.submittedAt,
+      uebernommenAm: sd.takenOverAt,
+      einwilligung:
+        sd.einwilligungAm == null
+          ? null
+          : { erteiltAm: sd.einwilligungAm, fassung: sd.einwilligungFassung },
+      angelegtAm: sd.createdAt,
+    })),
     auskunftProtokoll: input.auditLog,
   };
 }

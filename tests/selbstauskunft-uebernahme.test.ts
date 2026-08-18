@@ -168,3 +168,41 @@ describe("planUebernahme bei zwei Antworten auf dasselbe Zielfeld", () => {
     expect(plan.vorschlaege.some((v) => v.ziel.feld === "darlehenswunsch")).toBe(true);
   });
 });
+
+/**
+ * Die Finanzierungsart trug bis zum 18.08.2026 eine Schein-Abweichung: Der
+ * Plan verglich den rohen Enum-Wert des Falls ("kauf") mit dem Katalogwert des
+ * Kunden ("kauf_bestand"). Der Vermittler bekam dauerhaft eine Abweichung
+ * angezeigt, deren Übernahme exakt nichts geändert hätte.
+ */
+describe("planUebernahme: Finanzierungsart", () => {
+  const mitArt = (art: string): Fallstand => ({
+    ...leererStand,
+    caseFelder: { financingType: art },
+  });
+  const vorschlag = (kundenwert: string, stand: Fallstand) =>
+    planUebernahme({ "vorhaben.art": kundenwert }, stand).vorschlaege.find(
+      (v) => v.ziel.feld === "financingType"
+    );
+
+  it("meldet keine Abweichung, wenn Katalogwert und Fallwert dasselbe bedeuten", () => {
+    expect(vorschlag("kauf_bestand", mitArt("kauf"))).toBeUndefined();
+  });
+
+  it("meldet auch beim eigenen Bauvorhaben nichts, das auf 'neubau' fällt", () => {
+    // Das Schema kennt keinen eigenen Wert dafür – Übernehmen würde nichts ändern.
+    expect(vorschlag("eigenes_bauvorhaben", mitArt("neubau"))).toBeUndefined();
+  });
+
+  it("meldet eine echte Abweichung weiterhin", () => {
+    const v = vorschlag("kauf_bestand", mitArt("neubau"));
+    expect(v?.art).toBe("abweichung");
+    expect(v?.fallwert).toBe("neubau");
+    // Vorgeschlagen wird der Katalogwert – ihn übersetzt erst der Schreibkern.
+    expect(v?.kundenwert).toBe("kauf_bestand");
+  });
+
+  it("meldet eine Lücke, wenn im Fall noch nichts steht", () => {
+    expect(vorschlag("kauf_bestand", leererStand)?.art).toBe("luecke");
+  });
+});
