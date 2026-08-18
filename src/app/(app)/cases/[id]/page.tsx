@@ -47,6 +47,7 @@ import { ladeErstkontaktStand } from "@/lib/actions/erstkontakt-actions";
 import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorbereiten-button";
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
+import { Notizblock } from "@/components/case/notizblock";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
@@ -727,6 +728,7 @@ export default async function CaseCockpitPage({
         {/* Sidebar */}
         <div className="space-y-4">
           <NextBestAction actions={cockpit.nextActions} />
+          <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
           <Card id="upload-link" className="scroll-mt-24">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">

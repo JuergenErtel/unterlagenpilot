@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
+import { NOTIZEN_MAX_ZEICHEN } from "@/lib/cases/notizen";
 import {
   CASE_NOTE_KINDS,
   DEADLINE_KINDS,
@@ -185,6 +186,55 @@ export async function kontaktVersuchErfassen(caseId: string, formData: FormData)
   // kommt dazu, weil der Kontaktstand dort die To-do-Reihenfolge bestimmt.
   revalidateCase(caseId);
   revalidatePath("/dashboard");
+}
+
+// ---------------------------------------------------------------------------
+// Freier Notizblock am Fall
+// ---------------------------------------------------------------------------
+
+export type NotizenFormState = { ok?: boolean; error?: string };
+
+/**
+ * Speichert den freien Notizblock des Falls (`Case.notes`).
+ *
+ * Bewusst KEIN `CaseNote`: Vermerke sind Ereignisse (wer hat wann was getan)
+ * und stehen chronologisch in der Verwaltung. Dieser Block ist der Gegenpol –
+ * ein Schmierzettel, der immer den aktuellen Stand zeigt und den man
+ * ueberschreibt, statt ihn fortzuschreiben. Beides in einen Topf zu werfen
+ * hiesse, entweder die Historie zu verlieren oder den Zettel zu zerreissen.
+ */
+export async function setCaseNotes(
+  caseId: string,
+  _prev: NotizenFormState,
+  formData: FormData,
+): Promise<NotizenFormState> {
+  const { ctx } = await requireCaseAccess(caseId);
+
+  const roh = formData.get("notes");
+  const text = typeof roh === "string" ? roh.trim() : "";
+  if (text.length > NOTIZEN_MAX_ZEICHEN) {
+    return {
+      error: `Die Notizen sind zu lang (${text.length} von ${NOTIZEN_MAX_ZEICHEN} Zeichen). Nichts gespeichert.`,
+    };
+  }
+  // Leer heisst "keine Notiz" (null), nicht "Notiz mit leerem Text": Sonst
+  // muesste jede Abfrage nach "hat der Fall Notizen?" den leeren String extra
+  // abfangen.
+  const notes = text.length > 0 ? text : null;
+
+  await prisma.case.update({ where: { id: caseId }, data: { notes } });
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "case.updated",
+    entityType: "case",
+    entityId: caseId,
+    // Nur die Laenge, nie der Inhalt: Im Notizblock stehen Dinge ueber
+    // Menschen, die im Pruefprotokoll nichts verloren haben.
+    metadata: { notizen: notes ? `${notes.length} Zeichen` : "(geleert)" },
+  });
+  revalidateCase(caseId);
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
