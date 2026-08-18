@@ -17,15 +17,18 @@ export const metadata: Metadata = {
  * hat BaufiDesk eine oeffentlich zugaengliche, geschaeftsmaessig genutzte
  * Seite – und damit die Impressumspflicht.
  *
- * Firma, Anschrift und Kontaktadresse sind aus AGB und Datenschutzerklaerung
- * uebernommen, damit sich die Angaben nicht auseinanderentwickeln.
+ * Alle Angaben sind am 18.08.2026 aus dem Impressum von codingbrothers.de
+ * uebernommen – derselbe Betreiber, dieselbe Gesellschaft. Nicht aus AGB und
+ * Datenschutzerklaerung: Die nennen den Ort verkuerzt als "76744 Woerth",
+ * amtlich und im Register steht "Woerth am Rhein".
  *
- * OFFEN – von Juergen zu ergaenzen, hier bewusst NICHT geraten:
- * Registergericht und Handelsregisternummer, vertretungsberechtigte
- * Geschaeftsfuehrung und (falls vorhanden) die Umsatzsteuer-Identnummer nach
- * § 27a UStG. Die Konstante unten laesst fehlende Angaben weg, statt einen
- * Platzhalter zu veroeffentlichen: Eine unvollstaendige Angabe ist ein Mangel,
- * eine erfundene waere eine falsche Angabe.
+ * Ein Unterschied ist Absicht: Dort steht "§ 5 TMG", hier "§ 5 DDG". Das TMG
+ * ist im Mai 2024 im Digitale-Dienste-Gesetz aufgegangen; die Pflicht ist
+ * dieselbe, die Fundstelle nicht mehr.
+ *
+ * Die Konstante laesst fehlende Angaben weg, statt einen Platzhalter zu
+ * veroeffentlichen: Eine unvollstaendige Angabe ist ein Mangel, eine erfundene
+ * waere eine falsche Angabe.
  *
  * KEINE Angaben nach § 34i GewO: BaufiDesk ist Software, kein
  * Immobiliardarlehensvermittler. Die Erlaubnisangaben gehoeren zum jeweiligen
@@ -36,16 +39,13 @@ export const metadata: Metadata = {
 const ANBIETER = {
   firma: "Coding Brothers UG (haftungsbeschränkt)",
   strasse: "Ottstr. 9",
-  ort: "76744 Wörth",
+  ort: "76744 Wörth am Rhein",
   email: "info@codingbrothers.de",
-  /** z. B. "Amtsgericht Landau in der Pfalz, HRB 12345" */
-  register: null as string | null,
-  /** Vor- und Nachname der vertretungsberechtigten Person(en). */
-  vertreten: null as string | null,
-  /** Umsatzsteuer-Identifikationsnummer nach § 27a UStG. */
-  ustId: null as string | null,
-  /** Nur angeben, wenn die Nummer auch erreichbar ist. */
-  telefon: null as string | null,
+  register: "Amtsgericht Landau, HRB 34581",
+  /** Beide Geschäftsführer, wie im Register eingetragen. */
+  vertreten: "Carsten Hater und Jürgen Ertel",
+  ustId: "DE 463262784",
+  telefon: "07271 / 5007547",
 };
 
 export default function ImpressumPage() {

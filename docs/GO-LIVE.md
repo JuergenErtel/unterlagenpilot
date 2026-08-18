@@ -156,15 +156,18 @@ den Betrieb, alle sind vor dem ersten fremden Vermittler zu erledigen:
   beiden tragen ihr Geheimnis IM PFAD, ein indizierter Link wäre der
   öffentlich auffindbare Zugang zu den Unterlagen eines fremden Menschen. Dazu
   `/api/`, `/gate` und `/monitoring`.
-- **Impressum angelegt, aber NOCH UNVOLLSTÄNDIG** (`/impressum`, außerhalb des
+- ~~**Kein Impressum.**~~ **Erledigt 18.08.2026.** `/impressum`, außerhalb des
   Gates — eine Impressumspflicht läuft ins Leere, wenn die Seite hinter einem
-  Passwort liegt). Firma, Anschrift und Kontakt stammen aus AGB und
-  Datenschutzerklärung. **Jürgen muss drei Angaben nachtragen** (Konstante
-  `ANBIETER` in `src/app/impressum/page.tsx`): Registergericht + HRB-Nummer,
-  vertretungsberechtigte Geschäftsführung und — falls vorhanden — die
-  USt-IdNr. nach § 27a UStG. Fehlende Werte lässt die Seite weg statt einen
-  Platzhalter zu veröffentlichen: Eine unvollständige Angabe ist ein Mangel,
-  eine erfundene wäre eine falsche Angabe.
+  Passwort liegt. Sämtliche Angaben sind aus dem Impressum von
+  `codingbrothers.de` übernommen (derselbe Betreiber): Geschäftsführung
+  Carsten Hater und Jürgen Ertel, Amtsgericht Landau HRB 34581, USt-IdNr.
+  DE 463262784, Telefon und Anschrift. **Ein Unterschied ist Absicht:** Dort
+  steht „§ 5 TMG", hier „§ 5 DDG" — das TMG ist im Mai 2024 im
+  Digitale-Dienste-Gesetz aufgegangen. **Und einer ist offen:** AGB und
+  Datenschutzerklärung nennen den Ort verkürzt als „76744 Wörth", amtlich und
+  im Register steht „Wörth am Rhein". Falsch ist die Kurzform nicht, einheitlich
+  wäre besser.
+
 - **Der `selfEmployment`-Schreibzweig des gemeinsamen Schreibkerns ist von
   keinem Test berührt**, ebenso die Update-Zweige von `income` und
   `employment`.
