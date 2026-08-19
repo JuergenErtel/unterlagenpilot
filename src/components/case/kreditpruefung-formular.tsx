@@ -62,7 +62,14 @@ export function KreditpruefungFormular({
   const v = (
     gespeichert: string | number | null | undefined,
     wunsch?: string | number | null
-  ): string => (gespeichert ?? wunsch ?? "").toString().replace(".", ",");
+  ): string => {
+    const wert = gespeichert ?? wunsch;
+    if (wert == null || wert === "") return "";
+    // Deutsch anzeigen (210.000 statt 210000, 3,45 statt 3.45). Der Parser der
+    // Action liest beides – aber wer 210000 im Feld sieht, tippt es beim
+    // Korrigieren auch so zurueck.
+    return typeof wert === "number" ? wert.toLocaleString("de-DE") : wert;
+  };
 
   return (
     <div
