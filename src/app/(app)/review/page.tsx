@@ -268,9 +268,21 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   )}
                 </div>
               </CardHeader>
+              {/*
+                  min-w-0 an JEDER Spalte (weiter unten): Rasterspalten stehen
+                  von Haus aus auf min-width:auto und wachsen bis zur Breite
+                  ihres laengsten unumbrechbaren Inhalts. Ein einziger langer
+                  Feldwert - etwa ein als JSON-Zeile gespeichertes
+                  Belastungsverzeichnis - blies die mittlere Spalte auf 1487px
+                  auf; die Karte klemmt per overflow-hidden ab, und damit lagen
+                  Konfidenz-Abzeichen und die drei Korrektur-Knoepfe jeder Zeile
+                  ausserhalb des Bildes. Sichtbar war nur noch Label und Wert -
+                  es sah aus, als gaebe es gar keine Korrekturmoeglichkeit.
+                  Mit min-w-0 darf die Spalte schrumpfen, und erst dann greift
+                  das `truncate` am Wert. */}
               <CardContent className="grid gap-0 p-0 lg:grid-cols-[1fr_1.3fr_1fr]">
                 {/* Vorschau */}
-                <div className="flex flex-col items-center justify-center gap-2 border-b bg-gradient-to-br from-muted/40 to-card p-4 text-center lg:border-b-0 lg:border-r">
+                <div className="flex min-w-0 flex-col items-center justify-center gap-2 border-b bg-gradient-to-br from-muted/40 to-card p-4 text-center lg:border-b-0 lg:border-r">
                   {d.mimeType?.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -303,13 +315,16 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                 </div>
 
                 {/* Erkannte Felder */}
-                <div className="space-y-1 border-b p-4 lg:border-b-0 lg:border-r">
+                <div className="min-w-0 space-y-1 border-b p-4 lg:border-b-0 lg:border-r">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Erkannte Felder</div>
                   {d.extractedFields.map((f) => (
                     <div key={f.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
                       <div className="min-w-0">
                         <div className="text-xs text-muted-foreground">{f.label}</div>
-                        <div className="truncate text-sm font-medium">{f.correctedValue ?? f.value ?? "—"}</div>
+                        {/* title: der abgeschnittene Wert bleibt per Mauszeiger lesbar. */}
+                        <div className="truncate text-sm font-medium" title={f.correctedValue ?? f.value ?? undefined}>
+                          {f.correctedValue ?? f.value ?? "—"}
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <ConfidenceBadge value={f.confidence} />
@@ -324,7 +339,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                 </div>
 
                 {/* Hinweise + Aktionen */}
-                <div className="space-y-3 p-4">
+                <div className="min-w-0 space-y-3 p-4">
                   <div>
                     <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       <ShieldCheck className="h-3.5 w-3.5" /> Hinweise
