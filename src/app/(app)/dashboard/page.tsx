@@ -51,7 +51,7 @@ export default async function DashboardPage({
         eyebrow="Arbeitszentrale"
         title={
           aktiv === "board"
-            ? `${greeting()}, ${ctx.userName.split(" ")[0]}. So steht deine Pipeline.`
+            ? `${greeting()}, ${ctx.userName.split(" ")[0]}. Deine laufenden Fälle im Überblick.`
             : `${greeting()}, ${ctx.userName.split(" ")[0]}. Diese Fälle brauchen deine Aufmerksamkeit.`
         }
         subtitle={
