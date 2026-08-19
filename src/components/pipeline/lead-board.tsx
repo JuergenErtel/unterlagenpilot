@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, CalendarClock, MoreHorizontal, PhoneCall, RotateCcw } from "lucide-react";
+import { Check, CalendarClock, Landmark, MoreHorizontal, PhoneCall, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LEAD_PHASES, LEAD_PHASE_LABELS, type LeadPhase } from "@/lib/domain/enums";
 import { setzePhase, setzeVerloren, hebeVerlustAuf } from "@/lib/actions/lead-phase";
+import { KreditpruefungFormular } from "@/components/case/kreditpruefung-formular";
 import { LossDialog } from "@/components/pipeline/loss-dialog";
 
 export interface BoardKarteView {
@@ -29,6 +30,12 @@ export interface BoardKarteView {
    */
   ampel: { farbe: string; text: string; grund: string } | null;
   erstgespraechOffen: boolean;
+  /**
+   * Bank und Zahl der fehlenden Konditionen – nur ab der Phase
+   * "Kreditpruefung eingereicht", sonst null. Schlichtes Objekt aus demselben
+   * Grund wie die Ampel: Diese Datei ist eine Client-Komponente.
+   */
+  einreichung: { bank: string | null; fehlt: number } | null;
 }
 
 export interface BoardSpalteView {
@@ -91,8 +98,16 @@ export function LeadBoard({
   const [verlustFuer, setVerlustFuer] = useState<string | null>(null);
   const [gezogen, setGezogen] = useState<string | null>(null);
 
+  // Landet eine Karte in "Kreditpruefung eingereicht", fragt dasselbe Formular
+  // wie in der Fallakte nach Bank und Konditionen. Der Zug selbst geht immer
+  // durch – das Formular haelt ihn nicht auf.
+  const [erfassenFuer, setErfassenFuer] = useState<string | null>(null);
+
   const verschieben = (caseId: string, phase: string) =>
-    startTransition(() => void setzePhase(caseId, phase));
+    startTransition(async () => {
+      await setzePhase(caseId, phase);
+      if (phase === "kreditpruefung_eingereicht") setErfassenFuer(caseId);
+    });
 
   return (
     <div className="space-y-3">
@@ -211,6 +226,29 @@ export function LeadBoard({
                     </Link>
                   )}
 
+                  {/* Ab der Einreichungsphase gehoert auf die Karte, WOHIN der
+                      Fall raus ist. Fehlen die Konditionen, sagt die Karte das
+                      und oeffnet dasselbe Formular wie die Fallakte – sonst
+                      steht die Spalte voll mit "irgendwo eingereicht". */}
+                  {k.einreichung && (
+                    <button
+                      onClick={() => setErfassenFuer(k.caseId)}
+                      className={`mt-1.5 flex w-full items-center gap-1.5 rounded border px-2 py-1 text-left text-xs ${
+                        k.einreichung.fehlt > 0
+                          ? "border-warning/50 bg-warning/[0.08] text-foreground hover:bg-warning/[0.14]"
+                          : "border-transparent text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <Landmark className="h-3 w-3 shrink-0" />
+                      {k.einreichung.bank ?? "Bank offen"}
+                      {k.einreichung.fehlt > 0 && (
+                        <span className="ml-auto shrink-0 tabular">
+                          {k.einreichung.fehlt} {k.einreichung.fehlt === 1 ? "Angabe" : "Angaben"} fehlen
+                        </span>
+                      )}
+                    </button>
+                  )}
+
                   {k.ampel && (
                     <p
                       className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -257,6 +295,14 @@ export function LeadBoard({
           );
         })}
       </div>
+
+      {erfassenFuer && (
+        <KreditpruefungFormular
+          caseId={erfassenFuer}
+          offen
+          onClose={() => setErfassenFuer(null)}
+        />
+      )}
 
       <LossDialog
         offen={verlustFuer !== null}

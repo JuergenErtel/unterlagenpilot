@@ -51,6 +51,7 @@ const eingabe = (over: Partial<FallbildEingabe> = {}): FallbildEingabe => ({
   erstkontakt: { empfaenger: "a@b.de", vorbereitet: true, versendet: true },
   objekt: { objektart: "Reihenhaus", ort: "Meerbusch", wohnflaeche: 118, berechnungFreigegeben: false },
   objektAngaben: { gefuellt: 5, gesamt: 6, fehlend: ["Baujahr"] },
+  einreichung: { phaseEingereicht: false, stand: null },
   finanzierung: { kaufpreis: 420000 },
   offeneAnfragen: 2,
   ...over,
@@ -80,6 +81,7 @@ describe("Vollzähligkeit", () => {
         erstkontakt: { empfaenger: null, vorbereitet: false, versendet: false },
         objekt: { objektart: null, ort: null, wohnflaeche: null, berechnungFreigegeben: false },
         objektAngaben: { gefuellt: 0, gesamt: 6, fehlend: ["Objektart", "PLZ des Objekts", "Wohnfläche", "Grundstücksgröße", "Baujahr", "Nutzung"] },
+        einreichung: { phaseEingereicht: false, stand: null },
         finanzierung: { kaufpreis: null },
         offeneAnfragen: 0,
       })
@@ -201,6 +203,61 @@ describe("Objektdaten als eigene Station", () => {
     const t = tor(baueFallbild(eingabe({ objektAngaben: { gefuellt: 0, gesamt: 0, fehlend: [] } })), "objektdaten");
     expect(t.anteil).toBe(100);
     expect(t.ton).toBe("ready");
+  });
+});
+
+describe("Einreichung: Vorbereitung vs. Wirklichkeit", () => {
+  const stand = (over: Record<string, unknown> = {}) => ({
+    bank: "ING",
+    darlehenssumme: 320000,
+    sollzinsProzent: 3.45,
+    zinsbindungJahre: 10,
+    rateMonatlich: 1480,
+    tilgungProzent: null,
+    plattform: "Europace",
+    quelle: "manuell",
+    eingereichtAm: "2026-08-19",
+    notiz: null,
+    leer: false,
+    ...over,
+  }) as NonNullable<FallbildEingabe["einreichung"]["stand"]>;
+
+  it("nennt die Bank, sobald der Fall raus ist", () => {
+    const t = tor(
+      baueFallbild(eingabe({ einreichung: { phaseEingereicht: true, stand: stand() } })),
+      "einreichung"
+    );
+    expect(t.zustand).toBe("bei ING");
+    expect(t.anteil).toBe(100);
+    expect(t.ton).toBe("ready");
+    expect(t.detail).toContain("3,45 %");
+    expect(t.detail).toContain("10 J. Bindung");
+  });
+
+  it("benennt fehlende Konditionen, statt Vollständigkeit zu behaupten", () => {
+    const t = tor(
+      baueFallbild(
+        eingabe({
+          einreichung: {
+            phaseEingereicht: true,
+            stand: stand({ sollzinsProzent: null, rateMonatlich: null }),
+          },
+        })
+      ),
+      "einreichung"
+    );
+    expect(t.ton).toBe("review");
+    expect(t.detail).toContain("Sollzins");
+    expect(t.detail).toContain("Rate oder Tilgung");
+  });
+
+  it("zeigt ohne Einreichung weiter die Vorbereitung", () => {
+    const t = tor(baueFallbild(eingabe()), "einreichung");
+    expect(t.zustand).not.toContain("bei ");
+  });
+
+  it("heißt die Dokumentenprüfung nicht mehr nur „Prüfung“", () => {
+    expect(tor(baueFallbild(eingabe()), "pruefung").name).toBe("Dokumentenprüfung");
   });
 });
 

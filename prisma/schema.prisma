@@ -308,16 +308,16 @@ enum AiJobType {
 // ============================ MANDANT / NUTZER ============================
 
 model Organization {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  street        String?
-  zip           String?
-  city          String?
-  website       String?
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  street             String?
+  zip                String?
+  city               String?
+  website            String?
   // Telefon des Hauses. Steht auf dem Finanzierungszertifikat unter dem Namen
   // des Beraters – dort erwartet der Makler eine Nummer, unter der er anruft.
-  phone         String?
+  phone              String?
   /// Pflichtangaben des Vermittlers für den Fuß erzeugter Papiere: Rechtsform,
   /// zuständige IHK, Registernummer nach § 34i GewO.
   ///
@@ -330,10 +330,10 @@ model Organization {
   /// Erscheint auf dem Finanzierungszertifikat über dem Namen.
   unterschriftKey    String?
   // Datenschutz: Aufbewahrungsfrist (0 = bis manuelle Loeschung)
-  retentionDays Int      @default(0)
-  isWhiteLabel  Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  retentionDays      Int      @default(0)
+  isWhiteLabel       Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   users                User[]
   customers            Customer[]
@@ -558,6 +558,7 @@ model Case {
   findings            CaseFinding[]
   anforderungsAbrufe  BankAnforderungsAbruf[]
   erledigteAufgaben   AufgabeErledigt[]
+  kreditpruefung      Kreditpruefung?
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
@@ -726,6 +727,51 @@ model FinancingRequest {
   updatedAt                     DateTime @updatedAt
 
   @@map("financing_requests")
+}
+
+/**
+ * Was bei der Bank tatsaechlich zur Kreditpruefung eingereicht wurde.
+ * Bewusst NICHT in FinancingRequest: dort stehen die WUENSCHE des Kunden
+ * (Darlehenswunsch, Wunschrate, gewuenschte Zinsbindung). Hier stehen die
+ * Konditionen des eingereichten Antrags - zwei verschiedene Wahrheiten, die
+ * sich unterscheiden duerfen und muessen. Ein Feld mit zwei Rollen ist in
+ * diesem Projekt schon einmal teuer geworden.
+ * Ebenso getrennt von den Abschlussdaten am Case (abschlussBank,
+ * darlehensbetrag, sollzinsProzent): Die gelten erst nach der Zusage und
+ * koennen von der Einreichung abweichen - genau diese Abweichung ist die
+ * interessante Zahl.
+ * Quelle haelt fest, woher die Angaben stammen. Heute traegt der Vermittler
+ * sie ein ("manuell"); sobald ein Plattformzugang das hergibt (Europace), holt
+ * sie ein Abruf und ueberschreibt NUR, was von dort kam.
+ */
+model Kreditpruefung {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  /// Bank, bei der eingereicht wurde. Freitext: der Bankenkatalog kennt 664
+  /// Haeuser, aber eingereicht wird auch bei einem, das dort fehlt.
+  bank             String?
+  darlehenssumme   Float?
+  sollzinsProzent  Float?
+  zinsbindungJahre Int?
+  /// Monatliche Rate ODER Tilgungssatz - der Vermittler hat je nach Bank das
+  /// eine oder das andere vorliegen. Beide Felder sind optional; die Anzeige
+  /// rechnet nichts um, was nicht dasteht.
+  rateMonatlich    Float?
+  tilgungProzent   Float?
+  /// Ueber welche Plattform eingereicht wurde (europace, finlink, ehyp_home,
+  /// direkt). Freitext, weil der Weg auch eine Bank-eigene Maske sein kann.
+  plattform        String?
+  /// "manuell" oder der Name der Plattform, aus der die Werte gezogen wurden.
+  quelle           String    @default("manuell")
+  eingereichtAm    DateTime?
+  notiz            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("kreditpruefungen")
 }
 
 model Liability {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LEAD_PHASES, LEAD_PHASE_LABELS, type LeadPhase } from "@/lib/domain/enums";
 import { setzePhase, hebeVerlustAuf } from "@/lib/actions/lead-phase";
+import { KreditpruefungFormular } from "@/components/case/kreditpruefung-formular";
 
 /**
  * Vertriebsphase im Fallkopf – neben dem Bearbeitungsstatus, nicht statt seiner.
@@ -23,6 +24,15 @@ export function LeadPhaseSelect({
   verlorenGrund: string | null;
 }) {
   const [pending, startTransition] = useTransition();
+  // Beim Sprung in die Einreichungsphase gleich fragen, WOHIN und zu welchen
+  // Konditionen – sonst steht die Karte im Kanban und niemand weiss es mehr.
+  const [erfassen, setErfassen] = useState(false);
+
+  const wechsle = (ziel: string) =>
+    startTransition(async () => {
+      await setzePhase(caseId, ziel);
+      if (ziel === "kreditpruefung_eingereicht") setErfassen(true);
+    });
 
   if (verlorenGrund !== null) {
     return (
@@ -48,7 +58,7 @@ export function LeadPhaseSelect({
         aria-label="Vertriebsphase"
         value={phase}
         disabled={pending}
-        onChange={(e) => startTransition(() => void setzePhase(caseId, e.target.value))}
+        onChange={(e) => wechsle(e.target.value)}
         className="h-8 rounded-md border bg-background px-2 text-sm disabled:opacity-60"
       >
         {LEAD_PHASES.map((p: LeadPhase) => (
@@ -60,12 +70,21 @@ export function LeadPhaseSelect({
       {vorschlag && (
         <button
           disabled={pending}
-          onClick={() => startTransition(() => void setzePhase(caseId, vorschlag))}
+          onClick={() => wechsle(vorschlag)}
           className="inline-flex items-center gap-1 rounded border border-dashed px-2 py-1 text-xs hover:bg-muted disabled:opacity-60"
         >
           → {LEAD_PHASE_LABELS[vorschlag as LeadPhase]}? <Check className="h-3 w-3" />
         </button>
       )}
+      {phase === "kreditpruefung_eingereicht" && !erfassen && (
+        <button
+          onClick={() => setErfassen(true)}
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Einreichungsdaten
+        </button>
+      )}
+      <KreditpruefungFormular caseId={caseId} offen={erfassen} onClose={() => setErfassen(false)} />
     </div>
   );
 }

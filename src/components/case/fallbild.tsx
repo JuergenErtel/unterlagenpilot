@@ -118,6 +118,9 @@ export function FallbildAnsicht({
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
       <Card className="overflow-hidden">
         <CardContent className="p-2">
+          {/* Der Bogen erklaert sich nicht von selbst. Eine Zeile darueber sagt,
+              was man da sieht – Juergens Wortlaut. */}
+          <p className="px-2 pb-1 pt-1 text-sm font-semibold">Dein Weg zur Einreichung</p>
           <svg
             viewBox="0 0 820 625"
             preserveAspectRatio="xMidYMid meet"
@@ -125,7 +128,7 @@ export function FallbildAnsicht({
             role="group"
             aria-label={`Übersicht zum Fall ${bild.fall.nummer}`}
           >
-            {/* ── Die fuenf Tore auf dem Bogen ── */}
+            {/* ── Die Tore auf dem Bogen ── */}
             {bild.tore.map((t, i) => {
               const von = START + i * schritt + LUECKE;
               const bis = START + (i + 1) * schritt - LUECKE;

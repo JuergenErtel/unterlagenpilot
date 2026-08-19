@@ -35,6 +35,7 @@ import { PlatformReadiness } from "@/components/case/platform-readiness";
 import { CaseRoadmap } from "@/components/case/case-roadmap";
 import { FallbildAnsicht } from "@/components/case/fallbild";
 import { baueFallbild } from "@/lib/cases/fallbild";
+import type { KreditpruefungStand } from "@/lib/cases/kreditpruefung";
 import { NextStepCard } from "@/components/case/next-step-card";
 import { computeNextStep } from "@/lib/cases/next-step";
 import {
@@ -48,6 +49,7 @@ import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorb
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { Notizblock } from "@/components/case/notizblock";
+import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
@@ -104,6 +106,9 @@ export default async function CaseCockpitPage({
       },
       property: true,
       financingRequest: true,
+      // Was bei der Bank eingereicht wurde (Bank + Konditionen). Speist die
+      // Station "Einreichung" im Fallbild und die Karte in der Fallakte.
+      kreditpruefung: true,
       // Kontaktstand (Aufgabe 7): dieselbe Herleitung wie im Dashboard – nur
       // Vermerke MIT Ergebnis (Kontaktversuche) zählen.
       caseNotes: {
@@ -119,6 +124,31 @@ export default async function CaseCockpitPage({
   if (!caseRow) notFound();
 
   const cockpit = await getCaseCockpit(id);
+
+  // Einreichungsdaten in die Form bringen, die Anzeige und Luecken-Regel
+  // erwarten (src/lib/cases/kreditpruefung.ts) – einmal, nicht je Verwendung.
+  const k = caseRow.kreditpruefung;
+  const kreditpruefungStand: KreditpruefungStand | null = k
+    ? {
+        bank: k.bank,
+        darlehenssumme: k.darlehenssumme,
+        sollzinsProzent: k.sollzinsProzent,
+        zinsbindungJahre: k.zinsbindungJahre,
+        rateMonatlich: k.rateMonatlich,
+        tilgungProzent: k.tilgungProzent,
+        plattform: k.plattform,
+        quelle: k.quelle,
+        eingereichtAm: k.eingereichtAm ? k.eingereichtAm.toISOString().slice(0, 10) : null,
+        notiz: k.notiz,
+        leer:
+          !k.bank &&
+          k.darlehenssumme == null &&
+          k.sollzinsProzent == null &&
+          k.zinsbindungJahre == null &&
+          k.rateMonatlich == null &&
+          k.tilgungProzent == null,
+      }
+    : null;
   const [
     documents,
     plausibility,
@@ -495,6 +525,12 @@ export default async function CaseCockpitPage({
           })(),
           finanzierung: { kaufpreis: caseRow.financingRequest?.kaufpreis ?? null },
           offeneAnfragen,
+          einreichung: {
+            phaseEingereicht: ["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(
+              caseRow.leadPhase
+            ),
+            stand: kreditpruefungStand,
+          },
         });
         return (
           <>
@@ -777,6 +813,12 @@ export default async function CaseCockpitPage({
         {/* Sidebar */}
         <div className="space-y-4">
           <NextBestAction actions={cockpit.nextActions} />
+          {/* Erst ab der Einreichungsphase: Vorher gibt es keine Bank und keine
+              Konditionen, und eine leere Karte im Kopf der Seitenspalte
+              verdraengt nur, was gerade wirklich dran ist. */}
+          {["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(caseRow.leadPhase) && (
+            <KreditpruefungKarte caseId={id} stand={kreditpruefungStand} />
+          )}
           <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
           <Card id="upload-link" className="scroll-mt-24">
             <CardHeader className="pb-3">

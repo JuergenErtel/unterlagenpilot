@@ -37,6 +37,13 @@ export interface BoardKarte {
    * in dem die Leiter das Gespraech nach vorn zieht.
    */
   erstgespraechOffen: boolean;
+  /**
+   * Bank und Luecken der Einreichung – nur fuer Karten ab der Phase
+   * "Kreditpruefung eingereicht". Ohne sie ist die Spalte eine Behauptung:
+   * man sieht, dass etwas raus ist, aber nicht bei wem und zu welchem Zins.
+   * null = die Phase ist noch nicht erreicht, also nichts anzuzeigen.
+   */
+  einreichung: { bank: string | null; fehlt: number } | null;
 }
 
 export interface BoardSpalte {

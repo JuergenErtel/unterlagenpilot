@@ -6,6 +6,7 @@ import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-boa
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { laeuftAusserhalb } from "@/lib/cases/next-step";
 import { ampelFuer } from "@/lib/machbarkeit/ampel";
+import { fehlendeAngaben } from "@/lib/cases/kreditpruefung";
 import { ladeAnnahmen } from "@/lib/machbarkeit/annahmen";
 import { LeadBoard } from "@/components/pipeline/lead-board";
 import { SyncStatus } from "@/components/pipeline/sync-status";
@@ -123,6 +124,18 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
         },
       },
       liabilities: { select: { art: true, restschuld: true, monatlicheRate: true, abzuloesen: true } },
+      // Bank + Konditionen der Einreichung: speist die Karte in der Spalte
+      // "Kreditpruefung eingereicht" (und die Luecken-Warnung darauf).
+      kreditpruefung: {
+        select: {
+          bank: true,
+          darlehenssumme: true,
+          sollzinsProzent: true,
+          zinsbindungJahre: true,
+          rateMonatlich: true,
+          tilgungProzent: true,
+        },
+      },
       _count: { select: { documents: true } },
       generatedMessages: { where: { sent: true }, select: { id: true }, take: 1 },
       selfDisclosures: { select: { currentStep: true }, take: 1, orderBy: { createdAt: "desc" } },
@@ -205,6 +218,31 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       !laeuftAusserhalb(c.leadPhase) &&
       !c.erstgespraechGefuehrtAm &&
       c.generatedMessages.length === 0,
+    // Dieselbe Luecken-Regel wie in der Fallakte (cases/kreditpruefung.ts) –
+    // hier nur auf die ANZAHL verdichtet, weil auf einer Kanban-Karte kein
+    // Platz fuer fuenf Feldnamen ist.
+    einreichung: ["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(c.leadPhase)
+      ? {
+          bank: c.kreditpruefung?.bank ?? null,
+          fehlt: fehlendeAngaben(
+            c.kreditpruefung
+              ? {
+                  bank: c.kreditpruefung.bank,
+                  darlehenssumme: c.kreditpruefung.darlehenssumme,
+                  sollzinsProzent: c.kreditpruefung.sollzinsProzent,
+                  zinsbindungJahre: c.kreditpruefung.zinsbindungJahre,
+                  rateMonatlich: c.kreditpruefung.rateMonatlich,
+                  tilgungProzent: c.kreditpruefung.tilgungProzent,
+                  plattform: null,
+                  quelle: "manuell",
+                  eingereichtAm: null,
+                  notiz: null,
+                  leer: false,
+                }
+              : null
+          ).length,
+        }
+      : null,
     vorschlag: schlagePhaseVor({
       leadPhase: c.leadPhase,
       verlorenAm: c.verlorenAm,
@@ -251,6 +289,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       vorschlag: k.vorschlag,
       ampel: k.ampel,
       erstgespraechOffen: k.erstgespraechOffen,
+      einreichung: k.einreichung,
     })),
   });
 

@@ -1,6 +1,8 @@
 import type { Tone } from "@/lib/ui/tone";
 import type { CockpitData } from "./cockpit";
 import type { NextStep } from "./next-step";
+import type { KreditpruefungStand } from "./kreditpruefung";
+import { fehlendeAngaben } from "./kreditpruefung";
 
 /**
  * Das Fallbild: der Kunde in der Mitte, der Weg zur Einreichung als Bogen
@@ -126,6 +128,12 @@ export interface FallbildEingabe {
   finanzierung: { kaufpreis: number | null };
   /** Beim Kunden angeforderte, noch offene Unterlagen. */
   offeneAnfragen: number;
+  /**
+   * Ob der Fall schon zur Kreditpruefung raus ist – und mit welchen
+   * Konditionen. Erst das macht aus der Station "Einreichung" eine Aussage
+   * ueber die Wirklichkeit statt ueber die Vorbereitung.
+   */
+  einreichung: { phaseEingereicht: boolean; stand: KreditpruefungStand | null };
 }
 
 const KEIN_WERT = "noch nicht berechnet";
@@ -182,7 +190,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
       baueObjektdaten(id, e),
       baueUnterlagen(id, c),
       bauePruefung(id, c),
-      baueEinreichung(id, c),
+      baueEinreichung(id, c, e),
     ],
     felder: [
       baueObjekt(id, e),
@@ -202,7 +210,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
   };
 }
 
-/* ── Die fuenf Tore ───────────────────────────────────────────── */
+/* ── Die Tore auf dem Bogen ────────────────────────────────────── */
 
 function baueErstkontakt(id: string, e: FallbildEingabe): Tor {
   const k = e.erstkontakt;
@@ -344,7 +352,10 @@ function bauePruefung(id: string, c: CockpitData): Tor {
   const offen = pruefbereit + docsFehler;
   return {
     id: "pruefung",
-    name: "Prüfung",
+    // "Dokumentenpruefung", nicht "Pruefung": Sonst liest es sich wie die
+    // KREDITpruefung der Bank – und die ist ein voellig anderer Vorgang, der
+    // erst nach der Einreichung beginnt.
+    name: "Dokumentenprüfung",
     zustand,
     anteil: docsPresent === 0 ? 0 : anteil(((docsPresent - offen) / docsPresent) * 100),
     ton,
@@ -364,7 +375,40 @@ function bauePruefung(id: string, c: CockpitData): Tor {
   };
 }
 
-function baueEinreichung(id: string, c: CockpitData): Tor {
+function baueEinreichung(id: string, c: CockpitData, e: FallbildEingabe): Tor {
+  // Ist der Fall schon raus, redet diese Station nicht mehr ueber
+  // Vorbereitung, sondern ueber die Wirklichkeit: bei welcher Bank, zu welchen
+  // Konditionen. Fehlen die Angaben, ist das die Luecke, die sie nennt.
+  const { phaseEingereicht, stand } = e.einreichung;
+  if (phaseEingereicht || stand) {
+    const fehlt = fehlendeAngaben(stand);
+    const konditionen = [
+      stand?.darlehenssumme != null ? `${eur(stand.darlehenssumme)}` : null,
+      stand?.sollzinsProzent != null ? `${stand.sollzinsProzent.toLocaleString("de-DE")} %` : null,
+      stand?.zinsbindungJahre != null ? `${stand.zinsbindungJahre} J. Bindung` : null,
+      stand?.rateMonatlich != null
+        ? `${eur(stand.rateMonatlich)}/Monat`
+        : stand?.tilgungProzent != null
+          ? `${stand.tilgungProzent.toLocaleString("de-DE")} % Tilgung`
+          : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return {
+      id: "einreichung",
+      name: "Einreichung",
+      zustand: stand?.bank ? `bei ${stand.bank}` : "eingereicht",
+      anteil: 100,
+      ton: fehlt.length === 0 ? "ready" : "review",
+      detail:
+        (konditionen ? `Eingereicht: ${konditionen}. ` : "Der Fall ist zur Kreditprüfung raus. ") +
+        (fehlt.length === 0
+          ? "Jetzt entscheidet die Bank."
+          : `Es fehlt noch: ${fehlt.join(", ")}.`),
+      ziel: { label: fehlt.length === 0 ? "Fallakte öffnen" : "Einreichungsdaten ergänzen", href: `/cases/${id}` },
+    };
+  }
+
   const beste = c.platformReadiness.reduce((a, b) => (b.percent > a.percent ? b : a), c.platformReadiness[0] ?? { percent: 0, missingFields: 0 });
   const sofort = c.missingGroups.find((g) => g.key === "sofort")?.items.length ?? 0;
 
