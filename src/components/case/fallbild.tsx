@@ -232,15 +232,16 @@ export function FallbildAnsicht({
               );
             })}
 
-            {/* ── Start und Ziel an den offenen Enden: der Bogen laeuft nicht rund ── */}
-            <circle cx={sx} cy={sy} r={4} fill="hsl(var(--muted-foreground))" />
-            <text x={sx - 12} y={sy + 22} textAnchor="end" fontSize={11} fill="hsl(var(--muted-foreground))">
-              Start
-            </text>
-            <circle cx={zx} cy={zy} r={4} fill="hsl(var(--muted-foreground))" />
-            <text x={zx + 12} y={zy + 22} textAnchor="start" fontSize={11} fill="hsl(var(--muted-foreground))">
-              Ziel
-            </text>
+            {/* ── Start und Ziel an den offenen Enden: der Bogen laeuft nicht rund ──
+                Zwei Flaggen am selben Mast: schlichtes Tuch fuer den Anfang,
+                Zielflagge fuer das Ende. Ein Bildpaar, das jeder kennt, und es
+                sagt in einem Blick, dass der Bogen eine Richtung hat.
+                Bewusst OHNE Zustandsfarbe (kein Gruen, kein Rot): Gruen heisst
+                auf diesem Bild "geschafft" – eine gruene Zielflagge wuerde
+                jeden fertigen Fall behaupten. Der Ankerpunkt bleibt als
+                Scheibe stehen, damit das Bogenende sichtbar endet. */}
+            <StartZiel x={sx} y={sy} label="Start" seite="links" />
+            <StartZiel x={zx} y={zy} label="Ziel" seite="rechts" ziel />
 
             {/* ── Die Nabe: der Kunde ── */}
             <rect
@@ -409,5 +410,78 @@ export function FallbildAnsicht({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Flagge samt Beschriftung an einem offenen Ende des Bogens.
+ *
+ * Der Mast steht immer senkrecht auf dem Ankerpunkt, das Tuch weht nach
+ * aussen – links nach links, rechts nach rechts. Sonst zeigte die Startflagge
+ * in den Bogen hinein und sähe aus, als gehörte sie zum ersten Tor.
+ */
+function StartZiel({
+  x,
+  y,
+  label,
+  seite,
+  ziel = false,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  seite: "links" | "rechts";
+  ziel?: boolean;
+}) {
+  const richtung = seite === "links" ? -1 : 1;
+  const B = 13; // Tuchbreite
+  const H = 9; // Tuchhoehe
+  const MAST = 20;
+  const oben = -MAST;
+  // Das Tuch weht nach aussen; links vom Mast heisst negative x-Werte.
+  const links = richtung < 0 ? -B : 0;
+  const farbe = ziel ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))";
+
+  return (
+    <g transform={`translate(${x},${y})`} aria-hidden>
+      {/* Ankerpunkt: das Ende des Bogens bleibt ein Punkt, keine Flagge im Nichts. */}
+      <circle r={3.5} fill={farbe} />
+      <line x1={0} y1={0} x2={0} y2={oben} stroke={farbe} strokeWidth={1.6} strokeLinecap="round" />
+      {ziel ? (
+        <>
+          {/* Zielflagge: 4x2 Karos, abwechselnd gefuellt. */}
+          <rect x={links} y={oben} width={B} height={H} fill="hsl(var(--card))" stroke={farbe} strokeWidth={1.2} />
+          {[0, 1, 2, 3].map((sp) =>
+            [0, 1].map((ze) =>
+              (sp + ze) % 2 === 0 ? (
+                <rect
+                  key={`${sp}-${ze}`}
+                  x={links + (B / 4) * sp}
+                  y={oben + (H / 2) * ze}
+                  width={B / 4}
+                  height={H / 2}
+                  fill={farbe}
+                />
+              ) : null
+            )
+          )}
+        </>
+      ) : (
+        /* Startflagge: ein schlichtes, wehendes Tuch. */
+        <path
+          d={`M 0 ${oben} L ${richtung * B} ${oben + H / 2} L 0 ${oben + H} Z`}
+          fill={farbe}
+        />
+      )}
+      <text
+        x={richtung * 9}
+        y={14}
+        textAnchor={seite === "links" ? "end" : "start"}
+        fontSize={11}
+        fill="hsl(var(--muted-foreground))"
+      >
+        {label}
+      </text>
+    </g>
   );
 }
