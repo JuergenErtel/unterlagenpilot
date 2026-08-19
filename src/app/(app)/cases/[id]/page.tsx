@@ -558,7 +558,12 @@ export default async function CaseCockpitPage({
                           {mehrereAntragsteller && <TableHead>Antragsteller</TableHead>}
                           <TableHead>Konfidenz</TableHead>
                           <TableHead>Hinweise</TableHead>
-                          <TableHead>Status</TableHead>
+                          {/* Die Statusspalte traegt die Aktionen (Freigeben,
+                              Zurücknehmen). Bei sechs Spalten ist die Tabelle breiter
+                              als ihr Bereich neben der Seitenspalte - ohne sticky
+                              scrollt genau die Spalte mit den Knoepfen aus dem Bild,
+                              und die Aktion existiert fuer den Betrachter nicht. */}
+                          <TableHead className="sticky right-0 z-10 border-l bg-card">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -568,7 +573,14 @@ export default async function CaseCockpitPage({
                         {documents.map((d) => (
                           <Fragment key={d.id}>
                           <TableRow>
-                            <TableCell className="font-medium">{d.generatedName ?? d.originalName}</TableCell>
+                            {/* Der erzeugte Dateiname wird bis zu 60 Zeichen lang
+                                ("Einnahmenueberschussrechnung_EUeR_Mate_Topcic_01012024bis31122024.pdf")
+                                und blies die Spalte auf 565px auf - die Tabelle war damit
+                                1490px breit in einem 583px schmalen Bereich. Vollstaendig
+                                bleibt der Name im Mauszeiger. */}
+                            <TableCell className="max-w-[15rem] truncate font-medium" title={d.generatedName ?? d.originalName}>
+                              {d.generatedName ?? d.originalName}
+                            </TableCell>
                             <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
                             {mehrereAntragsteller && (
                               <TableCell>
@@ -577,7 +589,7 @@ export default async function CaseCockpitPage({
                             )}
                             <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
-                            <TableCell>
+                            <TableCell className="sticky right-0 z-10 border-l bg-card">
                               {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
                               {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
                                   Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
