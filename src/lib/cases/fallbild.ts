@@ -18,7 +18,14 @@ import type { NextStep } from "./next-step";
  * stand die Machbarkeit bei 70 %, waehrend die Pruefung erst bei 40 % war, und
  * im Kreis gelesen hiess das "uebersprungen".
  */
-export const TOR_IDS = ["erstkontakt", "kundendaten", "unterlagen", "pruefung", "einreichung"] as const;
+export const TOR_IDS = [
+  "erstkontakt",
+  "kundendaten",
+  "objektdaten",
+  "unterlagen",
+  "pruefung",
+  "einreichung",
+] as const;
 export type TorId = (typeof TOR_IDS)[number];
 
 /** Diese vier laufen nebenher und beanspruchen keine Reihenfolge. */
@@ -108,6 +115,14 @@ export interface FallbildEingabe {
     /** Eine freigegebene Wohnflaechenberechnung liegt vor. */
     berechnungFreigegeben: boolean;
   };
+  /**
+   * Vollstaendigkeit der Objektangaben – gezaehlt aus DEM Fragenkatalog des
+   * Erstgespraechs (`berechneReife`, Abschnitt "objekt"), nicht hier neu
+   * definiert. Der Katalog kennt die Regeln, die eine eigene Zaehlung sofort
+   * falsch machen wuerden: Ein unbebautes Grundstueck hat weder Wohnflaeche
+   * noch Baujahr, eine Eigentumswohnung keine eigene Grundstuecksgroesse.
+   */
+  objektAngaben: { gefuellt: number; gesamt: number; fehlend: string[] };
   finanzierung: { kaufpreis: number | null };
   /** Beim Kunden angeforderte, noch offene Unterlagen. */
   offeneAnfragen: number;
@@ -164,6 +179,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
     tore: [
       baueErstkontakt(id, e),
       baueKundendaten(id, c),
+      baueObjektdaten(id, e),
       baueUnterlagen(id, c),
       bauePruefung(id, c),
       baueEinreichung(id, c),
@@ -232,6 +248,56 @@ function baueKundendaten(id: string, c: CockpitData): Tor {
       ? "Alle Pflichtangaben zu den Antragstellern liegen vor."
       : `Es fehlen: ${fehlend.join(", ")}. Ohne diese Angaben ist keine Einreichung möglich.`,
     ziel: { label: "Kundendaten öffnen", href: `/cases/${id}/edit` },
+  };
+}
+
+/**
+ * Die Objektdaten als eigene Station zwischen Kunde und Unterlagen.
+ *
+ * Sie gehoeren auf den Bogen, nicht in die Mitte: Ohne Objektart, Lage und
+ * Flaeche laesst sich weder die Unterlagenliste richtig stellen (ein
+ * Grundstueck braucht andere Nachweise als eine Eigentumswohnung) noch der
+ * Beleihungswert schaetzen. Vorher sprang das Bild von "Kundendaten" direkt
+ * auf "Unterlagen", und die Luecke dazwischen war nirgends abzulesen.
+ *
+ * Gezaehlt wird NICHT hier, sondern im Fragenkatalog des Erstgespraechs –
+ * sonst stuenden im Fallbild und in der Maske zwei verschiedene Zahlen fuer
+ * dieselbe Frage.
+ */
+function baueObjektdaten(id: string, e: FallbildEingabe): Tor {
+  const { gefuellt, gesamt, fehlend } = e.objektAngaben;
+  // Verlangt der Katalog fuer dieses Vorhaben gar keine Objektangabe, ist
+  // nichts offen – nicht alles. Ohne diese Unterscheidung stuende die Station
+  // fuer einen solchen Fall auf Rot, obwohl es nichts einzutragen gibt.
+  const nichtsVerlangt = gesamt === 0;
+  const vollstaendig = nichtsVerlangt || gefuellt >= gesamt;
+  const leer = !nichtsVerlangt && gefuellt === 0;
+
+  // Die Wohnflaechenberechnung ist der naechste Schritt NACH vollstaendigen
+  // Angaben – solange etwas fehlt, fuehrt das Ziel dorthin, wo man es eintraegt.
+  const ziel: Ziel = vollstaendig && !e.objekt.berechnungFreigegeben
+    ? { label: "Wohnfläche berechnen", href: `/cases/${id}/wohnflaeche` }
+    : { label: "Objektdaten ergänzen", href: `/cases/${id}/erstgespraech` };
+
+  return {
+    id: "objektdaten",
+    name: "Objektdaten",
+    zustand: nichtsVerlangt ? "keine Angaben nötig" : vollstaendig ? "vollständig" : `${gefuellt} von ${gesamt}`,
+    anteil: nichtsVerlangt ? 100 : anteil((gefuellt / gesamt) * 100),
+    // Ganz ohne Objektangaben ist der Fall nicht rechenbar – das ist mehr als
+    // "noch nicht dran", aber kein Blocker fuer die Einreichung im engeren
+    // Sinn; die Pflichtfelder dafuer haengen an der Plattform (siehe
+    // baueEinreichung). Deshalb rot nur bei komplett leer.
+    ton: vollstaendig ? "ready" : leer ? "blocker" : "review",
+    detail:
+      nichtsVerlangt
+        ? "Für dieses Vorhaben verlangt der Fragenkatalog keine Objektangaben."
+        : vollstaendig
+          ? e.objekt.berechnungFreigegeben
+            ? "Alle Objektangaben liegen vor, die Wohnfläche ist aus dem Grundriss berechnet und freigegeben."
+            : "Alle Objektangaben liegen vor. Aus dem Grundriss ist noch keine Wohnfläche berechnet — Banken rechnen selbst nach."
+          : `Es fehlen: ${fehlend.join(", ")}. Ohne Objektart, Lage und Fläche steht weder die richtige Unterlagenliste noch ein belastbarer Beleihungswert.`,
+    ziel,
   };
 }
 
@@ -332,7 +398,10 @@ function baueObjekt(id: string, e: FallbildEingabe): Feld {
   const { wohnflaeche, berechnungFreigegeben } = e.objekt;
   return {
     id: "objekt",
-    name: "Objekt",
+    // Heisst "Wohnflaeche", seit die Objektangaben eine eigene Station auf dem
+    // Bogen haben: Zwei Kaesten namens "Objekt" nebeneinander waeren nicht
+    // auseinanderzuhalten. Hier geht es ausschliesslich um die Flaeche.
+    name: "Wohnfläche",
     wert: wohnflaeche != null ? `${wohnflaeche.toLocaleString("de-DE")} m²` : "keine Fläche",
     zeile: berechnungFreigegeben ? "Wohnfläche geprüft" : wohnflaeche != null ? "Wohnfläche ungeprüft" : "aus dem Grundriss",
     ton: berechnungFreigegeben ? "ready" : "review",

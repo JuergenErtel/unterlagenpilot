@@ -50,6 +50,7 @@ const eingabe = (over: Partial<FallbildEingabe> = {}): FallbildEingabe => ({
   schritt: schritt(),
   erstkontakt: { empfaenger: "a@b.de", vorbereitet: true, versendet: true },
   objekt: { objektart: "Reihenhaus", ort: "Meerbusch", wohnflaeche: 118, berechnungFreigegeben: false },
+  objektAngaben: { gefuellt: 5, gesamt: 6, fehlend: ["Baujahr"] },
   finanzierung: { kaufpreis: 420000 },
   offeneAnfragen: 2,
   ...over,
@@ -59,7 +60,7 @@ const tor = (b: ReturnType<typeof baueFallbild>, id: string) => b.tore.find((t) 
 const feld = (b: ReturnType<typeof baueFallbild>, id: string) => b.felder.find((f) => f.id === id)!;
 
 describe("Vollzähligkeit", () => {
-  it("liefert immer fünf Tore in fester Reihenfolge", () => {
+  it("liefert immer sechs Tore in fester Reihenfolge", () => {
     expect(baueFallbild(eingabe()).tore.map((t) => t.id)).toEqual([...TOR_IDS]);
   });
 
@@ -78,11 +79,12 @@ describe("Vollzähligkeit", () => {
         }),
         erstkontakt: { empfaenger: null, vorbereitet: false, versendet: false },
         objekt: { objektart: null, ort: null, wohnflaeche: null, berechnungFreigegeben: false },
+        objektAngaben: { gefuellt: 0, gesamt: 6, fehlend: ["Objektart", "PLZ des Objekts", "Wohnfläche", "Grundstücksgröße", "Baujahr", "Nutzung"] },
         finanzierung: { kaufpreis: null },
         offeneAnfragen: 0,
       })
     );
-    expect(leer.tore).toHaveLength(5);
+    expect(leer.tore).toHaveLength(6);
     expect(leer.felder).toHaveLength(4);
     expect(leer.fall.betrag).toBe("Kaufpreis offen");
     expect(leer.fall.vorhaben).toBe("Vorhaben offen");
@@ -163,6 +165,42 @@ describe("Wertebereiche", () => {
   it("kommt ohne Plattformdaten ohne Absturz aus", () => {
     const b = baueFallbild(eingabe({ cockpit: cockpit({ platformReadiness: [] }) }));
     expect(tor(b, "einreichung").anteil).toBe(0);
+  });
+});
+
+describe("Objektdaten als eigene Station", () => {
+  it("liegt zwischen Kundendaten und Unterlagen", () => {
+    const ids = baueFallbild(eingabe()).tore.map((t) => t.id);
+    expect(ids.indexOf("objektdaten")).toBe(ids.indexOf("kundendaten") + 1);
+    expect(ids.indexOf("unterlagen")).toBe(ids.indexOf("objektdaten") + 1);
+  });
+
+  it("zählt die Angaben, statt sie zu schätzen", () => {
+    const t = tor(baueFallbild(eingabe({ objektAngaben: { gefuellt: 3, gesamt: 6, fehlend: ["Baujahr", "Nutzung", "Wohnfläche"] } })), "objektdaten");
+    expect(t.zustand).toBe("3 von 6");
+    expect(t.anteil).toBe(50);
+    expect(t.ton).toBe("review");
+    expect(t.detail).toContain("Baujahr");
+  });
+
+  it("meldet vollständige Angaben als fertig", () => {
+    const t = tor(baueFallbild(eingabe({ objektAngaben: { gefuellt: 6, gesamt: 6, fehlend: [] } })), "objektdaten");
+    expect(t.zustand).toBe("vollständig");
+    expect(t.anteil).toBe(100);
+    expect(t.ton).toBe("ready");
+  });
+
+  it("führt bei vollständigen Angaben weiter zur Wohnflächenberechnung", () => {
+    const b = baueFallbild(eingabe({ objektAngaben: { gefuellt: 6, gesamt: 6, fehlend: [] } }));
+    expect(tor(b, "objektdaten").ziel.href).toContain("/wohnflaeche");
+    const offen = baueFallbild(eingabe({ objektAngaben: { gefuellt: 1, gesamt: 6, fehlend: ["Baujahr"] } }));
+    expect(tor(offen, "objektdaten").ziel.href).toContain("/erstgespraech");
+  });
+
+  it("behandelt einen Fall ohne verlangte Objektangaben nicht als Lücke", () => {
+    const t = tor(baueFallbild(eingabe({ objektAngaben: { gefuellt: 0, gesamt: 0, fehlend: [] } })), "objektdaten");
+    expect(t.anteil).toBe(100);
+    expect(t.ton).toBe("ready");
   });
 });
 

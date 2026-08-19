@@ -479,6 +479,20 @@ export default async function CaseCockpitPage({
             wohnflaeche: caseRow.property?.wohnflaeche ?? null,
             berechnungFreigegeben: wohnflaecheFreigegeben > 0,
           },
+          // Objektangaben aus DEM Fragenkatalog des Erstgespraechs zaehlen,
+          // nicht neu definieren: `erstgespraechReife` steht hier ohnehin
+          // schon, und sie kennt die Regeln nach Objektart (ein Grundstueck
+          // hat keine Wohnflaeche, eine Eigentumswohnung kein eigenes
+          // Grundstueck). Zwei eigene Zaehlungen liefen frueher oder spaeter
+          // auseinander.
+          objektAngaben: (() => {
+            const felder = erstgespraechReife.felder.filter((f) => f.abschnitt === "objekt");
+            return {
+              gefuellt: felder.filter((f) => f.gefuellt).length,
+              gesamt: felder.length,
+              fehlend: felder.filter((f) => !f.gefuellt).map((f) => f.label),
+            };
+          })(),
           finanzierung: { kaufpreis: caseRow.financingRequest?.kaufpreis ?? null },
           offeneAnfragen,
         });
