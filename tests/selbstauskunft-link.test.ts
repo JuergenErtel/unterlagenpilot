@@ -37,12 +37,35 @@ beforeEach(() => {
   linkUpdate.mockResolvedValue({});
 });
 
+/**
+ * findUnique liefert die Zeile nur, wenn das `where` wirklich passt.
+ *
+ * Muss so sein, seit der Aufloeser die Zeile UEBER den Token-Hash sucht: Ein
+ * Mock, der bei jedem where dieselbe Zeile zurueckgibt, wuerde einen falschen
+ * Hash nie auffallen lassen – der Test pruefte dann nichts.
+ */
+function zeileNurBei(bedingung: Record<string, unknown>, zeile: Record<string, unknown>) {
+  linkFindUnique.mockImplementation(async (args: unknown) => {
+    const where = (args as { where: Record<string, unknown> }).where;
+    const passt = Object.entries(bedingung).every(([k, v]) => where[k] === v);
+    return passt ? zeile : null;
+  });
+}
+
 describe("Selbstauskunft-Link", () => {
   it("speichert nur den Hash, nie das Klartext-Token", async () => {
     const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
-    const data = linkUpdate.mock.calls[0]![0] as { data: { tokenHash: string } };
+    const data = linkCreate.mock.calls[0]![0] as { data: { tokenHash: string } };
     expect(data.data.tokenHash).toBe(hashToken(created.token));
     expect(data.data.tokenHash).not.toBe(created.token);
+  });
+
+  it("erzeugt ein kurzes Token – der Link muss in eine Mail passen", async () => {
+    const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
+    // 16 Byte base64url = 22 Zeichen. Das alte signierte Format lag bei ~170.
+    expect(created.token).toHaveLength(22);
+    expect(created.token).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(created.url.length).toBeLessThan(60);
   });
 
   it("baut die Kunden-URL auf den Selbstauskunftspfad", () => {
@@ -51,14 +74,17 @@ describe("Selbstauskunft-Link", () => {
 
   it("löst ein gültiges Token auf", async () => {
     const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
-    linkFindUnique.mockResolvedValue({
-      id: "link-1",
-      tokenHash: hashToken(created.token),
-      active: true,
-      expiresAt: morgen,
-      caseId: "case-1",
-      case: { organizationId: "org-1" },
-    });
+    zeileNurBei(
+      { tokenHash: hashToken(created.token) },
+      {
+        id: "link-1",
+        tokenHash: hashToken(created.token),
+        active: true,
+        expiresAt: morgen,
+        caseId: "case-1",
+        case: { organizationId: "org-1" },
+      }
+    );
     await expect(resolveSelfDisclosureToken(created.token)).resolves.toEqual({
       linkId: "link-1",
       caseId: "case-1",
@@ -68,7 +94,7 @@ describe("Selbstauskunft-Link", () => {
 
   it("weist einen widerrufenen Link ab", async () => {
     const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
-    linkFindUnique.mockResolvedValue({
+    zeileNurBei({ tokenHash: hashToken(created.token) }, {
       id: "link-1",
       tokenHash: hashToken(created.token),
       active: false,
@@ -81,7 +107,7 @@ describe("Selbstauskunft-Link", () => {
 
   it("weist einen abgelaufenen Link ab", async () => {
     const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
-    linkFindUnique.mockResolvedValue({
+    zeileNurBei({ tokenHash: hashToken(created.token) }, {
       id: "link-1",
       tokenHash: hashToken(created.token),
       active: true,
@@ -92,9 +118,12 @@ describe("Selbstauskunft-Link", () => {
     await expect(resolveSelfDisclosureToken(created.token)).resolves.toBeNull();
   });
 
-  it("weist ein Token mit falscher Signatur ab, ohne die Datenbank zu fragen", async () => {
+  it("weist ein erfundenes Token ab", async () => {
+    // Seit dem kurzen Token kostet das eine indizierte Abfrage: Der Aufloeser
+    // SUCHT die Zeile ueber den Hash, statt die Gueltigkeit aus dem Token
+    // selbst zu lesen. Ohne Treffer bleibt es beim Nein.
+    linkFindUnique.mockResolvedValue(null);
     await expect(resolveSelfDisclosureToken("gefaelscht.xxxx")).resolves.toBeNull();
-    expect(linkFindUnique).not.toHaveBeenCalled();
   });
 
   it("weist ein Upload-Token ab, das auf diesen Pfad gerichtet wird", async () => {
@@ -104,9 +133,9 @@ describe("Selbstauskunft-Link", () => {
     await expect(resolveSelfDisclosureToken(created.token)).resolves.toBeNull();
   });
 
-  it("weist ein Token ab, dessen Hash nicht zum Datensatz passt", async () => {
+  it("weist ein Token ab, dessen Hash zu keinem Datensatz passt", async () => {
     const created = await createSelfDisclosureLink("case-1", morgen, { organizationId: "org-1" });
-    linkFindUnique.mockResolvedValue({
+    zeileNurBei({ tokenHash: hashToken("ein-anderes-token") }, {
       id: "link-1",
       tokenHash: hashToken("ein-anderes-token"),
       active: true,

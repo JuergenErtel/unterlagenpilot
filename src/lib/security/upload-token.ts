@@ -50,6 +50,28 @@ export function randomToken(bytes = 24): string {
 }
 
 /**
+ * Kurzes, undurchsichtiges Token fuer Kundenlinks – 22 Zeichen statt der rund
+ * 170 des signierten Formats.
+ *
+ * Warum das reicht: Der signierte Token trug seine Gueltigkeit selbst mit sich
+ * (Fall, Link, Ablauf, Signatur) und war deshalb so lang. Gebraucht wird das
+ * nie – zu jedem Link existiert ohnehin eine Zeile in der Datenbank, und
+ * genau sie entscheidet ueber Ablauf, Kontingent und Widerruf. Der Aufloeser
+ * findet sie ueber den HMAC-Hash des Tokens (`hashToken`), also ohne dass ein
+ * Klartext-Token gespeichert waere.
+ *
+ * 16 Byte = 128 Bit Zufall. Ein Link ist damit nicht erratbar; zum Vergleich
+ * arbeiten die ueblichen Freigabelinks grosser Anbieter mit 60–130 Bit.
+ *
+ * Ein zu langer Link ist kein Schoenheitsfehler, sondern ein Zustellproblem:
+ * Er bricht in Mailprogrammen um, wird abgeschnitten und sieht nach Phishing
+ * aus – genau die Reaktion, die man beim Kunden nicht will.
+ */
+export function createLinkToken(): string {
+  return randomToken(16);
+}
+
+/**
  * Deterministischer Hash des (Klartext-)Tokens für die Speicherung.
  * Wir speichern NIE das Klartext-Token in der DB, sondern nur diesen Hash –
  * so ist ein DB-Leak nicht direkt als gültiger Upload-Link verwendbar.

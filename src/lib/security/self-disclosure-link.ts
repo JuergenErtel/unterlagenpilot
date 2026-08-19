@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
-import { createUploadToken, verifyUploadToken, hashToken } from "@/lib/security/upload-token";
+import { createLinkToken, verifyUploadToken, hashToken } from "@/lib/security/upload-token";
 
 /**
  * Magic Link für die Selbstauskunft – bewusst ein eigener Datensatz neben dem
@@ -25,24 +25,19 @@ export function buildSelfDisclosureUrl(token: string): string {
 }
 
 /**
- * Gemeinsamer Kern für beide Link-Arten: Zeile zuerst anlegen, damit die
- * linkId ins signierte Token wandern kann, danach den echten Hash nachtragen.
+ * Gemeinsamer Kern für beide Link-Arten.
+ *
+ * Kurzes, undurchsichtiges Token (22 Zeichen): Der Datensatz entscheidet ueber
+ * Gueltigkeit und Widerruf, das Token ist nur sein Schluessel. Damit faellt
+ * auch die alte Runde "anlegen, linkId ins Token backen, Hash nachtragen" weg.
  */
 async function linkAnlegen(
   ziel: { caseId: string } | { formularId: string },
   expiresAt: Date
 ): Promise<{ linkId: string; token: string }> {
+  const token = createLinkToken();
   const link = await prisma.selfDisclosureLink.create({
-    data: { ...ziel, tokenHash: `pending-${crypto.randomUUID()}`, expiresAt, active: true },
-  });
-  const token = createUploadToken({
-    ...("caseId" in ziel ? { caseId: ziel.caseId } : {}),
-    linkId: link.id,
-    exp: Math.floor(expiresAt.getTime() / 1000),
-  });
-  await prisma.selfDisclosureLink.update({
-    where: { id: link.id },
-    data: { tokenHash: hashToken(token) },
+    data: { ...ziel, tokenHash: hashToken(token), expiresAt, active: true },
   });
   return { linkId: link.id, token };
 }
@@ -96,28 +91,42 @@ export interface SelfDisclosureAccess {
 export async function resolveSelfDisclosureToken(
   token: string
 ): Promise<SelfDisclosureAccess | null> {
-  const payload = verifyUploadToken(token);
-  if (!payload) return null;
-  const link = await prisma.selfDisclosureLink.findUnique({
-    where: { id: payload.linkId },
-    select: {
-      id: true,
-      tokenHash: true,
-      active: true,
-      expiresAt: true,
-      caseId: true,
-      case: { select: { organizationId: true } },
-      formularId: true,
-      formular: { select: { organizationId: true } },
-    },
+  const auswahl = {
+    id: true,
+    tokenHash: true,
+    active: true,
+    expiresAt: true,
+    caseId: true,
+    case: { select: { organizationId: true } },
+    formularId: true,
+    formular: { select: { organizationId: true } },
+  } as const;
+
+  // Kurzer Weg: Zeile ueber den Hash des undurchsichtigen Tokens finden.
+  let link = await prisma.selfDisclosureLink.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: auswahl,
   });
-  if (!link || !link.active) return null;
+
+  // Altbestand (signiertes Token mit eingebackener linkId) laeuft weiter, bis
+  // er ablaeuft – ein bereits versendeter Bogen darf nicht tot umfallen.
+  if (!link) {
+    const payload = verifyUploadToken(token);
+    if (!payload) return null;
+    link = await prisma.selfDisclosureLink.findUnique({
+      where: { id: payload.linkId },
+      select: auswahl,
+    });
+    if (!link) return null;
+    // Beide Seiten auf null normalisieren: Beim Formular-Link ist link.caseId
+    // null und payload.caseId undefined – ein roher !==-Vergleich wuerde jeden
+    // Formular-Bogen aussperren.
+    if ((link.caseId ?? null) !== (payload.caseId ?? null)) return null;
+    if (link.tokenHash !== hashToken(token)) return null;
+  }
+
+  if (!link.active) return null;
   if (link.expiresAt < new Date()) return null;
-  // Beide Seiten auf null normalisieren: Beim Formular-Link ist link.caseId
-  // null und payload.caseId undefined – ein roher !==-Vergleich wuerde jeden
-  // Formular-Bogen aussperren.
-  if ((link.caseId ?? null) !== (payload.caseId ?? null)) return null;
-  if (link.tokenHash !== hashToken(token)) return null;
 
   const organizationId = link.case?.organizationId ?? link.formular?.organizationId ?? null;
   // Weder Fall noch Formular: verwaister Link, kein Zugang.

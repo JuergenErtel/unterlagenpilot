@@ -186,25 +186,38 @@ export interface UploadTokenAccess {
  * Seitenanzeige). Neue Uploads gehen über `requireUploadTokenAccess`.
  */
 export async function resolveUploadToken(token: string): Promise<UploadTokenAccess | null> {
-  const payload = verifyUploadToken(token);
-  if (!payload) return null;
   const { hashToken } = await import("@/lib/security/upload-token");
-  const link = await prisma.uploadLink.findUnique({
-    where: { id: payload.linkId },
-    select: {
-      id: true,
-      token: true,
-      active: true,
-      expiresAt: true,
-      caseId: true,
-      case: { select: { organizationId: true } },
-    },
+  const auswahl = {
+    id: true,
+    token: true,
+    active: true,
+    expiresAt: true,
+    caseId: true,
+    case: { select: { organizationId: true } },
+  } as const;
+
+  // Der kurze Weg: Das Token ist undurchsichtig, seine Zeile findet sich ueber
+  // den Hash. Gespeichert ist weiterhin nur der Hash – ein Datenbankleck
+  // liefert also keinen benutzbaren Link.
+  let link = await prisma.uploadLink.findUnique({
+    where: { token: hashToken(token) },
+    select: auswahl,
   });
-  if (!link || !link.active) return null;
+
+  // Altbestand: Vor dem 19.08.2026 trug das Token seine linkId signiert in
+  // sich. Solche Links laufen weiter, bis sie ablaufen – ein Kunde, der die
+  // Mail von gestern oeffnet, darf nicht vor einer toten Seite stehen.
+  if (!link) {
+    const payload = verifyUploadToken(token);
+    if (!payload) return null;
+    link = await prisma.uploadLink.findUnique({ where: { id: payload.linkId }, select: auswahl });
+    if (!link) return null;
+    if (link.caseId !== payload.caseId) return null;
+    if (link.token !== hashToken(token)) return null;
+  }
+
+  if (!link.active) return null;
   if (link.expiresAt < new Date()) return null;
-  if (link.caseId !== payload.caseId) return null;
-  // Token-Hash-Abgleich (Klartext-Token wird nicht gespeichert).
-  if (link.token !== hashToken(token)) return null;
   return { linkId: link.id, caseId: link.caseId, organizationId: link.case.organizationId };
 }
 

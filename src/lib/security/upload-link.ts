@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
-import { createUploadToken, hashToken } from "@/lib/security/upload-token";
+import { createLinkToken, hashToken } from "@/lib/security/upload-token";
 
 /**
  * Sichere Kunden-Upload-Links.
@@ -41,18 +41,15 @@ export async function createSecureUploadLink(
 ): Promise<CreatedUploadLink> {
   const maxUploads = options.singleUse ? 1 : options.maxUploads ?? null;
 
-  // 1) Link-Zeile anlegen (Platzhalter-Token, sofort durch Hash ersetzt).
+  // Kurzes, undurchsichtiges Token – die Zeile in der Datenbank ist die
+  // Wahrheit ueber Ablauf, Kontingent und Widerruf, das Token nur ihr
+  // Schluessel. Deshalb faellt die alte Runde "Zeile anlegen, linkId ins
+  // signierte Token backen, Hash nachtragen" ganz weg: ein Schreibvorgang
+  // statt zwei, und der Link ist 22 statt rund 170 Zeichen lang.
+  const token = createLinkToken();
   const link = await prisma.uploadLink.create({
-    data: { caseId, token: `pending-${crypto.randomUUID()}`, expiresAt, maxUploads, active: true },
+    data: { caseId, token: hashToken(token), expiresAt, maxUploads, active: true },
   });
-
-  // 2) Signiertes Token mit linkId binden, Hash speichern.
-  const token = createUploadToken({
-    caseId,
-    linkId: link.id,
-    exp: Math.floor(expiresAt.getTime() / 1000),
-  });
-  await prisma.uploadLink.update({ where: { id: link.id }, data: { token: hashToken(token) } });
 
   await audit({
     organizationId: options.organizationId,

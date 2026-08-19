@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -416,9 +416,21 @@ export function FallbildAnsicht({
 /**
  * Flagge samt Beschriftung an einem offenen Ende des Bogens.
  *
- * Der Mast steht immer senkrecht auf dem Ankerpunkt, das Tuch weht nach
- * aussen – links nach links, rechts nach rechts. Sonst zeigte die Startflagge
- * in den Bogen hinein und sähe aus, als gehörte sie zum ersten Tor.
+ * Beide Flaggen sind Geschwister: gleiche Masthoehe, gleicher Fuss, gleiche
+ * gewellte Tuchkontur. Nur die Fuellung unterscheidet sie – der Start traegt
+ * ein ruhiges einfarbiges Tuch, das Ziel das karierte Muster, das jeder als
+ * Zielflagge liest. So sagt das Bildpaar auf einen Blick, dass der Bogen eine
+ * Richtung hat, ohne dass ein zweites Formenvokabular dazukommt.
+ *
+ * Die Tuecher wehen einander ZU (das linke nach rechts, das rechte nach
+ * links). Nach aussen gerichtet liefe das linke Tuch in den aufsteigenden
+ * Bogen hinein – dort ist bei dieser Masthoehe nur ein Fingerbreit Platz. So
+ * stehen sie stattdessen wie ein Tor am offenen Ende, und der Raum unterhalb
+ * der Nabe ist ohnehin frei. Gespiegelt wird die ganze Tuchgruppe, nicht jede
+ * Koordinate einzeln – die Kontur bleibt dadurch auf beiden Seiten dieselbe.
+ *
+ * Bewusst OHNE Zustandsfarbe: Gruen heisst auf diesem Bild "geschafft"; eine
+ * gruene Zielflagge wuerde jeden Fall fuer fertig erklaeren.
  */
 function StartZiel({
   x,
@@ -433,51 +445,86 @@ function StartZiel({
   seite: "links" | "rechts";
   ziel?: boolean;
 }) {
-  const richtung = seite === "links" ? -1 : 1;
-  const B = 13; // Tuchbreite
-  const H = 9; // Tuchhoehe
-  const MAST = 20;
+  const id = useId().replace(/:/g, "");
+  // Nach innen: am linken Ende weht das Tuch nach rechts und umgekehrt.
+  const richtung = seite === "links" ? 1 : -1;
+
+  const B = 34; // Tuchbreite
+  const H = 22; // Tuchhoehe
+  const MAST = 52; // Masthoehe ueber dem Ankerpunkt
   const oben = -MAST;
-  // Das Tuch weht nach aussen; links vom Mast heisst negative x-Werte.
-  const links = richtung < 0 ? -B : 0;
-  const farbe = ziel ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))";
+  const farbe = "hsl(var(--foreground))";
+
+  // Ein Tuch, das haengt und weht: Ober- und Unterkante schwingen gleichsinnig,
+  // sonst wirkt es wie ein verzogenes Rechteck statt wie Stoff.
+  const schwung = H * 0.3;
+  const tuch =
+    `M 0 ${oben} ` +
+    `C ${B * 0.34} ${oben - schwung}, ${B * 0.66} ${oben + schwung}, ${B} ${oben + schwung * 0.5} ` +
+    `L ${B} ${oben + H + schwung * 0.5} ` +
+    `C ${B * 0.66} ${oben + H + schwung}, ${B * 0.34} ${oben + H - schwung}, 0 ${oben + H} Z`;
+
+  const spalten = 4;
+  const zeilen = 3;
 
   return (
     <g transform={`translate(${x},${y})`} aria-hidden>
-      {/* Ankerpunkt: das Ende des Bogens bleibt ein Punkt, keine Flagge im Nichts. */}
-      <circle r={3.5} fill={farbe} />
-      <line x1={0} y1={0} x2={0} y2={oben} stroke={farbe} strokeWidth={1.6} strokeLinecap="round" />
-      {ziel ? (
-        <>
-          {/* Zielflagge: 4x2 Karos, abwechselnd gefuellt. */}
-          <rect x={links} y={oben} width={B} height={H} fill="hsl(var(--card))" stroke={farbe} strokeWidth={1.2} />
-          {[0, 1, 2, 3].map((sp) =>
-            [0, 1].map((ze) =>
-              (sp + ze) % 2 === 0 ? (
-                <rect
-                  key={`${sp}-${ze}`}
-                  x={links + (B / 4) * sp}
-                  y={oben + (H / 2) * ze}
-                  width={B / 4}
-                  height={H / 2}
-                  fill={farbe}
-                />
-              ) : null
-            )
-          )}
-        </>
-      ) : (
-        /* Startflagge: ein schlichtes, wehendes Tuch. */
-        <path
-          d={`M 0 ${oben} L ${richtung * B} ${oben + H / 2} L 0 ${oben + H} Z`}
-          fill={farbe}
-        />
-      )}
+      {/* Fuss: eine flache Scheibe. Sie markiert weiterhin das Bogenende – der
+          nackte Punkt von vorher war genau das, nur ohne Flagge darauf. */}
+      <ellipse cx={0} cy={0} rx={7.5} ry={2.8} fill={farbe} opacity={0.9} />
+      <line
+        x1={0}
+        y1={0}
+        x2={0}
+        y2={oben - 4}
+        stroke={farbe}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+      />
+      {/* Knauf an der Mastspitze – ohne ihn endet der Mast wie abgeschnitten. */}
+      <circle cx={0} cy={oben - 5} r={2.6} fill={farbe} />
+
+      <g transform={richtung < 0 ? "scale(-1,1)" : undefined}>
+        {ziel ? (
+          <>
+            <defs>
+              <clipPath id={`tuch-${id}`}>
+                <path d={tuch} />
+              </clipPath>
+            </defs>
+            {/* Karos innerhalb der Tuchkontur: Das Muster wellt dadurch mit,
+                statt in einem starren Rechteck zu sitzen. */}
+            <g clipPath={`url(#tuch-${id})`}>
+              <rect x={0} y={oben - schwung} width={B} height={H + 2 * schwung} fill="hsl(var(--card))" />
+              {Array.from({ length: spalten }).map((_, sp) =>
+                Array.from({ length: zeilen }).map((_, ze) =>
+                  (sp + ze) % 2 === 0 ? (
+                    <rect
+                      key={`${sp}-${ze}`}
+                      x={(B / spalten) * sp}
+                      y={oben - schwung + ((H + 2 * schwung) / zeilen) * ze}
+                      width={B / spalten}
+                      height={(H + 2 * schwung) / zeilen}
+                      fill={farbe}
+                    />
+                  ) : null
+                )
+              )}
+            </g>
+            <path d={tuch} fill="none" stroke={farbe} strokeWidth={1.6} strokeLinejoin="round" />
+          </>
+        ) : (
+          <path d={tuch} fill={farbe} opacity={0.55} stroke={farbe} strokeWidth={1.6} strokeLinejoin="round" />
+        )}
+      </g>
+
+      {/* Die Beschriftung bleibt AUSSEN – unter dem Tuch stuende sie im Bild. */}
       <text
-        x={richtung * 9}
-        y={14}
+        x={(seite === "links" ? -1 : 1) * 11}
+        y={16}
         textAnchor={seite === "links" ? "end" : "start"}
-        fontSize={11}
+        fontSize={12}
+        fontWeight={600}
         fill="hsl(var(--muted-foreground))"
       >
         {label}
