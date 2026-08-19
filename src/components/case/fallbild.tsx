@@ -27,7 +27,10 @@ import { KontaktKnopfreihe } from "@/components/case/kontakt-knopfreihe";
 /* Geometrie. Der Bogen laeuft von 210° im Uhrzeigersinn ueber den Scheitel bis
    150°; 0° ist oben. Damit steigt der Weg links auf und endet unten rechts,
    und die Luecke unten traegt sichtbar Start und Ziel. */
-const CX = 410;
+// Mehr Luft nach links und rechts als der Bogen breit ist: Die Torbeschriftung
+// steht AUSSERHALB des Bogens (R + 30) und braucht dort ihre Textbreite.
+// "Dokumentenpruefung" lief bei 820 Einheiten rechts aus dem Bild.
+const CX = 450;
 const CY = 340;
 const R = 272;
 const DICKE = 22;
@@ -43,6 +46,17 @@ const FARBE: Record<Tone, string> = {
   ai: "hsl(var(--ai))",
   neutral: "hsl(var(--muted-foreground))",
 };
+
+/**
+ * Zerlegt den Namen der Nabe in Zeilen. Zwei Antragsteller stehen als
+ * "A & B" da – der Umbruch am "&" ist die einzige Stelle, an der ein
+ * Kundenname ohne Sinnverlust brechen darf. Alles andere bleibt einzeilig
+ * und wird ueber die Schriftgroesse eingepasst.
+ */
+function teileNamen(name: string): string[] {
+  const teile = name.split(" & ").map((t) => t.trim()).filter(Boolean);
+  return teile.length > 1 ? teile : [name];
+}
 
 function punkt(grad: number, radius: number): [number, number] {
   const rad = ((grad - 90) * Math.PI) / 180;
@@ -122,7 +136,7 @@ export function FallbildAnsicht({
               was man da sieht – Juergens Wortlaut. */}
           <p className="px-2 pb-1 pt-1 text-sm font-semibold">Dein Weg zur Einreichung</p>
           <svg
-            viewBox="0 0 820 625"
+            viewBox="0 0 900 625"
             preserveAspectRatio="xMidYMid meet"
             className="h-[clamp(420px,62vh,620px)] w-full"
             role="group"
@@ -257,13 +271,42 @@ export function FallbildAnsicht({
             <text x={CX} y={CY - 30} textAnchor="middle" fontSize={10} letterSpacing="0.1em" fill="hsl(var(--muted-foreground))" style={{ fontFamily: "var(--font-geist-mono, ui-monospace, monospace)" }}>
               {bild.fall.nummer}
             </text>
-            <text x={CX} y={CY - 4} textAnchor="middle" fontSize={22} fontWeight={600} fill="hsl(var(--foreground))">
-              {bild.fall.name}
-            </text>
-            <text x={CX} y={CY + 16} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))">
+            {/* Der Name traegt die Nabe – und sprengte sie: "Mate Topcic &
+                Jadranka Topcic" lief bei fester Schriftgroesse weit ueber den
+                Rahmen hinaus. Paare brechen deshalb am "&" um, und die
+                Schriftgroesse folgt der laengsten Zeile. Abgeschnitten wird
+                nichts: Ein halber Kundenname ist schlimmer als kleine Schrift. */}
+            {(() => {
+              const zeilen = teileNamen(bild.fall.name);
+              const laengste = Math.max(...zeilen.map((z) => z.length));
+              // 190 Einheiten Innenbreite, rund 0,55 Einheiten je Zeichen und
+              // Punkt Schriftgroesse -> so viel passt hinein.
+              const groesse = Math.max(12, Math.min(22, Math.floor(176 / (laengste * 0.55))));
+              const start = zeilen.length === 1 ? CY - 4 : CY - 12;
+              return zeilen.map((z, i) => (
+                <text
+                  key={i}
+                  x={CX}
+                  y={start + i * (groesse + 2)}
+                  textAnchor="middle"
+                  fontSize={groesse}
+                  fontWeight={600}
+                  fill="hsl(var(--foreground))"
+                >
+                  {z}
+                </text>
+              ));
+            })()}
+            <text
+              x={CX}
+              y={CY + (teileNamen(bild.fall.name).length > 1 ? 22 : 16)}
+              textAnchor="middle"
+              fontSize={11}
+              fill="hsl(var(--muted-foreground))"
+            >
               {bild.fall.vorhaben}
             </text>
-            <text x={CX} y={CY + 40} textAnchor="middle" fontSize={16} fill="hsl(var(--foreground))" style={{ fontFamily: "var(--font-geist-mono, ui-monospace, monospace)", fontVariantNumeric: "tabular-nums" }}>
+            <text x={CX} y={CY + 42} textAnchor="middle" fontSize={16} fill="hsl(var(--foreground))" style={{ fontFamily: "var(--font-geist-mono, ui-monospace, monospace)", fontVariantNumeric: "tabular-nums" }}>
               {bild.fall.betrag}
             </text>
 
