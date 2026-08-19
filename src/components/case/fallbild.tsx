@@ -492,23 +492,32 @@ function StartZiel({
   // Nach innen: am linken Ende weht das Tuch nach rechts und umgekehrt.
   const richtung = seite === "links" ? 1 : -1;
 
-  const B = 34; // Tuchbreite
-  const H = 22; // Tuchhoehe
-  const MAST = 52; // Masthoehe ueber dem Ankerpunkt
+  const B = 40; // Tuchbreite
+  const H = 26; // Tuchhoehe
+  const MAST = 58; // Masthoehe ueber dem Ankerpunkt
   const oben = -MAST;
   const farbe = "hsl(var(--foreground))";
+  // Die Startflagge traegt die Tinte der Marke. Kein Gruen, kein Rot: Auf
+  // diesem Bild sind das Zustaende ("geschafft", "blockiert"), und eine
+  // Flagge ist kein Zustand.
+  const tuchfarbe = ziel ? farbe : "hsl(var(--primary))";
 
-  // Ein Tuch, das haengt und weht: Ober- und Unterkante schwingen gleichsinnig,
-  // sonst wirkt es wie ein verzogenes Rechteck statt wie Stoff.
-  const schwung = H * 0.3;
+  // Stoff, kein verzogenes Rechteck: Ober- und Unterkante laufen PARALLEL
+  // durch dieselbe Welle, um H versetzt. Die erste Fassung liess beide Kanten
+  // gegeneinander schwingen – das Tuch dellte in der Mitte ein.
+  const welle = (y: number, richtungHin: boolean) =>
+    richtungHin
+      ? `C ${B * 0.38} ${y - 6}, ${B * 0.62} ${y + 8}, ${B} ${y + 3}`
+      : `C ${B * 0.62} ${y + 8}, ${B * 0.38} ${y - 6}, 0 ${y}`;
   const tuch =
-    `M 0 ${oben} ` +
-    `C ${B * 0.34} ${oben - schwung}, ${B * 0.66} ${oben + schwung}, ${B} ${oben + schwung * 0.5} ` +
-    `L ${B} ${oben + H + schwung * 0.5} ` +
-    `C ${B * 0.66} ${oben + H + schwung}, ${B * 0.34} ${oben + H - schwung}, 0 ${oben + H} Z`;
+    `M 0 ${oben} ${welle(oben, true)} ` +
+    `L ${B} ${oben + H + 3} ` +
+    `${welle(oben + H, false)} Z`;
 
-  const spalten = 4;
-  const zeilen = 3;
+  // Wenige, grosse Karos wirken ruhiger als ein feines Raster, das bei dieser
+  // Groesse nur noch flimmert.
+  const spalten = 3;
+  const zeilen = 2;
 
   return (
     <g transform={`translate(${x},${y})`} aria-hidden>
@@ -537,17 +546,21 @@ function StartZiel({
             </defs>
             {/* Karos innerhalb der Tuchkontur: Das Muster wellt dadurch mit,
                 statt in einem starren Rechteck zu sitzen. */}
+            {/* Das Karomuster liegt grosszuegig ueber der Kontur und wird von
+                ihr beschnitten – so wellt es mit, statt in einem starren
+                Rechteck zu sitzen. Rand: 12 Einheiten nach oben und unten
+                decken die Wellenbewegung sicher ab. */}
             <g clipPath={`url(#tuch-${id})`}>
-              <rect x={0} y={oben - schwung} width={B} height={H + 2 * schwung} fill="hsl(var(--card))" />
+              <rect x={0} y={oben - 12} width={B} height={H + 24} fill="hsl(var(--card))" />
               {Array.from({ length: spalten }).map((_, sp) =>
                 Array.from({ length: zeilen }).map((_, ze) =>
                   (sp + ze) % 2 === 0 ? (
                     <rect
                       key={`${sp}-${ze}`}
                       x={(B / spalten) * sp}
-                      y={oben - schwung + ((H + 2 * schwung) / zeilen) * ze}
+                      y={oben - 12 + ((H + 24) / zeilen) * ze}
                       width={B / spalten}
-                      height={(H + 2 * schwung) / zeilen}
+                      height={(H + 24) / zeilen}
                       fill={farbe}
                     />
                   ) : null
@@ -557,7 +570,7 @@ function StartZiel({
             <path d={tuch} fill="none" stroke={farbe} strokeWidth={1.6} strokeLinejoin="round" />
           </>
         ) : (
-          <path d={tuch} fill={farbe} opacity={0.55} stroke={farbe} strokeWidth={1.6} strokeLinejoin="round" />
+          <path d={tuch} fill={tuchfarbe} stroke={tuchfarbe} strokeWidth={1.4} strokeLinejoin="round" />
         )}
       </g>
 
