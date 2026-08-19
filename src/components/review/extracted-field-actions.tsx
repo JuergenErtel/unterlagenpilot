@@ -30,10 +30,24 @@ export function ExtractedFieldActions({
     });
   }
 
+  // Geprüft heißt nicht endgültig: Wer beim ersten Durchgang zu schnell auf ✓
+  // geklickt hat, kam an das Feld sonst nicht mehr heran – der Stift bleibt.
   if (reviewed && !editing) {
     return (
-      <span className="rounded bg-success/15 px-1.5 py-0.5 text-[11px] text-success">
-        geprüft
+      <span className="flex items-center gap-1">
+        <span className="rounded bg-success/15 px-1.5 py-0.5 text-[11px] text-success">
+          geprüft
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          disabled={pending}
+          aria-label="Wert erneut korrigieren"
+          title="Erneut korrigieren"
+          className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
       </span>
     );
   }

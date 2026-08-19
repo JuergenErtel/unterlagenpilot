@@ -59,6 +59,7 @@ import { DocumentsProcessing } from "@/components/case/documents-processing";
 import { isAiCheckRunning, isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
 import { countProcessingDocuments } from "@/lib/documents/processing";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
+import { ReopenDocumentButton } from "@/components/review/reopen-document-button";
 import { ApplicantSelect } from "@/components/review/applicant-select";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
@@ -614,11 +615,23 @@ export default async function CaseCockpitPage({
                                   <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
                                 )
                               ) : d.reviewStatus === "akzeptiert" ? (
-                                <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+                                // Der Weg zurueck gehoert genau hierhin: Erkannte Felder
+                                // sind nur im Review-Center sichtbar, und das laedt nur
+                                // offene Dokumente. Ohne diesen Knopf war ein falsch
+                                // erkannter Wert nach der Freigabe unerreichbar.
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+                                  <ReopenDocumentButton documentId={d.id} />
+                                </div>
                               ) : (
-                                <Badge variant="neutral">
-                                  {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
-                                </Badge>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="neutral">
+                                    {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                                  </Badge>
+                                  {d.reviewStatus === "abgelehnt" && (
+                                    <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
+                                  )}
+                                </div>
                               )}
                             </TableCell>
                           </TableRow>

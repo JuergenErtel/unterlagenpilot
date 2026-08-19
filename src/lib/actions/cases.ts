@@ -553,6 +553,70 @@ export async function setDocumentReview(
 }
 
 /**
+ * Nimmt die Freigabe (oder Ablehnung) eines Dokuments zurück: zurück auf "offen".
+ *
+ * Warum es das braucht: Erkannte Felder sind ausschliesslich im Review-Center
+ * sichtbar, und das laedt nur Dokumente mit reviewStatus "offen". Wer einmal
+ * freigegeben hat, kam an einen falsch erkannten Wert nie wieder heran – die
+ * Fallakte zeigte nur noch ein gruenes Abzeichen. Genau diese Sackgasse macht
+ * diese Aktion auf.
+ *
+ * Bewusst NICHT rueckgaengig gemacht werden die beim Akzeptieren uebernommenen
+ * Stamm- und Objektdaten: die Uebernahme fuellt nur leere Felder, und im
+ * Nachhinein ist nicht mehr unterscheidbar, welcher Wert von ihr stammt und
+ * welchen der Vermittler danach selbst getippt hat. Ein pauschales Leeren
+ * loeschte also fremde Arbeit. Stammdaten korrigiert man in der Fallakte.
+ *
+ * "ersetzt" und "duplikat" bleiben aussen vor: die setzt nicht der Vermittler,
+ * sondern die Aufteilung bzw. die Dublettenpruefung. Ein zurueckgeholtes
+ * Herkunftsdokument stuende neben seinen Teildokumenten in der Checkliste.
+ */
+export async function reopenDocument(documentId: string): Promise<void> {
+  const ctx = await requireContext();
+
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      caseId: true,
+      reviewStatus: true,
+      case: { select: { organizationId: true, status: true } },
+    },
+  });
+  if (!doc || doc.case.organizationId !== ctx.organizationId) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+
+  // Nur zurueckholen, was ein Mensch entschieden hat.
+  if (doc!.reviewStatus !== "akzeptiert" && doc!.reviewStatus !== "abgelehnt") return;
+
+  // Ein exportierter/uebertragener Fall ist raus – seine Unterlagen liegen
+  // bereits bei der Bank. Sie hier wieder auf "offen" zu stellen erzeugte einen
+  // Fall, der laut Checkliste unfertig ist und trotzdem eingereicht wurde.
+  if (LOCKED_CASE_STATUSES.has(doc!.case.status as CaseStatus)) return;
+
+  const vorher = doc!.reviewStatus;
+  await prisma.document.update({
+    where: { id: documentId },
+    // Ablehnungsgrund mit zuruecknehmen: er steht dem Kunden auf der
+    // Upload-Seite; er darf ein wieder offenes Dokument nicht weiter begleiten.
+    data: { reviewStatus: "offen", reviewNote: null },
+  });
+
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "document.reviewed",
+    entityType: "document",
+    entityId: documentId,
+    metadata: { reviewStatus: "offen", vorher },
+  });
+
+  revalidatePath(`/cases/${doc!.caseId}`);
+  revalidatePath("/review");
+}
+
+/**
  * Dünner Wrapper für `<form action={acceptDocument.bind(null, documentId)}>`.
  *
  * `setDocumentReview` hat seit dem optionalen `grund`-Parameter drei
