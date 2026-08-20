@@ -22,7 +22,7 @@ import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect } from "@/components/review/applicant-select";
 import { RejectDocumentButton } from "@/components/review/reject-document-button";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { formatConfidence } from "@/lib/utils";
+import { formatFeldwert } from "@/lib/utils";
 import {
   MAX_APPLICANTS,
   type DocumentType,
@@ -142,7 +142,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
         </Link>
       )}
       <PageHeader
-        eyebrow="KI-Auswertung"
+        eyebrow="Arbeit"
         title={caseScope ? `Dokumente freigeben · ${caseScope.caseNumber}` : "Review-Center"}
         subtitle={
           caseScope
@@ -236,7 +236,11 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                   <Link href={`/review?case=${d.caseId}`} className="hover:text-foreground hover:underline">
                     {d.case.caseNumber} · {name}
                   </Link>
-                  <Badge variant="neutral" className="font-mono tabular">Konfidenz {formatConfidence(d.confidence)}</Badge>
+                  {/* Kein "Konfidenz 90 %"-Chip mehr im Kopf: Die Klassifikations-
+                      Konfidenz liegt praktisch immer bei 0,98–1,00 und suggeriert
+                      eine Präzision, die es nicht gibt (siehe readable-Regel
+                      unten – auch erfundene Typen kamen mit 0,98). Die ehrlichen
+                      Signale sind die Hinweise rechts und die Stufen je Feld. */}
                   {/*
                     Die Hauptaktion gehoert an den Kopf des Dokuments. Unterhalb
                     von lg stapeln sich die drei Spalten der Karte, und die
@@ -321,9 +325,12 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                     <div key={f.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
                       <div className="min-w-0">
                         <div className="text-xs text-muted-foreground">{f.label}</div>
-                        {/* title: der abgeschnittene Wert bleibt per Mauszeiger lesbar. */}
+                        {/* title: der abgeschnittene bzw. ROHE Wert bleibt per
+                            Mauszeiger lesbar – formatiert wird nur die Anzeige
+                            (aus "4200" wird "4.200 €"), gespeichert und
+                            korrigiert wird immer der Rohwert. */}
                         <div className="truncate text-sm font-medium" title={f.correctedValue ?? f.value ?? undefined}>
-                          {f.correctedValue ?? f.value ?? "—"}
+                          {formatFeldwert(f.label, f.correctedValue ?? f.value)}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -360,8 +367,11 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
                       {/* Tinte, nicht Gruen: Gruen ist in dieser App ein
                           Zustand ("angenommen"), keine Aktion. Die eine
                           Hauptaktion je Bildschirm traegt immer die Tinte. */}
+                      {/* Dasselbe Wort wie der Knopf im Kopf: "Freigeben".
+                          "Dokument akzeptieren" daneben las sich wie eine
+                          ZWEITE, andere Aktion – es ist dieselbe. */}
                       <SubmitButton size="sm" className="w-full" pendingLabel="Wird übernommen …">
-                        {caseScope ? "Alle Felder übernehmen & Dokument freigeben" : "Dokument akzeptieren"}
+                        Alle Felder übernehmen & freigeben
                       </SubmitButton>
                     </form>
                     <div className="grid grid-cols-2 gap-1.5">

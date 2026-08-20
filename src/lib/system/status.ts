@@ -101,7 +101,7 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
     },
     {
       key: "ai",
-      label: "KI-Auswertung",
+      label: "KI-Prüfung",
       value: env.AI_PROVIDER,
       mode: env.AI_PROVIDER === "mock" ? "demo" : "configured",
     },

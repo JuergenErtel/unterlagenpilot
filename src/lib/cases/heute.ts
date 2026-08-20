@@ -111,8 +111,8 @@ export function abhakartFuer(key: NextStep["key"]): Abhakart {
  * Zahlen enthält: „4 Dokumente freigeben") nicht mehr zur Verfügung steht.
  */
 export const SCHRITT_LABEL: Record<NextStep["key"], string> = {
-  ki_laeuft: "KI-Auswertung",
-  ki_fehler: "KI-Auswertung unterbrochen",
+  ki_laeuft: "KI-Prüfung läuft",
+  ki_fehler: "KI-Prüfung unterbrochen",
   erstkontakt_email_fehlt: "E-Mail-Adresse ergänzen",
   erstkontakt_vorbereiten: "Erstkontakt vorbereiten",
   erstkontakt_entwurf: "Erstkontakt versenden",

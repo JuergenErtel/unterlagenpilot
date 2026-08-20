@@ -59,7 +59,7 @@ export default async function DashboardPage({
         subtitle={
           aktiv === "board"
             ? undefined
-            : "Statustrichter und Kennzahlen über alle Fälle – die Aufgaben stehen unter „Heute“."
+            : "Statustrichter und Kennzahlen über alle Fälle – die Aufgaben stehen in der Tagesliste."
         }
         actions={
           <>

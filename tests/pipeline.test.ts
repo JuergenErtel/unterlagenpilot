@@ -34,6 +34,26 @@ describe("buildPipeline", () => {
     const p = buildPipeline([c({ status: "abgeschlossen", darlehensbetrag: null, courtageProzent: null })]);
     expect(p.courtageAbgeschlossen).toBe(0);
   });
+
+  it("entscheidet mit gesetzter Leadphase über die Phase, nicht den Status", () => {
+    // Unterlagen fertig (Status abgeschlossen), vertrieblich aber erst Zusage:
+    // Die Courtage ist noch ERWARTET, nicht verdient.
+    const p = buildPipeline([
+      c({ status: "abgeschlossen", leadPhase: "zusage", darlehensbetrag: 400000, courtageProzent: 1.5 }),
+    ]);
+    expect(p.abgeschlossen).toHaveLength(0);
+    expect(p.offen).toHaveLength(1);
+    expect(p.couragePipeline).toBe(6000);
+  });
+
+  it("zählt verlorene Fälle weder als offen noch in die erwartete Courtage", () => {
+    const p = buildPipeline([
+      c({ status: "uebertragen", verloren: true, darlehensbetrag: 200000, courtageProzent: 1 }),
+    ]);
+    expect(p.offen).toHaveLength(0);
+    expect(p.abgeschlossen).toHaveLength(0);
+    expect(p.couragePipeline).toBe(0);
+  });
 });
 
 describe("Detektiv-Anstoss nach der Hintergrundanalyse", () => {

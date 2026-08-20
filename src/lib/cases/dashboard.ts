@@ -45,7 +45,15 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     prisma.case.groupBy({ by: ["status"], where: { organizationId }, _count: { _all: true } }),
     prisma.document.count({ where: { case: { organizationId }, reviewStatus: "offen", ocrStatus: "fertig" } }),
     prisma.document.count({ where: { case: { organizationId }, reviewStatus: "offen", classificationStatus: "fertig" } }),
-    prisma.document.count({ where: { case: { organizationId }, classificationStatus: "fertig" } }),
+    // Nur die letzten 7 Tage – das Label verspricht "diese Woche", gezählt
+    // wurde bis zum 20.08.2026 aber der gesamte Bestand.
+    prisma.document.count({
+      where: {
+        case: { organizationId },
+        classificationStatus: "fertig",
+        updatedAt: { gte: new Date(Date.now() - 7 * 86400_000) },
+      },
+    }),
   ]);
 
   const countByStatus = new Map<string, number>(

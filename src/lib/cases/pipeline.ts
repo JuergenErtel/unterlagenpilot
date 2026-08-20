@@ -8,6 +8,16 @@ export interface PipelineCaseInput {
   caseNumber: string;
   kundenName: string;
   status: string;
+  /**
+   * Vertriebsphase. Wenn gesetzt, entscheidet SIE über "abgeschlossen" –
+   * nicht der CaseStatus: Der misst die Unterlagen, und ein Fall mit fertigen
+   * Unterlagen (Status "abgeschlossen") kann vertrieblich noch in der Zusage
+   * stehen. Optional, damit Aufrufer ohne Phase (und die Bestandstests) beim
+   * bisherigen Status-Kriterium bleiben.
+   */
+  leadPhase?: string | null;
+  /** Verlorene Fälle zählen weder als offen noch als erwartete Courtage. */
+  verloren?: boolean;
   abschlussBank: string | null;
   darlehensbetrag: number | null;
   courtageProzent: number | null;
@@ -39,8 +49,11 @@ export function buildPipeline(cases: PipelineCaseInput[]): PipelineSummary {
     courtage: courtageOf(c.darlehensbetrag, c.courtageProzent),
   }));
 
-  const abgeschlossen = enriched.filter((c) => c.status === "abgeschlossen");
-  const offen = enriched.filter((c) => c.status !== "abgeschlossen");
+  const istAbgeschlossen = (c: PipelineCase) =>
+    c.leadPhase != null ? c.leadPhase === "abgeschlossen" : c.status === "abgeschlossen";
+
+  const abgeschlossen = enriched.filter((c) => !c.verloren && istAbgeschlossen(c));
+  const offen = enriched.filter((c) => !c.verloren && !istAbgeschlossen(c));
 
   const sum = (xs: PipelineCase[]) => xs.reduce((acc, c) => acc + (c.courtage ?? 0), 0);
 

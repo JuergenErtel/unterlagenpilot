@@ -77,15 +77,21 @@ export async function ArbeitsAnsicht({
             <span>Was heute zu tun ist, steht in der Tagesliste – nach Dringlichkeit sortiert.</span>
           </div>
           <Button asChild variant="outline" size="sm">
-            <Link href="/heute">Zu den To Dos</Link>
+            <Link href="/heute">Zur Tagesliste</Link>
           </Button>
         </div>
       )}
 
-      {/* 2) Statustrichter */}
+      {/* 2) Statustrichter. NICHT "Pipeline" nennen: Das Board zeigt die
+          Vertriebsphasen, dieser Trichter den Stand der UNTERLAGEN – zwei
+          verschiedene Fragen, die unter demselben Namen niemand
+          auseinanderhalten kann. */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle className="eyebrow">Fall-Pipeline</CardTitle>
+          <CardTitle className="eyebrow">Unterlagen-Status</CardTitle>
+          <p className="text-xs font-normal normal-case tracking-normal text-muted-foreground">
+            Wo die Unterlagen jedes Falls stehen – die Vertriebsphasen zeigt das Board.
+          </p>
         </CardHeader>
         <CardContent>
           <Pipeline stages={data.pipeline} />
@@ -106,7 +112,7 @@ export async function ArbeitsAnsicht({
           {
             titel: "Prüfung",
             zeilen: [
-              { label: "Prüfbereite KI-Auswertungen", wert: data.kpis.pruefbereit, href: "/review" },
+              { label: "Dokumente im Review-Center", wert: data.kpis.pruefbereit, href: "/review" },
               {
                 label: "Fehlende Unterlagen",
                 wert: data.kpis.unterlagenFehlen,

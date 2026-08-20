@@ -93,6 +93,28 @@ const PHASEN_FARBE: Record<string, { kante: string; flaeche: string; zahl: strin
 const PHASE_STANDARD = { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40", zahl: "text-muted-foreground" };
 
 /**
+ * Ein Satz je Phase – als Mauszeiger-Hinweis am Spaltenkopf. Besonders die
+ * leeren, schmalen Schienen wirkten sonst wie Deko: Der Hinweis sagt, was in
+ * dieser Phase passiert, ohne der Spalte Breite zu kosten.
+ */
+const PHASEN_HINWEIS: Record<string, string> = {
+  neu: "Frisch eingegangene Leads – der erste Anruf entscheidet.",
+  anfrage_erstellt: "Kontakt besteht, die Finanzierungsanfrage ist angelegt.",
+  selbstauskunft_laeuft: "Der Kunde füllt Selbstauskunft und Unterlagen.",
+  finanzierungsvorschlag: "Angebot ist beim Kunden – Entscheidung steht aus.",
+  kreditpruefung_eingereicht: "Der Fall liegt bei der Bank zur Prüfung.",
+  zusage: "Die Bank hat zugesagt – Vertrag und Auszahlung folgen.",
+  abgeschlossen: "Finanzierung notariell abgeschlossen – Courtage verdient.",
+  verloren: "Nicht zustande gekommen – mit Grund, damit auswertbar bleibt, wo verloren wird.",
+};
+
+/** "seit 0 Tagen" ist Maschinensprache – auf der Karte steht "heute". */
+function liegezeitText(tage: number): string {
+  if (tage === 0) return "heute";
+  return tage === 1 ? "seit 1 Tag" : `seit ${tage} Tagen`;
+}
+
+/**
  * Das Kanban der Vertriebsphasen. Karten lassen sich ziehen; weil das auf dem
  * Handy und ohne Zeigegerät unzuverlässig ist, hat jede Karte zusätzlich ein
  * Menü mit denselben Zielen.
@@ -139,7 +161,8 @@ export function LeadBoard({
         <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
           {quellen.map((q) => (
             <span key={q.label} className="rounded-full border px-2 py-0.5">
-              {q.label} <span className="tabular font-medium text-foreground">{q.anzahl}</span>
+              {q.label === "Unbekannt" ? "Quelle unbekannt" : q.label}{" "}
+              <span className="tabular font-medium text-foreground">{q.anzahl}</span>
             </span>
           ))}
         </div>
@@ -186,7 +209,10 @@ export function LeadBoard({
                   className={`flex shrink-0 flex-col overflow-hidden rounded-lg transition-all md:w-11 md:items-center max-md:w-full ${farbe.flaeche}`}
                 >
                   <div className={`h-1 w-full ${farbe.kante}`} aria-hidden />
-                  <p className="p-2 text-xs font-medium text-muted-foreground max-md:flex max-md:items-baseline max-md:gap-2 md:mt-1 md:[writing-mode:vertical-rl]">
+                  <p
+                    title={PHASEN_HINWEIS[s.phase]}
+                    className="p-2 text-xs font-medium text-muted-foreground max-md:flex max-md:items-baseline max-md:gap-2 md:mt-1 md:[writing-mode:vertical-rl]"
+                  >
                     {s.titel}
                     <span className="max-md:text-muted-foreground/70 md:mt-1.5">0</span>
                   </p>
@@ -213,7 +239,7 @@ export function LeadBoard({
                 <div className={`h-1 ${farbe.kante}`} aria-hidden />
                 {/* Titel und Zahlen untereinander: In einer Zeile schnitt der
                     Platz "Kreditprüfung eingereicht" zu "…eingerei…" ab. */}
-                <header className="px-3 pb-1.5 pt-2">
+                <header className="px-3 pb-1.5 pt-2" title={PHASEN_HINWEIS[s.phase]}>
                   <p className="text-sm font-semibold leading-tight">{s.titel}</p>
                   <p className="text-xs text-muted-foreground">
                     <span className={`tabular font-semibold ${farbe.zahl}`}>{s.anzahl}</span>{" "}
@@ -237,7 +263,9 @@ export function LeadBoard({
                       } ${gezogen === k.caseId ? "opacity-50" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <Link href={`/cases/${k.caseId}`} className="min-w-0 truncate font-medium hover:underline">
+                        {/* Der Name ist das Wichtigste auf der Karte – lieber
+                            zwei Zeilen als "Jan Petersen & Svenja Peters…". */}
+                        <Link href={`/cases/${k.caseId}`} className="line-clamp-2 min-w-0 break-words font-medium hover:underline">
                           {k.kundenName}
                         </Link>
                         <details className="relative shrink-0">
@@ -280,8 +308,11 @@ export function LeadBoard({
                       </div>
 
                       <p className="text-xs text-muted-foreground">
-                        <span className="tabular">{k.volumen != null ? eur(k.volumen) : "—"}</span> · seit{" "}
-                        {k.liegezeit} {k.liegezeit === 1 ? "Tag" : "Tagen"} · {k.quelle}
+                        <span className="tabular">{k.volumen != null ? eur(k.volumen) : "—"}</span> ·{" "}
+                        {liegezeitText(k.liegezeit)}
+                        {/* "· Unbekannt" las sich wie ein Datenfehler – eine
+                            unbekannte Quelle sagt schlicht nichts und schweigt. */}
+                        {k.quelle !== "Unbekannt" && <> · {k.quelle}</>}
                       </p>
 
                       {/*

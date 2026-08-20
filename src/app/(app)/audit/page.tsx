@@ -110,7 +110,7 @@ export default async function AuditPage() {
         <CardContent className="flex items-start gap-3 p-5 text-sm text-muted-foreground">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-success" />
           <p>
-            Jede Änderung, KI-Auswertung, Freigabe und jeder Export wird
+            Jede Änderung, KI-Prüfung, Freigabe und jeder Export wird
             nachvollziehbar protokolliert. Sensible Klartexte (z. B. IBAN oder
             Ausweisnummern) werden dabei nie gespeichert.
           </p>

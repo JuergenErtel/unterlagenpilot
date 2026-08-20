@@ -37,7 +37,8 @@ export function SyncStatus({
           </>
         ) : (
           <span>
-            Zuletzt abgeglichen {zuletzt}
+            {/* "Zuletzt abgeglichen noch nie" ist kein Satz. */}
+            {zuletzt === "noch nie" ? "Noch nie abgeglichen" : `Zuletzt abgeglichen ${zuletzt}`}
             {angelegt > 0 && ` · ${angelegt} neue${angelegt === 1 ? "r Lead" : " Leads"}`}
           </span>
         )}

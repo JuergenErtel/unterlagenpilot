@@ -335,7 +335,7 @@ function bauePruefung(id: string, c: CockpitData): Tor {
 
   const zustand =
     docsLaufend > 0
-      ? "KI-Auswertung läuft"
+      ? "KI-Prüfung läuft"
       : criticals > 0
         ? `${criticals} kritische${criticals === 1 ? "r" : ""} Hinweis${criticals === 1 ? "" : "e"}`
         : pruefbereit > 0

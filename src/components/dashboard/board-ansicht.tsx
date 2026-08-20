@@ -21,10 +21,12 @@ function dateStr(d: Date | null): string {
   return d ? d.toLocaleDateString("de-DE") : "—";
 }
 
-/** Eine Kennzahl der stillen Zeile über dem Board: Beschriftung klein, Zahl in der Displayschrift. */
-function Kennzahl({ label, wert, ton }: { label: string; wert: string; ton?: string }) {
+/** Eine Kennzahl der stillen Zeile über dem Board: Beschriftung klein, Zahl in der Displayschrift.
+ *  `hinweis` erklärt im Mauszeiger, WIE gezählt wird – eine Zahl, die dem
+ *  Board zu widersprechen scheint, hält der Betrachter sonst für einen Fehler. */
+function Kennzahl({ label, wert, ton, hinweis }: { label: string; wert: string; ton?: string; hinweis?: string }) {
   return (
-    <div>
+    <div title={hinweis}>
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`display tabular text-lg leading-tight ${ton ?? "text-foreground"}`}>{wert}</div>
     </div>
@@ -45,12 +47,14 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
     where: {
       organizationId,
       status: { not: "archiviert" },
-      OR: [{ darlehensbetrag: { not: null } }, { courtageProzent: { not: null } }, { status: "abgeschlossen" }],
+      OR: [{ darlehensbetrag: { not: null } }, { courtageProzent: { not: null } }, { leadPhase: "abgeschlossen" }],
     },
     select: {
       id: true,
       caseNumber: true,
       status: true,
+      leadPhase: true,
+      verlorenAm: true,
       abschlussBank: true,
       bankName: true,
       darlehensbetrag: true,
@@ -69,12 +73,30 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       c.applicants.map((a) => [a.vorname, a.nachname].filter(Boolean).join(" ")).filter(Boolean).join(" & ") ||
       "Ohne Namen",
     status: c.status,
+    // Die PHASE entscheidet über abgeschlossen/erwartet (siehe pipeline.ts):
+    // Der CaseStatus misst nur die Unterlagen.
+    leadPhase: c.leadPhase,
+    verloren: c.verlorenAm != null,
     abschlussBank: c.abschlussBank ?? c.bankName,
     darlehensbetrag: c.darlehensbetrag,
     courtageProzent: c.courtageProzent,
     abschlussdatum: c.abschlussdatum,
   }));
   const pipeline = buildPipeline(input);
+
+  // KI-Zeitersparnis der letzten 7 Tage – dieselbe Schätzung wie die
+  // Kennzahlen-Ansicht (8 Min. je ausgewertetem Dokument). Sie steht hier,
+  // weil sie das ist, was BaufiDesk dem Vermittler jeden Tag abnimmt.
+  const docsWoche = await prisma.document.count({
+    where: {
+      case: { organizationId },
+      classificationStatus: "fertig",
+      updatedAt: { gte: new Date(Date.now() - 7 * 86400_000) },
+    },
+  });
+  const ersparnisMin = docsWoche * 8;
+  const ersparnisText =
+    ersparnisMin >= 60 ? `${Math.floor(ersparnisMin / 60)} h ${ersparnisMin % 60} min` : `${ersparnisMin} min`;
 
   // Kanban: eigene Abfrage, weil die Courtage-Liste bewusst nur bepreiste Fälle
   // zeigt – im Board sollen aber ALLE nicht archivierten Fälle stehen.
@@ -313,10 +335,36 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
         mehr: Es IST die Seite, jede Rahmung kostete Höhe.
       */}
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 border-b pb-3">
-        <Kennzahl label="Abgeschlossen" wert={String(pipeline.abgeschlossen.length)} />
-        <Kennzahl label="Courtage abgeschlossen" wert={eur(pipeline.courtageAbgeschlossen)} ton="text-success" />
-        <Kennzahl label="In Pipeline" wert={String(pipeline.offen.length)} />
-        <Kennzahl label="Courtage erwartet" wert={eur(pipeline.couragePipeline)} ton="text-ai" />
+        <Kennzahl
+          label="Abgeschlossen"
+          wert={String(pipeline.abgeschlossen.length)}
+          hinweis="Fälle in der Phase „Finanzierung abgeschlossen“."
+        />
+        <Kennzahl
+          label="Courtage abgeschlossen"
+          wert={eur(pipeline.courtageAbgeschlossen)}
+          ton="text-success"
+          hinweis="Darlehen × Courtagesatz der abgeschlossenen Fälle."
+        />
+        <Kennzahl
+          label="In Pipeline"
+          wert={String(
+            boardKarten.filter((k) => !k.verlorenAm && k.leadPhase !== "abgeschlossen").length
+          )}
+          hinweis="Alle aktiven Fälle auf dem Board – ohne verlorene und abgeschlossene."
+        />
+        <Kennzahl
+          label="Courtage erwartet"
+          wert={eur(pipeline.couragePipeline)}
+          ton="text-ai"
+          hinweis="Erwartete Courtage der offenen Fälle, bei denen Darlehen und Satz schon erfasst sind."
+        />
+        <Kennzahl
+          label="KI-Zeitersparnis (7 Tage)"
+          wert={ersparnisText}
+          ton="text-ai"
+          hinweis="Schätzung: 8 Minuten je KI-ausgewertetem Dokument."
+        />
         <div className="ml-auto self-center">
           <SyncStatus
             zuletzt={zuletzt}

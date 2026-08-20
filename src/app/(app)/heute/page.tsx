@@ -26,9 +26,11 @@ export default async function HeutePage() {
 
   return (
     <div className="space-y-6">
+      {/* EIN Name für dieses Konzept, überall: "Tagesliste" – nicht mal
+          "Heute", mal "To Dos", mal "Tagesliste" je nach Seite. */}
       <PageHeader
         eyebrow="Arbeit"
-        title="To Dos für heute"
+        title="Tagesliste"
         subtitle={
           aufgaben.length === 0
             ? "Nichts offen."

@@ -54,6 +54,10 @@ export function LeadPhaseSelect({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Sichtbar beschriftet: Neben Status- und Quellen-Chip muss erkennbar
+          sein, dass DIESES Element die Vertriebsphase ist – die dritte
+          Dimension am Fall. */}
+      <span className="text-xs font-medium text-muted-foreground">Phase</span>
       <select
         aria-label="Vertriebsphase"
         value={phase}

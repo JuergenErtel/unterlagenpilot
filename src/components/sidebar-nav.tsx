@@ -33,8 +33,9 @@ export const NAV_GROUPS: Array<{
     label: "Arbeit",
     items: [
       // Ganz oben: Die Tagesliste ist der Einstieg in die Arbeit, das Board
-      // die Übersicht darüber.
-      { href: "/heute", label: "Heute", icon: ListTodo },
+      // die Übersicht darüber. Der Name ist überall derselbe – Seite,
+      // Dashboard-Hinweis und Menü sagen alle "Tagesliste".
+      { href: "/heute", label: "Tagesliste", icon: ListTodo },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/cases", label: "Fälle", icon: FolderOpen },
       { href: "/review", label: "Review-Center", icon: ScanSearch },

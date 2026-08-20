@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ListChecks, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { TONE, type Tone } from "@/lib/ui/tone";
 
 export interface NextAction {
@@ -12,14 +11,23 @@ export interface NextAction {
   tone?: Tone;
 }
 
-/** "Nächste beste Aktion" – KI-priorisierte To-dos für den Fall. */
+/**
+ * "Offene Punkte" – die priorisierte Restliste des Falls.
+ *
+ * Bewusst NICHT mehr "Nächste beste Aktion" mit KI-Rahmen: Den nächsten
+ * Schritt empfiehlt die Fallreise oben – EINE Stimme pro Seite. Standen beide
+ * Panels als Empfehlung nebeneinander, empfahlen sie regelmäßig
+ * Verschiedenes ("Kunden anrufen" vs. "Geburtsdatum ergänzen"), und der
+ * Vermittler musste raten, wem er glaubt. Diese Liste zählt auf, was
+ * insgesamt noch offen ist; die Reihenfolge bleibt die Priorität.
+ */
 export function NextBestAction({ actions, primary }: { actions: NextAction[]; primary?: React.ReactNode }) {
   return (
-    <Card className="border-ai/30 bg-ai/[0.03]">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="h-4 w-4 text-ai" />
-          Nächste beste Aktion
+          <ListChecks className="h-4 w-4 text-muted-foreground" />
+          Offene Punkte
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">

@@ -412,7 +412,11 @@ export default async function CaseCockpitPage({
               )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge variant="neutral">{LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
+              {/* Beschriftet und nur wenn bekannt: Der nackte Chip "Unbekannt"
+                  las sich wie ein Datenfehler oder ein mysteriöser Status. */}
+              {caseRow.quelle !== "unbekannt" && (
+                <Badge variant="neutral">Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
+              )}
               <Badge variant={caseRow.einwilligungKontakt === true ? "success" : "neutral"}>
                 Telefon:{" "}
                 {caseRow.einwilligungKontakt === true
@@ -852,8 +856,12 @@ export default async function CaseCockpitPage({
               submittedAt={uebernahme.submittedAt.toLocaleDateString("de-DE")}
             />
           )}
+          {/* Die KI-Prüfung ist die eine Aktion, die sichtbar bleiben muss –
+              sie ist der Motor des Falls. Alles andere (13 gleich graue
+              Knöpfe) steht eingeklappt unter "Werkzeuge": Eine Seitenspalte
+              mit 16 Aktionsflächen führt nicht mehr, sie bietet nur an. */}
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Aktionen</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-base">KI-Prüfung</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
               {aiCheckLocked ? (
                 <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
@@ -870,66 +878,83 @@ export default async function CaseCockpitPage({
                 </form>
               )}
               {caseRow.finlinkId && <FinLinkRefreshButton caseId={id} />}
-              {/*
-                * Dauer-Einstieg in die Erstgespraechs-Maske. Die Fallreise
-                * zeigt den Weg nur, solange Angaben FEHLEN – steht alles, gab
-                * es keinen Knopf mehr, um eine Angabe zu korrigieren oder das
-                * Gespraech noch einmal durchzugehen. Ein Werkzeug, das
-                * verschwindet, sobald es sauber ist, laesst sich nicht pflegen.
-                */}
-              <Button asChild variant="outline" className="w-full justify-start">
-                <Link href={`/cases/${id}/erstgespraech`}>
-                  <PhoneCall />
-                  Erstgespräch führen
-                  {erstgespraechOffen > 0 && (
-                    <span className="ml-auto text-xs text-muted-foreground">{erstgespraechOffen} offen</span>
-                  )}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/machbarkeit`}><Scale />Machbarkeit</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Dokumente erzeugen</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><Ruler />Wohnflächenberechnung</Link></Button>
-              {/* Selbständigen-Werkzeug nur zeigen, wenn es zum Fall passt. */}
-              {istSelbststaendig && (
-                <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
-              )}
-              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
-              {/*
-                Finanzierungszertifikat – das Blatt, das der Kaufinteressent
-                dem Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen
-                gibt es keins (wie im Vorbild bei FinLink): Der Knopf bleibt
-                gesperrt und sagt, was fehlt, statt ein Papier mit Lücken
-                auszugeben, das der Kunde aus der Hand gibt.
-              */}
-              {zertifikatFehlt.length === 0 ? (
-                <Button asChild variant="outline" className="w-full justify-start">
-                  <a href={`/api/cases/${id}/pdf?type=zertifikat`}><BadgeCheck />Finanzierungszertifikat</a>
-                </Button>
-              ) : (
-                <div>
-                  <Button variant="outline" className="w-full justify-start" disabled>
-                    <BadgeCheck />Finanzierungszertifikat
+            <CardContent className="p-0">
+              {/* Beide Gruppen zugeklappt: Wer ein Werkzeug sucht, findet es
+                  in einem Klick – wer geführt arbeitet, wird nicht von 13
+                  gleichrangigen Knöpfen angesprochen. */}
+              <details className="group border-b">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-3.5 text-base font-semibold">
+                  Werkzeuge
+                  <span className="text-xs font-normal text-muted-foreground group-open:hidden">aufklappen</span>
+                </summary>
+                <div className="grid gap-2 px-6 pb-4">
+                  {/*
+                    * Dauer-Einstieg in die Erstgespraechs-Maske. Die Fallreise
+                    * zeigt den Weg nur, solange Angaben FEHLEN – steht alles, gab
+                    * es keinen Knopf mehr, um eine Angabe zu korrigieren oder das
+                    * Gespraech noch einmal durchzugehen. Ein Werkzeug, das
+                    * verschwindet, sobald es sauber ist, laesst sich nicht pflegen.
+                    */}
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href={`/cases/${id}/erstgespraech`}>
+                      <PhoneCall />
+                      Erstgespräch führen
+                      {erstgespraechOffen > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">{erstgespraechOffen} offen</span>
+                      )}
+                    </Link>
                   </Button>
-                  <p className="mt-1 px-1 text-xs text-muted-foreground">
-                    Dafür fehlt noch: {zertifikatFehlt.join(", ")}.
-                  </p>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/machbarkeit`}><Scale />Machbarkeit</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
                 </div>
-              )}
-              <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
+              </details>
+
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-3.5 text-base font-semibold">
+                  Dokumente erzeugen
+                  <span className="text-xs font-normal text-muted-foreground group-open:hidden">aufklappen</span>
+                </summary>
+                <div className="grid gap-2 px-6 pb-4">
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><Ruler />Wohnflächenberechnung</Link></Button>
+                  {/* Selbständigen-Werkzeug nur zeigen, wenn es zum Fall passt. */}
+                  {istSelbststaendig && (
+                    <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
+                  )}
+                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
+                  {/*
+                    Finanzierungszertifikat – das Blatt, das der Kaufinteressent
+                    dem Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen
+                    gibt es keins (wie im Vorbild bei FinLink): Der Knopf bleibt
+                    gesperrt und sagt, was fehlt, statt ein Papier mit Lücken
+                    auszugeben, das der Kunde aus der Hand gibt.
+                  */}
+                  {zertifikatFehlt.length === 0 ? (
+                    <Button asChild variant="outline" className="w-full justify-start">
+                      <a href={`/api/cases/${id}/pdf?type=zertifikat`}><BadgeCheck />Finanzierungszertifikat</a>
+                    </Button>
+                  ) : (
+                    <div>
+                      <Button variant="outline" className="w-full justify-start" disabled>
+                        <BadgeCheck />Finanzierungszertifikat
+                      </Button>
+                      <p className="mt-1 px-1 text-xs text-muted-foreground">
+                        Dafür fehlt noch: {zertifikatFehlt.join(", ")}.
+                      </p>
+                    </div>
+                  )}
+                  <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
+                </div>
+              </details>
             </CardContent>
           </Card>
           <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />

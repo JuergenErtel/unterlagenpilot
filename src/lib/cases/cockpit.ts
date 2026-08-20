@@ -196,7 +196,7 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
       ],
     },
     {
-      title: "KI-Auswertung",
+      title: "KI-Prüfung",
       tone: pruefbereit > 0 ? "ai" : docsPresent > 0 ? "ready" : "neutral",
       summary: pruefbereit > 0 ? `${pruefbereit} Dokument(e) prüfbereit.` : "Keine offenen KI-Ergebnisse.",
       action: pruefbereit > 0 ? { label: "Review-Center öffnen", href: `/review?case=${caseId}` } : undefined,

@@ -451,7 +451,7 @@ function ermittleSchritt(c: NextStepInput): NextStep {
   if (c.status === "ki_pruefung_laeuft" || c.counts.docsLaufend > 0) {
     return {
       key: "ki_laeuft",
-      title: "KI-Auswertung läuft",
+      title: "KI-Prüfung läuft",
       reason:
         "Die Dokumente werden gerade gelesen und ausgewertet – bei vielen Dokumenten kann das einige Minuten dauern, weil der KI-Anbieter die Anfragen pro Minute begrenzt.",
       tone: "ai",

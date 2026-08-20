@@ -135,10 +135,14 @@ export function FallbildAnsicht({
           {/* Der Bogen erklaert sich nicht von selbst. Eine Zeile darueber sagt,
               was man da sieht – Juergens Wortlaut. */}
           <p className="px-2 pb-1 pt-1 text-sm font-semibold">Dein Weg zur Einreichung</p>
+          {/* Kompakter als die erste Fassung (62vh): Der Bogen ist Orientierung,
+              nicht Arbeitsfläche – bei halber Bildschirmhöhe bleibt darunter
+              die Checkliste sichtbar, und die größeren Schriftgrade unten
+              gleichen die Verkleinerung aus. */}
           <svg
             viewBox="0 0 900 625"
             preserveAspectRatio="xMidYMid meet"
-            className="h-[clamp(420px,62vh,620px)] w-full"
+            className="h-[clamp(340px,48vh,500px)] w-full"
             role="group"
             aria-label={`Übersicht zum Fall ${bild.fall.nummer}`}
           >
@@ -225,19 +229,22 @@ export function FallbildAnsicht({
                       </text>
                     </>
                   )}
+                  {/* Eine Stufe größer als die erste Fassung (13,5/11,5): Das
+                      Bild ist seit dem 20.08. kompakter, die Beschriftung muss
+                      die Skalierung mittragen. */}
                   <text
                     x={lx}
                     y={ly + dy}
                     textAnchor={anker}
-                    fontSize={13.5} fontWeight={600} fill="hsl(var(--foreground))"
+                    fontSize={15} fontWeight={600} fill="hsl(var(--foreground))"
                   >
                     {t.name}
                   </text>
                   <text
                     x={lx}
-                    y={ly + dy + 16}
+                    y={ly + dy + 17}
                     textAnchor={anker}
-                    fontSize={11.5}
+                    fontSize={12.5}
                     fill={t.ton === "blocker" ? FARBE.blocker : "hsl(var(--muted-foreground))"}
                   >
                     {t.zustand}
@@ -348,13 +355,13 @@ export function FallbildAnsicht({
                   {/* Drei Zeilen UNTEREINANDER. Nebeneinander gesetzt haben sich
                       Wert und Zeile gegenseitig ueberschrieben – im Bild sofort
                       sichtbar, in keinem Test. */}
-                  <text x={x + 13} y={y + 19} fontSize={10.5} fill="hsl(var(--muted-foreground))">
+                  <text x={x + 13} y={y + 19} fontSize={11.5} fill="hsl(var(--muted-foreground))">
                     {f.name}
                   </text>
-                  <text x={x + 13} y={y + 39} fontSize={16} fontWeight={600} fill={FARBE[f.ton]} style={{ fontFamily: "var(--font-geist-mono, ui-monospace, monospace)", fontVariantNumeric: "tabular-nums" }}>
+                  <text x={x + 13} y={y + 39} fontSize={17} fontWeight={600} fill={FARBE[f.ton]} style={{ fontFamily: "var(--font-geist-mono, ui-monospace, monospace)", fontVariantNumeric: "tabular-nums" }}>
                     {f.wert}
                   </text>
-                  <text x={x + 13} y={y + 52} fontSize={10.5} fill="hsl(var(--muted-foreground))">
+                  <text x={x + 13} y={y + 52} fontSize={11.5} fill="hsl(var(--muted-foreground))">
                     {f.zeile}
                   </text>
                 </g>
@@ -363,7 +370,7 @@ export function FallbildAnsicht({
 
             {/* Sagt in Worten, was die Form schon sagt – und raeumt die letzte
                 Fehldeutung aus: diese vier stehen NEBEN dem Weg, nicht darauf. */}
-            <text x={CX} y={CY + 160} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))">
+            <text x={CX} y={CY + 160} textAnchor="middle" fontSize={12} fill="hsl(var(--muted-foreground))">
               diese vier laufen nebenher — ohne feste Reihenfolge
             </text>
           </svg>

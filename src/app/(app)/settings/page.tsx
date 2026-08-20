@@ -142,7 +142,7 @@ export default async function SettingsPage() {
             </div>
             <p className="text-muted-foreground">
               Standard ist <code>mock</code>. Produktiv wird Azure OpenAI (EU-Region)
-              für DSGVO-Konformität empfohlen. Jede KI-Auswertung erfordert eine
+              für DSGVO-Konformität empfohlen. Jede KI-Prüfung erfordert eine
               menschliche Freigabe; Ergebnisse werden mit Konfidenzwerten
               ausgewiesen.
             </p>

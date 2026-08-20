@@ -25,7 +25,7 @@ const TIER_SUBTITLES: Record<PlanTier, string> = {
 };
 
 const FEATURE_LABELS: Record<string, string> = {
-  ki_auswertung: "KI-Auswertung von Gehalt, Objekt und Unterlagen",
+  ki_auswertung: "KI-Prüfung von Gehalt, Objekt und Unterlagen",
   bankfaehige_zusammenfassung: "Bankfähige Zusammenfassung als PDF",
   plattform_kopiermaske: "Kopiermaske für Europace, FinLink und eHyp home",
   email_whatsapp_vorlagen: "E-Mail- und WhatsApp-Vorlagen",

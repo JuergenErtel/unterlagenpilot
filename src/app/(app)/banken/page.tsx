@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { sucheBanken } from "@/lib/banken/abfrage";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
@@ -40,9 +41,11 @@ export default async function BankenPage({
               Frage in eigenen Worten, belegt beantwortet über alle Banken.
             </p>
           </div>
-          <Link href="/banken/fragen" className="feld h-9 px-4 text-sm leading-9">
-            Frage stellen
-          </Link>
+          {/* Als KNOPF gestaltet: Die .feld-Klasse ließ Aktion und Eingabefeld
+              gleich aussehen – man wusste nicht, wo man tippt und wo man klickt. */}
+          <Button asChild>
+            <Link href="/banken/fragen">Frage stellen</Link>
+          </Button>
         </CardContent>
       </Card>
 
@@ -53,16 +56,20 @@ export default async function BankenPage({
               <span className="mb-1 block text-muted-foreground">Bank suchen</span>
               <Input name="q" defaultValue={q ?? ""} placeholder="z. B. Sparkasse, ING, muenchen" />
             </label>
-            <button type="submit" className="feld h-9 px-4 text-sm">
+            <Button type="submit" variant="outline">
               Suchen
-            </button>
+            </Button>
           </form>
         </CardContent>
       </Card>
 
+      {/* "Keine Bank gefunden" nur nach einer tatsächlichen Suche: Als
+          Dauertext unter dem leeren Suchfeld klang es nach einem Defekt. */}
       {treffer.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Keine Bank gefunden. Umlaute lassen sich auch als „ae“, „oe“, „ue“ schreiben.
+          {q
+            ? "Keine Bank gefunden. Umlaute lassen sich auch als „ae“, „oe“, „ue“ schreiben."
+            : "Tippe oben einen Banknamen – oder stell dem Wiki direkt eine Frage."}
         </p>
       ) : (
         <div className="space-y-2">

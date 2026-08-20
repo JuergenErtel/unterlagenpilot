@@ -59,7 +59,10 @@ export interface HeuteDaten {
 }
 
 export async function ladeHeute(organizationId: string): Promise<HeuteDaten> {
-  const activeWhere = { organizationId, status: { notIn: TERMINAL_STATUSES } };
+  // Verlorene Fälle erzeugen keine Aufgaben mehr: Ein "Erstgespräch führen"
+  // für einen Kunden, der längst bei der Hausbank abgeschlossen hat, lehrt
+  // den Vermittler nur, der Liste nicht zu trauen.
+  const activeWhere = { organizationId, status: { notIn: TERMINAL_STATUSES }, verlorenAm: null };
 
   const [aktiveGesamt, kandidaten] = await Promise.all([
     prisma.case.count({ where: activeWhere }),

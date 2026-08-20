@@ -568,7 +568,7 @@ describe("ladeHeute – Kontaktstand speist die Prioritätsleiter (Aufgabe 7)", 
  * next-step.ts) existierte bislang NUR auf der Fallseite: Stirbt ein
  * Hintergrundlauf hart (Deploy, Function-Timeout), zeigte die Fallseite "KI-
  * Prüfung wurde unterbrochen", während dasselbe Dashboard-Todo für immer bei
- * "KI-Auswertung läuft" stehen blieb – derselbe Fall, zwei Aussagen.
+ * "KI-Prüfung läuft" stehen blieb – derselbe Fall, zwei Aussagen.
  */
 describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () => {
   function nurDiesenFall(row: Record<string, unknown>) {
@@ -607,15 +607,15 @@ describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () =
     generatedMessageFindMany.mockReset().mockResolvedValue([]);
   });
 
-  it("zeigt 'KI-Auswertung läuft' für einen frischen Lauf", async () => {
+  it("zeigt 'KI-Prüfung läuft' für einen frischen Lauf", async () => {
     nurDiesenFall(ki_pruefung_kandidat({ updatedAt: new Date() }));
 
     const data = await ladeHeute("org-1");
     const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.titel).toBe("KI-Auswertung läuft");
+    expect(todo?.titel).toBe("KI-Prüfung läuft");
   });
 
-  it("zeigt 'KI-Prüfung wurde unterbrochen' statt endlos 'KI-Auswertung läuft', wenn der Lauf laut updatedAt hängengeblieben ist – wie auf der Fallseite", async () => {
+  it("zeigt 'KI-Prüfung wurde unterbrochen' statt endlos 'KI-Prüfung läuft', wenn der Lauf laut updatedAt hängengeblieben ist – wie auf der Fallseite", async () => {
     nurDiesenFall(
       ki_pruefung_kandidat({ updatedAt: new Date(Date.now() - 11 * 60_000) })
     );
@@ -627,7 +627,7 @@ describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () =
 
   /*
    * Der Sammel-Lauf `runAiCheck` ist der SELTENERE der beiden Auslöser für
-   * "KI-Auswertung läuft". Der häufigere ist der normale Upload: Die Pipeline
+   * "KI-Prüfung läuft". Der häufigere ist der normale Upload: Die Pipeline
    * (`runPipelineAfterStore`) setzt `classificationStatus: "laeuft"` je
    * Dokument und fasst den Fallstatus NIE an. Ein Stale-Schutz, der nur am
    * Fallstatus hängt, hält deshalb jeden frischen Einzel-Upload für
@@ -646,7 +646,7 @@ describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () =
     ]);
   }
 
-  it("nennt einen frischen Einzel-Upload 'KI-Auswertung läuft' – auch wenn der Fallstatus unberührt bleibt", async () => {
+  it("nennt einen frischen Einzel-Upload 'KI-Prüfung läuft' – auch wenn der Fallstatus unberührt bleibt", async () => {
     nurDiesenFall(
       ki_pruefung_kandidat({ status: "unterlagen_fehlen", updatedAt: new Date(Date.now() - 60 * 60_000) })
     );
@@ -654,7 +654,7 @@ describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () =
 
     const data = await ladeHeute("org-1");
     const todo = data.aufgaben.find((t) => t.caseId === "c-ki-stale");
-    expect(todo?.titel).toBe("KI-Auswertung läuft");
+    expect(todo?.titel).toBe("KI-Prüfung läuft");
   });
 
   it("meldet einen gestorbenen Einzel-Upload als 'ohne KI-Ergebnis' – der Neustart-Weg darf nicht verschwinden", async () => {
@@ -674,7 +674,7 @@ describe("ladeHeute – Stale-Schutz für hängengebliebene KI-Prüfungen", () =
      * "fertig") und damit aus der Leiter. Die Fallseite nennte irgendeinen
      * anderen Schritt, ohne den Knopf "KI-Prüfung wiederholen", das
      * Review-Center meldete "Alles freigegeben" und das Fallbild 100 %.
-     * Ein "not.toBe('KI-Auswertung läuft')" wäre dabei grün geblieben.
+     * Ein "not.toBe('KI-Prüfung läuft')" wäre dabei grün geblieben.
      */
     expect(todo?.titel).toBe("1 Dokument ohne KI-Ergebnis");
   });
