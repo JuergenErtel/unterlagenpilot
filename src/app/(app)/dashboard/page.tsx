@@ -44,20 +44,22 @@ export default async function DashboardPage({
   ]);
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       {status.pilot && <PilotBanner pilot={status.pilot} />}
 
+      {/*
+        Der Kopf ist bewusst EINE Zeile Gruß plus Aktionen: Die Arbeit auf
+        dieser Seite ist das Board, und das gehört über die Falz. Die frühere
+        zweizeilige Begrüßung samt Untertitel schob es unter den Bildschirmrand.
+      */}
       <PageHeader
+        className="pb-4"
         eyebrow="Arbeitszentrale"
-        title={
-          aktiv === "board"
-            ? `${greeting()}, ${ctx.userName.split(" ")[0]}. Deine laufenden Fälle im Überblick.`
-            : `${greeting()}, ${ctx.userName.split(" ")[0]}. Diese Fälle brauchen deine Aufmerksamkeit.`
-        }
+        title={`${greeting()}, ${ctx.userName.split(" ")[0]}.`}
         subtitle={
           aktiv === "board"
-            ? "Wo deine Leads stehen – und was sie erwartungsgemäß einbringen. Karten lassen sich zwischen den Phasen ziehen."
-            : "Unterlagen prüfen, Lücken schließen und Fälle einreichungsfertig machen."
+            ? undefined
+            : "Statustrichter und Kennzahlen über alle Fälle – die Aufgaben stehen unter „Heute“."
         }
         actions={
           <>

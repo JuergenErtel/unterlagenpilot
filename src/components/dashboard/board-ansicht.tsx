@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BadgeEuro, TrendingUp } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
@@ -12,7 +11,6 @@ import { LeadBoard } from "@/components/pipeline/lead-board";
 import { SyncStatus } from "@/components/pipeline/sync-status";
 import { LEAD_SOURCE_LABELS, type LeadSource, type CaseStatus } from "@/lib/domain/enums";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricCard } from "@/components/dashboard/metric-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge } from "@/components/status-badge";
 
@@ -21,6 +19,16 @@ function eur(n: number | null): string {
 }
 function dateStr(d: Date | null): string {
   return d ? d.toLocaleDateString("de-DE") : "—";
+}
+
+/** Eine Kennzahl der stillen Zeile über dem Board: Beschriftung klein, Zahl in der Displayschrift. */
+function Kennzahl({ label, wert, ton }: { label: string; wert: string; ton?: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`display tabular text-lg leading-tight ${ton ?? "text-foreground"}`}>{wert}</div>
+    </div>
+  );
 }
 
 /**
@@ -295,35 +303,34 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Leads nach Phase</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            {[...quellenZaehler.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .map(([quelle, anzahl]) => (
-                <span key={quelle} className="rounded-full border px-2 py-0.5">
-                  {quelle} {anzahl}
-                </span>
-              ))}
-          </div>
-          <LeadBoard spalten={board.spalten.map(alsView)} verloren={alsView(board.verloren)} />
+      {/*
+        Courtage-Zahlen als stille Zeile ÜBER dem Board statt vier Kacheln
+        darunter: Sie sind die Antwort auf "was bringt die Pipeline ein" und
+        gehören damit neben die Überschrift des Arbeitstags – aber leise, denn
+        gearbeitet wird auf den Karten. Das Board selbst hat keine Card-Hülle
+        mehr: Es IST die Seite, jede Rahmung kostete Höhe.
+      */}
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 border-b pb-3">
+        <Kennzahl label="Abgeschlossen" wert={String(pipeline.abgeschlossen.length)} />
+        <Kennzahl label="Courtage abgeschlossen" wert={eur(pipeline.courtageAbgeschlossen)} ton="text-success" />
+        <Kennzahl label="In Pipeline" wert={String(pipeline.offen.length)} />
+        <Kennzahl label="Courtage erwartet" wert={eur(pipeline.couragePipeline)} ton="text-ai" />
+        <div className="ml-auto self-center">
           <SyncStatus
             zuletzt={zuletzt}
             angelegt={syncState?.lastCreated ?? 0}
             fehler={syncState?.lastError ?? null}
           />
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Abgeschlossen" value={pipeline.abgeschlossen.length} icon={BadgeEuro} />
-        <MetricCard label="Courtage abgeschlossen" value={eur(pipeline.courtageAbgeschlossen)} tone="ready" icon={BadgeEuro} />
-        <MetricCard label="In Pipeline" value={pipeline.offen.length} icon={TrendingUp} />
-        <MetricCard label="Courtage Pipeline (erwartet)" value={eur(pipeline.couragePipeline)} tone="ai" icon={TrendingUp} />
+        </div>
       </div>
+
+      <LeadBoard
+        spalten={board.spalten.map(alsView)}
+        verloren={alsView(board.verloren)}
+        quellen={[...quellenZaehler.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, anzahl]) => ({ label, anzahl }))}
+      />
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Fälle</CardTitle></CardHeader>

@@ -49,12 +49,23 @@ export interface BoardSpalteView {
 
 const eur = (n: number) => `${Math.round(n).toLocaleString("de-DE")} €`;
 
-/** Ampelfarben aus dem vorhandenen Ton-System, keine neuen Werte. */
-const AMPEL_PUNKT: Record<string, string> = {
-  gruen: "bg-success",
-  gelb: "bg-warning",
-  rot: "bg-destructive",
-  grau: "bg-muted-foreground/40",
+/**
+ * Die Ampel sitzt als Farbkante an der linken Karten­kante – eine Marke, die
+ * man beim Überfliegen der Spalte liest, ohne Text. Der erklärende Satz
+ * erscheint nur noch, wenn er etwas MELDET (gelb/rot/Datenlücke): "trägt" auf
+ * jeder grünen Karte war die Wiederholung, die alle Karten gleich aussehen ließ.
+ */
+const AMPEL_KANTE: Record<string, string> = {
+  gruen: "border-l-success",
+  gelb: "border-l-warning",
+  rot: "border-l-destructive",
+  grau: "border-l-muted-foreground/40",
+};
+
+const AMPEL_TEXT: Record<string, string> = {
+  gelb: "text-warning",
+  rot: "text-destructive",
+  grau: "text-muted-foreground",
 };
 
 /**
@@ -85,13 +96,26 @@ const PHASE_STANDARD = { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40"
  * Das Kanban der Vertriebsphasen. Karten lassen sich ziehen; weil das auf dem
  * Handy und ohne Zeigegerät unzuverlässig ist, hat jede Karte zusätzlich ein
  * Menü mit denselben Zielen.
+ *
+ * Aufbau seit dem 20.08.2026 nach dem Brett-Modell: Ab md nimmt das Board die
+ * restliche Bildschirmhöhe ein, die Spaltenköpfe (Phase, Fallzahl, Summe)
+ * stehen fest, und die KARTEN scrollen in ihrer Spalte. Vorher scrollte die
+ * ganze Seite – nach zwei Karten war nicht mehr zu sehen, in welcher Phase man
+ * gerade liest, und das Mausrad blieb über dem Board hängen. Leere Phasen
+ * kollabieren zu schmalen Schienen: Sie bleiben Abwurfziele (beim Ziehen
+ * weiten sie sich), verbrauchen aber keine Spaltenbreite mehr, während sich
+ * daneben die Karten stapeln. Auf dem Handy bleibt alles untereinander und die
+ * Seite scrollt normal.
  */
 export function LeadBoard({
   spalten,
   verloren,
+  quellen,
 }: {
   spalten: BoardSpalteView[];
   verloren: BoardSpalteView;
+  /** Zähler je Lead-Quelle, absteigend – wird als Chip-Zeile gezeigt. */
+  quellen: Array<{ label: string; anzahl: number }>;
 }) {
   const [pending, startTransition] = useTransition();
   const [zeigeVerlorene, setZeigeVerlorene] = useState(false);
@@ -110,9 +134,16 @@ export function LeadBoard({
     });
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+          {quellen.map((q) => (
+            <span key={q.label} className="rounded-full border px-2 py-0.5">
+              {q.label} <span className="tabular font-medium text-foreground">{q.anzahl}</span>
+            </span>
+          ))}
+        </div>
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={zeigeVerlorene}
@@ -123,177 +154,211 @@ export function LeadBoard({
         {pending && <span className="text-xs text-muted-foreground">wird gespeichert …</span>}
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2 max-md:flex-col max-md:overflow-visible">
-        {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => {
-          const farbe = PHASEN_FARBE[s.phase] ?? PHASE_STANDARD;
-          return (
-          <section
-            key={s.phase}
-            onDragOver={(e) => {
-              if (s.phase !== "verloren") e.preventDefault();
-            }}
-            onDrop={() => {
-              if (gezogen && s.phase !== "verloren") verschieben(gezogen, s.phase);
-              setGezogen(null);
-            }}
-            className={`w-64 shrink-0 overflow-hidden rounded-lg p-2 pt-0 max-md:w-full ${farbe.flaeche}`}
-          >
-            {/* Farbkante als Registerreiter der Spalte – die Farbe steht oben
-                und stört die Karten darunter nicht. */}
-            <div className={`-mx-2 mb-2 h-1 ${farbe.kante}`} aria-hidden />
-            <header className="px-1 pb-2">
-              <p className="text-sm font-semibold">{s.titel}</p>
-              <p className="text-xs text-muted-foreground">
-                <span className={`font-medium ${farbe.zahl}`}>
-                  {s.anzahl} {s.anzahl === 1 ? "Fall" : "Fälle"}
-                </span>
-                {s.summe > 0 && ` · ${eur(s.summe)}`}
-              </p>
-            </header>
+      {/* Der Schleier am rechten Rand sagt ohne Worte: Da drüben geht es
+          weiter. Er liegt über den Spaltenflächen, lässt aber jeden Klick
+          durch (pointer-events-none). Die Höhe ist ab md an den Bildschirm
+          gebunden (Brett-Modell): Kopfzeile, Kennzahlen und Werkzeugzeile
+          darüber sind zusammen ~19 rem hoch; das Minimum fängt kleine
+          Fenster ab. */}
+      <div className="relative md:h-[calc(100dvh-19.5rem)] md:min-h-[24rem]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-background to-transparent md:block"
+        />
+        <div className="flex h-full gap-3 overflow-x-auto pb-1 max-md:flex-col max-md:overflow-visible md:snap-x md:snap-proximity">
+          {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => {
+            const farbe = PHASEN_FARBE[s.phase] ?? PHASE_STANDARD;
+            const leer = s.karten.length === 0 && s.weitere === 0;
+            const ziehbarHierher = gezogen !== null && s.phase !== "verloren";
 
-            <div className="space-y-2">
-              {s.karten.map((k) => (
-                <article
-                  key={k.caseId}
-                  draggable={s.phase !== "verloren"}
-                  onDragStart={() => setGezogen(k.caseId)}
-                  className="rounded-md border bg-background p-2.5 text-sm shadow-sm"
+            // Leere Phase: schmale Schiene mit stehendem Titel. Beim Ziehen
+            // weitet sie sich zum Abwurfziel – vorher belegte "0 Fälle" die
+            // Breite einer vollen Spalte.
+            if (leer && !ziehbarHierher) {
+              return (
+                <section
+                  key={s.phase}
+                  onDragOver={(e) => {
+                    if (s.phase !== "verloren") e.preventDefault();
+                  }}
+                  className={`flex shrink-0 flex-col overflow-hidden rounded-lg transition-all md:w-11 md:items-center max-md:w-full ${farbe.flaeche}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <Link href={`/cases/${k.caseId}`} className="font-medium hover:underline">
-                      {k.kundenName}
-                    </Link>
-                    <details className="relative">
-                      <summary className="cursor-pointer list-none text-muted-foreground">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </summary>
-                      <div className="absolute right-0 z-10 mt-1 w-56 space-y-0.5 rounded-md border bg-background p-1 shadow-md">
-                        {s.phase === "verloren" ? (
-                          <button
-                            className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                            onClick={() => {
-                              // Rückfrage, weil Grund und Datum dabei verloren gehen.
-                              if (!confirm("Verlust aufheben? Grund und Datum gehen dabei verloren.")) return;
-                              startTransition(() => void hebeVerlustAuf(k.caseId));
-                            }}
-                          >
-                            <RotateCcw className="h-3 w-3" /> Verlust aufheben
-                          </button>
-                        ) : (
-                          <>
-                            {LEAD_PHASES.filter((p) => p !== k.leadPhase).map((p: LeadPhase) => (
-                              <button
-                                key={p}
-                                className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                                onClick={() => verschieben(k.caseId, p)}
-                              >
-                                → {LEAD_PHASE_LABELS[p]}
-                              </button>
-                            ))}
-                            <button
-                              className="block w-full rounded px-2 py-1 text-left text-xs text-destructive hover:bg-muted"
-                              onClick={() => setVerlustFuer(k.caseId)}
-                            >
-                              Als verloren markieren
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </details>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    {k.volumen != null ? eur(k.volumen) : "—"} · seit {k.liegezeit}{" "}
-                    {k.liegezeit === 1 ? "Tag" : "Tagen"}
+                  <div className={`h-1 w-full ${farbe.kante}`} aria-hidden />
+                  <p className="p-2 text-xs font-medium text-muted-foreground max-md:flex max-md:items-baseline max-md:gap-2 md:mt-1 md:[writing-mode:vertical-rl]">
+                    {s.titel}
+                    <span className="max-md:text-muted-foreground/70 md:mt-1.5">0</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">{k.quelle}</p>
+                </section>
+              );
+            }
 
-                  {/*
-                    Erste Aufgabe nach dem Leadeingang (14.08.2026): Der frische
-                    Lead gehoert ans Telefon. Der Hinweis ist deshalb ein
-                    Knopf mit Ziel, kein blosses Abzeichen – er ist die Handlung,
-                    nicht ihre Beschreibung. Er sitzt ueber der Ampel, weil er
-                    zuerst dran ist; die Markenfarbe grenzt ihn von der
-                    Ampelsprache (gruen/gelb/rot) ab, die daneben weiterlaeuft.
-                  */}
-                  {k.erstgespraechOffen && (
-                    <Link
-                      href={`/cases/${k.caseId}/erstgespraech`}
-                      className="mt-1.5 flex items-center gap-1.5 rounded border border-primary/40 bg-primary/[0.06] px-2 py-1 text-xs font-medium text-primary hover:bg-primary/[0.12]"
-                    >
-                      <PhoneCall className="h-3 w-3 shrink-0" />
-                      Erstgespräch führen
-                    </Link>
-                  )}
+            return (
+              <section
+                key={s.phase}
+                onDragOver={(e) => {
+                  if (s.phase !== "verloren") e.preventDefault();
+                }}
+                onDrop={() => {
+                  if (gezogen && s.phase !== "verloren") verschieben(gezogen, s.phase);
+                  setGezogen(null);
+                }}
+                className={`flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-lg transition-all md:snap-start max-md:w-full ${farbe.flaeche} ${
+                  leer && ziehbarHierher ? "ring-2 ring-ring/40" : ""
+                }`}
+              >
+                {/* Farbkante als Registerreiter der Spalte – die Farbe steht oben
+                    und stört die Karten darunter nicht. */}
+                <div className={`h-1 ${farbe.kante}`} aria-hidden />
+                <header className="flex items-baseline justify-between gap-2 px-3 pb-1.5 pt-2">
+                  <p className="truncate text-sm font-semibold">{s.titel}</p>
+                  <p className="shrink-0 text-xs text-muted-foreground">
+                    <span className={`tabular font-semibold ${farbe.zahl}`}>{s.anzahl}</span>
+                    {s.summe > 0 && <span className="tabular"> · {eur(s.summe)}</span>}
+                  </p>
+                </header>
 
-                  {/* Ab der Einreichungsphase gehoert auf die Karte, WOHIN der
-                      Fall raus ist. Fehlen die Konditionen, sagt die Karte das
-                      und oeffnet dasselbe Formular wie die Fallakte – sonst
-                      steht die Spalte voll mit "irgendwo eingereicht". */}
-                  {k.einreichung && (
-                    <button
-                      onClick={() => setErfassenFuer(k.caseId)}
-                      className={`mt-1.5 flex w-full items-center gap-1.5 rounded border px-2 py-1 text-left text-xs ${
-                        k.einreichung.fehlt > 0
-                          ? "border-warning/50 bg-warning/[0.08] text-foreground hover:bg-warning/[0.14]"
-                          : "border-transparent text-muted-foreground hover:bg-muted"
-                      }`}
+                <div className="min-h-0 flex-1 space-y-2 overscroll-contain px-2 pb-2 md:overflow-y-auto">
+                  {s.karten.map((k) => (
+                    <article
+                      key={k.caseId}
+                      draggable={s.phase !== "verloren"}
+                      onDragStart={() => setGezogen(k.caseId)}
+                      onDragEnd={() => setGezogen(null)}
+                      className={`rounded-lg border border-l-[3px] bg-background p-2.5 text-sm shadow-sm transition-[box-shadow,opacity] hover:shadow-md ${
+                        (k.ampel && AMPEL_KANTE[k.ampel.farbe]) || "border-l-border"
+                      } ${gezogen === k.caseId ? "opacity-50" : ""}`}
                     >
-                      <Landmark className="h-3 w-3 shrink-0" />
-                      {k.einreichung.bank ?? "Bank offen"}
-                      {k.einreichung.fehlt > 0 && (
-                        <span className="ml-auto shrink-0 tabular">
-                          {k.einreichung.fehlt} {k.einreichung.fehlt === 1 ? "Angabe" : "Angaben"} fehlen
-                        </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <Link href={`/cases/${k.caseId}`} className="min-w-0 truncate font-medium hover:underline">
+                          {k.kundenName}
+                        </Link>
+                        <details className="relative shrink-0">
+                          <summary className="cursor-pointer list-none text-muted-foreground">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </summary>
+                          <div className="absolute right-0 z-20 mt-1 w-56 space-y-0.5 rounded-md border bg-background p-1 shadow-md">
+                            {s.phase === "verloren" ? (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                                onClick={() => {
+                                  // Rückfrage, weil Grund und Datum dabei verloren gehen.
+                                  if (!confirm("Verlust aufheben? Grund und Datum gehen dabei verloren.")) return;
+                                  startTransition(() => void hebeVerlustAuf(k.caseId));
+                                }}
+                              >
+                                <RotateCcw className="h-3 w-3" /> Verlust aufheben
+                              </button>
+                            ) : (
+                              <>
+                                {LEAD_PHASES.filter((p) => p !== k.leadPhase).map((p: LeadPhase) => (
+                                  <button
+                                    key={p}
+                                    className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                                    onClick={() => verschieben(k.caseId, p)}
+                                  >
+                                    → {LEAD_PHASE_LABELS[p]}
+                                  </button>
+                                ))}
+                                <button
+                                  className="block w-full rounded px-2 py-1 text-left text-xs text-destructive hover:bg-muted"
+                                  onClick={() => setVerlustFuer(k.caseId)}
+                                >
+                                  Als verloren markieren
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </details>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground">
+                        <span className="tabular">{k.volumen != null ? eur(k.volumen) : "—"}</span> · seit{" "}
+                        {k.liegezeit} {k.liegezeit === 1 ? "Tag" : "Tagen"} · {k.quelle}
+                      </p>
+
+                      {/*
+                        Erste Aufgabe nach dem Leadeingang (14.08.2026): Der frische
+                        Lead gehoert ans Telefon. Der Hinweis ist deshalb ein
+                        Verweis mit Ziel, kein blosses Abzeichen – er ist die
+                        Handlung, nicht ihre Beschreibung. Seit dem 20.08. eine
+                        stille Textzeile statt eines Kastens: Der Kasten stand auf
+                        JEDER frischen Karte und machte die Spalte zur Tapete.
+                      */}
+                      {k.erstgespraechOffen && (
+                        <Link
+                          href={`/cases/${k.caseId}/erstgespraech`}
+                          className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                        >
+                          <PhoneCall className="h-3.5 w-3.5 shrink-0" />
+                          Erstgespräch führen
+                        </Link>
                       )}
-                    </button>
-                  )}
 
-                  {k.ampel && (
-                    <p
-                      className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
-                      title={k.ampel.grund}
-                    >
-                      <span
-                        aria-hidden
-                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                          AMPEL_PUNKT[k.ampel.farbe] ?? "bg-muted-foreground/40"
-                        }`}
-                      />
-                      {k.ampel.text}
+                      {/* Ab der Einreichungsphase gehoert auf die Karte, WOHIN der
+                          Fall raus ist. Fehlen die Konditionen, sagt die Karte das
+                          und oeffnet dasselbe Formular wie die Fallakte – sonst
+                          steht die Spalte voll mit "irgendwo eingereicht". */}
+                      {k.einreichung && (
+                        <button
+                          onClick={() => setErfassenFuer(k.caseId)}
+                          className={`mt-1.5 flex w-full items-center gap-1.5 rounded border px-2 py-1 text-left text-xs ${
+                            k.einreichung.fehlt > 0
+                              ? "border-warning/50 bg-warning/[0.08] text-foreground hover:bg-warning/[0.14]"
+                              : "border-transparent px-0 text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Landmark className="h-3 w-3 shrink-0" />
+                          {k.einreichung.bank ?? "Bank offen"}
+                          {k.einreichung.fehlt > 0 && (
+                            <span className="tabular ml-auto shrink-0">
+                              {k.einreichung.fehlt} {k.einreichung.fehlt === 1 ? "Angabe" : "Angaben"} fehlen
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Nur Abweichendes wird gesagt: Grün spricht über die
+                          Kante, gelb/rot/Datenlücke zusätzlich im Klartext. */}
+                      {k.ampel && k.ampel.farbe !== "gruen" && (
+                        <p
+                          className={`mt-1 text-xs ${AMPEL_TEXT[k.ampel.farbe] ?? "text-muted-foreground"}`}
+                          title={k.ampel.grund}
+                        >
+                          {k.ampel.text}
+                        </p>
+                      )}
+
+                      {k.wiedervorlage && (
+                        <Badge variant="neutral" className="mt-1 gap-1">
+                          <CalendarClock className="h-3 w-3" /> WV {k.wiedervorlage}
+                        </Badge>
+                      )}
+                      {k.verlorenGrund && (
+                        <p className="mt-1 text-xs text-muted-foreground">{k.verlorenGrund}</p>
+                      )}
+
+                      {k.vorschlag && (
+                        <button
+                          onClick={() => verschieben(k.caseId, k.vorschlag!)}
+                          className="mt-2 flex w-full items-center justify-between rounded border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <span>→ {LEAD_PHASE_LABELS[k.vorschlag as LeadPhase]}?</span>
+                          <Check className="h-3 w-3" />
+                        </button>
+                      )}
+                    </article>
+                  ))}
+
+                  {s.weitere > 0 && (
+                    <p className="px-1 text-xs text-muted-foreground">
+                      {s.weitere} weitere – in der Fallliste sichtbar
                     </p>
                   )}
-
-                  {k.wiedervorlage && (
-                    <Badge variant="neutral" className="mt-1 gap-1">
-                      <CalendarClock className="h-3 w-3" /> WV {k.wiedervorlage}
-                    </Badge>
-                  )}
-                  {k.verlorenGrund && (
-                    <p className="mt-1 text-xs text-muted-foreground">{k.verlorenGrund}</p>
-                  )}
-
-                  {k.vorschlag && (
-                    <button
-                      onClick={() => verschieben(k.caseId, k.vorschlag!)}
-                      className="mt-2 flex w-full items-center justify-between rounded border border-dashed px-2 py-1 text-xs hover:bg-muted"
-                    >
-                      <span>→ {LEAD_PHASE_LABELS[k.vorschlag as LeadPhase]}?</span>
-                      <Check className="h-3 w-3" />
-                    </button>
-                  )}
-                </article>
-              ))}
-
-              {s.weitere > 0 && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  {s.weitere} weitere – in der Fallliste sichtbar
-                </p>
-              )}
-            </div>
-          </section>
-          );
-        })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </div>
 
       {erfassenFuer && (

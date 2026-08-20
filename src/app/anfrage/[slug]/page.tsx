@@ -39,7 +39,8 @@ export default async function AnfrageEinstieg({ params }: { params: Promise<{ sl
       <p className="mt-auto text-xs text-muted-foreground">
         Ihre Angaben werden verschlüsselt übertragen und ausschließlich zur Bearbeitung Ihrer
         Anfrage verwendet. Mehr dazu in der{" "}
-        <a href="/datenschutz" className="underline">Datenschutzerklärung</a>.
+        <a href="/datenschutz" className="underline">Datenschutzerklärung</a>.{" "}
+        <a href="/impressum" className="underline">Impressum</a>
       </p>
     </main>
   );

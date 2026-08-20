@@ -1,4 +1,5 @@
 import { Logo } from "@/components/brand/logo";
+import { RechtsFooter } from "@/components/legal/rechts-footer";
 import {
   Card,
   CardHeader,
@@ -72,6 +73,8 @@ export default async function GatePage({
             </form>
           </CardContent>
         </Card>
+
+        <RechtsFooter />
       </div>
     </main>
   );

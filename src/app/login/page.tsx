@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
+import { RechtsFooter } from "@/components/legal/rechts-footer";
 import {
   Card,
   CardHeader,
@@ -61,6 +62,8 @@ export default async function LoginPage({
             </p>
           </CardFooter>
         </Card>
+
+        <RechtsFooter />
       </div>
     </main>
   );

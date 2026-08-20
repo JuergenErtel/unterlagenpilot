@@ -24,7 +24,7 @@ export function SyncStatus({
   const [meldung, setMeldung] = useState<string | null>(null);
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
+    <div className="flex flex-wrap items-center gap-3 text-xs">
       <div
         className={
           fehler ? "flex items-center gap-1.5 text-destructive" : "text-muted-foreground"

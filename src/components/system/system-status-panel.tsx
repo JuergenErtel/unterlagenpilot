@@ -61,7 +61,7 @@ export function PilotBanner({ pilot }: { pilot: boolean }) {
     );
   }
   return (
-    <details className="group rounded-lg border border-ai/25 bg-ai/[0.04] px-4 py-2.5">
+    <details className="group rounded-lg border border-ai/25 bg-ai/[0.04] px-3 py-1.5">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm [&::-webkit-details-marker]:hidden">
         <FlaskConical className="h-4 w-4 shrink-0 text-ai" />
         <span className="font-medium text-ai">Pilotbetrieb</span>
