@@ -165,7 +165,9 @@ export function LeadBoard({
           aria-hidden
           className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-background to-transparent md:block"
         />
-        <div className="flex h-full gap-3 overflow-x-auto pb-1 max-md:flex-col max-md:overflow-visible md:snap-x md:snap-proximity">
+        {/* Die Scrollleiste ist bewusst IMMER sichtbar (statt macOS-Overlay):
+            Mit der Maus ist sie der einzige Griff, um nach rechts zu kommen. */}
+        <div className="flex h-full gap-3 overflow-x-auto pb-1 max-md:flex-col max-md:overflow-visible md:snap-x md:snap-proximity md:[scrollbar-width:thin] md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-border md:[&::-webkit-scrollbar-track]:bg-transparent md:[&::-webkit-scrollbar]:h-2">
           {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => {
             const farbe = PHASEN_FARBE[s.phase] ?? PHASE_STANDARD;
             const leer = s.karten.length === 0 && s.weitere === 0;
@@ -217,7 +219,10 @@ export function LeadBoard({
                   </p>
                 </header>
 
-                <div className="min-h-0 flex-1 space-y-2 overscroll-contain px-2 pb-2 md:overflow-y-auto">
+                {/* Bewusst KEIN overscroll-behavior: "contain" verschluckt die
+                    horizontale Trackpad-Geste über einer Karte, bevor sie das
+                    Board erreicht – genau die gemeldete Scroll-Sperre. */}
+                <div className="min-h-0 flex-1 space-y-2 px-2 pb-2 md:overflow-y-auto">
                   {s.karten.map((k) => (
                     <article
                       key={k.caseId}
