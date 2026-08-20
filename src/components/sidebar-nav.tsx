@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,6 +14,7 @@ import {
   Building2,
   ShieldCheck,
   BadgeEuro,
+  ChevronRight,
   KanbanSquare,
   Landmark,
   Settings,
@@ -21,7 +23,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; label: string; icon: LucideIcon }> }> = [
+export const NAV_GROUPS: Array<{
+  label: string;
+  /** Zugeklappt starten; die Überschrift wird zum Auf-/Zuklapp-Knopf. */
+  einklappbar?: boolean;
+  items: Array<{ href: string; label: string; icon: LucideIcon }>;
+}> = [
   {
     label: "Arbeit",
     items: [
@@ -44,6 +51,9 @@ export const NAV_GROUPS: Array<{ label: string; items: Array<{ href: string; lab
   },
   {
     label: "Konfiguration",
+    // Einrichtungsseiten braucht man alle paar Tage, nicht jeden Morgen –
+    // zugeklappt lassen sie den Arbeitsteil der Leiste atmen (Jürgen, 21.08.2026).
+    einklappbar: true,
     items: [
       { href: "/checklists", label: "Checklisten", icon: ListChecks },
       { href: "/document-types", label: "Dokumenttypen", icon: FileStack },
@@ -69,20 +79,74 @@ export function navGruppen(platformAdmin: boolean): typeof NAV_GROUPS {
   return platformAdmin ? [...NAV_GROUPS, PLATTFORM_GRUPPE] : NAV_GROUPS;
 }
 
+/** Dieselbe Aktiv-Regel wie beim Markieren des Eintrags – auch fürs Aufklappen. */
+function istAktiv(pathname: string, href: string): boolean {
+  return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
+}
+
 export function SidebarNav({
   onNavigate,
   platformAdmin = false,
 }: { onNavigate?: () => void; platformAdmin?: boolean } = {}) {
   const pathname = usePathname();
   const gruppen = navGruppen(platformAdmin);
+
+  // Einklappbare Gruppen starten zu – AUSSER man steht gerade auf einer ihrer
+  // Seiten: Dann wäre der aktive Eintrag unsichtbar und die Leiste behauptete,
+  // man sei nirgends.
+  const [aufgeklappt, setAufgeklappt] = useState<Record<string, boolean>>(() => {
+    const offen: Record<string, boolean> = {};
+    for (const g of gruppen) {
+      if (g.einklappbar) offen[g.label] = g.items.some((it) => istAktiv(pathname, it.href));
+    }
+    return offen;
+  });
+
+  // Navigiert man von außen in eine zugeklappte Gruppe (Link im Seiteninhalt),
+  // klappt sie auf – zugeklappt wieder nur von Hand.
+  useEffect(() => {
+    setAufgeklappt((bisher) => {
+      let geaendert = false;
+      const naechste = { ...bisher };
+      for (const g of gruppen) {
+        if (g.einklappbar && !bisher[g.label] && g.items.some((it) => istAktiv(pathname, it.href))) {
+          naechste[g.label] = true;
+          geaendert = true;
+        }
+      }
+      return geaendert ? naechste : bisher;
+    });
+    // gruppen ist aus platformAdmin abgeleitet und je Render neu – als
+    // Abhängigkeit würde der Effekt jeden Render laufen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, platformAdmin]);
+
   return (
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
       {gruppen.map((g) => (
         <div key={g.label}>
-          <div className="eyebrow px-3 pb-2 text-[0.625rem]">{g.label}</div>
-          <div className="space-y-px">
+          {g.einklappbar ? (
+            <button
+              type="button"
+              onClick={() => setAufgeklappt((o) => ({ ...o, [g.label]: !o[g.label] }))}
+              aria-expanded={aufgeklappt[g.label] ?? false}
+              className="eyebrow flex w-full items-center gap-1 px-3 pb-2 text-[0.625rem] transition-colors hover:text-foreground"
+            >
+              {g.label}
+              <ChevronRight
+                className={cn(
+                  "h-3 w-3 shrink-0 transition-transform",
+                  (aufgeklappt[g.label] ?? false) && "rotate-90"
+                )}
+                aria-hidden
+              />
+            </button>
+          ) : (
+            <div className="eyebrow px-3 pb-2 text-[0.625rem]">{g.label}</div>
+          )}
+          <div className={cn("space-y-px", g.einklappbar && !(aufgeklappt[g.label] ?? false) && "hidden")}>
             {g.items.map((it) => {
-              const active = pathname === it.href || (it.href !== "/dashboard" && pathname.startsWith(it.href));
+              const active = istAktiv(pathname, it.href);
               return (
                 <Link
                   key={it.href}
