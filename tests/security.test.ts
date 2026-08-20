@@ -126,7 +126,6 @@ describe("Session-Token (HMAC)", () => {
     expect(payload?.sub).toBe("u1");
     expect(payload?.org).toBe("o1");
     expect(payload?.role).toBe("vermittler");
-    expect(payload?.csrf).toBeTruthy();
   });
 
   it("lehnt manipulierte Tokens ab", () => {

@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
 import { buildReminderDigest } from "@/lib/cases/reminder-digest";
+import { timingSafeEqualStrings } from "@/lib/security/timing-safe";
 import {
   selectOverdueCases,
   OPEN_STATUSES_LIST,
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (!env.CRON_SECRET) {
     return NextResponse.json({ ok: false, reason: "CRON_SECRET nicht gesetzt" }, { status: 503 });
   }
-  if (req.headers.get("authorization") !== `Bearer ${env.CRON_SECRET}`) {
+  if (!timingSafeEqualStrings(req.headers.get("authorization") ?? "", `Bearer ${env.CRON_SECRET}`)) {
     return new NextResponse("Nicht autorisiert.", { status: 401 });
   }
 

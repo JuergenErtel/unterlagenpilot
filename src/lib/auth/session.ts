@@ -66,12 +66,18 @@ export function getDummyPasswordHash(): string {
 // Session-Token (HMAC)
 // ---------------------------------------------------------------------------
 
+/**
+ * Bewusst KEIN `csrf`-Feld: Ein frueheres Double-Submit-Geheimnis wurde
+ * erzeugt, aber nirgends geprueft – ein Feld, das einen Schutz suggeriert,
+ * den es nicht gibt. CSRF-Abdeckung kommt aus Next.js selbst (Server Actions
+ * pruefen Origin/Host) plus `sameSite: "lax"` auf dem Cookie; eigene GET/POST-
+ * Routen mutieren nichts ohne Session + Org-Check.
+ */
 export interface SessionPayload {
   sub: string; // userId
   org: string; // organizationId
   role: UserRole;
   name: string;
-  csrf: string; // CSRF-Geheimnis (Double-Submit)
   iat: number; // Unix-Sekunden
   exp: number; // Unix-Sekunden
 }
@@ -80,14 +86,11 @@ function sign(data: string): string {
   return crypto.createHmac("sha256", getEnv().AUTH_SECRET).update(data).digest("base64url");
 }
 
-export function createSessionToken(
-  input: Omit<SessionPayload, "iat" | "exp" | "csrf"> & { csrf?: string }
-): string {
+export function createSessionToken(input: Omit<SessionPayload, "iat" | "exp">): string {
   const ttlSec = getEnv().SESSION_TTL_HOURS * 3600;
   const now = Math.floor(Date.now() / 1000);
   const payload: SessionPayload = {
     ...input,
-    csrf: input.csrf ?? crypto.randomBytes(16).toString("base64url"),
     iat: now,
     exp: now + ttlSec,
   };

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalPageShell } from "@/components/legal/legal-page-shell";
 import { ANBIETER, ANBIETER_ZEILE } from "@/lib/legal/anbieter";
 
-export const dynamic = "force-static";
+// Kein force-static mehr: Die Nonce-CSP verlangt dynamisches Rendern (Root-Layout).
 
 export const metadata: Metadata = {
   title: "Datenschutzerklärung",

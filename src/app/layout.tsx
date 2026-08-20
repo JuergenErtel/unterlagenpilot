@@ -1,4 +1,17 @@
 import type { Metadata } from "next";
+
+/**
+ * Erzwungen dynamisches Rendern fuer die GESAMTE App – Voraussetzung der
+ * Nonce-CSP (siehe `src/middleware.ts`): Jede Antwort traegt eine frische
+ * Nonce im CSP-Header, also muss auch das HTML pro Request mit genau dieser
+ * Nonce gerendert werden. Eine statisch vorgerenderte/gecachte Seite truege
+ * die Nonce ihres Build- bzw. Erstbesuchs und ihre Skripte waeren fuer alle
+ * weiteren Besucher blockiert. Kein spuerbarer Verlust: Die App ist
+ * DB-getrieben und war fast vollstaendig ohnehin dynamisch; die wenigen
+ * frueher statischen Seiten (Rechtstexte, Gate) sind reine Textseiten.
+ */
+export const dynamic = "force-dynamic";
+
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Archivo } from "next/font/google";

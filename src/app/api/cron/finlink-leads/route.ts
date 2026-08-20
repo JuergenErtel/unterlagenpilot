@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { syncFinLinkLeads } from "@/lib/platforms/finlink/sync";
+import { timingSafeEqualStrings } from "@/lib/security/timing-safe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!env.CRON_SECRET) {
     return NextResponse.json({ ok: false, reason: "CRON_SECRET nicht gesetzt" }, { status: 503 });
   }
-  if (req.headers.get("authorization") !== `Bearer ${env.CRON_SECRET}`) {
+  if (!timingSafeEqualStrings(req.headers.get("authorization") ?? "", `Bearer ${env.CRON_SECRET}`)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
