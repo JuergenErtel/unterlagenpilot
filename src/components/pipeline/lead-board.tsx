@@ -211,10 +211,13 @@ export function LeadBoard({
                 {/* Farbkante als Registerreiter der Spalte – die Farbe steht oben
                     und stört die Karten darunter nicht. */}
                 <div className={`h-1 ${farbe.kante}`} aria-hidden />
-                <header className="flex items-baseline justify-between gap-2 px-3 pb-1.5 pt-2">
-                  <p className="truncate text-sm font-semibold">{s.titel}</p>
-                  <p className="shrink-0 text-xs text-muted-foreground">
-                    <span className={`tabular font-semibold ${farbe.zahl}`}>{s.anzahl}</span>
+                {/* Titel und Zahlen untereinander: In einer Zeile schnitt der
+                    Platz "Kreditprüfung eingereicht" zu "…eingerei…" ab. */}
+                <header className="px-3 pb-1.5 pt-2">
+                  <p className="text-sm font-semibold leading-tight">{s.titel}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className={`tabular font-semibold ${farbe.zahl}`}>{s.anzahl}</span>{" "}
+                    {s.anzahl === 1 ? "Fall" : "Fälle"}
                     {s.summe > 0 && <span className="tabular"> · {eur(s.summe)}</span>}
                   </p>
                 </header>

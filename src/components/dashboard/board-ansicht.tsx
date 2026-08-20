@@ -266,9 +266,11 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
     where: { organizationId_quelle: { organizationId, quelle: "finlink" } },
     select: { lastRunAt: true, lastCreated: true, lastError: true },
   });
-  const zuletzt = syncState?.lastRunAt
-    ? `vor ${Math.max(0, Math.round((jetzt.getTime() - syncState.lastRunAt.getTime()) / 60000))} Minuten`
-    : "noch nie";
+  const syncMinuten = syncState?.lastRunAt
+    ? Math.max(0, Math.round((jetzt.getTime() - syncState.lastRunAt.getTime()) / 60000))
+    : null;
+  const zuletzt =
+    syncMinuten == null ? "noch nie" : syncMinuten === 1 ? "vor 1 Minute" : `vor ${syncMinuten} Minuten`;
 
   // Quellen-Zähler über alle nicht verlorenen Karten.
   const quellenZaehler = new Map<string, number>();
