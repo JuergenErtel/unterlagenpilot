@@ -35,8 +35,11 @@ export function __resetRateLimits(): void {
 }
 
 function upstashConfig(): { url: string; token: string } | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Zwei Namenssaetze: UPSTASH_* (Upstash direkt) und KV_REST_API_* (so
+  // injiziert der Vercel-Marketplace die Upstash-for-Redis-Integration).
+  // Beide zeigen auf dieselbe REST-API; der jeweils gesetzte gewinnt.
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
   return url && token ? { url: url.replace(/\/$/, ""), token } : null;
 }
 
