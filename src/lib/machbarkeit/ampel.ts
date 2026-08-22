@@ -105,7 +105,11 @@ export function ampelFuer(c: CanonicalCase, opts: AmpelOptionen, a: Annahmen): A
     )} bei ${eur(start.rate + start.ratenkreditRate)} Rate.`;
 
     if (start.auslauf <= GRUEN_BIS_AUSLAUF) {
-      return { farbe: "gruen", text: `trägt · ${pct(start.auslauf)} Auslauf`, grund };
+      // Ohne das fuehrende "traegt": Das Wort stand auf JEDER gruenen Karte
+      // und war genau die Wiederholung, die 2026-08-20 den Text von gruenen
+      // Karten verbannt hat. Die Zahl dahinter ist je Karte verschieden und
+      // deshalb seit dem 22.08. wieder auf dem Brett – ohne die Floskel.
+      return { farbe: "gruen", text: `${pct(start.auslauf)} Auslauf`, grund };
     }
     // Traegt, aber die Nebenkosten laufen mit ins Darlehen: machbar, nur nicht
     // ohne Weiteres – deshalb gelb statt gruen.

@@ -32,9 +32,13 @@ describe("Ampel – grün", () => {
       VORGABE_ANNAHMEN
     );
     expect(a!.farbe).toBe("gruen");
-    expect(a!.text).toMatch(/trägt/);
-    // Der Auslauf gehoert dazu – sonst ist "traegt" eine nackte Behauptung.
-    expect(a!.text).toMatch(/%/);
+    // Die Zahl ist der ganze Inhalt der Zeile. Das fruehere "traegt ·" davor
+    // stand auf jeder gruenen Karte und liess alle gleich aussehen
+    // (22.08.2026) – die Kante sagt "traegt" ohnehin schon.
+    expect(a!.text).toMatch(/^\d+ % Auslauf$/);
+    expect(a!.text).not.toMatch(/trägt/);
+    // Der ausfuehrliche Satz bleibt und haengt am Mauszeiger.
+    expect(a!.grund).toMatch(/Beleihungsauslauf/);
   });
 });
 

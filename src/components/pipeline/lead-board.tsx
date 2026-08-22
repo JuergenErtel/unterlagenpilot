@@ -51,9 +51,15 @@ const eur = (n: number) => `${Math.round(n).toLocaleString("de-DE")} €`;
 
 /**
  * Die Ampel sitzt als Farbkante an der linken Karten­kante – eine Marke, die
- * man beim Überfliegen der Spalte liest, ohne Text. Der erklärende Satz
- * erscheint nur noch, wenn er etwas MELDET (gelb/rot/Datenlücke): "trägt" auf
- * jeder grünen Karte war die Wiederholung, die alle Karten gleich aussehen ließ.
+ * man beim Überfliegen der Spalte liest.
+ *
+ * Dazu EINE knappe Zeile. Sie war fuer gruene Karten am 20.08.2026 gestrichen
+ * worden, weil dort "traegt" stand – auf jeder Karte dasselbe Wort, das alle
+ * gleich aussehen liess. Seit dem 22.08. steht dort stattdessen die Zahl
+ * ("70 % Auslauf"), die je Karte verschieden ist: Juergen konnte sonst am
+ * Brett nicht nachsehen, WARUM eine Karte gruen ist – der Erklaersatz hing am
+ * Textabsatz, den gruene Karten gar nicht rendern, also auch nicht am
+ * Mauszeiger. Gruen bleibt trotzdem leise: gedecktes Grau statt Signalfarbe.
  */
 const AMPEL_KANTE: Record<string, string> = {
   gruen: "border-l-success",
@@ -63,6 +69,9 @@ const AMPEL_KANTE: Record<string, string> = {
 };
 
 const AMPEL_TEXT: Record<string, string> = {
+  // Gruen traegt KEIN Gruen: Die Kante sagt die Farbe schon, und eine zweite
+  // Signalfarbe im Text zoege den Blick auf die unauffaelligen Faelle.
+  gruen: "text-muted-foreground",
   gelb: "text-warning",
   rot: "text-destructive",
   grau: "text-muted-foreground",
@@ -354,9 +363,10 @@ export function LeadBoard({
                         </button>
                       )}
 
-                      {/* Nur Abweichendes wird gesagt: Grün spricht über die
-                          Kante, gelb/rot/Datenlücke zusätzlich im Klartext. */}
-                      {k.ampel && k.ampel.farbe !== "gruen" && (
+                      {/* Der volle Satz (Auslauf, Rate, Überschuss) hängt als
+                          Mauszeiger-Hinweis an dieser Zeile – für grüne Karten
+                          war er vorher unerreichbar, weil es die Zeile nicht gab. */}
+                      {k.ampel && (
                         <p
                           className={`mt-1 text-xs ${AMPEL_TEXT[k.ampel.farbe] ?? "text-muted-foreground"}`}
                           title={k.ampel.grund}
