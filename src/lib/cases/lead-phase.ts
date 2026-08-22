@@ -25,7 +25,7 @@ export interface PhasenSignale {
    * Frueher zaehlte hier auch "ein Link wurde erzeugt". Das war gleichbedeutend,
    * solange Links nur von Hand fuer eine Nachricht entstanden. Seit der
    * Erstkontakt Upload- und Selbstauskunftslink schon beim Lead-Eingang anlegt,
-   * haette das JEDEM frisch importierten Lead sofort "Anfrage erstellt"
+   * haette das JEDEM frisch importierten Lead sofort die naechste Phase
    * vorgeschlagen, obwohl nichts hinausgegangen ist.
    */
   hatGesendeteNachricht: boolean;
@@ -48,10 +48,12 @@ export function schlagePhaseVor(s: PhasenSignale): LeadPhase | null {
     erkannt = "abgeschlossen";
   } else if (s.status === "exportiert" || s.status === "uebertragen") {
     erkannt = "kreditpruefung_eingereicht";
-  } else if (s.selbstauskunftBegonnen || s.dokumenteVorhanden) {
+  } else if (s.selbstauskunftBegonnen || s.dokumenteVorhanden || s.hatGesendeteNachricht) {
+    // Nachricht raus, Bogen begonnen, erste Dokumente da: alles derselbe
+    // Zustand "der Ball liegt beim Kunden". Bis zum 22.08.2026 stand davor
+    // noch "Anfrage erstellt" – eine eigene Spalte fuer denselben Zustand,
+    // die auf dem Brett nur Platz und Aufmerksamkeit kostete (Juergen).
     erkannt = "selbstauskunft_laeuft";
-  } else if (s.hatGesendeteNachricht) {
-    erkannt = "anfrage_erstellt";
   }
 
   if (!erkannt) return null;

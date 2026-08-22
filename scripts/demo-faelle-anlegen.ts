@@ -25,14 +25,14 @@ type Demo = {
 const faelle: Demo[] = [
   { nr: "UP-2026-0002", vor1: "Sabine", nach1: "Krüger", phase: "neu", status: "neu", quelle: "immoscout24", kaufpreis: 485000, eigenkapital: 90000, darlehen: 420000, nettoeinkommen: 5200, tageInPhase: 0 },
   { nr: "UP-2026-0003", vor1: "Tobias", nach1: "Lindner", vor2: "Anna", nach2: "Lindner", phase: "neu", status: "upload_offen", quelle: "baufi24", kaufpreis: 320000, eigenkapital: 15000, darlehen: 330000, nettoeinkommen: 3400, tageInPhase: 2 },
-  { nr: "UP-2026-0004", vor1: "Miriam", nach1: "Schäfer", phase: "anfrage_erstellt", status: "upload_offen", quelle: "immoscout24", kaufpreis: 610000, eigenkapital: 140000, darlehen: 510000, nettoeinkommen: 6800, tageInPhase: 1 },
+  { nr: "UP-2026-0004", vor1: "Miriam", nach1: "Schäfer", phase: "selbstauskunft_laeuft", status: "upload_offen", quelle: "immoscout24", kaufpreis: 610000, eigenkapital: 140000, darlehen: 510000, nettoeinkommen: 6800, tageInPhase: 1 },
   { nr: "UP-2026-0005", vor1: "Daniel", nach1: "Voss", vor2: "Lea", nach2: "Voss", phase: "selbstauskunft_laeuft", status: "unterlagen_fehlen", quelle: "vergleich_de", kaufpreis: 398000, eigenkapital: 60000, darlehen: 365000, nettoeinkommen: 4600, tageInPhase: 5 },
   { nr: "UP-2026-0006", vor1: "Katrin", nach1: "Albrecht", phase: "selbstauskunft_laeuft", status: "vermittlerpruefung_erforderlich", quelle: "manuell", kaufpreis: 275000, eigenkapital: 55000, darlehen: 240000, nettoeinkommen: 3100, tageInPhase: 12 },
   { nr: "UP-2026-0007", vor1: "Jan", nach1: "Petersen", vor2: "Svenja", nach2: "Petersen", phase: "finanzierungsvorschlag", status: "einreichungsfertig", quelle: "immoscout24", kaufpreis: 540000, eigenkapital: 120000, darlehen: 455000, nettoeinkommen: 7200, tageInPhase: 3 },
   { nr: "UP-2026-0008", vor1: "Fatma", nach1: "Yildiz", phase: "kreditpruefung_eingereicht", status: "uebertragen", quelle: "baufi24", kaufpreis: 430000, eigenkapital: 95000, darlehen: 370000, nettoeinkommen: 4900, tageInPhase: 8 },
   { nr: "UP-2026-0009", vor1: "Markus", nach1: "Brandt", vor2: "Julia", nach2: "Brandt", phase: "zusage", status: "abgeschlossen", quelle: "immoscout24", kaufpreis: 520000, eigenkapital: 160000, darlehen: 400000, nettoeinkommen: 8100, tageInPhase: 4 },
   { nr: "UP-2026-0010", vor1: "Nora", nach1: "Wenzel", phase: "abgeschlossen", status: "abgeschlossen", quelle: "manuell", kaufpreis: 350000, eigenkapital: 105000, darlehen: 260000, nettoeinkommen: 4200, tageInPhase: 20 },
-  { nr: "UP-2026-0011", vor1: "Patrick", nach1: "Heller", phase: "anfrage_erstellt", status: "upload_offen", quelle: "vergleich_de", kaufpreis: 290000, eigenkapital: 0, darlehen: 310000, nettoeinkommen: 2500, tageInPhase: 9, verloren: "Kunde hat bei der Hausbank abgeschlossen" },
+  { nr: "UP-2026-0011", vor1: "Patrick", nach1: "Heller", phase: "selbstauskunft_laeuft", status: "upload_offen", quelle: "vergleich_de", kaufpreis: 290000, eigenkapital: 0, darlehen: 310000, nettoeinkommen: 2500, tageInPhase: 9, verloren: "Kunde hat bei der Hausbank abgeschlossen" },
 ];
 
 async function main() {

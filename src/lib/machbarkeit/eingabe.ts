@@ -22,6 +22,30 @@ const BEDARF_STATT_KAUFPREIS: Partial<Record<FinancingType, string>> = {
 };
 
 /**
+ * Vorhabensarten, bei denen dem Kunden die Immobilie bereits GEHOERT.
+ *
+ * Ein Kaufpreis am Fall ist dort keine Finanzierungsposition, sondern ein
+ * Rest: entweder der historische Preis oder – haeufiger – ein stehen
+ * gebliebener Wert aus einer frueheren Vorhabensart. Ihn mitzufinanzieren
+ * verdoppelt das Darlehen und erfindet obendrein Grunderwerbsteuer
+ * (`berechneNebenkosten` rechnet auf dem Kaufpreis).
+ *
+ * Genau das ist am 22.08.2026 passiert: Fall UP-2026-0015 wurde von "Kauf"
+ * auf "Kapitalbeschaffung" umgestellt, der Kaufpreis von 310.000 € blieb
+ * stehen – und die Fallakte rechnete 310.000 + 270.000 + 26.350 Nebenkosten
+ * = 151 % Auslauf statt der richtigen 70 %.
+ *
+ * Massstab darf der Kaufpreis weiterhin sein, wenn kein Objektwert erfasst
+ * ist – aber nur das. Siehe den Dateikopf zur Trennung der beiden Rollen.
+ */
+const BESITZT_IMMOBILIE_BEREITS: ReadonlySet<FinancingType> = new Set<FinancingType>([
+  "anschlussfinanzierung",
+  "umschuldung",
+  "kapitalbeschaffung",
+  "modernisierung",
+]);
+
+/**
  * CanonicalCase → SolverEingabe.
  *
  * Ohne Grundbetrag, Objektwert oder Nettoeinkommen wird NICHT gerechnet,
@@ -46,7 +70,12 @@ export function baueEingabe(
 ): EingabeErgebnis {
   const fehlend: string[] = [];
 
-  const kaufpreis = c.financing?.kaufpreis ?? c.financing?.baukosten ?? 0;
+  const erfassterKaufpreis = c.financing?.kaufpreis ?? c.financing?.baukosten ?? 0;
+  const bestandsobjekt = c.financingType
+    ? BESITZT_IMMOBILIE_BEREITS.has(c.financingType)
+    : false;
+  // Was finanziert wird. Bei den Bestandsarten NICHT der Kaufpreis (s. o.).
+  const kaufpreis = bestandsobjekt ? 0 : erfassterKaufpreis;
   const modernisierungskosten = c.financing?.modernisierungskosten ?? 0;
 
   const bedarfsName = c.financingType ? BEDARF_STATT_KAUFPREIS[c.financingType] : undefined;
@@ -67,7 +96,12 @@ export function baueEingabe(
   // Ohne erfassten Objektwert ist der Kaufpreis der Massstab. Fehlt beides,
   // laesst sich kein Auslauf bilden – und ein Urteil ohne Auslauf waere
   // allein die Haushaltssicht und damit zu optimistisch.
-  const objektwert = c.property?.objektwert ?? null;
+  //
+  // Bei den Bestandsarten muss der Kaufpreis hier ausdruecklich eingesetzt
+  // werden: `bewerte` faellt sonst auf `e.kaufpreis` zurueck, und der ist dort
+  // bewusst 0 – der Beleihungswert waere null und der Auslauf unendlich.
+  const objektwert =
+    c.property?.objektwert ?? (bestandsobjekt ? erfassterKaufpreis || null : null);
   if (!objektwert && !kaufpreis) fehlend.push("Wert der Immobilie");
 
   const nettoEinkommen = sum((c.income ?? []).map((i) => i.nettoMonatlich ?? 0));

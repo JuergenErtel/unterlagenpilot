@@ -1,3 +1,4 @@
+import type { FinancingType } from "@/lib/domain/enums";
 import type { Tone } from "@/lib/ui/tone";
 import type { CockpitData } from "./cockpit";
 import type { NextStep } from "./next-step";
@@ -125,7 +126,17 @@ export interface FallbildEingabe {
    * noch Baujahr, eine Eigentumswohnung keine eigene Grundstuecksgroesse.
    */
   objektAngaben: { gefuellt: number; gesamt: number; fehlend: string[] };
-  finanzierung: { kaufpreis: number | null };
+  /**
+   * Die Betraege des Vorhabens. Welcher davon in der Mitte steht, entscheidet
+   * die Vorhabensart – siehe `hauptbetrag`.
+   */
+  finanzierung: {
+    art: FinancingType | null;
+    kaufpreis: number | null;
+    baukosten: number | null;
+    modernisierungskosten: number | null;
+    darlehenswunsch: number | null;
+  };
   /** Beim Kunden angeforderte, noch offene Unterlagen. */
   offeneAnfragen: number;
   /**
@@ -173,6 +184,44 @@ const MARKE: Partial<Record<NextStep["key"], TorId | FeldId>> = {
   einreichung: "einreichung",
 };
 
+/**
+ * Der Betrag, um den es in diesem Fall geht – die Zahl in der Mitte des
+ * Kreises, mit der Beschriftung fuer den Fall, dass sie fehlt.
+ *
+ * Welches Feld das ist, haengt an der Vorhabensart: beim Kauf der Kaufpreis,
+ * beim Neubau Grundstueck plus Baukosten, bei der Modernisierung die
+ * geschaetzten Kosten, bei Anschlussfinanzierung, Umschuldung und
+ * Kapitalbeschaffung die Darlehenssumme (der Kunde besitzt die Immobilie
+ * bereits – ein Kaufpreis am Fall ist dort ein Rest, siehe
+ * `machbarkeit/eingabe.ts`).
+ *
+ * Bis zum 22.08.2026 stand hier IMMER der Kaufpreis. Wer einen Fall von
+ * "Kauf" auf "Kapitalbeschaffung" umstellte, las deshalb weiter die alten
+ * 310.000 € in der Mitte, obwohl die neue Darlehenshoehe von 270.000 €
+ * laengst erfasst war.
+ */
+function hauptbetrag(f: FallbildEingabe["finanzierung"]): string {
+  const zahl = (n: number | null, fehlt: string) => eur(n) ?? fehlt;
+
+  switch (f.art) {
+    case "anschlussfinanzierung":
+    case "umschuldung":
+      return zahl(f.darlehenswunsch, "Restschuld offen");
+    case "kapitalbeschaffung":
+      return zahl(f.darlehenswunsch, "Darlehensbetrag offen");
+    case "modernisierung":
+      return zahl(f.modernisierungskosten, "Kosten offen");
+    case "neubau": {
+      // Grundstueck und Bau sind zwei Posten desselben Vorhabens; einzeln
+      // gelesen untertreibt jeder von beiden.
+      const summe = (f.kaufpreis ?? 0) + (f.baukosten ?? 0);
+      return summe > 0 ? (eur(summe) as string) : "Baukosten offen";
+    }
+    default:
+      return zahl(f.kaufpreis, "Kaufpreis offen");
+  }
+}
+
 export function baueFallbild(e: FallbildEingabe): Fallbild {
   const { cockpit: c } = e;
   const id = c.caseId;
@@ -182,7 +231,7 @@ export function baueFallbild(e: FallbildEingabe): Fallbild {
       nummer: c.caseNumber,
       name: c.applicantNames || "Ohne Namen",
       vorhaben: [e.objekt.objektart, e.objekt.ort].filter(Boolean).join(" · ") || "Vorhaben offen",
-      betrag: eur(e.finanzierung.kaufpreis) ?? "Kaufpreis offen",
+      betrag: hauptbetrag(e.finanzierung),
     },
     tore: [
       baueErstkontakt(id, e),

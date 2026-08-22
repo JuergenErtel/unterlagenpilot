@@ -94,8 +94,19 @@ describe("Eingabe-Aufbereitung", () => {
       baueEingabe(basis({ financingType: "neubau" } as never), opts).ok &&
         baueEingabe(basis({ financingType: "neubau" } as never), opts)
     ).toBeTruthy();
-    const r = baueEingabe(basis({ financingType: "modernisierung" } as never), opts);
+    // Bei der Modernisierung besitzt der Kunde die Immobilie schon: der
+    // Kaufpreis ist dort keine Finanzierungsposition mehr, sondern nur noch
+    // Massstab – gerechnet wird auf den Modernisierungskosten.
+    const r = baueEingabe(
+      basis({
+        financingType: "modernisierung",
+        financing: { kaufpreis: 400_000, modernisierungskosten: 60_000 },
+      } as never),
+      opts
+    );
     expect(r.ok && r.eingabe.istNeubauOderModernisierung).toBe(true);
+    expect(r.ok && r.eingabe.kaufpreis).toBe(0);
+    expect(r.ok && r.eingabe.objektwert).toBe(400_000);
   });
 
   it("meldet ein unsicheres Bundesland weiter", () => {

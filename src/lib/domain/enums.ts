@@ -62,7 +62,6 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
  */
 export const LEAD_PHASES = [
   "neu",
-  "anfrage_erstellt",
   "selbstauskunft_laeuft",
   "finanzierungsvorschlag",
   "kreditpruefung_eingereicht",
@@ -73,7 +72,6 @@ export type LeadPhase = (typeof LEAD_PHASES)[number];
 
 export const LEAD_PHASE_LABELS: Record<LeadPhase, string> = {
   neu: "Neu",
-  anfrage_erstellt: "Anfrage erstellt",
   selbstauskunft_laeuft: "Selbstauskunft läuft",
   finanzierungsvorschlag: "Finanzierungsvorschlag",
   kreditpruefung_eingereicht: "Kreditprüfung eingereicht",

@@ -19,14 +19,19 @@ describe("schlagePhaseVor", () => {
     expect(schlagePhaseVor(signale())).toBeNull();
   });
 
-  it("schlägt 'Anfrage erstellt' vor, sobald eine Nachricht versendet wurde", () => {
-    expect(schlagePhaseVor(signale({ hatGesendeteNachricht: true }))).toBe("anfrage_erstellt");
+  it("schlägt 'Selbstauskunft läuft' vor, sobald eine Nachricht versendet wurde", () => {
+    // Bis zum 22.08.2026 gab es dafuer die eigene Phase "Anfrage erstellt".
+    // Sie beschrieb denselben Zustand wie "Selbstauskunft laeuft" – der Ball
+    // liegt beim Kunden – und ist deshalb weggefallen.
+    expect(schlagePhaseVor(signale({ hatGesendeteNachricht: true }))).toBe(
+      "selbstauskunft_laeuft"
+    );
   });
 
   it("schlägt für einen frisch importierten Lead nichts vor, nur weil Links bereitliegen", () => {
     // Der Erstkontakt legt Upload- und Selbstauskunftslink schon beim
     // Lead-Eingang an. Waere "ein Link existiert" weiterhin ein Signal, bekaeme
-    // JEDER neue Lead sofort "Anfrage erstellt" vorgeschlagen, obwohl nichts
+    // JEDER neue Lead sofort die naechste Phase vorgeschlagen, obwohl nichts
     // hinausgegangen ist – und der Vermittler gewoehnte sich das Wegklicken an.
     expect(schlagePhaseVor(signale({ leadPhase: "neu", hatGesendeteNachricht: false }))).toBeNull();
   });
@@ -60,7 +65,7 @@ describe("schlagePhaseVor", () => {
 
   it("schlägt nichts vor, wenn die Phase bereits stimmt", () => {
     expect(
-      schlagePhaseVor(signale({ leadPhase: "anfrage_erstellt", hatGesendeteNachricht: true }))
+      schlagePhaseVor(signale({ leadPhase: "selbstauskunft_laeuft", hatGesendeteNachricht: true }))
     ).toBeNull();
   });
 
@@ -81,7 +86,7 @@ describe("schlagePhaseVor", () => {
 
   it("kennt die Reihenfolge der Phasen", () => {
     expect(phasenIndex("neu")).toBe(0);
-    expect(phasenIndex("abgeschlossen")).toBe(6);
+    expect(phasenIndex("abgeschlossen")).toBe(5);
     expect(phasenIndex("quatsch")).toBe(-1);
   });
 });

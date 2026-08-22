@@ -52,7 +52,7 @@ const eingabe = (over: Partial<FallbildEingabe> = {}): FallbildEingabe => ({
   objekt: { objektart: "Reihenhaus", ort: "Meerbusch", wohnflaeche: 118, berechnungFreigegeben: false },
   objektAngaben: { gefuellt: 5, gesamt: 6, fehlend: ["Baujahr"] },
   einreichung: { phaseEingereicht: false, stand: null },
-  finanzierung: { kaufpreis: 420000 },
+  finanzierung: { art: "kauf", kaufpreis: 420000, baukosten: null, modernisierungskosten: null, darlehenswunsch: null },
   offeneAnfragen: 2,
   ...over,
 });
@@ -82,7 +82,7 @@ describe("Vollzähligkeit", () => {
         objekt: { objektart: null, ort: null, wohnflaeche: null, berechnungFreigegeben: false },
         objektAngaben: { gefuellt: 0, gesamt: 6, fehlend: ["Objektart", "PLZ des Objekts", "Wohnfläche", "Grundstücksgröße", "Baujahr", "Nutzung"] },
         einreichung: { phaseEingereicht: false, stand: null },
-        finanzierung: { kaufpreis: null },
+        finanzierung: { art: null, kaufpreis: null, baukosten: null, modernisierungskosten: null, darlehenswunsch: null },
         offeneAnfragen: 0,
       })
     );
@@ -90,6 +90,61 @@ describe("Vollzähligkeit", () => {
     expect(leer.felder).toHaveLength(4);
     expect(leer.fall.betrag).toBe("Kaufpreis offen");
     expect(leer.fall.vorhaben).toBe("Vorhaben offen");
+  });
+});
+
+/*
+ * Die Zahl in der Mitte des Kreises stand bis zum 22.08.2026 IMMER auf dem
+ * Kaufpreis. Wer einen Fall von "Kauf" auf "Kapitalbeschaffung" umstellte,
+ * las deshalb weiter den alten Kaufpreis, obwohl die neue Darlehenshoehe
+ * laengst erfasst war (Fall UP-2026-0015: 310.000 statt 270.000).
+ */
+describe("Betrag in der Mitte", () => {
+  const betrag = (f: Partial<FallbildEingabe["finanzierung"]>) =>
+    baueFallbild(
+      eingabe({
+        finanzierung: {
+          art: null,
+          kaufpreis: null,
+          baukosten: null,
+          modernisierungskosten: null,
+          darlehenswunsch: null,
+          ...f,
+        },
+      })
+    ).fall.betrag;
+
+  it("zeigt beim Kauf den Kaufpreis", () => {
+    expect(betrag({ art: "kauf", kaufpreis: 420_000 })).toBe("420.000 €");
+  });
+
+  it("zeigt bei der Kapitalbeschaffung den Darlehensbetrag, nicht den alten Kaufpreis", () => {
+    expect(betrag({ art: "kapitalbeschaffung", kaufpreis: 310_000, darlehenswunsch: 270_000 })).toBe(
+      "270.000 €"
+    );
+  });
+
+  it("zeigt bei der Anschlussfinanzierung die Restschuld", () => {
+    expect(betrag({ art: "anschlussfinanzierung", kaufpreis: 310_000, darlehenswunsch: 180_000 })).toBe(
+      "180.000 €"
+    );
+  });
+
+  it("zeigt bei der Modernisierung die geschaetzten Kosten", () => {
+    expect(betrag({ art: "modernisierung", kaufpreis: 310_000, modernisierungskosten: 60_000 })).toBe(
+      "60.000 €"
+    );
+  });
+
+  it("zaehlt beim Neubau Grundstueck und Baukosten zusammen", () => {
+    expect(betrag({ art: "neubau", kaufpreis: 150_000, baukosten: 350_000 })).toBe("500.000 €");
+  });
+
+  it("benennt die Luecke in der Sprache der Vorhabensart", () => {
+    expect(betrag({ art: "kapitalbeschaffung" })).toBe("Darlehensbetrag offen");
+    expect(betrag({ art: "anschlussfinanzierung" })).toBe("Restschuld offen");
+    expect(betrag({ art: "modernisierung" })).toBe("Kosten offen");
+    expect(betrag({ art: "kauf" })).toBe("Kaufpreis offen");
   });
 });
 

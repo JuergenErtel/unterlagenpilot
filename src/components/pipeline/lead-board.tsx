@@ -81,7 +81,6 @@ const AMPEL_TEXT: Record<string, string> = {
  */
 const PHASEN_FARBE: Record<string, { kante: string; flaeche: string; zahl: string }> = {
   neu: { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40", zahl: "text-muted-foreground" },
-  anfrage_erstellt: { kante: "bg-primary/30", flaeche: "bg-primary/[0.04]", zahl: "text-muted-foreground" },
   selbstauskunft_laeuft: { kante: "bg-primary/50", flaeche: "bg-primary/[0.07]", zahl: "text-muted-foreground" },
   finanzierungsvorschlag: { kante: "bg-ai/40", flaeche: "bg-ai/[0.06]", zahl: "text-ai" },
   kreditpruefung_eingereicht: { kante: "bg-ai/70", flaeche: "bg-ai/[0.10]", zahl: "text-ai" },
@@ -99,8 +98,7 @@ const PHASE_STANDARD = { kante: "bg-muted-foreground/30", flaeche: "bg-muted/40"
  */
 const PHASEN_HINWEIS: Record<string, string> = {
   neu: "Frisch eingegangene Leads – der erste Anruf entscheidet.",
-  anfrage_erstellt: "Kontakt besteht, die Finanzierungsanfrage ist angelegt.",
-  selbstauskunft_laeuft: "Der Kunde füllt Selbstauskunft und Unterlagen.",
+  selbstauskunft_laeuft: "Der Ball liegt beim Kunden: Anfrage ist raus, er füllt Selbstauskunft und Unterlagen.",
   finanzierungsvorschlag: "Angebot ist beim Kunden – Entscheidung steht aus.",
   kreditpruefung_eingereicht: "Der Fall liegt bei der Bank zur Prüfung.",
   zusage: "Die Bank hat zugesagt – Vertrag und Auszahlung folgen.",

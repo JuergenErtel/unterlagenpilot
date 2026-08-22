@@ -527,7 +527,13 @@ export default async function CaseCockpitPage({
               fehlend: felder.filter((f) => !f.gefuellt).map((f) => f.label),
             };
           })(),
-          finanzierung: { kaufpreis: caseRow.financingRequest?.kaufpreis ?? null },
+          finanzierung: {
+            art: caseRow.financingType ?? null,
+            kaufpreis: caseRow.financingRequest?.kaufpreis ?? null,
+            baukosten: caseRow.financingRequest?.baukosten ?? null,
+            modernisierungskosten: caseRow.financingRequest?.modernisierungskosten ?? null,
+            darlehenswunsch: caseRow.financingRequest?.darlehenswunsch ?? null,
+          },
           offeneAnfragen,
           einreichung: {
             phaseEingereicht: ["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(

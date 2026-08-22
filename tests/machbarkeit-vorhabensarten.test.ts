@@ -262,6 +262,60 @@ describe("Eingabe-Aufbereitung je Vorhabensart", () => {
     const r = baueEingabe({ ...fall({ kaufpreis: 400_000 }), financingType: "kauf" }, opts);
     expect(r.ok && r.eingabe.objektwert).toBeNull();
   });
+
+  /*
+   * Der stehen gebliebene Kaufpreis (22.08.2026, Fall UP-2026-0015).
+   *
+   * Ein Fall wird von "Kauf" auf "Kapitalbeschaffung" umgestellt; der alte
+   * Kaufpreis bleibt in der Datenbank stehen, weil ihn niemand loescht. Er
+   * darf ab dann weder finanziert werden noch Grunderwerbsteuer ausloesen.
+   */
+  it("finanziert einen stehen gebliebenen Kaufpreis bei der Kapitalbeschaffung nicht mit", () => {
+    const r = baueEingabe(
+      {
+        ...fall({ kaufpreis: 310_000, darlehenswunsch: 270_000 }, { objektwert: 415_000 }),
+        financingType: "kapitalbeschaffung",
+      },
+      opts
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eingabe.kaufpreis).toBe(0);
+    expect(r.eingabe.weitererDarlehensbedarf).toBe(270_000);
+
+    const u = bewerte(r.eingabe, VORGABE_ANNAHMEN);
+    // Nur der Darlehensbetrag, keine erfundene Grunderwerbsteuer.
+    expect(u.darlehen).toBe(270_000);
+    expect(u.nebenkosten.summe).toBe(0);
+    // 270.000 von 415.000 – vorher waren es 151 % aus 310.000 + 270.000 + NK.
+    expect(u.auslauf).toBe(65.06);
+  });
+
+  it("laesst den stehen gebliebenen Kaufpreis den Massstab sein, wenn kein Objektwert erfasst ist", () => {
+    // Ohne diesen Rueckfall waere der Beleihungswert 0 und der Auslauf
+    // unendlich – schlimmer als die alte Doppelzaehlung.
+    const r = baueEingabe(
+      { ...fall({ kaufpreis: 400_000, darlehenswunsch: 100_000 }), financingType: "kapitalbeschaffung" },
+      opts
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eingabe.kaufpreis).toBe(0);
+    expect(r.eingabe.objektwert).toBe(400_000);
+    expect(bewerte(r.eingabe, VORGABE_ANNAHMEN).auslauf).toBe(25);
+  });
+
+  it("finanziert einen stehen gebliebenen Kaufpreis auch bei der Modernisierung nicht mit", () => {
+    const r = baueEingabe(
+      {
+        ...fall({ kaufpreis: 310_000, modernisierungskosten: 60_000 }, { objektwert: 300_000 }),
+        financingType: "modernisierung",
+      },
+      opts
+    );
+    expect(r.ok && r.eingabe.kaufpreis).toBe(0);
+    expect(r.ok && bewerte(r.eingabe, VORGABE_ANNAHMEN).darlehen).toBe(60_000);
+  });
 });
 
 const ampelOpts = { applicantCount: 1, anzahlKinder: 0, verloren: false, abgeschlossen: false };

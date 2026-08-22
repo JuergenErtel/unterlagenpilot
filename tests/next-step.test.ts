@@ -972,7 +972,7 @@ describe("Vertrieb laeuft ausserhalb", () => {
     expect(schritt.reason).toMatch(/Phase/i);
   });
 
-  for (const phase of ["neu", "anfrage_erstellt", "selbstauskunft_laeuft"]) {
+  for (const phase of ["neu", "selbstauskunft_laeuft"]) {
     it(`fuehrt bei Phase ${phase} unveraendert weiter`, () => {
       const schritt = computeNextStep(cockpit({ ...laufend, leadPhase: phase }));
       expect(schritt.key).not.toBe("vertrieb_laeuft");
@@ -1045,7 +1045,7 @@ describe("laeuftAusserhalb", () => {
   });
 
   it("gilt davor nicht", () => {
-    for (const p of ["neu", "anfrage_erstellt", "selbstauskunft_laeuft"]) {
+    for (const p of ["neu", "selbstauskunft_laeuft"]) {
       expect(laeuftAusserhalb(p)).toBe(false);
     }
   });

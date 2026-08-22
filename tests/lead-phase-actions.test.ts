@@ -54,9 +54,9 @@ describe("setzePhase", () => {
 
   it("erlaubt auch das Zurückstufen von Hand", async () => {
     findUnique.mockResolvedValue({ leadPhase: "zusage", verlorenAm: null, verlorenGrund: null });
-    await setzePhase("case-A", "anfrage_erstellt");
+    await setzePhase("case-A", "selbstauskunft_laeuft");
     const arg = update.mock.calls[0]![0] as { data: { leadPhase: string } };
-    expect(arg.data.leadPhase).toBe("anfrage_erstellt");
+    expect(arg.data.leadPhase).toBe("selbstauskunft_laeuft");
   });
 });
 

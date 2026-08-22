@@ -5,6 +5,7 @@ import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-boa
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { laeuftAusserhalb } from "@/lib/cases/next-step";
 import { ampelFuer } from "@/lib/machbarkeit/ampel";
+import type { Bundesland } from "@/lib/machbarkeit/bundesland";
 import { fehlendeAngaben } from "@/lib/cases/kreditpruefung";
 import { ladeAnnahmen } from "@/lib/machbarkeit/annahmen";
 import { LeadBoard } from "@/components/pipeline/lead-board";
@@ -151,6 +152,10 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
           hausgeldMonatlich: true,
           mieteinnahmenMonatlich: true,
           bundesland: true,
+          // Massstab und Vorlast des Beleihungsauslaufs. Fehlten hier bis zum
+          // 22.08.2026 – siehe die Warnung am Canonical-Objekt unten.
+          objektwert: true,
+          bestehendeGrundschuld: true,
         },
       },
       liabilities: { select: { art: true, restschuld: true, monatlicheRate: true, abzuloesen: true } },
@@ -192,8 +197,22 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
     wiedervorlage: c.wiedervorlage,
     verlorenAm: c.verlorenAm,
     verlorenGrund: c.verlorenGrund,
+    /*
+     * ACHTUNG: Dieses Canonical-Objekt ist von Hand gebaut, weil ein
+     * `caseToCanonical` je Karte eine Datenbankrunde pro Fall waere. Der Preis
+     * dafuer ist, dass jedes Feld, das die Machbarkeitsrechnung liest, HIER
+     * ebenfalls stehen muss – und im Prisma-Select oben.
+     *
+     * Bis zum 22.08.2026 stand es als `as never` da und verschwieg deshalb,
+     * dass `darlehenswunsch`, `objektwert` und `bestehendeGrundschuld` fehlten:
+     * Das Dashboard rechnete bei einer Kapitalbeschaffung mit dem stehen
+     * gebliebenen Kaufpreis und meldete 109 % Auslauf, waehrend die Fallakte
+     * dieselbe Karte ganz anders beurteilte. Der Typ steht jetzt echt da –
+     * ein neues Pflichtfeld faellt beim Uebersetzen auf.
+     */
     ampel: ampelFuer(
       {
+        caseNumber: c.caseNumber,
         applicants: c.applicants.map((_a, i) => ({ position: i + 1 })),
         employment: [],
         income: c.applicants.flatMap((a) =>
@@ -217,6 +236,8 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
               wohnflaeche: c.property.wohnflaeche ?? undefined,
               hausgeldMonatlich: c.property.hausgeldMonatlich ?? undefined,
               mieteinnahmenMonatlich: c.property.mieteinnahmenMonatlich ?? undefined,
+              objektwert: c.property.objektwert ?? undefined,
+              bestehendeGrundschuld: c.property.bestehendeGrundschuld ?? undefined,
             }
           : undefined,
         financing: {
@@ -226,17 +247,18 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
           eigenkapital: c.financingRequest?.eigenkapital ?? undefined,
           nebenkosten: c.financingRequest?.nebenkosten ?? undefined,
           maklerprovisionProzent: c.financingRequest?.maklerprovisionProzent ?? undefined,
+          darlehenswunsch: c.financingRequest?.darlehenswunsch ?? undefined,
         },
         financingType: c.financingType ?? undefined,
         platformIds: {},
-      } as never,
+      },
       {
         applicantCount: Math.max(c.applicants.length, 1),
         anzahlKinder: c.applicants[0]?.anzahlKinder ?? 0,
         verloren: c.verlorenAm != null,
         abgeschlossen: c.status === "abgeschlossen",
         grunderwerbsteuerProzentOverride: c.financingRequest?.grunderwerbsteuerProzent ?? null,
-        bundeslandOverride: (c.property?.bundesland as never) ?? null,
+        bundeslandOverride: (c.property?.bundesland as Bundesland | null) ?? null,
       },
       machbarkeitsAnnahmen
     ),

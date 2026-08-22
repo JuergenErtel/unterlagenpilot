@@ -61,7 +61,6 @@ enum LeadSource {
  */
 enum LeadPhase {
   neu
-  anfrage_erstellt
   selbstauskunft_laeuft
   finanzierungsvorschlag
   kreditpruefung_eingereicht

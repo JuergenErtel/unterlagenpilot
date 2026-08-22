@@ -27,10 +27,13 @@ function karte(over: Partial<BoardKarte> = {}): BoardKarte {
 describe("buildBoard", () => {
   it("legt für jede Phase eine Spalte an, auch wenn sie leer ist", () => {
     const { spalten } = buildBoard([], JETZT);
-    expect(spalten).toHaveLength(7);
+    expect(spalten).toHaveLength(6);
     expect(spalten[0]!.phase).toBe("neu");
     expect(spalten[0]!.titel).toBe("Neu");
-    expect(spalten[6]!.titel).toBe("Finanzierung abgeschlossen");
+    expect(spalten[5]!.titel).toBe("Finanzierung abgeschlossen");
+    // "Anfrage erstellt" ist am 22.08.2026 weggefallen: dieselbe Aussage wie
+    // "Selbstauskunft laeuft" – der Ball liegt beim Kunden.
+    expect(spalten.map((s) => s.phase)).not.toContain("anfrage_erstellt");
   });
 
   it("zählt Karten und summiert das Volumen je Spalte", () => {
