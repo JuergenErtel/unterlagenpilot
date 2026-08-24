@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  verdichteAenderungen,
+  type ElementAusschnitt,
   istHydrationMismatch,
   mitDomFingerabdruck,
   type DokumentAusschnitt,
@@ -341,5 +343,205 @@ describe("mitDomFingerabdruck – Lagebericht", () => {
     const roh = JSON.stringify(angereichert.extra);
     expect(roh).toContain("fremd-widget");
     expect(roh).not.toContain("data-kunde");
+  });
+});
+
+/**
+ * Beobachtete Änderungen am Baum (seit 24.08.2026).
+ *
+ * Warum überhaupt: Die Momentaufnahme sagt, WIE der Baum beim Fehler aussah –
+ * nicht, WAS React daran auszusetzen hatte. Repariert React den Mismatch, fasst
+ * er genau den abweichenden Knoten an. Wer diese Reparatur aufzeichnet, hat
+ * beim nächsten Vorfall den Ort statt einer weiteren Vermutung.
+ */
+function verkettet(
+  tagName: string,
+  kinder: ElementAusschnitt[] = [],
+  id = "",
+  className = ""
+): ElementAusschnitt {
+  const k: ElementAusschnitt = {
+    tagName,
+    id,
+    className,
+    getAttributeNames: () => [],
+    children: kinder,
+  };
+  for (const kind of kinder) (kind as { parentElement?: ElementAusschnitt }).parentElement = k;
+  return k;
+}
+
+describe("verdichteAenderungen", () => {
+  it("benennt den Pfad des Knotens, dessen Kinder React ersetzt hat", () => {
+    const karte = verkettet("DIV", [], "", "card");
+    const spalte = verkettet("DIV", [verkettet("H2"), karte], "", "spalte");
+    verkettet("BODY", [verkettet("DIV", [spalte], "", "flex")]);
+
+    const erste = verdichteAenderungen([
+      { art: "childList", ziel: karte, hinzugefuegt: ["DIV"], entfernt: ["DIV"] },
+    ])[0]!;
+
+    expect(erste.pfad).toBe("body>0>0>1");
+    expect(erste.knoten).toBe("div.card");
+    expect(erste.art).toBe("kinder");
+  });
+
+  it("verwirft das Rauschen, das jede gesunde Seite erzeugt", () => {
+    // Next.js haengt waehrend des Stroms laufend Skripte an den Body und meldet
+    // die Route an – wer das mitzaehlt, bekommt auf JEDER Seite Treffer.
+    const body = verkettet("BODY");
+    expect(
+      verdichteAenderungen([
+        { art: "childList", ziel: body, hinzugefuegt: ["SCRIPT"], entfernt: [] },
+        { art: "childList", ziel: body, hinzugefuegt: ["NEXT-ROUTE-ANNOUNCER"], entfernt: [] },
+        { art: "childList", ziel: body, hinzugefuegt: ["LINK", "STYLE"], entfernt: [] },
+      ])
+    ).toEqual([]);
+  });
+
+  it("meldet geänderten Text als Ort, nie als Inhalt", () => {
+    // Der haeufigste Hydration-Grund ueberhaupt ("vor 1 Minute" gegen "vor 2
+    // Minuten"). Der Ort reicht, um die Komponente zu finden; der Text selbst
+    // waere ein Kundenname.
+    const zelle = verkettet("SPAN", [], "", "text-xs");
+    verkettet("BODY", [zelle]);
+
+    const erste = verdichteAenderungen([{ art: "characterData", ziel: zelle }])[0]!;
+
+    expect(erste).toEqual({ pfad: "body>0", knoten: "span.text-xs", art: "text", anzahl: 1 });
+  });
+
+  it("fasst mehrfache Änderungen am selben Knoten zusammen", () => {
+    const ziel = verkettet("UL", [], "liste");
+    verkettet("BODY", [ziel]);
+
+    const verdichtet = verdichteAenderungen([
+      { art: "childList", ziel, hinzugefuegt: ["LI"], entfernt: ["LI"] },
+      { art: "childList", ziel, hinzugefuegt: ["LI"], entfernt: ["LI"] },
+      { art: "childList", ziel, hinzugefuegt: ["LI"], entfernt: [] },
+    ]);
+
+    expect(verdichtet).toHaveLength(1);
+    expect(verdichtet[0]!.anzahl).toBe(3);
+  });
+
+  it("hält die Liste kurz – ein Fehlerbericht ist kein Protokoll", () => {
+    const ziele = Array.from({ length: 30 }, (_, i) => verkettet("DIV", [], `k${i}`));
+    verkettet("BODY", ziele);
+
+    const verdichtet = verdichteAenderungen(
+      ziele.map((ziel) => ({ art: "childList", ziel, hinzugefuegt: ["SPAN"], entfernt: [] })),
+      5
+    );
+
+    expect(verdichtet).toHaveLength(5);
+  });
+
+  it("überträgt keine Attributwerte, nur den Namen", () => {
+    const ziel = verkettet("INPUT", [], "email");
+    verkettet("BODY", [ziel]);
+
+    const erste = verdichteAenderungen([
+      { art: "attributes", ziel, attribut: "value" },
+    ])[0]!;
+
+    expect(erste.art).toBe("attribut:value");
+    expect(JSON.stringify(erste)).not.toContain("max@");
+  });
+
+  it("kommt mit einem Ziel ohne Elternkette aus (abgehängter Knoten)", () => {
+    const einzeln = verkettet("DIV", [], "", "weg");
+    const erste = verdichteAenderungen([{ art: "childList", ziel: einzeln, entfernt: ["P"] }])[0]!;
+    expect(erste.pfad).toBe("div.weg");
+  });
+});
+
+describe("mitDomFingerabdruck – beobachtete Änderungen", () => {
+  it("hängt die Änderungen an den Fingerabdruck", () => {
+    const ziel = verkettet("SECTION", [], "", "board");
+    verkettet("BODY", [ziel]);
+    const angereichert = mitDomFingerabdruck(event(HTML_MISMATCH), {
+      ...dokument([{ tagName: "DIV", className: "flex" }]),
+      aenderungen: [{ art: "childList", ziel, hinzugefuegt: ["DIV"], entfernt: ["DIV"] }],
+    });
+    const dom = angereichert.extra?.dom as Record<string, unknown>;
+    expect(dom.aenderungen).toEqual([
+      { pfad: "body>0", knoten: "section.board", art: "kinder", anzahl: 1 },
+    ]);
+  });
+
+  it("meldet ausdrücklich, wenn React gar nichts angefasst hat", () => {
+    // Das ist ein Befund, keine Lücke: Dann repariert React erst nach dem
+    // Bericht – und die naechste Runde muss spaeter messen.
+    const angereichert = mitDomFingerabdruck(event(HTML_MISMATCH), {
+      ...dokument([{ tagName: "DIV", className: "flex" }]),
+      aenderungen: [],
+    });
+    const dom = angereichert.extra?.dom as Record<string, unknown>;
+    expect(dom.aenderungen).toEqual([]);
+  });
+});
+
+describe("verdichteAenderungen – Zeitpunkte", () => {
+  it("hält fest, wann die Änderung geschah – nur so ist Strom von Reparatur zu trennen", () => {
+    // Waehrend des Stroms schiebt React laufend Teilstuecke an ihren Platz.
+    // Das sieht aus wie eine Reparatur. Erst der Abstand zum Fehlerzeitpunkt
+    // (lage.msSeitStart) entscheidet, was es war.
+    const ziel = verkettet("DIV", [], "", "board");
+    verkettet("BODY", [ziel]);
+
+    const [erste] = verdichteAenderungen([
+      { art: "childList", ziel, hinzugefuegt: ["DIV"], entfernt: [], ms: 120.4 },
+      { art: "childList", ziel, hinzugefuegt: ["DIV"], entfernt: [], ms: 812.6 },
+    ]);
+
+    expect(erste).toMatchObject({ anzahl: 2, vonMs: 120, bisMs: 813 });
+  });
+});
+
+describe("verdichteAenderungen – was beim Kürzen überlebt", () => {
+  it("behält die spätesten Änderungen, nicht die ersten", () => {
+    // Der Bericht entsteht im Augenblick des Fehlers. Reacts Reparatur steht
+    // deshalb am ENDE der Aufzeichnung – das Einstroemen davor steht auf jeder
+    // gesunden Seite. Wer vorne kappt, wirft den Befund weg und behaelt das
+    // Rauschen.
+    const ziele = Array.from({ length: 8 }, (_, i) => verkettet("DIV", [], `k${i}`));
+    verkettet("BODY", ziele);
+
+    const verdichtet = verdichteAenderungen(
+      ziele.map((ziel, i) => ({
+        art: "childList",
+        ziel,
+        hinzugefuegt: ["SPAN"],
+        entfernt: [],
+        ms: i * 100,
+      })),
+      3
+    );
+
+    expect(verdichtet.map((a) => a.knoten)).toEqual(["div#k5", "div#k6", "div#k7"]);
+  });
+});
+
+describe("mitDomFingerabdruck – der Kopf", () => {
+  it("hält die Kopf-Kinder fest – dort hängt React seine Metaangaben ein", () => {
+    // Blinder Fleck bis zum 24.08.2026: Der echte Vorfall ist die
+    // HTML-Variante (Struktur), und der Kopf ist Struktur wie jede andere.
+    const angereichert = mitDomFingerabdruck(event(HTML_MISMATCH), {
+      ...dokument([{ tagName: "DIV", className: "flex" }]),
+      head: verkettet("HEAD", [verkettet("TITLE"), verkettet("META"), verkettet("LINK")]),
+    });
+    const dom = angereichert.extra?.dom as Record<string, unknown>;
+    expect(dom.kopfKinder).toEqual(["title", "meta", "link"]);
+    expect(dom.kopfKinderGesamt).toBe(3);
+  });
+
+  it("kommt ohne Kopf aus – ein fehlendes Feld ist besser als ein fehlender Bericht", () => {
+    const angereichert = mitDomFingerabdruck(
+      event(HTML_MISMATCH),
+      dokument([{ tagName: "DIV", className: "flex" }])
+    );
+    const dom = angereichert.extra?.dom as Record<string, unknown>;
+    expect(dom.kopfKinder).toBeUndefined();
   });
 });

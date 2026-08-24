@@ -81,8 +81,53 @@ import type { ErrorEvent } from "@sentry/nextjs";
  *  - `lage.sichtbarkeit` / `msSeitStart` – lief die Seite im Hintergrund, und
  *    wie weit war sie, als es knallte?
  *
- * Die Vorfälle vom 08. und 12.08. tragen diese Felder noch nicht: Der
- * Fingerabdruck ging erst am 14.08. live. Der nächste Vorfall entscheidet.
+ * BEFUND AUS DEN VIER MESSUNGEN (24.08.2026, sechs Vorfälle mit Feldern,
+ * vom 15. bis 22.08.). Sie beantworten die Frage, wegen der sie eingebaut
+ * wurden – und verschieben den Verdächtigen:
+ *
+ *  - **`sichtbarkeit: "hidden"` in SECHS von sechs.** Kein einziger Vorfall
+ *    trat in einem sichtbaren Tab auf. Die Seite hydratisiert im Hintergrund –
+ *    typischerweise beim Wiederherstellen der Sitzung am Arbeitsbeginn (die
+ *    Zeitpunkte passen: 06:59, 07:03, 07:34, 08:41 Ortszeit) oder wenn das
+ *    Fenster nicht vorn steht.
+ *  - **Nicht vorgerendert** (`aktivierungsStartMs: 0`), Navigationsart
+ *    `navigate`, **kein Referer**: ein direkter Aufruf, kein Klick von einer
+ *    anderen Seite.
+ *  - **Der Strom war fertig** (`offeneTeilstuecke: 0`, `platzhalter: 0`) und
+ *    **nichts Fremdes im Baum** (`fremdeElemente: []`), in allen sechs.
+ *  - Der Fehler fällt 0,5 bis 2,9 s nach Seitenstart, rund 30 ms nach dem
+ *    Verlaufseintrag, den Next.js beim Start selbst schreibt – also im
+ *    Augenblick der Hydration.
+ *
+ * ES IST NICHT DAS DASHBOARD. Der Vorfall vom 19.08.2026 traf
+ * `/cases/<id>`. Gemeinsam ist beiden Seiten nur der Rahmen (`AppShell`:
+ * `div.flex > aside.sticky + div.flex`) – und genau der steht in allen sechs
+ * Fingerabdrücken als Wurzel. Der Titel des Sentry-Issues führt in die Irre.
+ *
+ * ES IST DIE HTML-VARIANTE, NICHT TEXT. Die echten Meldungen nennen
+ * "server rendered HTML didn't match" – eine STRUKTUR weicht ab, keine
+ * Zeichenkette. (Der lokale Produktionsbau meldet dieselbe Lage als
+ * minifiziertes `#418` mit `args[]=HTML`; warum die Produktion den vollen Text
+ * trägt, ist ungeklärt. `istHydrationMismatch` erkennt beide Formen.)
+ *
+ * NACHSTELLUNG WEITER ERFOLGLOS – diese drei Wege sind verbraucht:
+ *  - Kopfloser Browser mit Hintergrund-Tab: meldet immer `visible`.
+ *  - `document.visibilityState` überschreiben: kein Mismatch. Unser Code liest
+ *    die Sichtbarkeit nirgends; es geht also um Chromes Zeitverhalten im
+ *    Hintergrund, nicht um einen Zweig im Code.
+ *  - Echtes Chrome über die Erweiterung: nicht verbunden.
+ *
+ * DESHALB SEIT DEM 24.08.2026 zwei weitere Beweismittel:
+ *  - `aenderungen` – was React beim Reparieren anfasst (Beobachter im
+ *    Dokumentkopf, siehe `hydration-beobachter-skript.ts`). Im lokalen
+ *    Produktionsbau mit erzwungenem Mismatch gemessen: Sitzt der Unterschied
+ *    im Rahmen, baut React vom Körper an neu; sitzt er im Seiteninhalt, bleibt
+ *    die Reparatur lokal. Der nächste Vorfall trennt damit Rahmen von Inhalt –
+ *    er benennt nicht den Knoten.
+ *  - `kopfKinder` – der Kopf war blinder Fleck. React 19 hängt dort Titel und
+ *    Metaangaben selbst ein (46 Einhängungen je Aufbau); weicht der Kopf ab,
+ *    ist das ein HTML-Mismatch, den ein körperbezogener Fingerabdruck nicht
+ *    sieht.
  *
  * Bewusst NICHT gesetzt: `suppressHydrationWarning` an html/body. Das wäre die
  * übliche Absicherung gegen Erweiterungen – würde hier aber genau das Signal
@@ -101,6 +146,48 @@ export interface ElementAusschnitt {
   className: string;
   getAttributeNames(): string[];
   children: ArrayLike<ElementAusschnitt>;
+  /**
+   * Nur fuer die Ortsangabe einer beobachteten Aenderung. Ein echtes `Element`
+   * bringt sie mit; die Testbaeume setzen sie beim Verketten.
+   */
+  parentElement?: ElementAusschnitt | null;
+}
+
+/**
+ * Eine beobachtete Aenderung am Baum, roh wie der Beobachter sie liefert.
+ * `ziel` ist bei Textaenderungen bereits das ELTERNelement des Textknotens –
+ * ein Textknoten hat weder Tag noch Klasse, und seinen Inhalt wollen wir nicht.
+ */
+export interface AenderungRoh {
+  art: "childList" | "attributes" | "characterData" | string;
+  ziel: ElementAusschnitt | null;
+  /** Nur Tagnamen der hinzugefuegten/entfernten Knoten – keine Inhalte. */
+  hinzugefuegt?: string[];
+  entfernt?: string[];
+  /** Name des geaenderten Attributs, nie sein Wert. */
+  attribut?: string | null;
+  /**
+   * `performance.now()` beim Eintreten – gerundet. Der entscheidende Trenner:
+   * Waehrend des Stroms schiebt React laufend fertige Teilstuecke an ihren
+   * Platz (gemessen am 24.08.2026: Templates raus, Divs rein, Kommentarmarken
+   * hin und her). Das sieht aus wie eine Reparatur, ist aber der Normalbetrieb.
+   * Erst der Abstand zum Fehlerzeitpunkt (`lage.msSeitStart`) trennt beides.
+   */
+  ms?: number;
+}
+
+/** Eine verdichtete Aenderung: Ort und Art, sonst nichts. */
+export interface Aenderung {
+  /** `body>0>3>1` – Kindindizes vom obersten erreichbaren Knoten abwaerts. */
+  pfad: string;
+  /** `div.card` – Tag, Id und erste Klasse des Ziels. */
+  knoten: string;
+  /** `kinder`, `text` oder `attribut:<name>`. */
+  art: string;
+  anzahl: number;
+  /** Erster und letzter Zeitpunkt dieser Aenderung, ms seit Seitenstart. */
+  vonMs?: number;
+  bisMs?: number;
 }
 
 /**
@@ -125,9 +212,23 @@ export interface LageAusschnitt {
 export interface DokumentAusschnitt {
   documentElement: ElementAusschnitt;
   body: ElementAusschnitt;
+  /**
+   * Der Kopf. Blinder Fleck bis zum 24.08.2026 – dabei haengt React 19 dort
+   * Titel und Metaangaben selbst ein (im lokalen Produktionsbau gemessen: 46
+   * Einhaengungen in den Kopf bei einem einzigen Seitenaufbau). Weicht der
+   * Kopf ab, meldet React einen HTML-Mismatch, und ein Fingerabdruck, der nur
+   * den Koerper kennt, zeigt eine heile Seite.
+   */
+  head?: ElementAusschnitt;
   /** Nur der Suchteil der Adresse – der Pfad steht bereits im Sentry-Tag `url`. */
   suchparameter?: string;
   lage?: LageAusschnitt;
+  /**
+   * Was der Beobachter seit dem Laden am Baum gesehen hat (siehe
+   * instrumentation-client.ts). Fehlt sie, bleibt das Feld weg – ein alter
+   * Browser ohne MutationObserver soll den Bericht nicht verlieren.
+   */
+  aenderungen?: AenderungRoh[];
 }
 
 /** Höchstzahl protokollierter Kinder je Ebene – das Event soll klein bleiben. */
@@ -271,6 +372,112 @@ function kuerzel(element: ElementAusschnitt): string {
 }
 
 /**
+ * Knoten, die Next.js waehrend und nach dem Strom von sich aus in den Baum
+ * haengt. Wer sie mitzaehlt, bekommt auf JEDER gesunden Seite Treffer – und
+ * ein Beweismittel, das immer anschlaegt, beweist nichts.
+ */
+const RAUSCHEN = new Set(["script", "link", "style", "next-route-announcer"]);
+
+/** Hoechstzahl gemeldeter Aenderungen – ein Fehlerbericht ist kein Protokoll. */
+const MAX_AENDERUNGEN = 12;
+
+/**
+ * Der Ort eines Knotens als Kette von Kindindizes: `body>0>3>1`. Bewusst keine
+ * CSS-Auswahl – die traegt Klassennamen und Ids aus Kundendaten mit sich.
+ *
+ * Haengt der Knoten nicht (mehr) im Baum, bleibt sein Kuerzel als Ortsangabe.
+ * Genau das ist der interessante Fall: Ein von React ersetzter Teilbaum hat
+ * seinen Platz verloren.
+ */
+function pfadVon(element: ElementAusschnitt): string {
+  const stufen: number[] = [];
+  let aktuell: ElementAusschnitt = element;
+  let eltern = element.parentElement;
+
+  while (eltern) {
+    const geschwister = Array.from(eltern.children ?? []);
+    const index = geschwister.indexOf(aktuell);
+    stufen.unshift(index);
+    aktuell = eltern;
+    eltern = eltern.parentElement;
+  }
+
+  if (stufen.length === 0) return kuerzel(element);
+  return [aktuell.tagName.toLowerCase(), ...stufen].join(">");
+}
+
+/** Nur Rauschen im Spiel? Dann ist die Aenderung keine Meldung wert. */
+function nurRauschen(roh: AenderungRoh): boolean {
+  const beteiligte = [...(roh.hinzugefuegt ?? []), ...(roh.entfernt ?? [])];
+  if (beteiligte.length === 0) return true;
+  return beteiligte.every((tag) => RAUSCHEN.has(tag.toLowerCase()));
+}
+
+/** Wie die Aenderung im Bericht heisst. */
+function artVon(roh: AenderungRoh): string {
+  if (roh.art === "characterData") return "text";
+  if (roh.art === "attributes") return `attribut:${roh.attribut ?? "?"}`;
+  return "kinder";
+}
+
+/**
+ * Verdichtet die Rohmeldungen des Beobachters zu einer kurzen Liste von Orten.
+ *
+ * Der Zweck ist eng: Repariert React einen Hydration-Mismatch, ersetzt er genau
+ * den abweichenden Teilbaum. Diese Reparatur aufzuzeichnen beantwortet die
+ * Frage, an der die Jagd seit dem 08.08.2026 haengt – WO die Baeume
+ * auseinandergehen. Alles andere (Inhalte, Attributwerte, Text) bleibt draussen.
+ */
+export function verdichteAenderungen(
+  rohe: AenderungRoh[],
+  max = MAX_AENDERUNGEN
+): Aenderung[] {
+  const nachOrt = new Map<string, Aenderung>();
+
+  for (const roh of rohe) {
+    if (!roh.ziel) continue;
+    if (roh.art === "childList" && nurRauschen(roh)) continue;
+
+    const art = artVon(roh);
+    const pfad = pfadVon(roh.ziel);
+    const schluessel = `${pfad}|${art}`;
+    const ms = roh.ms == null ? undefined : Math.round(roh.ms);
+    const bekannt = nachOrt.get(schluessel);
+
+    if (bekannt) {
+      bekannt.anzahl++;
+      if (ms != null) {
+        bekannt.vonMs = bekannt.vonMs == null ? ms : Math.min(bekannt.vonMs, ms);
+        bekannt.bisMs = bekannt.bisMs == null ? ms : Math.max(bekannt.bisMs, ms);
+      }
+      continue;
+    }
+
+    nachOrt.set(schluessel, {
+      pfad,
+      knoten: kuerzel(roh.ziel),
+      art,
+      anzahl: 1,
+      ...(ms == null ? {} : { vonMs: ms, bisMs: ms }),
+    });
+  }
+
+  /*
+   * Muss die Liste gekuerzt werden, ueberleben die SPAETESTEN Aenderungen.
+   * Der Bericht entsteht im Augenblick des Fehlers; was React beim Reparieren
+   * anfasst, steht deshalb am Ende. Wer vorne kappt, wirft genau das weg und
+   * behaelt das Einstroemen – den Teil, der auf jeder gesunden Seite steht.
+   */
+  const alle = [...nachOrt.values()];
+  if (alle.length <= max) return alle;
+  return alle
+    .slice()
+    .sort((a, b) => (b.bisMs ?? 0) - (a.bisMs ?? 0))
+    .slice(0, max)
+    .sort((a, b) => (a.vonMs ?? 0) - (b.vonMs ?? 0));
+}
+
+/**
  * Hängt den Strukturfingerabdruck an ein Hydration-Event. Alle anderen Events
  * – und Aufrufe ohne Dokument (Server, Worker) – kommen unverändert zurück.
  */
@@ -299,6 +506,10 @@ export function mitDomFingerabdruck(
       ...event.extra,
       dom: {
         htmlAttribute: dokument.documentElement.getAttributeNames(),
+        kopfKinder: dokument.head
+          ? Array.from(dokument.head.children ?? []).slice(0, MAX_KINDER).map(kuerzel)
+          : undefined,
+        kopfKinderGesamt: dokument.head ? Array.from(dokument.head.children ?? []).length : undefined,
         bodyAttribute: dokument.body.getAttributeNames(),
         bodyKinder: kinder.slice(0, MAX_KINDER).map(kuerzel),
         bodyKinderGesamt: kinder.length,
@@ -307,6 +518,7 @@ export function mitDomFingerabdruck(
         wurzelKinderGesamt: wurzelKinder.length,
         parameter: dokument.suchparameter ? sichereParameter(dokument.suchparameter) : [],
         ...befund,
+        aenderungen: dokument.aenderungen ? verdichteAenderungen(dokument.aenderungen) : undefined,
         lage: dokument.lage ? lagebericht(dokument.lage) : undefined,
       },
     },

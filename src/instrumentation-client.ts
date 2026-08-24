@@ -1,7 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
 import { isReactStreamingCascade } from "@/lib/observability/react-streaming-noise";
 import { istFremdesNetzRauschen } from "@/lib/observability/fremdes-netz-rauschen";
-import { mitDomFingerabdruck, type LageAusschnitt } from "@/lib/observability/hydration-diagnose";
+import {
+  mitDomFingerabdruck,
+  type AenderungRoh,
+  type LageAusschnitt,
+} from "@/lib/observability/hydration-diagnose";
 
 /**
  * Die Umstände des Aufrufs für die Hydration-Diagnose. Bewusst hier statt im
@@ -22,6 +26,23 @@ function lageDesAufrufs(): LageAusschnitt | undefined {
       sichtbarkeit: document.visibilityState,
       msSeitStart: performance.now(),
     };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Die Aufzeichnung des Beobachters abholen.
+ *
+ * Der Beobachter selbst läuft NICHT hier, sondern als Inline-Skript im
+ * Dokumentkopf (`hydration-beobachter-skript.ts`). Der Grund steht dort und
+ * ist gemessen: Von hier aus gestartet, kam er 1032 ms zu spät und verpasste
+ * genau die Reparatur, um die es geht.
+ */
+function aufgezeichneteAenderungen(): AenderungRoh[] | undefined {
+  try {
+    const gesammelt = (window as unknown as Record<string, unknown>).__domAenderungen;
+    return Array.isArray(gesammelt) ? (gesammelt as AenderungRoh[]) : undefined;
   } catch {
     return undefined;
   }
@@ -70,8 +91,10 @@ Sentry.init({
                 // liest, sie verändert nichts an der laufenden Seite.
                 documentElement: document.documentElement,
                 body: document.body,
+                head: document.head,
                 suchparameter: window.location.search,
                 lage: lageDesAufrufs(),
+                aenderungen: aufgezeichneteAenderungen(),
               }
         ),
 });

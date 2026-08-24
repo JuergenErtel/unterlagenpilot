@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { HYDRATION_BEOBACHTER_SKRIPT } from "@/lib/observability/hydration-beobachter-skript";
 
 /**
  * Erzwungen dynamisches Rendern fuer die GESAMTE App – Voraussetzung der
@@ -53,17 +55,33 @@ export const metadata: Metadata = {
   other: { google: "notranslate" },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  /*
+   * Die Nonce der laufenden Antwort (siehe middleware.ts). Ohne sie blockiert
+   * die CSP das Beobachterskript – dann fehlt die Diagnose, die Seite laeuft
+   * unveraendert weiter.
+   */
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html
       lang="de"
       translate="no"
       className={`notranslate ${GeistSans.variable} ${GeistMono.variable} ${archivo.variable}`}
     >
+      <head>
+        {/*
+          Muss INLINE und im Kopf stehen: Der Beobachter soll die Hydration
+          sehen, und die beginnt, bevor irgendein Buendel geladen ist. Warum
+          das nicht in instrumentation-client.ts geht, steht im Modul
+          hydration-beobachter-skript.ts (dort gemessen: 1032 ms zu spaet).
+        */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: HYDRATION_BEOBACHTER_SKRIPT }} />
+      </head>
       <body className="min-h-screen bg-canvas font-sans antialiased">{children}</body>
     </html>
   );
