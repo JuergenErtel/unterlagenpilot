@@ -121,3 +121,47 @@ describe("verifyGatePassword", () => {
     await expect(verifyGatePassword(new File([], "x"), PASSWORT)).resolves.toBe(false);
   });
 });
+
+/**
+ * Fremder Rumpf (Sentry BAUFIDESK-V, 16.08.2026).
+ *
+ * Ein `POST /api/gate` mit `Content-Type: application/json` (curl) liess
+ * `req.formData()` werfen: 500 statt 400, und jeder solche Aufruf schrieb ins
+ * Fehlerbuch. Die Domain wird laufend automatisiert abgeklopft – einmal
+ * systematisch, und daraus wird Dauerrauschen im Fehlerbuch.
+ */
+function fremderRumpf(inhaltstyp: string | null, rumpf: string, ip = "203.0.113.9") {
+  return new Request("https://baufidesk.de/api/gate", {
+    method: "POST",
+    body: rumpf,
+    headers: {
+      "x-real-ip": ip,
+      ...(inhaltstyp ? { "content-type": inhaltstyp } : {}),
+    },
+  }) as never;
+}
+
+describe("Site-Gate – unbrauchbarer Rumpf", () => {
+  it("antwortet auf JSON mit 400 statt zu werfen", async () => {
+    const res = await POST(fremderRumpf("application/json", '{"password":"x"}'));
+    expect(res.status).toBe(400);
+    expect(gateCookie(res)).toBeNull();
+  });
+
+  it("antwortet auch ohne Inhaltstyp mit 400", async () => {
+    const res = await POST(fremderRumpf(null, "irgendwas"));
+    expect(res.status).toBe(400);
+  });
+
+  it("verbraucht dabei kein Kontingent der Rate-Bremse", async () => {
+    // Die Bremse zaehlt Rateversuche. Ein unbrauchbarer Rumpf ist kein
+    // Rateversuch – sonst sperrte sich ein Besucher aus, dessen Anschluss
+    // zufaellig ein Werkzeug mitschickt, das falsch postet.
+    for (let i = 0; i < 8; i++) {
+      await POST(fremderRumpf("application/json", "{}", "203.0.113.10"));
+    }
+    const res = await POST(anfrage(PASSWORT, "203.0.113.10"));
+    expect(res.status).toBe(303);
+    expect(gateCookie(res)).toBeTruthy();
+  });
+});

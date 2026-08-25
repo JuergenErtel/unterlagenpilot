@@ -27,7 +27,30 @@ function clientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const password = process.env.SITE_GATE_PASSWORD;
-  const form = await req.formData();
+
+  /*
+   * Der Rumpf einer echten Anmeldung ist immer ein Formular – etwas anderes
+   * schickt kein Browser. Bis zum 25.08.2026 warf `formData()` bei allem
+   * uebrigen (JSON, leer, abgeschnitten) einen TypeError: 500 statt 400, und
+   * jeder solche Aufruf schrieb ins Fehlerbuch – Sentry BAUFIDESK-V,
+   * ausgeloest von einem `curl` mit `application/json`. Die Domain wird
+   * laufend automatisiert abgeklopft; einmal systematisch, und daraus wird
+   * Dauerrauschen, in dem echte Fehler untergehen.
+   *
+   * Bewusst OHNE die Rate-Bremse zu belasten: Sie zaehlt Rateversuche, und ein
+   * unbrauchbarer Rumpf ist keiner. Sonst sperrte sich aus, wessen Anschluss
+   * ein Werkzeug mitschickt, das falsch postet.
+   */
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return new NextResponse("Formulardaten erwartet.", {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
   const next = safeNext(form.get("next"));
 
   // Gate nicht aktiv → einfach durchlassen.
