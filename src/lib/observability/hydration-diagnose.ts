@@ -106,9 +106,18 @@ import type { ErrorEvent } from "@sentry/nextjs";
  *
  * ES IST DIE HTML-VARIANTE, NICHT TEXT. Die echten Meldungen nennen
  * "server rendered HTML didn't match" – eine STRUKTUR weicht ab, keine
- * Zeichenkette. (Der lokale Produktionsbau meldet dieselbe Lage als
- * minifiziertes `#418` mit `args[]=HTML`; warum die Produktion den vollen Text
- * trägt, ist ungeklärt. `istHydrationMismatch` erkennt beide Formen.)
+ * Zeichenkette.
+ *
+ * Dazu ein aufgeklärter Nebenbefund (25.08.2026): Der lokale Produktionsbau
+ * meldet dieselbe Lage als minifiziertes `#418` mit `args[]=HTML`, die echten
+ * Sentry-Ereignisse tragen den vollen Text. Nachgesehen: Der ausgelieferte
+ * React-Chunk enthält den Volltext NICHT (nur "Minified React error"), und
+ * kein anderer ausgelieferter Chunk auch. Der Browser kann die Zeichenkette
+ * also nicht erzeugt haben – Sentry setzt sie anhand der Fehlernummer ein.
+ * Zwei Folgerungen: In der Produktion läuft der richtige (minifizierte)
+ * React-Bau, kein Entwicklungsbau. Und aus der FORMULIERUNG einer Meldung
+ * darf man hier nichts ableiten – wohl aber aus `args[]`, denn das ist Reacts
+ * eigener Parameter. `istHydrationMismatch` erkennt beide Formen.
  *
  * NACHSTELLUNG WEITER ERFOLGLOS – diese drei Wege sind verbraucht:
  *  - Kopfloser Browser mit Hintergrund-Tab: meldet immer `visible`.
