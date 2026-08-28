@@ -31,22 +31,31 @@ function hatSeitenzaehler(text: string): boolean {
  * und "nichts gefunden" duerfen nie gleich aussehen.
  */
 export async function erkenneBuendel(caseId: string): Promise<void> {
-  // Die Sperre liegt in der Datenbank, nicht im Speicher: zwei gleichzeitig
-  // fertig gewordene Dokumente wuerden sonst beide "niemand laeuft mehr" sehen
-  // und beide die KI rufen.
-  const beansprucht = await prisma.case.updateMany({
-    where: {
-      id: caseId,
-      OR: [
-        { buendelStatus: { not: "laeuft" } },
-        { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
-      ],
-    },
-    data: { buendelStatus: "laeuft", buendelStatusAm: new Date() },
-  });
-  if (beansprucht.count !== 1) return;
+  // Merkt sich, ob WIR die Sperre bekommen haben. Scheitert schon das Setzen
+  // der Sperre (z. B. Verbindungsfehler), gehoert der Lauf uns nie - dann darf
+  // der catch-Block unten nicht "fehler" hineinschreiben und damit einen
+  // fremden, echten Lauf ueberschreiben.
+  let sperreErhalten = false;
 
   try {
+    // Die Sperre liegt in der Datenbank, nicht im Speicher: zwei gleichzeitig
+    // fertig gewordene Dokumente wuerden sonst beide "niemand laeuft mehr" sehen
+    // und beide die KI rufen.
+    const beansprucht = await prisma.case.updateMany({
+      where: {
+        id: caseId,
+        OR: [
+          { buendelStatus: { not: "laeuft" } },
+          { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
+        ],
+      },
+      data: { buendelStatus: "laeuft", buendelStatusAm: new Date() },
+    });
+    // Verloren - der Nachbar laeuft schon (oder der Fall existiert nicht). Ein
+    // stiller Rueckzug, kein Fehler.
+    if (beansprucht.count !== 1) return;
+    sperreErhalten = true;
+
     const docs = await prisma.document.findMany({
       where: { caseId },
       select: {
@@ -103,7 +112,7 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
     const { angenommen, verworfen } = pruefeBuendel(antwort.buendel as BuendelVorschlag[], kandidaten);
     for (const v of verworfen) {
       // Ohne Klartext-Inhalte: nur, welcher Vorschlag warum wegfiel.
-      console.info(`[buendelung] Vorschlag „${v.titel}" verworfen: ${v.grund}`);
+      console.info(`[buendelung] Vorschlag „${v.titel}“ verworfen: ${v.grund}`);
     }
 
     await abschliessen(
@@ -119,6 +128,14 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
     );
   } catch (e) {
     console.error(`[buendelung] Erkennung fuer Fall ${caseId} fehlgeschlagen:`, e);
+    if (!sperreErhalten) {
+      // Die Sperre selbst ist gescheitert - wir waren nie der Besitzer dieses
+      // Laufs. Der ehrliche Zustand ist: unveraendert. "fehler" zu schreiben
+      // wuerde blind behaupten, WIR haetten etwas geprueft und wuerde im
+      // schlimmsten Fall den echten, gerade laufenden oder bereits fertigen
+      // Stand eines anderen Aufrufs ueberschreiben.
+      return;
+    }
     await prisma.case
       .update({ where: { id: caseId }, data: { buendelStatus: "fehler", buendelStatusAm: new Date() } })
       .catch(() => undefined);

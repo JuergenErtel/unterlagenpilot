@@ -109,4 +109,21 @@ describe.runIf(RUN)("Bündel-Erkennung (PGlite)", () => {
     await erkenneBuendel(caseId);
     expect(await prisma.documentBuendel.count({ where: { caseId } })).toBe(0);
   });
+
+  it("wirft nicht, wenn schon das Setzen der Sperre fehlschlaegt, und laesst den Status unangetastet", async () => {
+    const caseId = await fallMitSeiten(3);
+    const spy = vi
+      .spyOn(prisma.case, "updateMany")
+      .mockRejectedValueOnce(new Error("keine Verbindung"));
+
+    await expect(erkenneBuendel(caseId)).resolves.toBeUndefined();
+    spy.mockRestore();
+
+    // Die Sperre wurde nie erhalten - wir waren nie der Besitzer des Laufs.
+    // "fehler" zu schreiben waere eine Behauptung ueber einen Lauf, der nie
+    // stattfand, und koennte einen echten, gleichzeitigen Lauf ueberschreiben.
+    const c = await prisma.case.findUnique({ where: { id: caseId } });
+    expect(c.buendelStatus).toBe("ausstehend");
+    expect(await prisma.documentBuendel.count({ where: { caseId } })).toBe(0);
+  });
 });
