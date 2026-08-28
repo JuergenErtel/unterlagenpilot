@@ -96,17 +96,34 @@ export async function buendelErneutPruefenAction(formData: FormData): Promise<vo
   revalidatePath(`/cases/${caseId}`);
 }
 
+/** Zustand fuer die Auswahlleiste - siehe `seitenZusammenfuegenAction`. */
+export interface SeitenZusammenfuegenState {
+  /** Kundengrade deutsche Begruendung eines gescheiterten Zusammenfuegens. */
+  grund?: string;
+}
+
 /**
  * Von Hand ausgewaehlte Seiten zusammenfuegen - der Notausgang, wenn die KI
  * danebenliegt. Die Reihenfolge ist die der Tabelle (Uploadzeit).
+ *
+ * Signatur fuer `useActionState`, wie `buendelZusammenfuegenAction` oben:
+ * `fuegeZusammen` prueft jede Quelle erneut mit `istBuendelKandidat` und
+ * lehnt ab, sobald eine Zeile inzwischen nicht mehr bündelbar ist (z. B.
+ * zwischenzeitlich freigegeben) - genau hier ist ein "Klick, nichts passiert"
+ * am wahrscheinlichsten, also darf `grund` nicht verschluckt werden.
  */
-export async function seitenZusammenfuegenAction(formData: FormData): Promise<void> {
+export async function seitenZusammenfuegenAction(
+  _bisher: SeitenZusammenfuegenState,
+  formData: FormData
+): Promise<SeitenZusammenfuegenState> {
   const caseId = String(formData.get("caseId") ?? "");
   const documentIds = String(formData.get("documentIds") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!caseId || documentIds.length < 2) return;
+  if (!caseId || documentIds.length < 2) {
+    return { grund: "Es sind weniger als zwei Seiten ausgewählt." };
+  }
   const { ctx } = await requireCaseAccess(caseId);
 
   // Der Titel kommt aus dem erkannten Typ der ersten Seite; ohne Typ ein
@@ -135,8 +152,11 @@ export async function seitenZusammenfuegenAction(formData: FormData): Promise<vo
       entityId: ergebnis.documentId,
       metadata: { gebuendeltAus: ergebnis.seiten, quelle: "handauswahl" },
     });
+    revalidatePath(`/cases/${caseId}`);
+    return {};
   }
   revalidatePath(`/cases/${caseId}`);
+  return { grund: ergebnis.grund };
 }
 
 /** Eine Buendelung zuruecknehmen. */

@@ -53,6 +53,8 @@ import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
+import { SeitenAuswahl, SeitenKaestchen } from "@/components/case/seiten-auswahl";
+import { istBuendelKandidat } from "@/lib/buendelung/kandidaten";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -315,6 +317,29 @@ export default async function CaseCockpitPage({
     name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
   }));
   const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
+
+  // DIESELBE Funktion wie im Erkennungslauf (buendelung/service.ts) - die
+  // Regel darf nicht zweimal dastehen. Wer aendert, was eine buendelbare
+  // Einzelseite ist, aendert es an genau einer Stelle. `text` liest
+  // istBuendelKandidat nicht, der Typ verlangt das Feld trotzdem.
+  const auswaehlbareSeiten = documents
+    .filter((d) =>
+      istBuendelKandidat({
+        id: d.id,
+        originalName: d.originalName,
+        mimeType: d.mimeType,
+        pageCount: d.pageCount,
+        reviewStatus: d.reviewStatus,
+        ocrStatus: d.ocrStatus,
+        readable: d.readable,
+        zusammengefuegtInId: d.zusammengefuegtInId,
+        documentType: d.documentType as DocumentType | null,
+        period: d.period,
+        createdAt: d.createdAt,
+        text: "",
+      })
+    )
+    .map((d) => d.id);
 
   // Torpruefung fuer das Finanzierungszertifikat – dieselbe Funktion, die auch
   // die PDF-Route anwendet, damit der Knopf nie etwas freigibt, was der Server
@@ -650,9 +675,15 @@ export default async function CaseCockpitPage({
                 />
                 <Card>
                   <CardContent className="p-0">
+                    <SeitenAuswahl caseId={id} kandidaten={auswaehlbareSeiten}>
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {/* Schmale Kaestchenspalte fuer die Handauswahl - siehe
+                              seiten-auswahl.tsx. Kopfzelle bewusst ohne Text: eine
+                              Beschriftung "Auswahl" ueber einer 2rem breiten Spalte
+                              waere nur unleserlich abgeschnitten. */}
+                          <TableHead className="w-8" />
                           <TableHead>Dateiname</TableHead>
                           <TableHead>Typ</TableHead>
                           {mehrereAntragsteller && <TableHead>Antragsteller</TableHead>}
@@ -668,11 +699,14 @@ export default async function CaseCockpitPage({
                       </TableHeader>
                       <TableBody>
                         {documents.length === 0 && (
-                          <TableRow><TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={mehrereAntragsteller ? 7 : 6} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
                         )}
                         {documents.map((d) => (
                           <Fragment key={d.id}>
                           <TableRow>
+                            <TableCell className="w-8">
+                              <SeitenKaestchen documentId={d.id} label={d.generatedName ?? d.originalName} />
+                            </TableCell>
                             {/* Der erzeugte Dateiname wird bis zu 60 Zeichen lang
                                 ("Einnahmenueberschussrechnung_EUeR_Mate_Topcic_01012024bis31122024.pdf")
                                 und blies die Spalte auf 565px auf - die Tabelle war damit
@@ -749,7 +783,7 @@ export default async function CaseCockpitPage({
                           </TableRow>
                           {d.splitSegmente.length >= 2 && (
                             <TableRow>
-                              <TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="pt-0">
+                              <TableCell colSpan={mehrereAntragsteller ? 7 : 6} className="pt-0">
                                 <AufteilungVorschlag caseId={id} documentId={d.id} segmente={d.splitSegmente} />
                               </TableCell>
                             </TableRow>
@@ -758,6 +792,7 @@ export default async function CaseCockpitPage({
                         ))}
                       </TableBody>
                     </Table>
+                    </SeitenAuswahl>
                   </CardContent>
                 </Card>
               </div>
