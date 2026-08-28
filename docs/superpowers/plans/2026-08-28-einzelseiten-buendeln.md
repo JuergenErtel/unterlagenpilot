@@ -31,8 +31,8 @@
 |---|---|
 | `prisma/schema.prisma` | `DocumentBuendel`, `DocumentBuendelSeite`, `Case.buendelStatus` + `buendelStatusAm`, `Document.zusammengefuegtInId` |
 | `sql/2026-08-28-buendelung.sql` | Dieselbe Änderung als SQL für die Produktionsdatenbank |
-| `src/lib/buendelung/types.ts` | `Kandidat`, `BuendelVorschlag`, `MIN_KANDIDATEN` |
-| `src/lib/buendelung/kandidaten.ts` | `waehleKandidaten()` — wer in den Lauf kommt. Rein, ohne DB. |
+| `src/lib/buendelung/types.ts` | `BuendelVorschlag`, `MIN_KANDIDATEN`, `TEXT_ANFANG` |
+| `src/lib/buendelung/kandidaten.ts` | `Kandidat`, `istBuendelKandidat()`, `waehleKandidaten()` — wer in den Lauf kommt. Rein, ohne DB. |
 | `src/lib/buendelung/pruefung.ts` | `pruefeBuendel()` — die fünf Regeln. Rein, ohne DB. |
 | `src/lib/buendelung/schema.ts` | Zod-Vertrag mit der KI |
 | `src/lib/buendelung/service.ts` | `erkenneBuendel()`, `fuegeZusammen()`, `macheRueckgaengig()` |
@@ -345,6 +345,7 @@ git commit -m "feat(buendelung): Datenmodell fuer Buendelvorschlaege und ihre He
 - Produces:
   - `interface Kandidat { id: string; originalName: string; mimeType: string; pageCount: number | null; reviewStatus: string; ocrStatus: string; readable: boolean | null; zusammengefuegtInId: string | null; documentType: DocumentType | null; period: string | null; createdAt: Date; text: string }`
   - `MIN_KANDIDATEN = 2`, `TEXT_ANFANG = 400`
+  - `istBuendelKandidat(d: Kandidat): boolean` — das Praedikat einzeln, weil Task 12 es in der Fallakte wiederverwendet
   - `waehleKandidaten(docs: Kandidat[]): Kandidat[]`
 
 - [ ] **Step 1: Den fehlschlagenden Test schreiben**
@@ -353,7 +354,7 @@ Erstelle `tests/buendelung-kandidaten.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { waehleKandidaten, type Kandidat } from "@/lib/buendelung/kandidaten";
+import { waehleKandidaten, istBuendelKandidat, type Kandidat } from "@/lib/buendelung/kandidaten";
 
 function k(over: Partial<Kandidat> = {}): Kandidat {
   return {
@@ -419,6 +420,14 @@ describe("waehleKandidaten", () => {
 
   it("ein einzelner Kandidat ergibt keinen Lauf", () => {
     expect(waehleKandidaten([k({ id: "a" }), k({ id: "b", reviewStatus: "akzeptiert" })])).toEqual([]);
+  });
+
+  it("das Praedikat allein entscheidet ueber EINE Seite - ohne Mindestanzahl", () => {
+    // Die Fallakte braucht die Frage je Zeile; waehleKandidaten() gibt bei nur
+    // einem Treffer bewusst nichts zurueck.
+    expect(istBuendelKandidat(k())).toBe(true);
+    expect(istBuendelKandidat(k({ pageCount: 6, mimeType: "application/pdf" }))).toBe(false);
+    expect(istBuendelKandidat(k({ reviewStatus: "akzeptiert" }))).toBe(false);
   });
 
   it("sortiert nach Uploadzeit - das ist die Ausgangsordnung, die die KI umstellen darf", () => {
@@ -499,6 +508,27 @@ function istEinzelseite(d: Kandidat): boolean {
 }
 
 /**
+ * Darf diese Seite gebuendelt werden?
+ *
+ * Bewusst einzeln exportiert: die Fallakte braucht dieselbe Frage, um die
+ * Auswahlkaestchen zu setzen. Zwei Wahrheiten darueber, was eine Einzelseite
+ * ist, waeren genau die Falle, die in diesem Projekt schon zugeschlagen hat.
+ */
+export function istBuendelKandidat(d: Kandidat): boolean {
+  return (
+    istEinzelseite(d) &&
+    // Eine Freigabe ist eine Entscheidung des Vermittlers; buendeln wuerde sie
+    // stillschweigend zuruecknehmen.
+    d.reviewStatus === "offen" &&
+    d.zusammengefuegtInId === null &&
+    d.ocrStatus === "fertig" &&
+    // Ohne erkannten Text kann die KI nichts einordnen. Die Seite bleibt
+    // liegen und traegt weiter ihr Abzeichen "Kein lesbarer Text".
+    d.readable !== false
+  );
+}
+
+/**
  * Welche Dokumente eines Falls in den Buendel-Lauf gehen.
  *
  * Rein und ohne Datenbank, damit jede einzelne Regel pruefbar bleibt. Unter
@@ -506,18 +536,7 @@ function istEinzelseite(d: Kandidat): boolean {
  * Aufrufer spart sich den KI-Aufruf.
  */
 export function waehleKandidaten(docs: Kandidat[]): Kandidat[] {
-  const treffer = docs.filter(
-    (d) =>
-      istEinzelseite(d) &&
-      // Eine Freigabe ist eine Entscheidung des Vermittlers; buendeln wuerde
-      // sie stillschweigend zuruecknehmen.
-      d.reviewStatus === "offen" &&
-      d.zusammengefuegtInId === null &&
-      d.ocrStatus === "fertig" &&
-      // Ohne erkannten Text kann die KI nichts einordnen. Die Seite bleibt
-      // liegen und traegt weiter ihr Abzeichen "Kein lesbarer Text".
-      d.readable !== false
-  );
+  const treffer = docs.filter(istBuendelKandidat);
   if (treffer.length < MIN_KANDIDATEN) return [];
   return treffer.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
@@ -2796,7 +2815,7 @@ git commit -m "feat(buendelung): Vorschlagskarte - je Buendel wird einzeln entsc
 - Test: manuell im Browser
 
 **Interfaces:**
-- Consumes: `seitenZusammenfuegenAction` aus `@/lib/actions/buendelung`
+- Consumes: `seitenZusammenfuegenAction` aus `@/lib/actions/buendelung`; `istBuendelKandidat` aus `@/lib/buendelung/kandidaten`
 - Produces: `<SeitenAuswahl caseId kandidaten>{...}</SeitenAuswahl>` — Client-Komponente, die Kästchen und Leiste um die Tabelle legt; `kandidaten: string[]` sind die Dokument-IDs, die ankreuzbar sind.
 
 - [ ] **Step 1: Die Komponente schreiben**
@@ -2893,19 +2912,22 @@ import { SeitenAuswahl } from "@/components/case/seiten-auswahl";
 Vor der Tabelle im Reiter „Dokumente" die Kandidatenliste bestimmen — dieselben Regeln wie serverseitig, damit nicht zwei Wahrheiten entstehen:
 
 ```ts
-  // Dieselbe Regel wie in waehleKandidaten(): einzelne, offene, lesbare,
-  // noch nicht gebuendelte Seiten. Zwei Wahrheiten waeren hier eine Falle -
-  // wer die Regel aendert, aendert sie an beiden Stellen.
-  const auswaehlbareSeiten = documents
-    .filter(
-      (d) =>
-        (d.mimeType.startsWith("image/") || (d.mimeType === "application/pdf" && d.pageCount === 1)) &&
-        d.reviewStatus === "offen" &&
-        d.zusammengefuegtInId === null &&
-        d.readable !== false
-    )
-    .map((d) => d.id);
+  // DIESELBE Funktion wie im Erkennungslauf - die Regel darf nicht zweimal
+  // dastehen. Wer aendert, was eine buendelbare Einzelseite ist, aendert es an
+  // genau einer Stelle.
+  const auswaehlbareSeiten = documents.filter(istBuendelKandidat).map((d) => d.id);
 ```
+
+Import ergänzen:
+
+```ts
+import { istBuendelKandidat } from "@/lib/buendelung/kandidaten";
+```
+
+`istBuendelKandidat` erwartet genau die Felder des `Kandidat`-Typs; die
+Dokumente aus `findMany` tragen sie alle (`text` wird nicht gelesen, aber der
+Typ verlangt es — falls TypeScript meckert, das Feld beim Mappen als `""`
+mitgeben, statt die Signatur aufzuweichen).
 
 Die `<Table>` in `<SeitenAuswahl>` einwickeln und in der ersten Tabellenspalte je Zeile das Kästchen rendern:
 
