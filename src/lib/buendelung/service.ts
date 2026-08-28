@@ -410,3 +410,83 @@ export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<Zusamme
     return { ok: false, grund: "Das Zusammenfügen ist fehlgeschlagen." };
   }
 }
+
+/**
+ * Nimmt eine Buendelung zurueck: das erzeugte PDF verschwindet, die
+ * Einzelseiten stehen wieder auf offen.
+ *
+ * Das Sicherheitsnetz zur schlanken Vorschlagsliste. Ohne diesen Weg waere
+ * eine falsche Gruppierung eine Sackgasse - deshalb wird beim Zusammenfuegen
+ * auch nie eine Quelldatei geloescht.
+ *
+ * Nach der Freigabe nicht mehr moeglich: wer freigegeben hat, hat entschieden;
+ * der Weg zurueck fuehrt dann ueber die Wiedereroeffnung.
+ */
+export async function macheRueckgaengig(
+  documentId: string,
+  organizationId: string
+): Promise<{ ok: true; seiten: number } | { ok: false; grund: string }> {
+  const doc = await prisma.document.findFirst({
+    where: { id: documentId, case: { organizationId } },
+    select: {
+      id: true,
+      caseId: true,
+      storageKey: true,
+      reviewStatus: true,
+      quellseiten: { select: { id: true } },
+    },
+  });
+  if (!doc) return { ok: false, grund: "Dokument nicht gefunden." };
+  if (doc.quellseiten.length === 0) {
+    return { ok: false, grund: "Dieses Dokument ist nicht aus Einzelseiten entstanden." };
+  }
+  if (doc.reviewStatus !== "offen") {
+    return { ok: false, grund: "Das Dokument ist bereits freigegeben – bitte zuerst wieder öffnen." };
+  }
+
+  const quellIds = doc.quellseiten.map((q) => q.id);
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Erst die Quellseiten loesen, DANN das Buendel-Dokument loeschen: die
+      // Fremdschluessel-Beziehung (onDelete: NoAction) verbietet sonst das
+      // Loeschen, solange noch Zeilen darauf zeigen.
+      await tx.document.updateMany({
+        where: { id: { in: quellIds } },
+        data: { zusammengefuegtInId: null, reviewStatus: "offen" },
+      });
+      // Der Vorab-Check lag ausserhalb dieser Transaktion - ein zweiter,
+      // ueberlappender Aufruf (Doppelklick, zwei Tabs) oder eine
+      // zwischenzeitliche Freigabe koennte das Dokument seitdem veraendert
+      // haben. Die WHERE-Klausel prueft "offen" deshalb HIER NOCHMAL:
+      // loescht sie keine Zeile, war jemand schneller - dann wird geworfen
+      // und die ganze Transaktion rollt zurueck, statt dieselbe Buendelung
+      // ein zweites Mal rueckgaengig zu machen. Gleiches Muster wie der
+      // verplant-Check in fuegeZusammen.
+      const geloescht = await tx.document.deleteMany({
+        where: { id: doc.id, reviewStatus: "offen" },
+      });
+      if (geloescht.count !== 1) {
+        throw new Error("Das Dokument wurde inzwischen anderweitig bearbeitet.");
+      }
+      // Ein Lauf startet damit nicht von selbst; er kommt beim naechsten
+      // Upload oder auf "Erneut pruefen". Automatisch neu zu gruppieren
+      // waere falsch - die KI kaeme auf denselben Vorschlag, den der
+      // Vermittler gerade zurueckgenommen hat.
+      await tx.case.update({
+        where: { id: doc.caseId },
+        data: { buendelStatus: "ausstehend", buendelStatusAm: null },
+      });
+    });
+  } catch (e) {
+    console.error(`[buendelung] Rueckgaengigmachen von ${doc.id} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das Rückgängigmachen ist fehlgeschlagen – bitte erneut versuchen." };
+  }
+
+  // Erst nach der Transaktion: eine geloeschte Datei bei einem Rollback waere
+  // nicht wiederherstellbar, eine liegengebliebene dagegen harmlos.
+  await getStorage()
+    .remove(doc.storageKey)
+    .catch((e) => console.error(`[buendelung] Datei ${doc.storageKey} nicht entfernt:`, e));
+
+  return { ok: true, seiten: quellIds.length };
+}
