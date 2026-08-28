@@ -1,10 +1,14 @@
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { aiService } from "@/lib/ai";
+import { getStorage } from "@/lib/storage";
+import { analysiereDokument } from "@/lib/documents/pipeline";
 import { SEITEN_MUSTER } from "@/lib/detektiv/completeness";
 import { countProcessingDocuments } from "@/lib/documents/processing";
-import { waehleKandidaten, type Kandidat } from "./kandidaten";
+import { waehleKandidaten, istBuendelKandidat, type Kandidat } from "./kandidaten";
+import { baueBuendelPdf } from "./pdf";
 import { pruefeBuendel } from "./pruefung";
-import { TEXT_ANFANG, type BuendelVorschlag } from "./types";
+import { MIN_KANDIDATEN, TEXT_ANFANG, type BuendelVorschlag } from "./types";
 import type { DocumentType } from "@/lib/domain/enums";
 
 /** Nach dieser Zeit gilt ein `laeuft` als haengengeblieben (Absturz, Deploy). */
@@ -217,5 +221,181 @@ export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocument
     await erkenneBuendel(caseId);
   } catch (e) {
     console.error(`[buendelung] Anstoss fuer Fall ${caseId} fehlgeschlagen:`, e);
+  }
+}
+
+export interface ZusammenfuegenInput {
+  caseId: string;
+  organizationId: string;
+  /** Die Quellseiten IN DER GEWUENSCHTEN SEITENREIHENFOLGE. */
+  documentIds: string[];
+  titel: string;
+  vermuteterTyp?: DocumentType | null;
+  /** Der Vorschlag, aus dem das kam - er wird danach entfernt. */
+  buendelId?: string;
+}
+
+export type ZusammenfuegenErgebnis =
+  | { ok: true; documentId: string; seiten: number }
+  | { ok: false; grund: string };
+
+/**
+ * Fuegt Einzelseiten zu EINEM PDF zusammen - nur auf Klick.
+ *
+ * Alles oder nichts: Erst wird die fertige Datei abgelegt, dann erst entstehen
+ * die Datensaetze. Ein halb zusammengefuegtes Dokument waere schlimmer als gar
+ * keines - dieselbe Regel wie beim Auftrennen.
+ *
+ * Dieselbe Funktion bedient den KI-Vorschlag und die Auswahl von Hand. Zwei
+ * Pfade wuerden auseinanderlaufen.
+ */
+export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<ZusammenfuegenErgebnis> {
+  const { caseId, organizationId, documentIds, titel } = input;
+  if (documentIds.length < MIN_KANDIDATEN) {
+    return { ok: false, grund: "Zum Zusammenfügen braucht es mindestens zwei Seiten." };
+  }
+
+  const docs = await prisma.document.findMany({
+    where: { id: { in: documentIds }, caseId, case: { organizationId } },
+    select: {
+      id: true,
+      originalName: true,
+      storageKey: true,
+      mimeType: true,
+      pageCount: true,
+      applicantId: true,
+      uploadSource: true,
+      scanStatus: true,
+      scanEngine: true,
+      scannedAt: true,
+      reviewStatus: true,
+      ocrStatus: true,
+      readable: true,
+      zusammengefuegtInId: true,
+      documentType: true,
+      period: true,
+      createdAt: true,
+    },
+  });
+  if (docs.length !== documentIds.length) {
+    return { ok: false, grund: "Mindestens eine Seite gehört nicht zu diesem Fall." };
+  }
+
+  // Diese Funktion ist ueber eine Server Action mit einer kommagetrennten
+  // ID-Liste aus einem Formular erreichbar - dort kann JEDE Dokument-ID des
+  // Falls landen, auch ein 40-seitiges PDF oder ein bereits freigegebenes
+  // Dokument. istBuendelKandidat ist die EINE Stelle, an der diese Regel
+  // steht (dieselbe, die die Auswahlkaestchen in der Fallakte und den
+  // KI-Lauf bindet) - sie hier zu wiederholen waere genau die Falle, gegen
+  // die der Export in kandidaten.ts geschaffen wurde. Die Pruefung laeuft
+  // VOR jedem Storage-Zugriff, damit ein Ablehnen nie etwas anfasst.
+  const kandidaten: Kandidat[] = docs.map((d) => ({
+    id: d.id,
+    originalName: d.originalName,
+    mimeType: d.mimeType,
+    pageCount: d.pageCount,
+    reviewStatus: d.reviewStatus,
+    ocrStatus: d.ocrStatus,
+    readable: d.readable,
+    zusammengefuegtInId: d.zusammengefuegtInId,
+    documentType: d.documentType as DocumentType | null,
+    period: d.period,
+    createdAt: d.createdAt,
+    // istBuendelKandidat sieht nur Struktur-Felder - der Text ist fuer die
+    // Regel ohne Bedeutung, ein Nachladen aus DocumentPage waere hier
+    // verschwendet.
+    text: "",
+  }));
+  const ungueltig = kandidaten.find((k) => !istBuendelKandidat(k));
+  if (ungueltig) {
+    return {
+      ok: false,
+      grund: `„${ungueltig.originalName}“ ist keine bündelbare Einzelseite mehr (mehrseitiges Dokument, bereits freigegeben oder schon gebündelt).`,
+    };
+  }
+
+  // In die vom Aufrufer gewuenschte Reihenfolge bringen - findMany liefert sie
+  // in beliebiger Ordnung, und die Reihenfolge IST hier die Aussage.
+  const nachId = new Map(docs.map((d) => [d.id, d]));
+  const geordnet = documentIds.map((id) => nachId.get(id)!);
+
+  const storage = getStorage();
+  const teile: Array<{ mimeType: string; buffer: Buffer }> = [];
+  for (const [i, d] of geordnet.entries()) {
+    const buffer = await storage.get(d.storageKey);
+    if (!buffer) return { ok: false, grund: `Seite ${i + 1} ist im Speicher nicht auffindbar.` };
+    teile.push({ mimeType: d.mimeType, buffer });
+  }
+
+  let pdf: Buffer;
+  try {
+    pdf = await baueBuendelPdf(teile);
+  } catch (e) {
+    console.error(`[buendelung] PDF fuer Fall ${caseId} nicht baubar:`, e);
+    return { ok: false, grund: e instanceof Error ? e.message : "Die Seiten ließen sich nicht zusammenfügen." };
+  }
+
+  const name = `${titel.replace(/[^A-Za-z0-9äöüÄÖÜß._-]+/g, "_")}.pdf`;
+  let gespeichert;
+  try {
+    gespeichert = await storage.put({
+      organizationId,
+      caseId,
+      originalName: name,
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+  } catch (e) {
+    console.error(`[buendelung] Ablegen des PDFs fuer Fall ${caseId} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das zusammengefügte Dokument konnte nicht gespeichert werden." };
+  }
+
+  const erste = geordnet[0]!;
+  try {
+    const neu = await prisma.$transaction(async (tx) => {
+      const erzeugt = await tx.document.create({
+        data: {
+          caseId,
+          applicantId: erste.applicantId,
+          originalName: name,
+          storageKey: gespeichert.storageKey,
+          mimeType: "application/pdf",
+          sizeBytes: pdf.byteLength,
+          pageCount: teile.length,
+          uploadSource: erste.uploadSource,
+          // Dieselben Bytes wurden bereits geprueft - kein zweiter Virenscan.
+          scanStatus: erste.scanStatus,
+          scanEngine: erste.scanEngine,
+          scannedAt: erste.scannedAt,
+          documentType: input.vermuteterTyp ?? undefined,
+          // Ein gebuendeltes Dokument wird nicht auf Aufteilung untersucht.
+          splitStatus: "fertig",
+        },
+      });
+      await tx.document.updateMany({
+        where: { id: { in: documentIds } },
+        data: { zusammengefuegtInId: erzeugt.id, reviewStatus: "ersetzt" },
+      });
+      if (input.buendelId) {
+        await tx.documentBuendel.deleteMany({ where: { id: input.buendelId, caseId } });
+      }
+      return erzeugt;
+    });
+
+    // Analyse im Hintergrund - der Klick soll nicht warten. Die Buendelung ist
+    // an dieser Stelle festgeschrieben: scheitert nur die Einplanung, darf das
+    // den Erfolg nicht kippen.
+    try {
+      after(() => analysiereDokument(neu.id));
+    } catch (e) {
+      console.error(`[buendelung] Analyse von ${neu.id} konnte nicht eingeplant werden:`, e);
+    }
+
+    return { ok: true, documentId: neu.id, seiten: teile.length };
+  } catch (e) {
+    // Kein Muell im Speicher, und der Fall bleibt exakt so, wie er war.
+    await storage.remove(gespeichert.storageKey).catch(() => undefined);
+    console.error(`[buendelung] Zusammenfuegen im Fall ${caseId} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das Zusammenfügen ist fehlgeschlagen." };
   }
 }
