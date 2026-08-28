@@ -527,6 +527,16 @@ model Case {
   // kein Besitz - wird sie geloescht, gilt der Erstkontakt als nicht vorbereitet.
   erstkontaktMessageId     String?
 
+  /// Lauf der Einzelseiten-Erkennung. Eigener Status, damit "nicht geprueft"
+  /// und "nichts gefunden" unterscheidbar bleiben - und als Sperre, damit
+  /// nicht zwei gleichzeitig fertige Dokumente denselben Lauf starten.
+  buendelStatus   ProcessingStatus  @default(ausstehend)
+  /// Beginn des laufenden bzw. Ende des letzten Laufs. Ohne diesen Zeitstempel
+  /// laesst sich eine haengende Sperre nicht von einem echten Lauf
+  /// unterscheiden.
+  buendelStatusAm DateTime?
+  buendel         DocumentBuendel[]
+
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -931,6 +941,14 @@ model Document {
   aufgeteiltAusId String?
   aufgeteiltAus   Document?  @relation("Aufteilung", fields: [aufgeteiltAusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   teildokumente   Document[] @relation("Aufteilung")
+
+  /// Zieldokument, falls diese Seite in ein Buendel eingegangen ist. Spiegel
+  /// zu aufgeteiltAusId: dort wurde eine Datei zu vielen, hier werden viele zu
+  /// einer.
+  zusammengefuegtInId String?
+  zusammengefuegtIn   Document?              @relation("Buendelung", fields: [zusammengefuegtInId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quellseiten         Document[]             @relation("Buendelung")
+  buendelSeiten       DocumentBuendelSeite[]
 
   @@index([caseId])
   @@index([documentType])
@@ -1716,6 +1734,45 @@ model DocumentSplitSegment {
 
   @@index([documentId])
   @@map("document_split_segments")
+}
+
+/**
+ * Vorschlag, mehrere Einzelseiten eines Falls zu einem Dokument zu verbinden.
+ * Lebt nur bis zur Entscheidung: zusammengefuegt oder verworfen.
+ */
+model DocumentBuendel {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  reihenfolge   Int
+  titel         String
+  vermuteterTyp DocumentType?
+  confidence    Float?
+
+  createdAt DateTime               @default(now())
+  seiten    DocumentBuendelSeite[]
+
+  @@index([caseId])
+  @@map("document_buendel")
+}
+
+/**
+ * Eine Seite in einem Buendelvorschlag. `position` ist die Reihenfolge im
+ * spaeteren PDF - nicht die Uploadreihenfolge.
+ */
+model DocumentBuendelSeite {
+  id         String          @id @default(cuid())
+  buendelId  String
+  buendel    DocumentBuendel @relation(fields: [buendelId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  position Int
+
+  @@unique([buendelId, documentId])
+  @@index([documentId])
+  @@map("document_buendel_seiten")
 }
 
 /**
