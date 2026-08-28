@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Layers } from "lucide-react";
 import { SubmitButton } from "@/components/ui/submit-button";
 import {
@@ -42,6 +43,23 @@ export function BuendelVorschlagKarte({
   status: "ausstehend" | "laeuft" | "fertig" | "fehler";
   buendel: BuendelView[];
 }) {
+  const router = useRouter();
+
+  // Der Buendel-Lauf ist ein Hintergrundprozess ohne eigenes Push-Signal -
+  // nur Neuladen zeigt, wenn er fertig ist. Die Karte pollt sich selbst,
+  // genau wie <AiCheckRunning>/<DocumentsProcessing> es fuer ihre je eigene
+  // "laeuft"-Anzeige tun - bewusst NICHT ueber einen an <DocumentsProcessing>
+  // durchgereichten Zaehler, der sonst einen falschen Wert ("0 Dokumente
+  // werden noch verarbeitet") mitanzeigen wuerde, waehrend in Wahrheit nur
+  // die Buendelung laeuft. Der Hook steht bewusst VOR jedem fruehen Return -
+  // Hooks duerfen nicht von einer Bedingung uebersprungen werden, nur ihr
+  // Effekt darf es.
+  useEffect(() => {
+    if (status !== "laeuft") return;
+    const timer = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(timer);
+  }, [status, router]);
+
   // "Noch nicht geprueft" bekommt keine Karte - sonst stuende dort dauerhaft
   // ein Hinweis, der nichts sagt.
   if (status === "ausstehend") return null;

@@ -298,10 +298,6 @@ export default async function CaseCockpitPage({
   // <DocumentsProcessing> mit einem zweiten Intervall, und die schwerste Seite
   // der App rendert sich während jedes Uploads doppelt so oft neu.
   const processingCount = kiLaufAktiv ? 0 : countProcessingDocuments(documents);
-  // Der Buendel-Lauf startet erst, wenn die letzte Dokumentanalyse fertig ist.
-  // Ohne ihn im Polling erschiene die Vorschlagskarte erst nach manuellem
-  // Neuladen.
-  const buendelLaeuft = caseRow.buendelStatus === "laeuft";
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -627,9 +623,11 @@ export default async function CaseCockpitPage({
                     <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={applicantOptions} />
                   </CardContent>
                 </Card>
-                {(processingCount > 0 || buendelLaeuft) && (
-                  <DocumentsProcessing count={processingCount} />
-                )}
+                {processingCount > 0 && <DocumentsProcessing count={processingCount} />}
+                {/* Pollt sich bei buendelStatus === "laeuft" selbst weiter
+                    (siehe buendel-vorschlag.tsx) - nicht ueber einen an
+                    <DocumentsProcessing> durchgereichten Zaehler, der sonst
+                    einen falschen Wert anzeigen wuerde. */}
                 <BuendelVorschlagKarte
                   caseId={id}
                   status={caseRow.buendelStatus as "ausstehend" | "laeuft" | "fertig" | "fehler"}
