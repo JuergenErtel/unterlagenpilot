@@ -52,6 +52,22 @@ type FetchLike = typeof fetch;
  */
 const LEADS_PATH = "/leads";
 const LOAN_APPLICATIONS_PATH = "/loan_applications";
+
+/**
+ * Haengt einen Query-Parameter an, egal ob der Pfad schon einen traegt.
+ *
+ * Bewusst EINE Stelle fuer diese Regel: Am 28.08.2026 stand sie zweimal da -
+ * mitBerater() waehlte den Trenner richtig, fetchAllPages nahm immer "?".
+ * Bei der Lead-Liste liefen beide hintereinander, es entstand
+ * "/leads?advisor_id=<uuid>?limit=50&page=1", die Berater-Id wurde damit zu
+ * "<uuid>?limit=50", und die API lieferte null Leads. Die Auswahlliste war
+ * dadurch zwei Wochen lang leer, ohne dass irgendwo ein Fehler auftauchte.
+ */
+function mitParam(pfad: string, name: string, wert: string): string {
+  const trenner = pfad.includes("?") ? "&" : "?";
+  return `${pfad}${trenner}${name}=${encodeURIComponent(wert)}`;
+}
+
 /**
  * Seitengrößen nach gemessenem API-Verhalten (04.08.2026, 905 Leads):
  * /leads verkraftet große Seiten (500 ≈ 2 s), /loan_applications ist träge
@@ -112,7 +128,9 @@ export class HttpFinLinkClient implements FinLinkClient {
     for (let first = 1; first <= MAX_PAGES; first += WAVE_SIZE) {
       const pages = Array.from({ length: Math.min(WAVE_SIZE, MAX_PAGES - first + 1) }, (_, i) => first + i);
       const bodies = await Promise.all(
-        pages.map((p) => this.fetchJson(`${path}?limit=${limit}&page=${p}`, LIST_CACHE_SECONDS))
+        pages.map((p) =>
+          this.fetchJson(mitParam(mitParam(path, "limit", String(limit)), "page", String(p)), LIST_CACHE_SECONDS)
+        )
       );
       let sawShortPage = false;
       for (const body of bodies) {
@@ -147,8 +165,7 @@ export class HttpFinLinkClient implements FinLinkClient {
    * bleibt die zweite Prüfung an der Antwort trotzdem bestehen.
    */
   private mitBerater(pfad: string): string {
-    const trenner = pfad.includes("?") ? "&" : "?";
-    return `${pfad}${trenner}advisor_id=${encodeURIComponent(this.config.advisorId)}`;
+    return mitParam(pfad, "advisor_id", this.config.advisorId);
   }
 
   /** Zweite Schranke: Was nicht nachweislich uns gehört, fliegt raus. */

@@ -72,6 +72,38 @@ describe("FinLink-Import: nur die eigenen Kunden", () => {
     expect(gesehen.some((u) => u.includes(`advisor_id=${ICH}`))).toBe(true);
   });
 
+  /**
+   * Am 28.08.2026 in Produktion: Die Auswahlliste auf /cases/import zeigte
+   * "Keine Leads im FinLink-Konto gefunden", obwohl das Konto 87 Leads hatte.
+   * Ursache war KEIN Filterfehler, sondern die zusammengesetzte Adresse:
+   * mitBerater() haengt "?advisor_id=..." an, fetchAllPages haengt danach ein
+   * ZWEITES "?limit=...&page=..." an. Das zweite Fragezeichen trennt nichts —
+   * die Berater-Id wurde zu "<uuid>?limit=50", die API fand keinen solchen
+   * Berater und lieferte null Leads. Live nachgemessen: mit dem zweiten
+   * Fragezeichen 0 Leads, mit "&" 50.
+   *
+   * Der Cron blieb heil, weil fetchLeadsPage seinen Pfad schon MIT "?" baut
+   * und mitBerater dann korrekt "&" waehlt — deshalb fiel es zwei Wochen
+   * lang niemandem auf, und ein leeres Ergebnis sieht aus wie "nichts da".
+   */
+  it("verstuemmelt die Berater-Id nicht beim Anhaengen der Seitenangabe", async () => {
+    const gesehen: string[] = [];
+    const c = client(fetchMitLeads([lead("meiner", ICH)], gesehen));
+    await c.listLeads();
+
+    expect(gesehen.length).toBeGreaterThan(0);
+    for (const u of gesehen) {
+      // Genau ein Fragezeichen je Adresse - alles Weitere gehoert an ein "&".
+      expect(u.split("?").length - 1, `zwei Fragezeichen in ${u}`).toBe(1);
+    }
+    // Und die Id kommt unverfaelscht an, nicht als "<uuid>?limit=50".
+    const leadsAufrufe = gesehen.filter((u) => /\/leads(\?|$)/.test(u));
+    expect(leadsAufrufe.length).toBeGreaterThan(0);
+    for (const u of leadsAufrufe) {
+      expect(new URL(u).searchParams.get("advisor_id")).toBe(ICH);
+    }
+  });
+
   it("lässt auch den Einzelabruf keinen fremden Vorgang durch", async () => {
     // Sonst wäre der Filter auf der Liste wertlos: Wer eine fremde Lead-Id
     // kennt (z. B. aus einem früheren Import), käme über die Detail-Adresse
