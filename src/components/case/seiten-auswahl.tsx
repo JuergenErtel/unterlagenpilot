@@ -22,6 +22,11 @@ interface AuswahlKontextWert {
 // die Tabelle eine Funktion aufruft.
 const AuswahlKontext = createContext<AuswahlKontextWert | null>(null);
 
+/** Zwei ID-Listen inhaltsgleich (gleiche Reihenfolge)? */
+function gleicheAuswahl(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
 /**
  * Auswahlkaestchen an den Einzelseiten plus die Leiste zum Zusammenfuegen.
  *
@@ -48,6 +53,13 @@ export function SeitenAuswahl({
     seitenZusammenfuegenAction,
     {}
   );
+  // Fuer WELCHE Auswahl `state.grund` zuletzt abgeschickt wurde - `state`
+  // selbst kennt nur den Text, nicht mehr, wozu er gehoerte. Ohne dieses
+  // Gedaechtnis haengt ein alter Ablehnungsgrund (A+B) an einer voellig neuen
+  // Auswahl (C+D), die nie abgeschickt wurde - eine Aussage, die luegt. Jede
+  // Aenderung der Auswahl (Haken setzen/entfernen, Aufheben) macht den Grund
+  // sofort ungueltig; erst ein neues Abschicken setzt ihn wieder.
+  const [grundGiltFuer, setGrundGiltFuer] = useState<string[] | null>(null);
 
   // Aendert sich die Kandidatenliste (z.B. weil eine Zusammenfuehrung gerade
   // geglueckt ist und die Quellseiten ihr Kaestchen verloren haben), faellt
@@ -59,12 +71,23 @@ export function SeitenAuswahl({
   }, [kandidaten]);
 
   const erlaubt = new Set(kandidaten);
-  const umschalten = (id: string) =>
+  const umschalten = (id: string) => {
+    setGrundGiltFuer(null);
     setGewaehlt((alt) => (alt.includes(id) ? alt.filter((x) => x !== id) : [...alt, id]));
+  };
 
   // In Tabellenreihenfolge, nicht in Anklickreihenfolge: die Seitenfolge soll
   // vorhersagbar sein.
   const inReihenfolge = kandidaten.filter((id) => gewaehlt.includes(id));
+
+  // Nur zeigen, wenn der Grund WIRKLICH zur aktuell angehakten Auswahl gehoert
+  // - sonst wuerde ein Zurueck-und-wieder-Anhaken derselben zwei Seiten einen
+  // Grund reanimieren, dem seit dem letzten Abschicken kein neuer Versuch
+  // mehr zugrunde liegt.
+  const sichtbarerGrund =
+    state.grund && grundGiltFuer && gleicheAuswahl(grundGiltFuer, inReihenfolge)
+      ? state.grund
+      : undefined;
 
   return (
     <AuswahlKontext.Provider
@@ -88,14 +111,14 @@ export function SeitenAuswahl({
                   bewirkt hat (der teuerste wiederkehrende Fehler in diesem
                   Projekt). `grund` ist bereits kundengrader Klartext aus der
                   Service-Schicht. */}
-              {state.grund && (
+              {sichtbarerGrund && (
                 <p className="mt-1 text-xs text-destructive" role="alert">
-                  {state.grund}
+                  {sichtbarerGrund}
                 </p>
               )}
             </div>
             <div className="flex shrink-0 gap-2">
-              <form action={zusammenfuegen}>
+              <form action={zusammenfuegen} onSubmit={() => setGrundGiltFuer(inReihenfolge)}>
                 <input type="hidden" name="caseId" value={caseId} />
                 <input type="hidden" name="documentIds" value={inReihenfolge.join(",")} />
                 <SubmitButton size="sm" pendingLabel="Wird zusammengefügt …">
@@ -104,7 +127,10 @@ export function SeitenAuswahl({
               </form>
               <button
                 type="button"
-                onClick={() => setGewaehlt([])}
+                onClick={() => {
+                  setGrundGiltFuer(null);
+                  setGewaehlt([]);
+                }}
                 className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
                 Auswahl aufheben
