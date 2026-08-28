@@ -41,6 +41,7 @@ import {
   type UrteileErgebnis,
   type BankWahl,
 } from "@/lib/banken/fragen/schema";
+import { buendelungSchema, type BuendelungResult } from "@/lib/buendelung/schema";
 
 /**
  * AIService – die einzige Schnittstelle für KI-Auswertungen.
@@ -687,6 +688,61 @@ export class AIService {
         "Ein Hinweis '[Seitenzaehler beginnt neu]' spricht stark fuer einen Dokumentanfang.",
         "titel ist eine kurze deutsche Bezeichnung fuer die Anzeige. vermuteterTyp ist null, wenn unklar – nie geraten.",
         "confidence ist deine Sicherheit fuer GENAU dieses Segment.",
+      ].join(" "),
+      beschreibung,
+      { seiten: seiten.length }
+    );
+  }
+
+  /**
+   * Welche Einzelseiten eines Falls gehoeren zu einem Dokument - und in welcher
+   * Reihenfolge?
+   *
+   * Bewusst EIN Aufruf fuer den ganzen Fall: ein einzelnes Foto sagt nichts
+   * darueber, ob es zu einem anderen gehoert, und dreissig Aufrufe brechen das
+   * Mistral-Kontingent (50 Anfragen/Minute).
+   */
+  async gruppiereEinzelseiten(
+    seiten: Array<{
+      nummer: number;
+      dateiname: string;
+      hochgeladen: string;
+      erkannterTyp: string | null;
+      zeitraum: string | null;
+      seitenzaehler: boolean;
+      anfang: string;
+    }>
+  ): Promise<BuendelungResult> {
+    if (seiten.length === 0) return { buendel: [] };
+
+    const beschreibung = seiten
+      .map((s) =>
+        [
+          `Seite ${s.nummer}`,
+          `Datei: ${s.dateiname}`,
+          `hochgeladen: ${s.hochgeladen}`,
+          s.erkannterTyp ? `erkannter Typ: ${s.erkannterTyp}` : null,
+          s.zeitraum ? `Zeitraum: ${s.zeitraum}` : null,
+          s.seitenzaehler ? "[traegt einen Seitenzaehler]" : null,
+          `Text: ${s.anfang}`,
+        ]
+          .filter(Boolean)
+          .join(" | ")
+      )
+      .join("\n");
+
+    return this.run(
+      "buendelung",
+      buendelungSchema,
+      [
+        "Du bekommst einzeln fotografierte oder gescannte Seiten aus EINER deutschen Baufinanzierung.",
+        "Bestimme, welche Seiten zu DEMSELBEN Dokument gehoeren, und in welcher Reihenfolge sie im Dokument stehen.",
+        "Die Reihenfolge im Feld 'seiten' IST die Seitenreihenfolge - richte dich nach dem Inhalt (Seitenzaehler wie 'Seite 2 von 4', angefangene Saetze, Datum), NICHT nach Dateinamen oder Uploadzeit. Handyfotos sind oft in falscher Reihenfolge aufgenommen.",
+        "Gib NUR Gruppen mit mindestens zwei Seiten zurueck. Seiten, die allein stehen, laesst du einfach weg - das ist der Normalfall und kein Fehler.",
+        "Seiten aus verschiedenen Zeitraeumen gehoeren NIE zusammen: zwei Gehaltsabrechnungen aus Mai und Juni sind zwei Dokumente, nicht eines.",
+        "titel ist eine kurze deutsche Bezeichnung fuer die Anzeige, z. B. 'Gehaltsabrechnung 05/2026'.",
+        "vermuteterTyp ist null, wenn unklar - nie geraten.",
+        "confidence ist deine Sicherheit fuer GENAU diese Gruppe.",
       ].join(" "),
       beschreibung,
       { seiten: seiten.length }

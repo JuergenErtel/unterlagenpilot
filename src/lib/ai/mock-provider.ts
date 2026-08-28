@@ -73,6 +73,17 @@ export class MockAIProvider implements AIProvider {
             { vonSeite: 3, bisSeite: 8, vermuteterTyp: "grundbuchauszug", titel: "Grundbuchauszug", confidence: 0.9 },
           ],
         };
+      // Der Mock buendelt die ersten beiden Seiten - genug, damit Tests den
+      // ganzen Weg gehen koennen, ohne die echte KI zu rufen.
+      case "buendelung": {
+        const anzahl = Number(req.hints?.seiten ?? 0);
+        if (anzahl < 2) return { buendel: [] };
+        return {
+          buendel: [
+            { titel: "Gehaltsabrechnung 05/2026", vermuteterTyp: "gehaltsabrechnung", confidence: 0.9, seiten: [0, 1] },
+          ],
+        };
+      }
       case "bankenFrageDeutung":
         return this.deuteBankenFrage(req);
       case "bankenFrageUrteile":
