@@ -372,10 +372,21 @@ export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<Zusamme
           splitStatus: "fertig",
         },
       });
-      await tx.document.updateMany({
-        where: { id: { in: documentIds } },
+      // Der Vorab-Check lag ausserhalb dieser Transaktion - zwischen ihm und
+      // hier kann ein zweiter, ueberlappender Aufruf (Doppelklick, zwei
+      // Tabs, KI-Vorschlag und Handauswahl fast gleichzeitig) dieselbe Seite
+      // schon verplant haben. Die WHERE-Klausel prueft "offen"/unverplant
+      // deshalb HIER NOCHMAL; bekommt sie nicht mehr Zeilen als erwartet,
+      // war jemand schneller - dann wird geworfen und die ganze Transaktion
+      // rollt zurueck, statt eine Seite lautlos einem zweiten Dokument zu
+      // entreissen. Gleiches Muster wie die Lauf-Sperre in erkenneBuendel.
+      const verplant = await tx.document.updateMany({
+        where: { id: { in: documentIds }, reviewStatus: "offen", zusammengefuegtInId: null },
         data: { zusammengefuegtInId: erzeugt.id, reviewStatus: "ersetzt" },
       });
+      if (verplant.count !== documentIds.length) {
+        throw new Error("Mindestens eine Seite wurde inzwischen anderweitig verplant.");
+      }
       if (input.buendelId) {
         await tx.documentBuendel.deleteMany({ where: { id: input.buendelId, caseId } });
       }

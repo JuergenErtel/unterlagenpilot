@@ -12,8 +12,15 @@ vi.mock("next/server", () => ({ after: () => undefined }));
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Echtes 800x1200-JPEG aus tests/fixtures - kein Bild-Encoder im Test noetig. */
+/** Echtes 800x1200-JPEG (Hochformat) aus tests/fixtures - kein Bild-Encoder im Test noetig. */
 const jpeg = () => readFileSync(join(process.cwd(), "tests", "fixtures", "seite-hoch.jpg"));
+
+/**
+ * Echtes 1600x900-JPEG (Querformat). Unterscheidet sich in der Form von
+ * `jpeg()` - genau das macht die Seiten im fertigen PDF unterscheidbar
+ * (A4 hoch vs. A4 quer), ohne dass der Test in die Pixel schauen muss.
+ */
+const jpegQuer = () => readFileSync(join(process.cwd(), "tests", "fixtures", "seite-quer.jpg"));
 
 /** Baut ein echtes PDF mit der gewuenschten Seitenzahl - kein Fixture noetig. */
 const pdfMitSeiten = async (anzahl: number): Promise<Buffer> => {
@@ -261,5 +268,96 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
     expect(unveraendertFreigegeben.zusammengefuegtInId).toBeNull();
     expect(await storage.get(unveraendertA.storageKey)).not.toBeNull();
     expect(await storage.get(unveraendertFreigegeben.storageKey)).not.toBeNull();
+  });
+
+  // Der Vorab-Check (istBuendelKandidat) liegt AUSSERHALB der Transaktion, die
+  // Seiten anschliessend verplant. Zwei ECHT ueberlappende Aufrufe
+  // (Doppelklick, zwei Tabs, KI-Vorschlag und Handauswahl fast gleichzeitig)
+  // koennnen beide den Vorab-Check bestehen, bevor einer schreibt - deshalb
+  // hier per Promise.all wirklich gleichzeitig gestartet, nicht nacheinander
+  // (ein sequenzieller zweiter Aufruf wuerde schon am - laengst vorhandenen -
+  // Vorab-Check scheitern und die neue Transaktions-WHERE-Klausel gar nicht
+  // pruefen). Ohne die "offen"/unverplant-Bedingung in der Transaktion haette
+  // der Verlierer der zweiten Quellseite lautlos den zusammengefuegtInId
+  // umgeschrieben und dem Gewinner eine Seite entrissen.
+  it("verhindert, dass zwei gleichzeitige Aufrufe dieselbe Quellseite doppelt verplanen", async () => {
+    const caseId = await fallAnlegen();
+    const a = await seiteAnlegen(caseId, "a.jpg", jpeg());
+    const b = await seiteAnlegen(caseId, "b.jpg", jpeg());
+
+    const [ergebnisA, ergebnisB] = await Promise.all([
+      fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen A" }),
+      fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen B" }),
+    ]);
+
+    // Genau einer der beiden ueberlappenden Aufrufe darf gewinnen - welcher,
+    // ist Zufall und fuer die Zusicherung ohne Belang.
+    const erfolge = [ergebnisA, ergebnisB].filter((e) => e.ok);
+    expect(erfolge).toHaveLength(1);
+
+    // Es ist nur EIN zusammengefuegtes Dokument entstanden, und das hat
+    // beide Quellseiten - keine ging an einen ueberschriebenen zweiten
+    // Versuch verloren.
+    const erzeugte = await prisma.document.findMany({
+      where: { caseId, mimeType: "application/pdf" },
+      include: { quellseiten: true },
+    });
+    expect(erzeugte).toHaveLength(1);
+    expect(erzeugte[0].quellseiten).toHaveLength(2);
+    expect(erzeugte[0].pageCount).toBe(2);
+
+    // Kein Speicherobjekt des Verlierers haengengeblieben: das Dokument des
+    // Gewinners ist ganz normal abrufbar.
+    expect(await storage.get(erzeugte[0].storageKey)).not.toBeNull();
+  });
+
+  // Die Seitenreihenfolge ist das ganze Versprechen dieses Features - die KI
+  // ordnet durcheinandergeratene Handyfotos neu. Ein still vertauschtes Paar
+  // wuerde eine Gehaltsabrechnung zerreissen, ohne dass ein Test es merkt -
+  // deshalb hier die tatsaechliche PDF-Geometrie pruefen, nicht nur die
+  // Seitenzahl. seite-hoch.jpg (800x1200) wird zu A4 hoch (595x842),
+  // seite-quer.jpg (1600x900) zu A4 quer (842x595) - beide Formate
+  // unterscheidbar, ohne Pixel vergleichen zu muessen.
+  it("haelt die vom Aufrufer gewuenschte Seitenreihenfolge exakt ein", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+
+    const caseIdVorwaerts = await fallAnlegen();
+    const hoch1 = await seiteAnlegen(caseIdVorwaerts, "hoch.jpg", jpeg());
+    const quer1 = await seiteAnlegen(caseIdVorwaerts, "quer.jpg", jpegQuer());
+    const vorwaerts = await fuegeZusammen({
+      caseId: caseIdVorwaerts,
+      organizationId: orgId,
+      documentIds: [hoch1.id, quer1.id],
+      titel: "Vorwaerts",
+    });
+    expect(vorwaerts.ok).toBe(true);
+    const vorwaertsDokument = await prisma.document.findUnique({ where: { id: vorwaerts.documentId } });
+    const vorwaertsPdf = await PDFDocument.load(await storage.get(vorwaertsDokument.storageKey));
+    const [seite1, seite2] = vorwaertsPdf.getPages() as [any, any];
+    // hoch.jpg zuerst -> Seite 1 im Hochformat, quer.jpg danach -> Seite 2 im Querformat.
+    expect(seite1.getWidth()).toBe(595);
+    expect(seite1.getHeight()).toBe(842);
+    expect(seite2.getWidth()).toBe(842);
+    expect(seite2.getHeight()).toBe(595);
+
+    const caseIdRueckwaerts = await fallAnlegen();
+    const hoch2 = await seiteAnlegen(caseIdRueckwaerts, "hoch.jpg", jpeg());
+    const quer2 = await seiteAnlegen(caseIdRueckwaerts, "quer.jpg", jpegQuer());
+    const rueckwaerts = await fuegeZusammen({
+      caseId: caseIdRueckwaerts,
+      organizationId: orgId,
+      documentIds: [quer2.id, hoch2.id],
+      titel: "Rueckwaerts",
+    });
+    expect(rueckwaerts.ok).toBe(true);
+    const rueckwaertsDokument = await prisma.document.findUnique({ where: { id: rueckwaerts.documentId } });
+    const rueckwaertsPdf = await PDFDocument.load(await storage.get(rueckwaertsDokument.storageKey));
+    const [rSeite1, rSeite2] = rueckwaertsPdf.getPages() as [any, any];
+    // Vertauschte Eingabe -> vertauschte Geometrie, sonst haette die
+    // Reihenfolge keine erkennbare Wirkung.
+    expect(rSeite1.getWidth()).toBe(842);
+    expect(rSeite1.getHeight()).toBe(595);
+    expect(rSeite2.getWidth()).toBe(595);
+    expect(rSeite2.getHeight()).toBe(842);
   });
 });
