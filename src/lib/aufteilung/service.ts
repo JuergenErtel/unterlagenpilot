@@ -34,6 +34,8 @@ export async function erkenneAufteilung(documentId: string): Promise<void> {
         pageCount: true,
         ocrStatus: true,
         pages: { select: { pageNumber: true, ocrText: true }, orderBy: { pageNumber: "asc" } },
+        // Ist dieses Dokument selbst aus Einzelseiten entstanden?
+        _count: { select: { quellseiten: true } },
       },
     });
     if (!doc) return;
@@ -43,7 +45,11 @@ export async function erkenneAufteilung(documentId: string): Promise<void> {
       doc.mimeType === "application/pdf" &&
       seitenzahl >= MIN_SEITEN_FUER_PRUEFUNG &&
       doc.ocrStatus === "fertig" &&
-      doc.pages.length > 0;
+      doc.pages.length > 0 &&
+      // Ein gerade aus Einzelseiten zusammengefuegtes Dokument nicht sofort
+      // wieder zum Zerlegen vorschlagen - der Vermittler hat eben entschieden,
+      // dass diese Seiten zusammengehoeren.
+      doc._count.quellseiten === 0;
 
     if (!pruefbar) {
       // Geprueft und nichts zu tun – das ist kein Fehler.

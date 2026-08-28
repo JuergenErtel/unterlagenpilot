@@ -52,6 +52,10 @@ import { Notizblock } from "@/components/case/notizblock";
 import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
+import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
+import { BuendelRueckgaengig } from "@/components/case/buendel-rueckgaengig";
+import { SeitenAuswahl, SeitenKaestchen } from "@/components/case/seiten-auswahl";
+import { istBuendelKandidat, zuKandidat } from "@/lib/buendelung/kandidaten";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -157,6 +161,7 @@ export default async function CaseCockpitPage({
     uebernahme,
     gesendeteNachrichten,
     erstkontaktStand,
+    buendelVorschlaege,
   ] = await Promise.all([
     prisma.document.findMany({
       where: { caseId: id },
@@ -166,6 +171,8 @@ export default async function CaseCockpitPage({
           orderBy: { reihenfolge: "asc" },
           select: { vonSeite: true, bisSeite: true, titel: true },
         },
+        // Fuer den Rueckgaengig-Knopf: nur die Zahl, nicht die Zeilen.
+        _count: { select: { quellseiten: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -182,6 +189,18 @@ export default async function CaseCockpitPage({
     // Fallseite eine andere Phase vor als das Board.
     prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
     ladeErstkontaktStand(id),
+    // Vorschlaege der Buendelung (Einzelseiten -> Dokument) fuer die
+    // Vorschlagskarte im Reiter "Dokumente".
+    prisma.documentBuendel.findMany({
+      where: { caseId: id },
+      orderBy: { reihenfolge: "asc" },
+      include: {
+        seiten: {
+          orderBy: { position: "asc" },
+          select: { document: { select: { generatedName: true, originalName: true } } },
+        },
+      },
+    }),
   ]);
 
   // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
@@ -282,6 +301,14 @@ export default async function CaseCockpitPage({
   // <DocumentsProcessing> mit einem zweiten Intervall, und die schwerste Seite
   // der App rendert sich während jedes Uploads doppelt so oft neu.
   const processingCount = kiLaufAktiv ? 0 : countProcessingDocuments(documents);
+  // Dieselbe Regel wie oben, nur fuer die Buendel-Karte statt fuer
+  // <DocumentsProcessing>: Pollt hier bereits <AiCheckRunning> (kiLaufAktiv)
+  // oder <DocumentsProcessing> (processingCount > 0), pollt die Buendel-Karte
+  // NICHT zusaetzlich - sonst laeuft "die schwerste Seite der App" (s. o.)
+  // mit zwei parallelen 4-Sekunden-Intervallen. Faellt der andere Poller weg
+  // (Upload fertig), waehrend buendelStatus noch "laeuft" ist, flippt dieser
+  // Wert beim naechsten Rendern auf false und die Karte uebernimmt selbst.
+  const andererPollerLaeuft = kiLaufAktiv || processingCount > 0;
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -291,6 +318,12 @@ export default async function CaseCockpitPage({
     name: [a.vorname, a.nachname].filter(Boolean).join(" ") || `Antragsteller ${a.position}`,
   }));
   const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
+
+  // DIESELBE Abbildung (zuKandidat) und DIESELBE Regel (istBuendelKandidat)
+  // wie im Erkennungslauf und beim Zusammenfuegen (buendelung/service.ts) -
+  // drei eigene Kopien standen hier schon einmal, und das ist genau die Falle,
+  // gegen die zuKandidat() geschaffen wurde.
+  const auswaehlbareSeiten = documents.filter((d) => istBuendelKandidat(zuKandidat(d))).map((d) => d.id);
 
   // Torpruefung fuer das Finanzierungszertifikat – dieselbe Funktion, die auch
   // die PDF-Route anwendet, damit der Knopf nie etwas freigibt, was der Server
@@ -608,11 +641,33 @@ export default async function CaseCockpitPage({
                   </CardContent>
                 </Card>
                 {processingCount > 0 && <DocumentsProcessing count={processingCount} />}
+                {/* Pollt sich bei buendelStatus === "laeuft" selbst weiter
+                    (siehe buendel-vorschlag.tsx) - aber nur, wenn nicht schon
+                    <AiCheckRunning> oder <DocumentsProcessing> pollen
+                    (andererPollerLaeuft, s. o.). */}
+                <BuendelVorschlagKarte
+                  caseId={id}
+                  status={caseRow.buendelStatus as "ausstehend" | "laeuft" | "fertig" | "fehler"}
+                  andererPollerLaeuft={andererPollerLaeuft}
+                  buendel={buendelVorschlaege.map((b) => ({
+                    id: b.id,
+                    titel: b.titel,
+                    seiten: b.seiten.map((s) => ({
+                      name: s.document.generatedName ?? s.document.originalName,
+                    })),
+                  }))}
+                />
                 <Card>
                   <CardContent className="p-0">
+                    <SeitenAuswahl caseId={id} kandidaten={auswaehlbareSeiten}>
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {/* Schmale Kaestchenspalte fuer die Handauswahl - siehe
+                              seiten-auswahl.tsx. Kopfzelle bewusst ohne Text: eine
+                              Beschriftung "Auswahl" ueber einer 2rem breiten Spalte
+                              waere nur unleserlich abgeschnitten. */}
+                          <TableHead className="w-8" />
                           <TableHead>Dateiname</TableHead>
                           <TableHead>Typ</TableHead>
                           {mehrereAntragsteller && <TableHead>Antragsteller</TableHead>}
@@ -628,11 +683,14 @@ export default async function CaseCockpitPage({
                       </TableHeader>
                       <TableBody>
                         {documents.length === 0 && (
-                          <TableRow><TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={mehrereAntragsteller ? 7 : 6} className="py-10 text-center text-sm text-muted-foreground">Noch keine Dokumente. Lade oben selbst welche hoch oder erstelle einen Upload-Link für den Kunden.</TableCell></TableRow>
                         )}
                         {documents.map((d) => (
                           <Fragment key={d.id}>
                           <TableRow>
+                            <TableCell className="w-8">
+                              <SeitenKaestchen documentId={d.id} label={d.generatedName ?? d.originalName} />
+                            </TableCell>
                             {/* Der erzeugte Dateiname wird bis zu 60 Zeichen lang
                                 ("Einnahmenueberschussrechnung_EUeR_Mate_Topcic_01012024bis31122024.pdf")
                                 und blies die Spalte auf 565px auf - die Tabelle war damit
@@ -650,66 +708,91 @@ export default async function CaseCockpitPage({
                             <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
                             <TableCell className="sticky right-0 z-10 border-l bg-card">
-                              {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
-                              {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
-                                  Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
-                                  bekommt bewusst KEINEN Freigeben-Knopf – freigegeben wurde
-                                  genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
-                                  die Checkliste meldete Gruen fuer ein Dokument, das im Fall
-                                  nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
-                              {d.readable === false ? (
-                                <Badge variant="warning">
-                                  Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
-                                </Badge>
-                              ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
-                                <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
-                              ) : d.reviewStatus === "offen" ? (
-                                // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
-                                // stand nur ein passives Abzeichen, und der einzige Weg zur
-                                // Uebernahme lag im Review-Center - darauf kam niemand, der
-                                // es nicht ohnehin wusste. Erst wenn die KI fertig ist, sonst
-                                // gaebe man ein Dokument ohne erkannte Daten frei.
-                                d.classificationStatus === "fertig" ? (
-                                  <div className="flex items-center gap-2">
-                                    <form action={acceptDocument.bind(null, d.id)}>
-                                      <SubmitButton size="sm" pendingLabel="Wird übernommen …">
-                                        Freigeben
-                                      </SubmitButton>
-                                    </form>
-                                    <Link
-                                      href={`/review?case=${id}`}
-                                      className="whitespace-nowrap text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                                    >
-                                      Felder ansehen
-                                    </Link>
-                                  </div>
-                                ) : (
-                                  <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
-                                )
-                              ) : d.reviewStatus === "akzeptiert" ? (
-                                // Der Weg zurueck gehoert genau hierhin: Erkannte Felder
-                                // sind nur im Review-Center sichtbar, und das laedt nur
-                                // offene Dokumente. Ohne diesen Knopf war ein falsch
-                                // erkannter Wert nach der Freigabe unerreichbar.
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
-                                  <ReopenDocumentButton documentId={d.id} />
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="neutral">
-                                    {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                              {/* Aussenrum EIN Flex-Container fuer alle Zweige: Der
+                                  Rueckgaengig-Knopf haengt unten an einer einzigen
+                                  Stelle an "reviewStatus === offen", statt sich in
+                                  jeden der folgenden Zweige (unlesbar, KI-Fehler,
+                                  KI laeuft noch, freigebbar) einzeln zu wiederholen -
+                                  er gilt fuer alle davon gleichermassen, solange das
+                                  Dokument nicht freigegeben ist. */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
+                                {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
+                                    Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
+                                    bekommt bewusst KEINEN Freigeben-Knopf – freigegeben wurde
+                                    genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
+                                    die Checkliste meldete Gruen fuer ein Dokument, das im Fall
+                                    nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
+                                {d.readable === false ? (
+                                  <Badge variant="warning">
+                                    Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
                                   </Badge>
-                                  {d.reviewStatus === "abgelehnt" && (
-                                    <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
-                                  )}
-                                </div>
-                              )}
+                                ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
+                                  <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
+                                ) : d.reviewStatus === "offen" ? (
+                                  // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
+                                  // stand nur ein passives Abzeichen, und der einzige Weg zur
+                                  // Uebernahme lag im Review-Center - darauf kam niemand, der
+                                  // es nicht ohnehin wusste. Erst wenn die KI fertig ist, sonst
+                                  // gaebe man ein Dokument ohne erkannte Daten frei.
+                                  d.classificationStatus === "fertig" ? (
+                                    <>
+                                      <form action={acceptDocument.bind(null, d.id)}>
+                                        <SubmitButton size="sm" pendingLabel="Wird übernommen …">
+                                          Freigeben
+                                        </SubmitButton>
+                                      </form>
+                                      <Link
+                                        href={`/review?case=${id}`}
+                                        className="whitespace-nowrap text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                      >
+                                        Felder ansehen
+                                      </Link>
+                                    </>
+                                  ) : (
+                                    <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
+                                  )
+                                ) : d.reviewStatus === "akzeptiert" ? (
+                                  // Der Weg zurueck gehoert genau hierhin: Erkannte Felder
+                                  // sind nur im Review-Center sichtbar, und das laedt nur
+                                  // offene Dokumente. Ohne diesen Knopf war ein falsch
+                                  // erkannter Wert nach der Freigabe unerreichbar.
+                                  <>
+                                    <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+                                    <ReopenDocumentButton documentId={d.id} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <Badge variant="neutral">
+                                      {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                                    </Badge>
+                                    {d.reviewStatus === "abgelehnt" && (
+                                      <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
+                                    )}
+                                  </>
+                                )}
+                                {/* Nur bei einem aus Einzelseiten entstandenen Dokument -
+                                    diese Bedingung aendert sich fuer eine gegebene Zeile
+                                    nie mehr, anders als reviewStatus. Ob der Knopf selbst
+                                    erscheint, entscheidet die Komponente an ihrem `offen`-
+                                    Prop: bliebe die Bedingung hier bei reviewStatus === "offen",
+                                    wuerde ein zwischenzeitlich (zweiter Tab) abgelehntes
+                                    Rueckgaengig die ganze Komponente unmounten und die eben
+                                    gesetzte Ablehnungsmeldung mit ihr wegreissen. */}
+                                {d._count.quellseiten > 0 && (
+                                  <BuendelRueckgaengig
+                                    caseId={id}
+                                    documentId={d.id}
+                                    seiten={d._count.quellseiten}
+                                    offen={d.reviewStatus === "offen"}
+                                  />
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                           {d.splitSegmente.length >= 2 && (
                             <TableRow>
-                              <TableCell colSpan={mehrereAntragsteller ? 6 : 5} className="pt-0">
+                              <TableCell colSpan={mehrereAntragsteller ? 7 : 6} className="pt-0">
                                 <AufteilungVorschlag caseId={id} documentId={d.id} segmente={d.splitSegmente} />
                               </TableCell>
                             </TableRow>
@@ -718,6 +801,7 @@ export default async function CaseCockpitPage({
                         ))}
                       </TableBody>
                     </Table>
+                    </SeitenAuswahl>
                   </CardContent>
                 </Card>
               </div>

@@ -1,0 +1,608 @@
+import { after } from "next/server";
+import { prisma } from "@/lib/db";
+import { aiService } from "@/lib/ai";
+import { getStorage } from "@/lib/storage";
+import { analysiereDokument } from "@/lib/documents/pipeline";
+import { SEITEN_MUSTER } from "@/lib/detektiv/completeness";
+import { countProcessingDocuments } from "@/lib/documents/processing";
+import { waehleKandidaten, istBuendelKandidat, zuKandidat, type Kandidat } from "./kandidaten";
+import { baueBuendelPdf } from "./pdf";
+import { pruefeBuendel, zeitraumKonflikt } from "./pruefung";
+import { MIN_KANDIDATEN, TEXT_ANFANG, type BuendelVorschlag } from "./types";
+import type { DocumentType } from "@/lib/domain/enums";
+
+/** Nach dieser Zeit gilt ein `laeuft` als haengengeblieben (Absturz, Deploy). */
+const SPERRE_VERFAELLT_MS = 10 * 60_000;
+
+/**
+ * Markiert einen Lauf, dessen Sperre waehrend der KI-Auswertung (Laufzeit
+ * unbestimmt) von einem zweiten Lauf uebernommen wurde (SPERRE_VERFAELLT_MS
+ * ueberschritten). Der zweite Lauf ist danach der rechtmaessige Besitzer -
+ * der erste darf weder sein Ergebnis noch seinen Status ueberschreiben und
+ * muss das von einem echten Fehler unterscheiden koennen (siehe `erkenneBuendel`).
+ */
+class SperreVerdraengtError extends Error {}
+
+/** Steht auf dieser Seite ueberhaupt ein Seitenzaehler ("Seite 2 von 4")? */
+function hatSeitenzaehler(text: string): boolean {
+  for (const muster of SEITEN_MUSTER) {
+    muster.lastIndex = 0;
+    if (muster.test(text)) return true;
+  }
+  return false;
+}
+
+/**
+ * Prueft den GANZEN Fall darauf, welche Einzelseiten zu einem Dokument
+ * gehoeren, und legt die Vorschlaege ab.
+ *
+ * Fallweit und nicht je Datei: Ein einzelnes Foto sagt nichts darueber, ob es
+ * zu einem anderen gehoert - die Frage ist erst beantwortbar, wenn alle Seiten
+ * da sind.
+ *
+ * Wirft nie: ein Fehlschlag darf weder OCR noch Extraktion noch den Detektiv
+ * mitreissen. Sichtbar wird er ueber `Case.buendelStatus` - "nicht geprueft"
+ * und "nichts gefunden" duerfen nie gleich aussehen.
+ */
+export async function erkenneBuendel(caseId: string): Promise<void> {
+  // Merkt sich, ob WIR die Sperre bekommen haben. Scheitert schon das Setzen
+  // der Sperre (z. B. Verbindungsfehler), gehoert der Lauf uns nie - dann darf
+  // der catch-Block unten nicht "fehler" hineinschreiben und damit einen
+  // fremden, echten Lauf ueberschreiben.
+  let sperreErhalten = false;
+  // Der Zeitstempel, den WIR gleich beim Beanspruchen setzen - das
+  // Fencing-Token. Die abschliessende Schreiboperation (`abschliessen`) gilt
+  // nur, solange dieser Stempel noch in der Datenbank steht. Wurde die Sperre
+  // waehrend der KI-Auswertung von einem zweiten Lauf uebernommen, steht dort
+  // laengst ein neuerer - dann darf dieser Lauf nichts mehr schreiben. Schon
+  // hier (nicht erst in try{}) zugewiesen, sonst saehe TypeScript den Wert im
+  // catch-Block als moeglicherweise nie zugewiesen an.
+  let beanspruchtAm = new Date();
+
+  try {
+    // Die Sperre liegt in der Datenbank, nicht im Speicher: zwei gleichzeitig
+    // fertig gewordene Dokumente wuerden sonst beide "niemand laeuft mehr" sehen
+    // und beide die KI rufen.
+    const beansprucht = await prisma.case.updateMany({
+      where: {
+        id: caseId,
+        OR: [
+          { buendelStatus: { not: "laeuft" } },
+          { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
+        ],
+      },
+      data: { buendelStatus: "laeuft", buendelStatusAm: beanspruchtAm },
+    });
+    // Verloren - der Nachbar laeuft schon (oder der Fall existiert nicht). Ein
+    // stiller Rueckzug, kein Fehler.
+    if (beansprucht.count !== 1) return;
+    sperreErhalten = true;
+
+    const docs = await prisma.document.findMany({
+      where: { caseId },
+      select: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        pageCount: true,
+        reviewStatus: true,
+        ocrStatus: true,
+        readable: true,
+        zusammengefuegtInId: true,
+        documentType: true,
+        period: true,
+        createdAt: true,
+        pages: { select: { ocrText: true }, orderBy: { pageNumber: "asc" }, take: 1 },
+      },
+    });
+
+    const kandidaten: Kandidat[] = waehleKandidaten(
+      docs.map((d) => zuKandidat(d, (d.pages[0]?.ocrText ?? "").trim()))
+    );
+
+    if (kandidaten.length === 0) {
+      // Geprueft und nichts zu tun - das ist kein Fehler.
+      await abschliessen(caseId, "fertig", [], beanspruchtAm);
+      return;
+    }
+
+    const antwort = await aiService.gruppiereEinzelseiten(
+      kandidaten.map((k, i) => ({
+        nummer: i,
+        dateiname: k.originalName,
+        hochgeladen: k.createdAt.toISOString(),
+        erkannterTyp: k.documentType,
+        zeitraum: k.period,
+        seitenzaehler: hatSeitenzaehler(k.text),
+        anfang: k.text.slice(0, TEXT_ANFANG),
+      }))
+    );
+
+    const { angenommen, verworfen } = pruefeBuendel(antwort.buendel as BuendelVorschlag[], kandidaten);
+    for (const v of verworfen) {
+      // Ohne Klartext-Inhalte: nur, welcher Vorschlag warum wegfiel.
+      console.info(`[buendelung] Vorschlag „${v.titel}“ verworfen: ${v.grund}`);
+    }
+
+    await abschliessen(
+      caseId,
+      "fertig",
+      angenommen.map((b, i) => ({
+        reihenfolge: i,
+        titel: b.titel,
+        vermuteterTyp: b.vermuteterTyp,
+        confidence: b.confidence,
+        seiten: b.seiten.map((nummer, position) => ({ documentId: kandidaten[nummer]!.id, position })),
+      })),
+      beanspruchtAm
+    );
+  } catch (e) {
+    if (e instanceof SperreVerdraengtError) {
+      // Kein Fehler - ein zweiter Lauf hat die verfallene Sperre uebernommen
+      // und ist jetzt der rechtmaessige Besitzer. Weder sein Ergebnis noch
+      // sein Status duerfen von diesem, verdraengten Lauf ueberschrieben
+      // werden - deshalb hier ohne "fehler"-Schreibvorgang zurueck.
+      console.warn(`[buendelung] Lauf fuer Fall ${caseId} wurde waehrend der Ausfuehrung verdraengt - Ergebnis verworfen.`);
+      return;
+    }
+    console.error(`[buendelung] Erkennung fuer Fall ${caseId} fehlgeschlagen:`, e);
+    if (!sperreErhalten) {
+      // Die Sperre selbst ist gescheitert - wir waren nie der Besitzer dieses
+      // Laufs. Der ehrliche Zustand ist: unveraendert. "fehler" zu schreiben
+      // wuerde blind behaupten, WIR haetten etwas geprueft und wuerde im
+      // schlimmsten Fall den echten, gerade laufenden oder bereits fertigen
+      // Stand eines anderen Aufrufs ueberschreiben.
+      return;
+    }
+    // Fencing wie bei `abschliessen` unten: nur schreiben, wenn dieser Lauf
+    // die Sperre noch haelt - sonst koennte ein (an dieser Stelle nicht als
+    // SperreVerdraengtError erkannter, aber ebenso verdraengter) Lauf einen
+    // zweiten, inzwischen echten Lauf mit "fehler" ueberschreiben. updateMany
+    // wirft bei null Treffern nicht - ein stiller No-op ist hier korrekt.
+    await prisma.case
+      .updateMany({
+        where: { id: caseId, buendelStatusAm: beanspruchtAm },
+        data: { buendelStatus: "fehler", buendelStatusAm: new Date() },
+      })
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * Fuer den manuellen "Erneut pruefen"-Klick: setzt die Sperre NUR zurueck,
+ * wenn sie nicht mehr frisch ist - dieselbe Bedingung, mit der `erkenneBuendel`
+ * oben die Sperre uebernimmt (daher hier, statt sie ein zweites Mal an anderer
+ * Stelle nachzubilden).
+ *
+ * Ohne diese Unterscheidung wuerde ein Klick waehrend eines echten, gerade
+ * laufenden Hintergrundlaufs (ausgeloest durch einen Upload) dessen Sperre
+ * aushebeln und einen zweiten, ueberlappenden Lauf gegen denselben Fall
+ * anstossen. Beide raeumen am Ende dieselben `DocumentBuendel`-Zeilen weg -
+ * wer zuletzt fertig wird, gewinnt und verwirft das Ergebnis des anderen
+ * lautlos, und das Mistral-Kontingent (50 Anfragen/Minute) wird doppelt
+ * belastet.
+ *
+ * Trifft die Bedingung nicht (ein echter Lauf haelt die Sperre), bleibt der
+ * Status unveraendert - der nachfolgende Aufruf von `erkenneBuendel` verliert
+ * dann selbst um die Sperre und kehrt still zurueck. Das ist das korrekte
+ * Verhalten: der laufende Vorgang gewinnt, der Klick wird zum No-op.
+ */
+export async function ermoeglicheErneutePruefung(caseId: string): Promise<void> {
+  await prisma.case.updateMany({
+    where: {
+      id: caseId,
+      OR: [
+        { buendelStatus: { not: "laeuft" } },
+        { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
+      ],
+    },
+    data: { buendelStatus: "ausstehend", buendelStatusAm: null },
+  });
+}
+
+interface NeuesBuendel {
+  reihenfolge: number;
+  titel: string;
+  vermuteterTyp: DocumentType | null;
+  confidence: number;
+  seiten: Array<{ documentId: string; position: number }>;
+}
+
+/**
+ * Setzt Status und Vorschlaege in EINER Transaktion. Ein erneuter Lauf ersetzt
+ * den alten Vorschlag, statt ihn zu verdoppeln.
+ *
+ * `beanspruchtAm` ist das Fencing-Token aus `erkenneBuendel`: geschrieben wird
+ * nur, wenn `Case.buendelStatusAm` noch genau diesen Wert traegt. Steht dort
+ * ein anderer (ein zweiter Lauf hat die Sperre uebernommen, weil dieser Lauf
+ * laenger als SPERRE_VERFAELLT_MS brauchte), wirft die Funktion
+ * `SperreVerdraengtError` und die Transaktion rollt komplett zurueck - weder
+ * Status noch `DocumentBuendel`-Zeilen des zweiten, rechtmaessigen Laufs
+ * werden angefasst.
+ */
+async function abschliessen(
+  caseId: string,
+  status: "fertig",
+  buendel: NeuesBuendel[],
+  beanspruchtAm: Date
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    // Die Sperr-Pruefung ZUERST, bevor irgendetwas anderes geschrieben wird -
+    // scheitert sie, sollen auch deleteMany/create unten nie anfassen.
+    const haeltNochDieSperre = await tx.case.updateMany({
+      where: { id: caseId, buendelStatusAm: beanspruchtAm },
+      data: { buendelStatus: status, buendelStatusAm: new Date() },
+    });
+    if (haeltNochDieSperre.count !== 1) {
+      throw new SperreVerdraengtError();
+    }
+    await tx.documentBuendel.deleteMany({ where: { caseId } });
+    for (const b of buendel) {
+      await tx.documentBuendel.create({
+        data: {
+          caseId,
+          reihenfolge: b.reihenfolge,
+          titel: b.titel,
+          vermuteterTyp: b.vermuteterTyp ?? undefined,
+          confidence: b.confidence,
+          seiten: { create: b.seiten },
+        },
+      });
+    }
+  });
+}
+
+/**
+ * "Wer als Letzter fertig wird, macht das Licht aus."
+ *
+ * Am Ende der Analyse eines Dokuments: laeuft im Fall noch eine andere
+ * Analyse? Wenn nein, startet dieses Dokument den fallweiten Buendel-Lauf.
+ * Ergebnis ist EIN KI-Aufruf je Upload-Schwung, gleich ob drei oder dreissig
+ * Seiten - dreissig Aufrufe wuerden das Mistral-Kontingent (50/Minute)
+ * sprengen.
+ *
+ * Das eigene Dokument wird ausgenommen: sein Status steht zu diesem Zeitpunkt
+ * je nach Reihenfolge der Schreibvorgaenge moeglicherweise noch auf "laeuft",
+ * und es duerfte sich nicht selbst blockieren.
+ *
+ * Ein Nachbar zaehlt nur mit, wenn sein "laeuft" noch FRISCH ist
+ * (`countProcessingDocuments`, dieselbe Alters-Schwelle wie beim Poll-Status
+ * der Fallseite). Stirbt ein Hintergrundlauf hart (Deploy, Function-Timeout),
+ * gibt es keinen Aufraeum-Cron, der die Zeile zuruecksetzt - ohne diese
+ * Bereinigung wuerde ein einziges tot haengengebliebenes Nachbardokument den
+ * Buendel-Lauf fuer den ganzen restlichen Fall fuer immer verhindern.
+ *
+ * Das eigene Dokument zaehlt zusaetzlich nicht, wenn es SELBST aus Einzelseiten
+ * entstanden ist (hat `quellseiten`): seine fertige Analyse traegt fuer die
+ * Buendel-Erkennung keine neue Information, aber `erkenneBuendel` raeumt in
+ * `abschliessen` ALLE Vorschlaege des Falls weg und ersetzt sie durch einen
+ * frischen KI-Lauf - ein gerade erst zusammengefuegtes Dokument wuerde damit
+ * jeden anderen, noch unbearbeiteten Vorschlag lautlos wegraeumen (Befund 2).
+ * Gleiches Muster wie `_count.quellseiten` in `erkenneAufteilung`.
+ *
+ * Wirft nie.
+ */
+export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocumentId: string): Promise<void> {
+  try {
+    const eigenes = await prisma.document.findUnique({
+      where: { id: eigeneDocumentId },
+      select: { _count: { select: { quellseiten: true } } },
+    });
+    if (eigenes && eigenes._count.quellseiten > 0) return;
+
+    const kandidaten = await prisma.document.findMany({
+      where: {
+        caseId,
+        id: { not: eigeneDocumentId },
+        OR: [
+          { ocrStatus: "laeuft" },
+          { classificationStatus: "laeuft" },
+          { extractionStatus: "laeuft" },
+        ],
+      },
+      select: { ocrStatus: true, classificationStatus: true, extractionStatus: true, updatedAt: true },
+    });
+    if (countProcessingDocuments(kandidaten) > 0) return;
+    await erkenneBuendel(caseId);
+  } catch (e) {
+    console.error(`[buendelung] Anstoss fuer Fall ${caseId} fehlgeschlagen:`, e);
+  }
+}
+
+export interface ZusammenfuegenInput {
+  caseId: string;
+  organizationId: string;
+  /** Die Quellseiten IN DER GEWUENSCHTEN SEITENREIHENFOLGE. */
+  documentIds: string[];
+  titel: string;
+  vermuteterTyp?: DocumentType | null;
+  /** Der Vorschlag, aus dem das kam - er wird danach entfernt. */
+  buendelId?: string;
+}
+
+export type ZusammenfuegenErgebnis =
+  | { ok: true; documentId: string; seiten: number }
+  | { ok: false; grund: string };
+
+/**
+ * Fuegt Einzelseiten zu EINEM PDF zusammen - nur auf Klick.
+ *
+ * Alles oder nichts: Erst wird die fertige Datei abgelegt, dann erst entstehen
+ * die Datensaetze. Ein halb zusammengefuegtes Dokument waere schlimmer als gar
+ * keines - dieselbe Regel wie beim Auftrennen.
+ *
+ * Dieselbe Funktion bedient den KI-Vorschlag und die Auswahl von Hand. Zwei
+ * Pfade wuerden auseinanderlaufen.
+ */
+export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<ZusammenfuegenErgebnis> {
+  const { caseId, organizationId, documentIds, titel } = input;
+  if (documentIds.length < MIN_KANDIDATEN) {
+    return { ok: false, grund: "Zum Zusammenfügen braucht es mindestens zwei Seiten." };
+  }
+
+  const docs = await prisma.document.findMany({
+    where: { id: { in: documentIds }, caseId, case: { organizationId } },
+    select: {
+      id: true,
+      originalName: true,
+      storageKey: true,
+      mimeType: true,
+      pageCount: true,
+      applicantId: true,
+      uploadSource: true,
+      scanStatus: true,
+      scanEngine: true,
+      scannedAt: true,
+      reviewStatus: true,
+      ocrStatus: true,
+      readable: true,
+      zusammengefuegtInId: true,
+      documentType: true,
+      period: true,
+      createdAt: true,
+    },
+  });
+  if (docs.length !== documentIds.length) {
+    return { ok: false, grund: "Mindestens eine Seite gehört nicht zu diesem Fall." };
+  }
+
+  // Diese Funktion ist ueber eine Server Action mit einer kommagetrennten
+  // ID-Liste aus einem Formular erreichbar - dort kann JEDE Dokument-ID des
+  // Falls landen, auch ein 40-seitiges PDF oder ein bereits freigegebenes
+  // Dokument. istBuendelKandidat ist die EINE Stelle, an der diese Regel
+  // steht (dieselbe, die die Auswahlkaestchen in der Fallakte und den
+  // KI-Lauf bindet) - sie hier zu wiederholen waere genau die Falle, gegen
+  // die der Export in kandidaten.ts geschaffen wurde. Die Pruefung laeuft
+  // VOR jedem Storage-Zugriff, damit ein Ablehnen nie etwas anfasst.
+  // istBuendelKandidat sieht nur Struktur-Felder - der Text ist fuer die
+  // Regel ohne Bedeutung, ein Nachladen aus DocumentPage waere hier
+  // verschwendet (zuKandidat() ohne zweites Argument laesst ihn leer).
+  const kandidaten: Kandidat[] = docs.map((d) => zuKandidat(d));
+  const ungueltig = kandidaten.find((k) => !istBuendelKandidat(k));
+  if (ungueltig) {
+    return {
+      ok: false,
+      grund: `„${ungueltig.originalName}“ ist keine bündelbare Einzelseite mehr (mehrseitiges Dokument, bereits freigegeben oder schon gebündelt).`,
+    };
+  }
+
+  // Die wichtigste Sperre (siehe pruefeBuendel/zeitraumKonflikt): Seiten aus
+  // verschiedenen Zeitraeumen duerfen nie in einem Dokument landen - sonst
+  // meldet die Checkliste Gruen fuer eine Gehaltsabrechnung, der ein Monat
+  // fehlt. Diese Funktion bedient sowohl den KI-Vorschlag als auch die
+  // Handauswahl - ohne diese Pruefung HIER haengt die schaerfste Regel des
+  // Features nur am Pfad, dem man ohnehin misstraut. Auch hier VOR jedem
+  // Storage-Zugriff.
+  const konflikt = zeitraumKonflikt(kandidaten.map((k) => k.period));
+  if (konflikt) {
+    return {
+      ok: false,
+      grund: `Diese Seiten stammen aus verschiedenen Zeiträumen (${konflikt.join(", ")}) – das wären vermutlich zwei Dokumente.`,
+    };
+  }
+
+  // In die vom Aufrufer gewuenschte Reihenfolge bringen - findMany liefert sie
+  // in beliebiger Ordnung, und die Reihenfolge IST hier die Aussage.
+  const nachId = new Map(docs.map((d) => [d.id, d]));
+  const geordnet = documentIds.map((id) => nachId.get(id)!);
+
+  const storage = getStorage();
+  const teile: Array<{ mimeType: string; buffer: Buffer }> = [];
+  for (const [i, d] of geordnet.entries()) {
+    const buffer = await storage.get(d.storageKey);
+    if (!buffer) return { ok: false, grund: `Seite ${i + 1} ist im Speicher nicht auffindbar.` };
+    teile.push({ mimeType: d.mimeType, buffer });
+  }
+
+  let pdf: Buffer;
+  try {
+    pdf = await baueBuendelPdf(teile);
+  } catch (e) {
+    console.error(`[buendelung] PDF fuer Fall ${caseId} nicht baubar:`, e);
+    return { ok: false, grund: e instanceof Error ? e.message : "Die Seiten ließen sich nicht zusammenfügen." };
+  }
+
+  const name = `${titel.replace(/[^A-Za-z0-9äöüÄÖÜß._-]+/g, "_")}.pdf`;
+  let gespeichert;
+  try {
+    gespeichert = await storage.put({
+      organizationId,
+      caseId,
+      originalName: name,
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+  } catch (e) {
+    console.error(`[buendelung] Ablegen des PDFs fuer Fall ${caseId} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das zusammengefügte Dokument konnte nicht gespeichert werden." };
+  }
+
+  const erste = geordnet[0]!;
+  try {
+    const neu = await prisma.$transaction(async (tx) => {
+      const erzeugt = await tx.document.create({
+        data: {
+          caseId,
+          applicantId: erste.applicantId,
+          originalName: name,
+          storageKey: gespeichert.storageKey,
+          mimeType: "application/pdf",
+          sizeBytes: pdf.byteLength,
+          pageCount: teile.length,
+          uploadSource: erste.uploadSource,
+          // Dieselben Bytes wurden bereits geprueft - kein zweiter Virenscan.
+          scanStatus: erste.scanStatus,
+          scanEngine: erste.scanEngine,
+          scannedAt: erste.scannedAt,
+          documentType: input.vermuteterTyp ?? undefined,
+          // Ein gebuendeltes Dokument wird nicht auf Aufteilung untersucht.
+          splitStatus: "fertig",
+        },
+      });
+      // Der Vorab-Check lag ausserhalb dieser Transaktion - zwischen ihm und
+      // hier kann ein zweiter, ueberlappender Aufruf (Doppelklick, zwei
+      // Tabs, KI-Vorschlag und Handauswahl fast gleichzeitig) dieselbe Seite
+      // schon verplant haben. Die WHERE-Klausel prueft "offen"/unverplant
+      // deshalb HIER NOCHMAL; bekommt sie nicht mehr Zeilen als erwartet,
+      // war jemand schneller - dann wird geworfen und die ganze Transaktion
+      // rollt zurueck, statt eine Seite lautlos einem zweiten Dokument zu
+      // entreissen. Gleiches Muster wie die Lauf-Sperre in erkenneBuendel.
+      const verplant = await tx.document.updateMany({
+        where: { id: { in: documentIds }, reviewStatus: "offen", zusammengefuegtInId: null },
+        data: { zusammengefuegtInId: erzeugt.id, reviewStatus: "ersetzt" },
+      });
+      if (verplant.count !== documentIds.length) {
+        throw new Error("Mindestens eine Seite wurde inzwischen anderweitig verplant.");
+      }
+      if (input.buendelId) {
+        await tx.documentBuendel.deleteMany({ where: { id: input.buendelId, caseId } });
+      }
+      return erzeugt;
+    });
+
+    // Analyse im Hintergrund - der Klick soll nicht warten. Die Buendelung ist
+    // an dieser Stelle festgeschrieben: scheitert nur die Einplanung, darf das
+    // den Erfolg nicht kippen.
+    try {
+      after(() => analysiereDokument(neu.id));
+    } catch (e) {
+      console.error(`[buendelung] Analyse von ${neu.id} konnte nicht eingeplant werden:`, e);
+    }
+
+    return { ok: true, documentId: neu.id, seiten: teile.length };
+  } catch (e) {
+    // Der Fall soll exakt so bleiben, wie er war - das PDF, das schon im
+    // Speicher liegt, muss also wieder weg. Scheitert auch DAS, darf es nicht
+    // stillschweigend verschwinden (wie bei macheRueckgaengig unten): sonst
+    // bliebe ein verwaistes Objekt liegen, waehrend hier und im Kommentar
+    // "kein Muell im Speicher" behauptet wuerde.
+    await storage
+      .remove(gespeichert.storageKey)
+      .catch((removeError) =>
+        console.error(`[buendelung] PDF ${gespeichert.storageKey} nicht entfernt:`, removeError)
+      );
+    console.error(`[buendelung] Zusammenfuegen im Fall ${caseId} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das Zusammenfügen ist fehlgeschlagen." };
+  }
+}
+
+/**
+ * Warum "Rueckgaengig" fuer ein nicht mehr offenes Dokument abgelehnt wird -
+ * "bereits freigegeben" stimmt nur bei `akzeptiert`, nicht bei `abgelehnt`,
+ * `duplikat` oder `ersetzt`. Nur bei `akzeptiert`/`abgelehnt` fuehrt in der
+ * Oberflaeche ein Weg zurueck ("Freigabe zuruecknehmen"/"Ablehnung
+ * zuruecknehmen", siehe reopenDocument in actions/cases.ts) - bei
+ * `duplikat`/`ersetzt` gibt es keinen, der Text darf das nicht versprechen.
+ */
+function ablehnungsgrundNichtOffen(status: string): string {
+  switch (status) {
+    case "akzeptiert":
+      return "Das Dokument ist bereits freigegeben – bitte zuerst wieder öffnen.";
+    case "abgelehnt":
+      return "Das Dokument wurde bereits abgelehnt – bitte zuerst wieder öffnen.";
+    case "duplikat":
+      return "Das Dokument wurde als Duplikat markiert und lässt sich nicht mehr zurücknehmen.";
+    default:
+      return "Das Dokument wurde bereits durch ein anderes ersetzt und lässt sich nicht mehr zurücknehmen.";
+  }
+}
+
+/**
+ * Nimmt eine Buendelung zurueck: das erzeugte PDF verschwindet, die
+ * Einzelseiten stehen wieder auf offen.
+ *
+ * Das Sicherheitsnetz zur schlanken Vorschlagsliste. Ohne diesen Weg waere
+ * eine falsche Gruppierung eine Sackgasse - deshalb wird beim Zusammenfuegen
+ * auch nie eine Quelldatei geloescht.
+ *
+ * Nach der Freigabe nicht mehr moeglich: wer freigegeben hat, hat entschieden;
+ * der Weg zurueck fuehrt dann ueber die Wiedereroeffnung.
+ */
+export async function macheRueckgaengig(
+  documentId: string,
+  organizationId: string
+): Promise<{ ok: true; seiten: number } | { ok: false; grund: string }> {
+  const doc = await prisma.document.findFirst({
+    where: { id: documentId, case: { organizationId } },
+    select: {
+      id: true,
+      caseId: true,
+      storageKey: true,
+      reviewStatus: true,
+      quellseiten: { select: { id: true } },
+    },
+  });
+  if (!doc) return { ok: false, grund: "Dokument nicht gefunden." };
+  if (doc.quellseiten.length === 0) {
+    return { ok: false, grund: "Dieses Dokument ist nicht aus Einzelseiten entstanden." };
+  }
+  if (doc.reviewStatus !== "offen") {
+    return { ok: false, grund: ablehnungsgrundNichtOffen(doc.reviewStatus) };
+  }
+
+  const quellIds = doc.quellseiten.map((q) => q.id);
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Erst die Quellseiten loesen, DANN das Buendel-Dokument loeschen: die
+      // Fremdschluessel-Beziehung (onDelete: NoAction) verbietet sonst das
+      // Loeschen, solange noch Zeilen darauf zeigen.
+      await tx.document.updateMany({
+        where: { id: { in: quellIds } },
+        data: { zusammengefuegtInId: null, reviewStatus: "offen" },
+      });
+      // Der Vorab-Check lag ausserhalb dieser Transaktion - ein zweiter,
+      // ueberlappender Aufruf (Doppelklick, zwei Tabs) oder eine
+      // zwischenzeitliche Freigabe koennte das Dokument seitdem veraendert
+      // haben. Die WHERE-Klausel prueft "offen" deshalb HIER NOCHMAL:
+      // loescht sie keine Zeile, war jemand schneller - dann wird geworfen
+      // und die ganze Transaktion rollt zurueck, statt dieselbe Buendelung
+      // ein zweites Mal rueckgaengig zu machen. Gleiches Muster wie der
+      // verplant-Check in fuegeZusammen.
+      const geloescht = await tx.document.deleteMany({
+        where: { id: doc.id, reviewStatus: "offen" },
+      });
+      if (geloescht.count !== 1) {
+        throw new Error("Das Dokument wurde inzwischen anderweitig bearbeitet.");
+      }
+      // Ein Lauf startet damit nicht von selbst; er kommt beim naechsten
+      // Upload oder auf "Erneut pruefen". Automatisch neu zu gruppieren
+      // waere falsch - die KI kaeme auf denselben Vorschlag, den der
+      // Vermittler gerade zurueckgenommen hat.
+      await tx.case.update({
+        where: { id: doc.caseId },
+        data: { buendelStatus: "ausstehend", buendelStatusAm: null },
+      });
+    });
+  } catch (e) {
+    console.error(`[buendelung] Rueckgaengigmachen von ${doc.id} fehlgeschlagen:`, e);
+    return { ok: false, grund: "Das Rückgängigmachen ist fehlgeschlagen – bitte erneut versuchen." };
+  }
+
+  // Erst nach der Transaktion: eine geloeschte Datei bei einem Rollback waere
+  // nicht wiederherstellbar, eine liegengebliebene dagegen harmlos.
+  await getStorage()
+    .remove(doc.storageKey)
+    .catch((e) => console.error(`[buendelung] Datei ${doc.storageKey} nicht entfernt:`, e));
+
+  return { ok: true, seiten: quellIds.length };
+}
