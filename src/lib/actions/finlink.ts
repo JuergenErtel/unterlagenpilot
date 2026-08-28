@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
@@ -13,8 +12,29 @@ import { rematchCaseDocuments } from "@/lib/documents/rematch";
 
 export interface FinLinkImportState {
   error?: string;
+  /** Bei Erfolg: der angelegte (oder bereits vorhandene) Fall. */
+  fall?: { id: string; caseNumber?: string };
 }
 
+/**
+ * Übernimmt einen FinLink-Vorgang als Fall und MELDET das Ergebnis zurück –
+ * bewusst ohne `redirect()`.
+ *
+ * Am 28.08.2026 hing der Knopf „Importiert …" in der Lead-Liste dauerhaft:
+ * Der Fall war nach einer Sekunde angelegt (UP-2026-0030), der Server hatte
+ * die Weiterleitung ausgeliefert (303, Zielseite mit 200 abgeholt) – nur
+ * übernahm der Browser sie nie. Damit blieb der Ladezustand für immer stehen,
+ * denn bei `redirect()` endet er ERST, wenn die Navigation durch ist. Der
+ * fertige Fall war unsichtbar und der Knopf ausgegraut: kein Weg vor, keiner
+ * zurück, keine Meldung.
+ *
+ * Die Ursache im Browser liess sich nicht nachstellen (Muster, CSP-Nonce,
+ * nachgeladene Chunks, langsame Ausgangsseite und Sentry einzeln geprueft –
+ * alle unauffaellig). Deshalb haengt der Ladezustand jetzt nur noch am
+ * Abschluss DIESER Funktion, den sie selbst in der Hand hat. Wohin es danach
+ * geht, entscheidet der Client (finlink-lead-list.tsx) – und zwar so, dass
+ * der Fall auch dann erreichbar bleibt, wenn keine Navigation greift.
+ */
 export async function importFromFinLink(
   _prev: FinLinkImportState,
   formData: FormData
@@ -26,10 +46,21 @@ export async function importFromFinLink(
   const connector = new FinLinkConnector();
   const res = await connector.importCaseById(externalId, { organizationId: ctx.organizationId, userId: ctx.userId });
 
-  if (!res.ok || res.importedCaseIds.length === 0) {
+  const id = res.importedCaseIds[0];
+  if (!res.ok || !id) {
     return { error: res.message || "FinLink-Import fehlgeschlagen." };
   }
-  redirect(`/cases/${res.importedCaseIds[0]}`);
+
+  // Die Fallnummer ist nur Beschriftung: Fehlt sie, führt die ID trotzdem hin.
+  // Ein Fehler beim Nachschlagen darf den geglückten Import nicht kippen.
+  let caseNumber: string | undefined;
+  try {
+    const angelegt = await prisma.case.findUnique({ where: { id }, select: { caseNumber: true } });
+    caseNumber = angelegt?.caseNumber;
+  } catch (e) {
+    console.error(`[finlink] Fallnummer für ${id} nicht gelesen:`, e);
+  }
+  return { fall: { id, caseNumber } };
 }
 
 export interface FinLinkRefreshState {

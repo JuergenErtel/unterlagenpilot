@@ -9,16 +9,35 @@ const importCaseById = vi.fn();
 vi.mock("@/lib/platforms/connectors", () => ({
   FinLinkConnector: class { importCaseById = importCaseById; },
 }));
+const findUnique = vi.fn();
+vi.mock("@/lib/db", () => ({ prisma: { case: { findUnique: (a: unknown) => findUnique(a) } } }));
 
 afterEach(() => vi.clearAllMocks());
 
 function fd(id: string) { const f = new FormData(); f.set("finlinkId", id); return f; }
 
 describe("importFromFinLink", () => {
-  it("leitet bei Erfolg auf den neuen Fall um", async () => {
+  it("gibt den angelegten Fall zurück, statt serverseitig umzuleiten", async () => {
+    // Die Weiterleitung gehört dem Client: Solange die Action mit redirect()
+    // endet, endet der Ladezustand des Knopfes erst, wenn die Navigation
+    // durch ist – bleibt sie aus, hängt der Knopf für immer (28.08.2026).
     importCaseById.mockResolvedValue({ ok: true, importedCaseIds: ["case-9"], message: "ok" });
+    findUnique.mockResolvedValue({ caseNumber: "UP-2026-0030" });
     const { importFromFinLink } = await import("@/lib/actions/finlink");
-    await expect(importFromFinLink({}, fd("FL-1"))).rejects.toThrow("REDIRECT:/cases/case-9");
+    const res = await importFromFinLink({}, fd("FL-1"));
+    expect(res.fall).toEqual({ id: "case-9", caseNumber: "UP-2026-0030" });
+    expect(res.error).toBeUndefined();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it("liefert den Fall auch dann, wenn die Fallnummer nicht zu lesen ist", async () => {
+    // Ohne Nummer bleibt der Weg zum Fall trotzdem offen – die ID genügt.
+    importCaseById.mockResolvedValue({ ok: true, importedCaseIds: ["case-7"], message: "ok" });
+    findUnique.mockResolvedValue(null);
+    const { importFromFinLink } = await import("@/lib/actions/finlink");
+    const res = await importFromFinLink({}, fd("FL-2"));
+    expect(res.fall?.id).toBe("case-7");
+    expect(res.fall?.caseNumber).toBeUndefined();
   });
 
   it("gibt einen Fehler zurück, wenn die ID leer ist", async () => {
@@ -33,5 +52,6 @@ describe("importFromFinLink", () => {
     const { importFromFinLink } = await import("@/lib/actions/finlink");
     const res = await importFromFinLink({}, fd("nope"));
     expect(res.error).toMatch(/nicht gefunden/i);
+    expect(res.fall).toBeUndefined();
   });
 });

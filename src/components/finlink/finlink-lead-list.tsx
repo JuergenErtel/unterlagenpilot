@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Download, ExternalLink, Search } from "lucide-react";
 import { importFromFinLink, type FinLinkImportState } from "@/lib/actions/finlink";
+import { useFallOeffnen } from "./fall-oeffnen";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,14 @@ export function filterLeads(leads: LeadRowData[], query: string): LeadRowData[] 
 
 function LeadRow({ lead }: { lead: LeadRowData }) {
   const [state, action, pending] = useActionState<FinLinkImportState, FormData>(importFromFinLink, {});
+  // Der Import meldet den Fall zurück; das Öffnen ist Sache des Clients.
+  useFallOeffnen(state.fall?.id);
+  // Frisch importiert zählt wie „schon importiert": beide führen zum selben
+  // Fall. So steht der Weg dorthin sichtbar da, auch wenn keine Navigation
+  // greift – genau daran scheiterte es am 28.08.2026.
+  const fall = state.fall
+    ? { id: state.fall.id, caseNumber: state.fall.caseNumber ?? "Fall öffnen" }
+    : lead.importedCase;
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -105,12 +114,12 @@ function LeadRow({ lead }: { lead: LeadRowData }) {
           </p>
         )}
       </div>
-      {lead.importedCase ? (
+      {fall ? (
         <div className="flex items-center gap-2">
-          <Badge variant="success">Bereits importiert</Badge>
+          <Badge variant="success">{state.fall ? "Importiert" : "Bereits importiert"}</Badge>
           <Button asChild variant="ghost" size="sm">
-            <Link href={`/cases/${lead.importedCase.id}`}>
-              {lead.importedCase.caseNumber}
+            <Link href={`/cases/${fall.id}`}>
+              {fall.caseNumber}
               <ExternalLink />
             </Link>
           </Button>
@@ -120,7 +129,7 @@ function LeadRow({ lead }: { lead: LeadRowData }) {
           <input type="hidden" name="finlinkId" value={lead.id} />
           <Button type="submit" size="sm" disabled={pending}>
             <Download />
-            {pending ? "Importiert …" : "Importieren"}
+            {pending ? "Wird importiert …" : "Importieren"}
           </Button>
         </form>
       )}
