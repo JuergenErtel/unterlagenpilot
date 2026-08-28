@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pruefeBuendel } from "@/lib/buendelung/pruefung";
+import { pruefeBuendel, zeitraumKonflikt } from "@/lib/buendelung/pruefung";
 import type { Kandidat } from "@/lib/buendelung/kandidaten";
 import type { BuendelVorschlag } from "@/lib/buendelung/types";
 
@@ -93,5 +93,28 @@ describe("pruefeBuendel", () => {
 
   it("behaelt die von der KI gewaehlte Seitenreihenfolge", () => {
     expect(pruefeBuendel([v([2, 0, 1])], VIER).angenommen[0]!.seiten).toEqual([2, 0, 1]);
+  });
+});
+
+// Schlussbefund 1: Diese Funktion ist seit dem Fix die EINE Stelle fuer die
+// wichtigste Sperre - genutzt von pruefeBuendel oben (KI-Pfad) UND von
+// fuegeZusammen in service.ts (Handauswahl). Direkt getestet, statt nur
+// indirekt ueber pruefeBuendel, damit ein Auseinanderlaufen der beiden
+// Aufrufer sofort auffiele.
+describe("zeitraumKonflikt", () => {
+  it("meldet zwei verschiedene Zeitraeume, sortiert", () => {
+    expect(zeitraumKonflikt(["2026-06", "2026-05"])).toEqual(["2026-05", "2026-06"]);
+  });
+
+  it("meldet nichts bei genau einem Zeitraum", () => {
+    expect(zeitraumKonflikt(["2026-05", "2026-05"])).toBeNull();
+  });
+
+  it("meldet nichts, wenn kein Zeitraum erkannt ist", () => {
+    expect(zeitraumKonflikt([null, null])).toBeNull();
+  });
+
+  it("stoert sich nicht an einem fehlenden Zeitraum neben einem erkannten", () => {
+    expect(zeitraumKonflikt(["2026-05", null])).toBeNull();
   });
 });

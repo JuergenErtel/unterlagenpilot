@@ -65,8 +65,9 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
     buffer: Buffer,
     mimeType = "image/jpeg",
     // Ueberschreibt einzelne Felder - fuer die Kandidatenpruefung: ein
-    // mehrseitiges "Foto" oder eine bereits freigegebene Seite.
-    overrides: { pageCount?: number; reviewStatus?: string } = {}
+    // mehrseitiges "Foto", eine bereits freigegebene Seite oder ein erkannter
+    // Zeitraum (Befund 1).
+    overrides: { pageCount?: number; reviewStatus?: string; period?: string | null } = {}
   ) => {
     const stored = await storage.put({ organizationId: orgId, caseId, originalName: name, mimeType, buffer });
     return prisma.document.create({
@@ -83,6 +84,7 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
         ocrStatus: "fertig",
         readable: true,
         reviewStatus: overrides.reviewStatus ?? "offen",
+        period: overrides.period ?? null,
       },
     });
   };
@@ -268,6 +270,59 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
     expect(unveraendertFreigegeben.zusammengefuegtInId).toBeNull();
     expect(await storage.get(unveraendertA.storageKey)).not.toBeNull();
     expect(await storage.get(unveraendertFreigegeben.storageKey)).not.toBeNull();
+  });
+
+  // Schlussbefund 1 (KRITISCH): Die Handauswahl in der Fallakte umgeht
+  // istBuendelKandidat NICHT, aber bis zu diesem Fix wurde die Zeitraum-Sperre
+  // (pruefeBuendel/zeitraumKonflikt) nur im KI-Pfad geprueft. Ein Vermittler
+  // konnte per Handauswahl die Gehaltsabrechnung Mai und Juni anhaken und
+  // zusammenfuegen - ein Dokument, gruene Checkliste, zwei fehlende Monate
+  // sichtbar erst bei der Bank. Die Regel muss deshalb in fuegeZusammen
+  // SELBST greifen, nicht nur bei ihrem einzigen heutigen Aufrufer.
+
+  it("weist zwei Seiten mit verschiedenen Zeitraeumen ab, bevor irgendetwas gebaut wird", async () => {
+    const caseId = await fallAnlegen();
+    const mai = await seiteAnlegen(caseId, "mai.jpg", jpeg(), "image/jpeg", { period: "2026-05" });
+    const juni = await seiteAnlegen(caseId, "juni.jpg", jpeg(), "image/jpeg", { period: "2026-06" });
+
+    const vorher = await prisma.document.count({ where: { caseId } });
+    const ergebnis = await fuegeZusammen({
+      caseId,
+      organizationId: orgId,
+      documentIds: [mai.id, juni.id],
+      titel: "Gehaltsabrechnung",
+    });
+
+    expect(ergebnis.ok).toBe(false);
+    if (!ergebnis.ok) {
+      expect(ergebnis.grund).toMatch(/2026-05/);
+      expect(ergebnis.grund).toMatch(/2026-06/);
+    }
+    // Kein Dokument entstanden, kein Speicherobjekt angefasst - die Pruefung
+    // laeuft VOR dem PDF-Bau, genau wie die anderen Kandidaten-Ablehnungen.
+    expect(await prisma.document.count({ where: { caseId } })).toBe(vorher);
+    const unveraendertMai = await prisma.document.findUnique({ where: { id: mai.id } });
+    expect(unveraendertMai.reviewStatus).toBe("offen");
+    expect(unveraendertMai.zusammengefuegtInId).toBeNull();
+    expect(await storage.get(unveraendertMai.storageKey)).not.toBeNull();
+  });
+
+  it("nimmt weiterhin zwei Seiten mit DEMSELBEN Zeitraum an - die Gegenrichtung zur Sperre", async () => {
+    // Ohne diesen Test wuerde eine Verschaerfung der Regel oben still auch den
+    // Normalfall blockieren: eine mehrseitige Abrechnung EINES Monats, per
+    // Hand aus zwei Fotos zusammengefuegt.
+    const caseId = await fallAnlegen();
+    const seite1 = await seiteAnlegen(caseId, "seite1.jpg", jpeg(), "image/jpeg", { period: "2026-05" });
+    const seite2 = await seiteAnlegen(caseId, "seite2.jpg", jpeg(), "image/jpeg", { period: "2026-05" });
+
+    const ergebnis = await fuegeZusammen({
+      caseId,
+      organizationId: orgId,
+      documentIds: [seite1.id, seite2.id],
+      titel: "Gehaltsabrechnung 05/2026",
+    });
+
+    expect(ergebnis.ok).toBe(true);
   });
 
   // Der Vorab-Check (istBuendelKandidat) liegt AUSSERHALB der Transaktion, die

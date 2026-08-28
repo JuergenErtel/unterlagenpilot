@@ -7,7 +7,7 @@ import { SEITEN_MUSTER } from "@/lib/detektiv/completeness";
 import { countProcessingDocuments } from "@/lib/documents/processing";
 import { waehleKandidaten, istBuendelKandidat, type Kandidat } from "./kandidaten";
 import { baueBuendelPdf } from "./pdf";
-import { pruefeBuendel } from "./pruefung";
+import { pruefeBuendel, zeitraumKonflikt } from "./pruefung";
 import { MIN_KANDIDATEN, TEXT_ANFANG, type BuendelVorschlag } from "./types";
 import type { DocumentType } from "@/lib/domain/enums";
 
@@ -343,6 +343,21 @@ export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<Zusamme
     return {
       ok: false,
       grund: `„${ungueltig.originalName}“ ist keine bündelbare Einzelseite mehr (mehrseitiges Dokument, bereits freigegeben oder schon gebündelt).`,
+    };
+  }
+
+  // Die wichtigste Sperre (siehe pruefeBuendel/zeitraumKonflikt): Seiten aus
+  // verschiedenen Zeitraeumen duerfen nie in einem Dokument landen - sonst
+  // meldet die Checkliste Gruen fuer eine Gehaltsabrechnung, der ein Monat
+  // fehlt. Diese Funktion bedient sowohl den KI-Vorschlag als auch die
+  // Handauswahl - ohne diese Pruefung HIER haengt die schaerfste Regel des
+  // Features nur am Pfad, dem man ohnehin misstraut. Auch hier VOR jedem
+  // Storage-Zugriff.
+  const konflikt = zeitraumKonflikt(kandidaten.map((k) => k.period));
+  if (konflikt) {
+    return {
+      ok: false,
+      grund: `Diese Seiten stammen aus verschiedenen Zeiträumen (${konflikt.join(", ")}) – das wären vermutlich zwei Dokumente.`,
     };
   }
 

@@ -63,14 +63,28 @@ function pruefeEines(b: BuendelVorschlag, kandidaten: Kandidat[], schonVergeben:
     gesehen.add(i);
   }
 
-  // Die schaerfste Regel. Zwei erkannte, verschiedene Zeitraeume in einem
-  // Buendel heissen fast immer: zwei Dokumente. Ist bei einer Seite kein
-  // Zeitraum erkannt (Seite 2 einer Abrechnung traegt oft keinen Monat), sagt
-  // das nichts - dann greift die Regel nicht.
-  const zeitraeume = new Set(b.seiten.map((i) => kandidaten[i]!.period).filter((p): p is string => !!p));
-  if (zeitraeume.size > 1) {
-    return `Enthält Seiten aus verschiedenen Zeitraum-Angaben (${[...zeitraeume].sort().join(", ")}).`;
+  const konflikt = zeitraumKonflikt(b.seiten.map((i) => kandidaten[i]!.period));
+  if (konflikt) {
+    return `Enthält Seiten aus verschiedenen Zeitraum-Angaben (${konflikt.join(", ")}).`;
   }
 
   return null;
+}
+
+/**
+ * Die schaerfste Regel des Features: Seiten aus zwei verschiedenen erkannten
+ * Zeitraeumen duerfen nie im selben Buendel landen (zwei Gehaltsabrechnungen
+ * aus Mai und Juni sind zwei Dokumente, kein "Mai+Juni"). Ist bei einer Seite
+ * kein Zeitraum erkannt (Seite 2 einer Abrechnung traegt oft keinen Monat),
+ * sagt das nichts - dann greift die Regel nicht.
+ *
+ * EINE Funktion fuer beide Wege, an denen Seiten zusammengefuegt werden
+ * koennen - den KI-Vorschlag (`pruefeEines` oben) und die Handauswahl
+ * (`fuegeZusammen` in service.ts). Zwei Kopien derselben Regel sind in diesem
+ * Projekt schon zweimal auseinandergelaufen.
+ */
+export function zeitraumKonflikt(perioden: Array<string | null>): string[] | null {
+  const zeitraeume = new Set(perioden.filter((p): p is string => !!p));
+  if (zeitraeume.size <= 1) return null;
+  return [...zeitraeume].sort();
 }
