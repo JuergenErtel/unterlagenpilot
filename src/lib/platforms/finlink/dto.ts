@@ -302,18 +302,30 @@ export interface FinLinkLeadSummary {
   createdAt?: string; // ISO
   /** Vertriebsstatus aus /loan_applications: active | lost | won | on_hold */
   salesState?: string;
+  /**
+   * Vorgangsnummer, wie FinLink sie dem Berater in der eigenen Oberfläche
+   * zeigt (z. B. "1865655", dort dargestellt als "1.865.655"). Anders als
+   * die Lead-UUID ist das die ID, die ein Berater tatsächlich kennt und
+   * eintippt – deshalb erlaubt der Import-Abgleich auch diese Form.
+   */
+  caseId?: string;
 }
 
 /** Vertriebsstatus eines Antrags samt zugehöriger Lead-ID (aus /loan_applications). */
 export interface FinLinkSalesStateEntry {
   leadId: string;
-  salesState: string;
+  /** Undefined, wenn dieser Antrag keinen Vertriebsstatus trägt (dann liefert der Eintrag nur die Vorgangsnummer). */
+  salesState?: string;
+  /** Vorgangsnummer (case_id) desselben Antrags; undefined, wenn FinLink keine liefert. */
+  caseId?: string;
 }
 
 const apiLoanApplicationsSchema = z.object({
   data: z.array(
     z.object({
-      attributes: z.object({ sales_state: z.string().optional().nullable() }).passthrough(),
+      attributes: z
+        .object({ sales_state: z.string().optional().nullable(), case_id: numOrStr })
+        .passthrough(),
       relationships: z
         .object({ lead: z.object({ data: z.object({ id: z.string() }).optional().nullable() }).optional().nullable() })
         .passthrough()
@@ -330,7 +342,8 @@ export function parseFinLinkSalesStates(body: unknown): FinLinkSalesStateEntry[]
   for (const la of parsed.data) {
     const leadId = la.relationships?.lead?.data?.id;
     const state = la.attributes.sales_state ?? undefined;
-    if (leadId && state) entries.push({ leadId, salesState: state });
+    const caseId = la.attributes.case_id != null ? String(la.attributes.case_id) : undefined;
+    if (leadId && (state || caseId)) entries.push({ leadId, salesState: state, caseId });
   }
   return entries;
 }

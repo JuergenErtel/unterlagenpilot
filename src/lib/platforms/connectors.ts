@@ -115,6 +115,43 @@ export class EuropaceConnector extends BaseConnector {
   }
 }
 
+/** Erkennt eine Lead-UUID; alles andere geht über die Vorgangsnummer-Auflösung. */
+const UUID_MUSTER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Fehlermeldung bei unbekannter ID. Nennt beide gültigen Eingabeformen und
+ * verweist auf die Auswahlliste, die ganz ohne ID auskommt – vorher stand
+ * hier nur "Bitte ID prüfen", ohne zu sagen, welche Sorte ID gemeint ist.
+ * Genau daran scheiterte Jürgen: Er tippte die Vorgangsnummer ("1 865 655"),
+ * die FinLink ihm selbst als "1.865.655" zeigt, in ein Feld, das die
+ * Lead-UUID erwartete.
+ */
+const VORGANG_NICHT_GEFUNDEN_TEXT =
+  "FinLink-Vorgang nicht gefunden. Bitte die Vorgangsnummer (z. B. 1.865.655) oder die Lead-UUID prüfen – " +
+  "oder den Vorgang stattdessen oben in der Auswahlliste anklicken, dort ist keine ID nötig.";
+
+/**
+ * Löst eine eingegebene Vorgangsnummer (FinLinks eigene Anzeige, z. B.
+ * "1 865 655" oder "1.865.655") auf die zugehörige Lead-UUID auf. Normalisiert
+ * wird auf reine Ziffern, damit Leerzeichen/Punkte keine Rolle spielen.
+ *
+ * Ohne jede Ziffer in der Eingabe (z. B. ein eingetippter Vorname) lohnt sich
+ * nicht einmal der Listenabruf – dann kommt sofort "nicht gefunden" zurück.
+ * `listLeads()` filtert bereits auf den eigenen Berater (nurEigene), die
+ * Auflösung kann also nie einen fremden Vorgang treffen.
+ */
+async function loeseVorgangsnummerAuf(
+  client: FinLinkClient,
+  eingabe: string
+): Promise<{ ok: true; leadId: string } | { ok: false; mehrdeutig: boolean }> {
+  const ziffern = eingabe.replace(/\D/g, "");
+  if (!ziffern) return { ok: false, mehrdeutig: false };
+  const leads = await client.listLeads();
+  const treffer = leads.filter((l) => l.caseId && l.caseId.replace(/\D/g, "") === ziffern);
+  if (treffer.length === 1) return { ok: true, leadId: treffer[0]!.id };
+  return { ok: false, mehrdeutig: treffer.length > 1 };
+}
+
 // ---------------- FinLink ----------------
 export class FinLinkConnector extends BaseConnector {
   readonly name = "finlink" as const;
@@ -130,7 +167,7 @@ export class FinLinkConnector extends BaseConnector {
     return {
       ok,
       message: ok
-        ? "FinLink-Partner-API verbunden (API-Key gesetzt). Einzelne Vorgänge per Lead-UUID importierbar."
+        ? "FinLink-Partner-API verbunden (API-Key gesetzt). Einzelne Vorgänge per Vorgangsnummer oder Lead-UUID importierbar."
         : "FinLink nicht konfiguriert. FINLINK_API_KEY setzen (FINLINK_BASE_URL optional).",
     };
   }
@@ -139,7 +176,7 @@ export class FinLinkConnector extends BaseConnector {
     return {
       ok: false,
       importedCaseIds: [],
-      message: "Sammel-Import noch nicht verfügbar – bitte einzelne Vorgänge per Lead-UUID importieren.",
+      message: "Sammel-Import noch nicht verfügbar – bitte einzelne Vorgänge per Vorgangsnummer oder Lead-UUID importieren.",
     };
   }
   async importCaseById(
@@ -151,8 +188,35 @@ export class FinLinkConnector extends BaseConnector {
     if (!client) {
       return { ok: false, importedCaseIds: [], message: "FinLink ist nicht verbunden. Bitte FINLINK_BASE_URL/FINLINK_API_KEY setzen." };
     }
+
+    let leadId = externalId;
+    if (!UUID_MUSTER.test(externalId)) {
+      // Keine UUID – vermutlich die Vorgangsnummer, die FinLink dem Berater
+      // tatsächlich anzeigt. Der zusätzliche Listenabruf lohnt sich nur hier;
+      // die UUID bleibt der schnelle Direktpfad und zahlt dafür nicht.
+      try {
+        const aufgeloest = await loeseVorgangsnummerAuf(client, externalId);
+        if (!aufgeloest.ok) {
+          if (aufgeloest.mehrdeutig) {
+            return {
+              ok: false,
+              importedCaseIds: [],
+              message:
+                "Mehrere Vorgänge tragen diese Vorgangsnummer. Bitte den passenden Vorgang oben in der Auswahlliste anklicken.",
+            };
+          }
+          return { ok: false, importedCaseIds: [], message: VORGANG_NICHT_GEFUNDEN_TEXT };
+        }
+        leadId = aufgeloest.leadId;
+      } catch (e) {
+        if (e instanceof FinLinkAuthError) return { ok: false, importedCaseIds: [], message: "FinLink-Zugang abgelehnt. Bitte API-Key prüfen." };
+        console.error(`[finlink] Auflösung der Vorgangsnummer fehlgeschlagen: ${e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e)}`);
+        return { ok: false, importedCaseIds: [], message: "FinLink-Import fehlgeschlagen. Bitte später erneut versuchen." };
+      }
+    }
+
     try {
-      const dto = await client.fetchVorgang(externalId);
+      const dto = await client.fetchVorgang(leadId);
       const canonical = finlinkToCanonical(dto);
       const { caseId, deduped } = await createCaseFromCanonical(ctx, canonical);
 
@@ -175,7 +239,7 @@ export class FinLinkConnector extends BaseConnector {
         message: deduped ? "Vorgang bereits importiert – bestehender Fall geöffnet." : "FinLink-Vorgang übernommen.",
       };
     } catch (e) {
-      if (e instanceof FinLinkNotFoundError) return { ok: false, importedCaseIds: [], message: "FinLink-Vorgang nicht gefunden. Bitte ID prüfen." };
+      if (e instanceof FinLinkNotFoundError) return { ok: false, importedCaseIds: [], message: VORGANG_NICHT_GEFUNDEN_TEXT };
       if (e instanceof FinLinkAuthError) return { ok: false, importedCaseIds: [], message: "FinLink-Zugang abgelehnt. Bitte API-Key prüfen." };
       console.error(`[finlink] Import fehlgeschlagen: ${e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e)}`);
       return { ok: false, importedCaseIds: [], message: "FinLink-Import fehlgeschlagen. Bitte später erneut versuchen." };

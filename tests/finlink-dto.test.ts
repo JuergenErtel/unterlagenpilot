@@ -7,8 +7,55 @@ import {
   parseFinLinkSingleLeadResponse,
   parseFinLinkLeadLoanApplicationIds,
   parseFinLinkApplicantsResponse,
+  parseFinLinkSalesStates,
   mergeAntragstellerDetails,
 } from "@/lib/platforms/finlink/dto";
+
+/**
+ * Jürgen tippte die Vorgangsnummer ("1 865 655", wie FinLink sie ihm als
+ * "1.865.655" zeigt) in das Feld, das die Lead-UUID erwartete – 404, und die
+ * Fehlermeldung sagte nicht, welche Form gemeint war. `case_id` steckt schon
+ * in der /loan_applications-Antwort (via .passthrough() auf attributes), wird
+ * aber bisher verworfen. Dieser Parser zieht ihn heraus, damit der Import ihn
+ * als zweite gültige Eingabeform akzeptieren kann.
+ */
+describe("parseFinLinkSalesStates", () => {
+  it("zieht die Vorgangsnummer (case_id) neben dem Vertriebsstatus", () => {
+    const body = {
+      data: [
+        {
+          attributes: { sales_state: "active", case_id: 1865655 },
+          relationships: { lead: { data: { id: "lead-1" } } },
+        },
+      ],
+    };
+    const entries = parseFinLinkSalesStates(body);
+    expect(entries).toEqual([{ leadId: "lead-1", salesState: "active", caseId: "1865655" }]);
+  });
+
+  it("liefert die Vorgangsnummer auch ohne Vertriebsstatus", () => {
+    const body = {
+      data: [
+        {
+          attributes: { case_id: "1865655" },
+          relationships: { lead: { data: { id: "lead-1" } } },
+        },
+      ],
+    };
+    const entries = parseFinLinkSalesStates(body);
+    expect(entries).toEqual([{ leadId: "lead-1", salesState: undefined, caseId: "1865655" }]);
+  });
+
+  it("lässt Einträge ohne Lead-Bezug und ohne jeden Wert weg", () => {
+    const body = {
+      data: [
+        { attributes: {}, relationships: { lead: { data: { id: "lead-1" } } } },
+        { attributes: { sales_state: "active" }, relationships: { lead: { data: null } } },
+      ],
+    };
+    expect(parseFinLinkSalesStates(body)).toEqual([]);
+  });
+});
 
 describe("Antragsteller-Detaildaten aus /loan_applications/{id}/applicants", () => {
   // Nachbau der echten Antwort für Lead Colell (04.08.2026): zwei Antragsteller,

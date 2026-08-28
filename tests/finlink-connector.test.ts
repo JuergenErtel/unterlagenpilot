@@ -204,6 +204,23 @@ describe("HttpFinLinkClient.listLeads", () => {
     expect(leads[0]?.salesState).toBe("active");
   });
 
+  it("reicht die Vorgangsnummer (case_id) aus /loan_applications an die Lead-Zusammenfassung durch", async () => {
+    // Jürgen tippt die Vorgangsnummer ein, nicht die Lead-UUID – die Auflösung
+    // im Import (FinLinkConnector.importCaseById) braucht sie deshalb hier.
+    const loanApps = {
+      data: [
+        { attributes: { sales_state: "active", case_id: 1865655 }, relationships: { lead: { data: { id: "FL-1" } } } },
+      ],
+    };
+    const fetchMock = mockFetchRouting([
+      [/\/loan_applications\?/, { status: 200, body: loanApps }],
+      [/\/leads\?/, { status: 200, body: apiLeadBody("FL-1") }],
+    ]);
+    const client = new HttpFinLinkClient({ baseUrl: "https://x", apiKey: "k", advisorId: BERATER }, fetchMock);
+    const leads = await client.listLeads();
+    expect(leads[0]?.caseId).toBe("1865655");
+  });
+
   it("Leads ohne Antrag bekommen keinen Vertriebsstatus", async () => {
     const fetchMock = mockFetchRouting([
       [/\/loan_applications\?/, { status: 200, body: { data: [] } }],
@@ -238,10 +255,16 @@ vi.mock("@/lib/platforms/case-writer", () => ({
 
 const ctx = { organizationId: "org-1", userId: "user-1" };
 
-function clientReturning(dto: any): FinLinkClient {
+// Echte Lead-IDs sind UUIDs – nur die nimmt der Direktpfad ohne Listenabruf.
+const UUID_1 = "11111111-1111-1111-1111-111111111111";
+const UUID_2 = "22222222-2222-2222-2222-222222222222";
+const UUID_3 = "33333333-3333-3333-3333-333333333333";
+const UUID_4 = "44444444-4444-4444-4444-444444444444";
+
+function clientReturning(dto: any, leads: unknown[] = []): FinLinkClient {
   return {
     fetchVorgang: vi.fn().mockResolvedValue(dto),
-    listLeads: vi.fn().mockResolvedValue([]),
+    listLeads: vi.fn().mockResolvedValue(leads),
     fetchLeadsPage: vi.fn().mockResolvedValue([]),
   };
 }
@@ -249,8 +272,8 @@ function clientReturning(dto: any): FinLinkClient {
 describe("FinLinkConnector.importCaseById", () => {
   it("importiert und liefert die neue caseId", async () => {
     const connector = new FinLinkConnector();
-    const client = clientReturning({ id: "FL-1", antragsteller: [{ vorname: "Anna" }] });
-    const res = await connector.importCaseById("FL-1", ctx, { client });
+    const client = clientReturning({ id: UUID_1, antragsteller: [{ vorname: "Anna" }] });
+    const res = await connector.importCaseById(UUID_1, ctx, { client });
     expect(res.ok).toBe(true);
     expect(res.importedCaseIds).toEqual(["case-123"]);
   });
@@ -259,11 +282,11 @@ describe("FinLinkConnector.importCaseById", () => {
     caseUpdate.mockClear();
     const connector = new FinLinkConnector();
     const client = clientReturning({
-      id: "FL-1",
+      id: UUID_1,
       antragsteller: [{ vorname: "Anna" }],
       quelle: { sourceType: "ImmoscoutLead", source: null },
     });
-    await connector.importCaseById("FL-1", ctx, { client });
+    await connector.importCaseById(UUID_1, ctx, { client });
     expect(caseUpdate).toHaveBeenCalledWith({
       where: { id: "case-123" },
       data: { quelle: "immoscout24", quelleDetail: "ImmoscoutLead" },
@@ -273,8 +296,8 @@ describe("FinLinkConnector.importCaseById", () => {
   it("schreibt 'unbekannt', wenn FinLink keine Herkunft liefert – ohne den Import zu kippen", async () => {
     caseUpdate.mockClear();
     const connector = new FinLinkConnector();
-    const client = clientReturning({ id: "FL-2", antragsteller: [{ vorname: "Bea" }] });
-    const res = await connector.importCaseById("FL-2", ctx, { client });
+    const client = clientReturning({ id: UUID_2, antragsteller: [{ vorname: "Bea" }] });
+    const res = await connector.importCaseById(UUID_2, ctx, { client });
     expect(res.ok).toBe(true);
     expect(caseUpdate).toHaveBeenCalledWith({
       where: { id: "case-123" },
@@ -292,8 +315,8 @@ describe("FinLinkConnector.importCaseById", () => {
       deduped: true,
     });
     const connector = new FinLinkConnector();
-    const client = clientReturning({ id: "FL-3", antragsteller: [] });
-    await connector.importCaseById("FL-3", ctx, { client });
+    const client = clientReturning({ id: UUID_3, antragsteller: [] });
+    await connector.importCaseById(UUID_3, ctx, { client });
     expect(caseUpdate).not.toHaveBeenCalled();
   });
 
@@ -302,15 +325,15 @@ describe("FinLinkConnector.importCaseById", () => {
     caseUpdate.mockRejectedValueOnce(new Error("DB weg"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const connector = new FinLinkConnector();
-    const client = clientReturning({ id: "FL-4", antragsteller: [{ vorname: "Cem" }] });
-    const res = await connector.importCaseById("FL-4", ctx, { client });
+    const client = clientReturning({ id: UUID_4, antragsteller: [{ vorname: "Cem" }] });
+    const res = await connector.importCaseById(UUID_4, ctx, { client });
     expect(res.ok).toBe(true);
     errSpy.mockRestore();
   });
 
   it("meldet 'nicht konfiguriert', wenn kein Client vorhanden ist", async () => {
     const connector = new FinLinkConnector();
-    const res = await connector.importCaseById("FL-1", ctx, { client: null });
+    const res = await connector.importCaseById(UUID_1, ctx, { client: null });
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/nicht (verbunden|konfiguriert)/i);
   });
@@ -323,8 +346,92 @@ describe("FinLinkConnector.importCaseById", () => {
       listLeads: vi.fn().mockResolvedValue([]),
       fetchLeadsPage: vi.fn().mockResolvedValue([]),
     };
-    const res = await connector.importCaseById("nope", ctx, { client });
+    const res = await connector.importCaseById(UUID_1, ctx, { client });
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/nicht gefunden/i);
+  });
+
+  it("nennt beide Eingabeformen und die Auswahlliste, wenn ein Vorgang nicht gefunden wird", async () => {
+    // Genau das fehlte bisher: "Bitte ID prüfen" sagte nicht, welche ID
+    // gemeint ist. Jürgen tippte die Vorgangsnummer in ein UUID-Feld.
+    const { FinLinkNotFoundError } = await import("@/lib/platforms/finlink/client");
+    const connector = new FinLinkConnector();
+    const client: FinLinkClient = {
+      fetchVorgang: vi.fn().mockRejectedValue(new FinLinkNotFoundError("x")),
+      listLeads: vi.fn().mockResolvedValue([]),
+      fetchLeadsPage: vi.fn().mockResolvedValue([]),
+    };
+    const res = await connector.importCaseById(UUID_1, ctx, { client });
+    expect(res.message).toMatch(/Vorgangsnummer/);
+    expect(res.message).toMatch(/UUID/);
+    expect(res.message).toMatch(/Auswahlliste/);
+  });
+
+  describe("Auflösung der Vorgangsnummer (case_id statt UUID)", () => {
+    it("löst '1 865 655' über die Vorgangsnummer auf und importiert den passenden Lead", async () => {
+      const client = clientReturning(
+        { id: UUID_1, antragsteller: [{ vorname: "Anna" }] },
+        [{ id: UUID_1, beraterId: "b", caseId: "1865655" }]
+      );
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById("1 865 655", ctx, { client });
+      expect(res.ok).toBe(true);
+      expect(client.fetchVorgang).toHaveBeenCalledWith(UUID_1);
+    });
+
+    it("löst auch die Punktschreibweise '1.865.655' auf", async () => {
+      const client = clientReturning(
+        { id: UUID_1, antragsteller: [{ vorname: "Anna" }] },
+        [{ id: UUID_1, beraterId: "b", caseId: "1865655" }]
+      );
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById("1.865.655", ctx, { client });
+      expect(res.ok).toBe(true);
+      expect(client.fetchVorgang).toHaveBeenCalledWith(UUID_1);
+    });
+
+    it("nimmt bei einer echten UUID den Direktpfad, ohne die Leadliste zu laden", async () => {
+      const client = clientReturning({ id: UUID_1, antragsteller: [{ vorname: "Anna" }] });
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById(UUID_1, ctx, { client });
+      expect(res.ok).toBe(true);
+      expect(client.listLeads).not.toHaveBeenCalled();
+      expect(client.fetchVorgang).toHaveBeenCalledWith(UUID_1);
+    });
+
+    it("antwortet sofort ohne Listenabruf, wenn die Eingabe keine einzige Ziffer enthält", async () => {
+      const client = clientReturning({ id: UUID_1, antragsteller: [] }, []);
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById("ubeida", ctx, { client });
+      expect(res.ok).toBe(false);
+      expect(client.listLeads).not.toHaveBeenCalled();
+      expect(client.fetchVorgang).not.toHaveBeenCalled();
+      expect(res.message).toMatch(/Vorgangsnummer/);
+    });
+
+    it("meldet Mehrdeutigkeit, statt zu raten, wenn zwei Leads dieselbe Vorgangsnummer tragen", async () => {
+      const client = clientReturning(
+        { id: UUID_1, antragsteller: [] },
+        [
+          { id: UUID_1, beraterId: "b", caseId: "1865655" },
+          { id: UUID_2, beraterId: "b", caseId: "1865655" },
+        ]
+      );
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById("1865655", ctx, { client });
+      expect(res.ok).toBe(false);
+      expect(res.message).toMatch(/mehrere/i);
+      expect(client.fetchVorgang).not.toHaveBeenCalled();
+    });
+
+    it("kann über die Vorgangsnummer keinen fremden Lead erreichen, weil listLeads bereits gefiltert ist", async () => {
+      // listLeads() liefert (wie im echten Client) nur die eigenen Leads –
+      // ein fremder Lead mit passender Vorgangsnummer taucht dort nie auf.
+      const client = clientReturning({ id: UUID_1, antragsteller: [] }, []);
+      const connector = new FinLinkConnector();
+      const res = await connector.importCaseById("1865655", ctx, { client });
+      expect(res.ok).toBe(false);
+      expect(client.fetchVorgang).not.toHaveBeenCalled();
+    });
   });
 });

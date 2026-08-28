@@ -170,11 +170,14 @@ export class HttpFinLinkClient implements FinLinkClient {
     const summaries = this.nurEigene(alleSummaries);
     // Hat ein Lead mehrere Anträge, gewinnt „active“, sonst der zuletzt gesehene.
     const salesStates = new Map<string, string>();
-    for (const { leadId, salesState } of stateEntries) {
-      if (salesStates.get(leadId) === "active") continue;
-      salesStates.set(leadId, salesState);
+    // Vorgangsnummer je Lead – der erste gesehene Wert genügt, sie ändert sich
+    // zwischen den Anträgen desselben Leads praktisch nicht.
+    const caseIds = new Map<string, string>();
+    for (const { leadId, salesState, caseId } of stateEntries) {
+      if (salesState && salesStates.get(leadId) !== "active") salesStates.set(leadId, salesState);
+      if (caseId && !caseIds.has(leadId)) caseIds.set(leadId, caseId);
     }
-    return summaries.map((s) => ({ ...s, salesState: salesStates.get(s.id) }));
+    return summaries.map((s) => ({ ...s, salesState: salesStates.get(s.id), caseId: caseIds.get(s.id) }));
   }
 
   async fetchLeadsPage(limit: number): Promise<FinLinkLeadRoh[]> {
