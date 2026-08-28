@@ -52,6 +52,7 @@ import { Notizblock } from "@/components/case/notizblock";
 import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
+import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -157,6 +158,7 @@ export default async function CaseCockpitPage({
     uebernahme,
     gesendeteNachrichten,
     erstkontaktStand,
+    buendelVorschlaege,
   ] = await Promise.all([
     prisma.document.findMany({
       where: { caseId: id },
@@ -166,6 +168,8 @@ export default async function CaseCockpitPage({
           orderBy: { reihenfolge: "asc" },
           select: { vonSeite: true, bisSeite: true, titel: true },
         },
+        // Fuer den Rueckgaengig-Knopf: nur die Zahl, nicht die Zeilen.
+        _count: { select: { quellseiten: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -182,6 +186,18 @@ export default async function CaseCockpitPage({
     // Fallseite eine andere Phase vor als das Board.
     prisma.generatedMessage.count({ where: { caseId: id, sent: true } }),
     ladeErstkontaktStand(id),
+    // Vorschlaege der Buendelung (Einzelseiten -> Dokument) fuer die
+    // Vorschlagskarte im Reiter "Dokumente".
+    prisma.documentBuendel.findMany({
+      where: { caseId: id },
+      orderBy: { reihenfolge: "asc" },
+      include: {
+        seiten: {
+          orderBy: { position: "asc" },
+          select: { document: { select: { generatedName: true, originalName: true } } },
+        },
+      },
+    }),
   ]);
 
   // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
@@ -282,6 +298,10 @@ export default async function CaseCockpitPage({
   // <DocumentsProcessing> mit einem zweiten Intervall, und die schwerste Seite
   // der App rendert sich während jedes Uploads doppelt so oft neu.
   const processingCount = kiLaufAktiv ? 0 : countProcessingDocuments(documents);
+  // Der Buendel-Lauf startet erst, wenn die letzte Dokumentanalyse fertig ist.
+  // Ohne ihn im Polling erschiene die Vorschlagskarte erst nach manuellem
+  // Neuladen.
+  const buendelLaeuft = caseRow.buendelStatus === "laeuft";
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -607,7 +627,20 @@ export default async function CaseCockpitPage({
                     <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={applicantOptions} />
                   </CardContent>
                 </Card>
-                {processingCount > 0 && <DocumentsProcessing count={processingCount} />}
+                {(processingCount > 0 || buendelLaeuft) && (
+                  <DocumentsProcessing count={processingCount} />
+                )}
+                <BuendelVorschlagKarte
+                  caseId={id}
+                  status={caseRow.buendelStatus as "ausstehend" | "laeuft" | "fertig" | "fehler"}
+                  buendel={buendelVorschlaege.map((b) => ({
+                    id: b.id,
+                    titel: b.titel,
+                    seiten: b.seiten.map((s) => ({
+                      name: s.document.generatedName ?? s.document.originalName,
+                    })),
+                  }))}
+                />
                 <Card>
                   <CardContent className="p-0">
                     <Table>

@@ -12,21 +12,36 @@ import {
 } from "@/lib/buendelung/service";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/lib/domain/enums";
 
+/** Zustand fuer die Vorschlagskarte - siehe `buendelZusammenfuegenAction`. */
+export interface BuendelZusammenfuegenState {
+  /** Kundengrade deutsche Begruendung eines gescheiterten Zusammenfuegens. */
+  grund?: string;
+}
+
 /**
  * Fuegt einen KI-Vorschlag zusammen - nur auf Klick. Die Erkennung schlaegt
  * vor, entschieden wird hier.
+ *
+ * Signatur fuer `useActionState`, NICHT fuer ein nacktes `<form action>`: Ein
+ * fehlgeschlagenes Zusammenfuegen (`fuegeZusammen` liefert `{ ok: false,
+ * grund }`) wurde bisher stillschweigend verschluckt - Klick, und sichtbar
+ * passierte nichts. `grund` ist bereits kundengrader Klartext aus der
+ * Service-Schicht und wird unveraendert durchgereicht.
  */
-export async function buendelZusammenfuegenAction(formData: FormData): Promise<void> {
+export async function buendelZusammenfuegenAction(
+  _bisher: BuendelZusammenfuegenState,
+  formData: FormData
+): Promise<BuendelZusammenfuegenState> {
   const caseId = String(formData.get("caseId") ?? "");
   const buendelId = String(formData.get("buendelId") ?? "");
-  if (!caseId || !buendelId) return;
+  if (!caseId || !buendelId) return { grund: "Fall oder Bündel fehlt." };
   const { ctx } = await requireCaseAccess(caseId);
 
   const buendel = await prisma.documentBuendel.findFirst({
     where: { id: buendelId, caseId },
     include: { seiten: { orderBy: { position: "asc" }, select: { documentId: true } } },
   });
-  if (!buendel) return;
+  if (!buendel) return { grund: "Dieser Vorschlag ist nicht mehr vorhanden - vermutlich bereits bearbeitet." };
 
   const ergebnis = await fuegeZusammen({
     caseId,
@@ -46,8 +61,11 @@ export async function buendelZusammenfuegenAction(formData: FormData): Promise<v
       entityId: ergebnis.documentId,
       metadata: { gebuendeltAus: ergebnis.seiten, quelle: "vorschlag" },
     });
+    revalidatePath(`/cases/${caseId}`);
+    return {};
   }
   revalidatePath(`/cases/${caseId}`);
+  return { grund: ergebnis.grund };
 }
 
 /** Vorschlag verwerfen: die Einzelseiten bleiben unveraendert liegen. */
