@@ -298,6 +298,14 @@ export default async function CaseCockpitPage({
   // <DocumentsProcessing> mit einem zweiten Intervall, und die schwerste Seite
   // der App rendert sich während jedes Uploads doppelt so oft neu.
   const processingCount = kiLaufAktiv ? 0 : countProcessingDocuments(documents);
+  // Dieselbe Regel wie oben, nur fuer die Buendel-Karte statt fuer
+  // <DocumentsProcessing>: Pollt hier bereits <AiCheckRunning> (kiLaufAktiv)
+  // oder <DocumentsProcessing> (processingCount > 0), pollt die Buendel-Karte
+  // NICHT zusaetzlich - sonst laeuft "die schwerste Seite der App" (s. o.)
+  // mit zwei parallelen 4-Sekunden-Intervallen. Faellt der andere Poller weg
+  // (Upload fertig), waehrend buendelStatus noch "laeuft" ist, flippt dieser
+  // Wert beim naechsten Rendern auf false und die Karte uebernimmt selbst.
+  const andererPollerLaeuft = kiLaufAktiv || processingCount > 0;
 
   // Bei Paar-Finanzierungen kommen Kunden-Uploads ohne Antragsteller-Zuordnung an
   // (der gemeinsame Link verrät nicht, wer hochgeladen hat). Der Vermittler ordnet zu.
@@ -625,12 +633,13 @@ export default async function CaseCockpitPage({
                 </Card>
                 {processingCount > 0 && <DocumentsProcessing count={processingCount} />}
                 {/* Pollt sich bei buendelStatus === "laeuft" selbst weiter
-                    (siehe buendel-vorschlag.tsx) - nicht ueber einen an
-                    <DocumentsProcessing> durchgereichten Zaehler, der sonst
-                    einen falschen Wert anzeigen wuerde. */}
+                    (siehe buendel-vorschlag.tsx) - aber nur, wenn nicht schon
+                    <AiCheckRunning> oder <DocumentsProcessing> pollen
+                    (andererPollerLaeuft, s. o.). */}
                 <BuendelVorschlagKarte
                   caseId={id}
                   status={caseRow.buendelStatus as "ausstehend" | "laeuft" | "fertig" | "fehler"}
+                  andererPollerLaeuft={andererPollerLaeuft}
                   buendel={buendelVorschlaege.map((b) => ({
                     id: b.id,
                     titel: b.titel,

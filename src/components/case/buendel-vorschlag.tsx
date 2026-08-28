@@ -38,27 +38,36 @@ export function BuendelVorschlagKarte({
   caseId,
   status,
   buendel,
+  andererPollerLaeuft,
 }: {
   caseId: string;
   status: "ausstehend" | "laeuft" | "fertig" | "fehler";
   buendel: BuendelView[];
+  /**
+   * Pollt anderswo auf der Fallseite schon jemand (<AiCheckRunning> bei
+   * kiLaufAktiv, <DocumentsProcessing> bei processingCount > 0), pollt diese
+   * Karte NICHT zusaetzlich - sonst laeuft "die schwerste Seite der App" mit
+   * zwei parallelen 4-Sekunden-Intervallen (page.tsx, Kommentar bei
+   * kiLaufAktiv/processingCount). Faellt der andere Poller weg, waehrend der
+   * Buendel-Lauf noch laeuft, uebernimmt diese Karte beim naechsten Rendern -
+   * sonst saehe der Vermittler den Vorschlag erst nach manuellem Neuladen.
+   */
+  andererPollerLaeuft: boolean;
 }) {
   const router = useRouter();
 
   // Der Buendel-Lauf ist ein Hintergrundprozess ohne eigenes Push-Signal -
   // nur Neuladen zeigt, wenn er fertig ist. Die Karte pollt sich selbst,
   // genau wie <AiCheckRunning>/<DocumentsProcessing> es fuer ihre je eigene
-  // "laeuft"-Anzeige tun - bewusst NICHT ueber einen an <DocumentsProcessing>
-  // durchgereichten Zaehler, der sonst einen falschen Wert ("0 Dokumente
-  // werden noch verarbeitet") mitanzeigen wuerde, waehrend in Wahrheit nur
-  // die Buendelung laeuft. Der Hook steht bewusst VOR jedem fruehen Return -
-  // Hooks duerfen nicht von einer Bedingung uebersprungen werden, nur ihr
-  // Effekt darf es.
+  // "laeuft"-Anzeige tun - aber nur, wenn keiner der beiden schon laeuft
+  // (siehe `andererPollerLaeuft` oben). Der Hook steht bewusst VOR jedem
+  // fruehen Return - Hooks duerfen nicht von einer Bedingung uebersprungen
+  // werden, nur ihr Effekt darf es.
   useEffect(() => {
-    if (status !== "laeuft") return;
+    if (status !== "laeuft" || andererPollerLaeuft) return;
     const timer = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(timer);
-  }, [status, router]);
+  }, [status, andererPollerLaeuft, router]);
 
   // "Noch nicht geprueft" bekommt keine Karte - sonst stuende dort dauerhaft
   // ein Hinweis, der nichts sagt.
