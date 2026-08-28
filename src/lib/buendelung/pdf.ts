@@ -28,6 +28,13 @@ export async function baueBuendelPdf(teile: BuendelTeil[]): Promise<Buffer> {
     try {
       if (teil.mimeType === "application/pdf") {
         const quelle = await PDFDocument.load(teil.buffer);
+        const anzahl = quelle.getPageCount();
+        if (anzahl !== 1) {
+          // Ein mehrseitiges PDF an dieser Stelle ist ein Datenfehler weiter
+          // vorne (falsche Klassifikation, verpasste Auftrennung) - stumm nur
+          // die erste Seite zu uebernehmen wuerde den Rest lautlos verlieren.
+          throw new Error(`Erwartet 1 Seite, gefunden ${anzahl}.`);
+        }
         const [seite] = await ziel.copyPages(quelle, [0]);
         ziel.addPage(seite);
         continue;

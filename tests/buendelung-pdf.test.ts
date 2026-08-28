@@ -25,6 +25,21 @@ async function einseitigesPdf(): Promise<Buffer> {
   });
 }
 
+/** Erzeugt ein zweiseitiges PDF mit dem vorhandenen pdfkit. */
+async function zweiseitigesPdf(): Promise<Buffer> {
+  const PDFDocument = (await import("pdfkit")).default;
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ autoFirstPage: false });
+    const teile: Buffer[] = [];
+    doc.on("data", (d: Buffer) => teile.push(d));
+    doc.on("end", () => resolve(Buffer.concat(teile)));
+    doc.on("error", reject);
+    doc.addPage().text("Seite eins");
+    doc.addPage().text("Seite zwei");
+    doc.end();
+  });
+}
+
 async function seitenzahl(pdf: Buffer): Promise<number> {
   const { PDFDocument } = await import("pdf-lib");
   return (await PDFDocument.load(pdf)).getPageCount();
@@ -86,6 +101,15 @@ describe("baueBuendelPdf", () => {
         { mimeType: "image/jpeg", buffer: HOCH() },
       ])
     ).rejects.toThrow(/Seite 1/);
+  });
+
+  it("wirft bei einem mehrseitigen PDF-Teil, statt lautlos Seiten zu verlieren", async () => {
+    await expect(
+      baueBuendelPdf([
+        { mimeType: "image/jpeg", buffer: HOCH() },
+        { mimeType: "application/pdf", buffer: await zweiseitigesPdf() },
+      ])
+    ).rejects.toThrow(/Seite 2/);
   });
 
   it("wirft bei einem nicht unterstuetzten Typ", async () => {
