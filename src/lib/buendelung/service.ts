@@ -147,6 +147,38 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
   }
 }
 
+/**
+ * Fuer den manuellen "Erneut pruefen"-Klick: setzt die Sperre NUR zurueck,
+ * wenn sie nicht mehr frisch ist - dieselbe Bedingung, mit der `erkenneBuendel`
+ * oben die Sperre uebernimmt (daher hier, statt sie ein zweites Mal an anderer
+ * Stelle nachzubilden).
+ *
+ * Ohne diese Unterscheidung wuerde ein Klick waehrend eines echten, gerade
+ * laufenden Hintergrundlaufs (ausgeloest durch einen Upload) dessen Sperre
+ * aushebeln und einen zweiten, ueberlappenden Lauf gegen denselben Fall
+ * anstossen. Beide raeumen am Ende dieselben `DocumentBuendel`-Zeilen weg -
+ * wer zuletzt fertig wird, gewinnt und verwirft das Ergebnis des anderen
+ * lautlos, und das Mistral-Kontingent (50 Anfragen/Minute) wird doppelt
+ * belastet.
+ *
+ * Trifft die Bedingung nicht (ein echter Lauf haelt die Sperre), bleibt der
+ * Status unveraendert - der nachfolgende Aufruf von `erkenneBuendel` verliert
+ * dann selbst um die Sperre und kehrt still zurueck. Das ist das korrekte
+ * Verhalten: der laufende Vorgang gewinnt, der Klick wird zum No-op.
+ */
+export async function ermoeglicheErneutePruefung(caseId: string): Promise<void> {
+  await prisma.case.updateMany({
+    where: {
+      id: caseId,
+      OR: [
+        { buendelStatus: { not: "laeuft" } },
+        { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
+      ],
+    },
+    data: { buendelStatus: "ausstehend", buendelStatusAm: null },
+  });
+}
+
 interface NeuesBuendel {
   reihenfolge: number;
   titel: string;

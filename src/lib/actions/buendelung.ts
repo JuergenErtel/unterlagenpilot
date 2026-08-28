@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
-import { erkenneBuendel, fuegeZusammen, macheRueckgaengig } from "@/lib/buendelung/service";
-import type { DocumentType } from "@/lib/domain/enums";
+import {
+  erkenneBuendel,
+  ermoeglicheErneutePruefung,
+  fuegeZusammen,
+  macheRueckgaengig,
+} from "@/lib/buendelung/service";
+import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/lib/domain/enums";
 
 /**
  * Fuegt einen KI-Vorschlag zusammen - nur auf Klick. Die Erkennung schlaegt
@@ -63,11 +68,12 @@ export async function buendelErneutPruefenAction(formData: FormData): Promise<vo
   const caseId = String(formData.get("caseId") ?? "");
   if (!caseId) return;
   await requireCaseAccess(caseId);
-  // Die Sperre zuruecksetzen, sonst kehrt der Lauf still um.
-  await prisma.case.update({
-    where: { id: caseId },
-    data: { buendelStatus: "ausstehend", buendelStatusAm: null },
-  });
+  // Die Sperre nur zuruecksetzen, wenn sie NICHT mehr frisch ist - sonst
+  // wuerde dieser Klick einen echten, gerade laufenden Hintergrundlauf
+  // aushebeln und einen zweiten, ueberlappenden Lauf starten. Haelt ein
+  // echter Lauf die Sperre, bleibt sie unveraendert und erkenneBuendel
+  // verliert unten selbst um sie - korrektes Verhalten, kein Bug.
+  await ermoeglicheErneutePruefung(caseId);
   await erkenneBuendel(caseId);
   revalidatePath(`/cases/${caseId}`);
 }
@@ -92,7 +98,6 @@ export async function seitenZusammenfuegenAction(formData: FormData): Promise<vo
     select: { documentType: true },
   });
   const typ = (erste?.documentType as DocumentType | null) ?? null;
-  const { DOCUMENT_TYPE_LABELS } = await import("@/lib/domain/enums");
   const titel = typ ? DOCUMENT_TYPE_LABELS[typ] : "Zusammengefügtes Dokument";
 
   const ergebnis = await fuegeZusammen({
