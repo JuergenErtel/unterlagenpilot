@@ -340,10 +340,25 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
     const a = await seiteAnlegen(caseId, "a.jpg", jpeg());
     const b = await seiteAnlegen(caseId, "b.jpg", jpeg());
 
+    // Schlussbefund 5: Beide Aufrufe legen ihr PDF im Speicher ab, BEVOR die
+    // Transaktions-WHERE-Klausel entscheidet, wer gewinnt (siehe fuegeZusammen).
+    // Ohne diesen Spy liesse sich der Speicherschluessel des VERLIERERS nicht
+    // ermitteln - das Ergebnisobjekt eines gescheiterten Aufrufs traegt ihn
+    // nicht. storage.put wird deshalb hier real ausgefuehrt, aber jeder
+    // erzeugte Schluessel zusaetzlich mitgeschrieben.
+    const angelegteSchluessel: string[] = [];
+    const echtesPut = storage.put.bind(storage);
+    const putSpy = vi.spyOn(storage, "put").mockImplementation(async (input: any) => {
+      const ergebnis = await echtesPut(input);
+      angelegteSchluessel.push(ergebnis.storageKey);
+      return ergebnis;
+    });
+
     const [ergebnisA, ergebnisB] = await Promise.all([
       fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen A" }),
       fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen B" }),
     ]);
+    putSpy.mockRestore();
 
     // Genau einer der beiden ueberlappenden Aufrufe darf gewinnen - welcher,
     // ist Zufall und fuer die Zusicherung ohne Belang.
@@ -361,9 +376,46 @@ describe.runIf(RUN)("Zusammenfügen (PGlite)", () => {
     expect(erzeugte[0].quellseiten).toHaveLength(2);
     expect(erzeugte[0].pageCount).toBe(2);
 
-    // Kein Speicherobjekt des Verlierers haengengeblieben: das Dokument des
-    // Gewinners ist ganz normal abrufbar.
+    // Der Kommentar dieses Tests behauptete bisher "kein Speicherobjekt des
+    // Verlierers haengengeblieben", geprueft wurde aber nur, dass der GEWINNER
+    // abrufbar ist - das waere auch dann gruen, wenn die Aufraeumzeile in
+    // fuegeZusammen ersatzlos entfernt wuerde. Beide Aufrufe haben ein PDF
+    // angelegt (siehe Spy oben); der Schluessel, der NICHT der des Gewinners
+    // ist, muss nach dem Wettlauf wirklich weg sein.
+    expect(angelegteSchluessel).toHaveLength(2);
+    const verliererSchluessel = angelegteSchluessel.find((k) => k !== erzeugte[0].storageKey);
+    expect(verliererSchluessel).toBeDefined();
+    expect(await storage.get(verliererSchluessel!)).toBeNull();
     expect(await storage.get(erzeugte[0].storageKey)).not.toBeNull();
+  });
+
+  it("loggt, wenn nach einem verlorenen Wettlauf auch das Aufraeumen im Speicher scheitert", async () => {
+    // Schlussbefund 4: Scheitert das storage.remove(...) im catch-Zweig von
+    // fuegeZusammen, wurde der Fehler bisher mit `.catch(() => undefined)`
+    // stillschweigend verschluckt - der Kommentar "kein Muell im Speicher"
+    // war dann schlicht falsch, ohne dass es irgendwo sichtbar wurde.
+    const caseId = await fallAnlegen();
+    const a = await seiteAnlegen(caseId, "a.jpg", jpeg());
+    const b = await seiteAnlegen(caseId, "b.jpg", jpeg());
+
+    const removeSpy = vi
+      .spyOn(storage, "remove")
+      .mockRejectedValue(new Error("Speicher nicht erreichbar (Testfixture)"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const [ergebnisA, ergebnisB] = await Promise.all([
+      fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen A" }),
+      fuegeZusammen({ caseId, organizationId: orgId, documentIds: [a.id, b.id], titel: "Rennen B" }),
+    ]);
+    removeSpy.mockRestore();
+
+    expect([ergebnisA, ergebnisB].filter((e) => e.ok)).toHaveLength(1);
+
+    // Eine eigene Log-Zeile fuer die gescheiterte Aufraeumung, unterscheidbar
+    // von der allgemeinen "Zusammenfuegen fehlgeschlagen"-Zeile - sonst weiss
+    // niemand, der die Logs liest, dass zusaetzlich ein Objekt liegen blieb.
+    expect(errorSpy.mock.calls.some((call) => String(call[0]).includes("nicht entfernt"))).toBe(true);
+    errorSpy.mockRestore();
   });
 
   // Die Seitenreihenfolge ist das ganze Versprechen dieses Features - die KI

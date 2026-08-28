@@ -55,7 +55,7 @@ import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
 import { BuendelRueckgaengig } from "@/components/case/buendel-rueckgaengig";
 import { SeitenAuswahl, SeitenKaestchen } from "@/components/case/seiten-auswahl";
-import { istBuendelKandidat } from "@/lib/buendelung/kandidaten";
+import { istBuendelKandidat, zuKandidat } from "@/lib/buendelung/kandidaten";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
@@ -319,28 +319,11 @@ export default async function CaseCockpitPage({
   }));
   const istSelbststaendig = brauchtSelbststaendigenEinkommensnachweis(caseRow.primaryEmploymentType);
 
-  // DIESELBE Funktion wie im Erkennungslauf (buendelung/service.ts) - die
-  // Regel darf nicht zweimal dastehen. Wer aendert, was eine buendelbare
-  // Einzelseite ist, aendert es an genau einer Stelle. `text` liest
-  // istBuendelKandidat nicht, der Typ verlangt das Feld trotzdem.
-  const auswaehlbareSeiten = documents
-    .filter((d) =>
-      istBuendelKandidat({
-        id: d.id,
-        originalName: d.originalName,
-        mimeType: d.mimeType,
-        pageCount: d.pageCount,
-        reviewStatus: d.reviewStatus,
-        ocrStatus: d.ocrStatus,
-        readable: d.readable,
-        zusammengefuegtInId: d.zusammengefuegtInId,
-        documentType: d.documentType as DocumentType | null,
-        period: d.period,
-        createdAt: d.createdAt,
-        text: "",
-      })
-    )
-    .map((d) => d.id);
+  // DIESELBE Abbildung (zuKandidat) und DIESELBE Regel (istBuendelKandidat)
+  // wie im Erkennungslauf und beim Zusammenfuegen (buendelung/service.ts) -
+  // drei eigene Kopien standen hier schon einmal, und das ist genau die Falle,
+  // gegen die zuKandidat() geschaffen wurde.
+  const auswaehlbareSeiten = documents.filter((d) => istBuendelKandidat(zuKandidat(d))).map((d) => d.id);
 
   // Torpruefung fuer das Finanzierungszertifikat – dieselbe Funktion, die auch
   // die PDF-Route anwendet, damit der Knopf nie etwas freigibt, was der Server
@@ -788,17 +771,20 @@ export default async function CaseCockpitPage({
                                     )}
                                   </>
                                 )}
-                                {/* Nur bei einem aus Einzelseiten entstandenen, noch
-                                    offenen Dokument - unabhaengig davon, ob die KI
-                                    schon fertig, noch am Laufen oder mit Fehler
-                                    stehengeblieben ist. Danach hat der Vermittler
-                                    entschieden, und der Weg zurueck fuehrt ueber
-                                    "Freigabe zuruecknehmen". */}
-                                {d.reviewStatus === "offen" && d._count.quellseiten > 0 && (
+                                {/* Nur bei einem aus Einzelseiten entstandenen Dokument -
+                                    diese Bedingung aendert sich fuer eine gegebene Zeile
+                                    nie mehr, anders als reviewStatus. Ob der Knopf selbst
+                                    erscheint, entscheidet die Komponente an ihrem `offen`-
+                                    Prop: bliebe die Bedingung hier bei reviewStatus === "offen",
+                                    wuerde ein zwischenzeitlich (zweiter Tab) abgelehntes
+                                    Rueckgaengig die ganze Komponente unmounten und die eben
+                                    gesetzte Ablehnungsmeldung mit ihr wegreissen. */}
+                                {d._count.quellseiten > 0 && (
                                   <BuendelRueckgaengig
                                     caseId={id}
                                     documentId={d.id}
                                     seiten={d._count.quellseiten}
+                                    offen={d.reviewStatus === "offen"}
                                   />
                                 )}
                               </div>

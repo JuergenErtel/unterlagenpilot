@@ -53,6 +53,51 @@ export function istBuendelKandidat(d: Kandidat): boolean {
 }
 
 /**
+ * Baut aus einer Prisma-`Document`-Zeile den Kandidaten, den die Buendelung
+ * sehen darf.
+ *
+ * DIESELBE Abbildung fuer alle drei Aufrufer (Erkennungslauf, Zusammenfuegen
+ * und die Auswahlkaestchen in der Fallakte) - drei eigene Kopien standen hier
+ * schon einmal, und das ist genau die Falle, die dieser Helfer schliesst.
+ * `documentType` kommt vom Aufrufer typischerweise als Prisma-Enum, nicht als
+ * das lokale `DocumentType` - beide sind dieselben Zeichenketten, der Cast
+ * gehoert deshalb hierher und nicht an jeden Aufrufer einzeln.
+ */
+export function zuKandidat(
+  d: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    pageCount: number | null;
+    reviewStatus: string;
+    ocrStatus: string;
+    readable: boolean | null;
+    zusammengefuegtInId: string | null;
+    documentType: string | null;
+    period: string | null;
+    createdAt: Date;
+  },
+  /** Anfang des OCR-Textes. Fuer die Regeln selbst ohne Bedeutung (siehe
+   *  `istBuendelKandidat`), nur der Erkennungslauf braucht ihn fuer die KI. */
+  text = ""
+): Kandidat {
+  return {
+    id: d.id,
+    originalName: d.originalName,
+    mimeType: d.mimeType,
+    pageCount: d.pageCount,
+    reviewStatus: d.reviewStatus,
+    ocrStatus: d.ocrStatus,
+    readable: d.readable,
+    zusammengefuegtInId: d.zusammengefuegtInId,
+    documentType: d.documentType as DocumentType | null,
+    period: d.period,
+    createdAt: d.createdAt,
+    text,
+  };
+}
+
+/**
  * Welche Dokumente eines Falls in den Buendel-Lauf gehen.
  *
  * Rein und ohne Datenbank, damit jede einzelne Regel pruefbar bleibt. Unter

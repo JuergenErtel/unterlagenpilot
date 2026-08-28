@@ -98,6 +98,34 @@ describe.runIf(RUN)("Bündelung rückgängig machen (PGlite)", () => {
     expect(ergebnis.grund).toMatch(/freigegeben/i);
   });
 
+  // Schlussbefund 7 (WICHTIG): "bereits freigegeben - bitte zuerst wieder
+  // oeffnen" stimmt nur fuer `akzeptiert`. Fuer `abgelehnt`, `duplikat` und
+  // `ersetzt` behauptete der bisherige, einzige Text etwas Falsches - der
+  // Vermittler haette bei einem Duplikat nach einem "wieder oeffnen" gesucht,
+  // das es fuer diesen Status in der Oberflaeche gar nicht gibt.
+  it("nennt bei einem abgelehnten Dokument den richtigen Status, nicht 'freigegeben'", async () => {
+    const { zielId } = await gebuendelterFall();
+    await prisma.document.update({ where: { id: zielId }, data: { reviewStatus: "abgelehnt" } });
+    const ergebnis = await macheRueckgaengig(zielId, orgId);
+    expect(ergebnis.ok).toBe(false);
+    if (!ergebnis.ok) {
+      expect(ergebnis.grund).toMatch(/abgelehnt/i);
+      expect(ergebnis.grund).not.toMatch(/freigegeben/i);
+    }
+  });
+
+  it("verspricht bei einem als Duplikat markierten Dokument keinen 'wieder oeffnen'-Weg, den es dafuer nicht gibt", async () => {
+    const { zielId } = await gebuendelterFall();
+    await prisma.document.update({ where: { id: zielId }, data: { reviewStatus: "duplikat" } });
+    const ergebnis = await macheRueckgaengig(zielId, orgId);
+    expect(ergebnis.ok).toBe(false);
+    if (!ergebnis.ok) {
+      expect(ergebnis.grund).toMatch(/duplikat/i);
+      expect(ergebnis.grund).not.toMatch(/freigegeben/i);
+      expect(ergebnis.grund).not.toMatch(/wieder öffnen/i);
+    }
+  });
+
   it("weist ein Dokument ohne Quellseiten ab", async () => {
     const { seiten } = await gebuendelterFall();
     const ergebnis = await macheRueckgaengig(seiten[0].id, orgId);

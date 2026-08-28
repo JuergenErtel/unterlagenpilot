@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { waehleKandidaten, istBuendelKandidat, type Kandidat } from "@/lib/buendelung/kandidaten";
+import { waehleKandidaten, istBuendelKandidat, zuKandidat, type Kandidat } from "@/lib/buendelung/kandidaten";
 
 function k(over: Partial<Kandidat> = {}): Kandidat {
   return {
@@ -79,5 +79,40 @@ describe("waehleKandidaten", () => {
     const spaet = k({ id: "spaet", createdAt: new Date("2026-08-28T12:00:00Z") });
     const frueh = k({ id: "frueh", createdAt: new Date("2026-08-28T09:00:00Z") });
     expect(waehleKandidaten([spaet, frueh]).map((x) => x.id)).toEqual(["frueh", "spaet"]);
+  });
+});
+
+// Schlussbefund 8: DIESELBE Abbildung fuer alle drei Aufrufer (Erkennungslauf,
+// Zusammenfuegen, Auswahlkaestchen in der Fallakte) - direkt getestet, damit
+// eine kuenftige vierte Kopie oder ein Auseinanderlaufen der drei Aufrufer
+// sofort auffiele.
+describe("zuKandidat", () => {
+  const roh = {
+    id: "d1",
+    originalName: "foto.jpg",
+    mimeType: "image/jpeg",
+    pageCount: 1,
+    reviewStatus: "offen",
+    ocrStatus: "fertig",
+    readable: true,
+    zusammengefuegtInId: null,
+    documentType: "gehaltsabrechnung",
+    period: "2026-05",
+    createdAt: new Date("2026-08-28T10:00:00Z"),
+  };
+
+  it("uebernimmt alle Strukturfelder unveraendert", () => {
+    expect(zuKandidat(roh)).toEqual({ ...roh, text: "" });
+  });
+
+  it("nimmt den Text als optionales zweites Argument - Standard ist leer", () => {
+    expect(zuKandidat(roh, "Gehaltsabrechnung Mai").text).toBe("Gehaltsabrechnung Mai");
+    expect(zuKandidat(roh).text).toBe("");
+  });
+
+  it("das Ergebnis besteht dieselbe Pruefung wie ein von Hand gebauter Kandidat", () => {
+    expect(istBuendelKandidat(zuKandidat(roh))).toBe(
+      istBuendelKandidat(k({ ...roh, documentType: roh.documentType as Kandidat["documentType"], text: "" }))
+    );
   });
 });

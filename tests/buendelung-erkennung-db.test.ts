@@ -110,6 +110,45 @@ describe.runIf(RUN)("Bündel-Erkennung (PGlite)", () => {
     expect(await prisma.documentBuendel.count({ where: { caseId } })).toBe(0);
   });
 
+  // Schlussbefund 3 (WICHTIG): Ein Lauf beansprucht die Sperre, ruft dann die
+  // KI (Laufzeit unbestimmt) und schreibt sein Ergebnis, OHNE vorher zu
+  // pruefen, ob er die Sperre noch haelt. Braucht ein Lauf laenger als
+  // SPERRE_VERFAELLT_MS, darf ein zweiter Aufruf (z. B. "Erneut pruefen") die
+  // Sperre zu Recht uebernehmen und selbst abschliessen - der erste, immer
+  // noch laufende Lauf darf dessen Ergebnis danach nicht ueberschreiben. Der
+  // KI-Aufruf hier wird gespiegelt, um den zweiten Lauf GENAU waehrend der
+  // "Laufzeit unbestimmt" des ersten zu simulieren.
+  it("ein Lauf, dessen Sperre zwischenzeitlich uebernommen wurde, schreibt sein Ergebnis nicht", async () => {
+    const caseId = await fallMitSeiten(3);
+    const { aiService } = await import("@/lib/ai");
+
+    const echtesGruppieren = aiService.gruppiereEinzelseiten.bind(aiService);
+    const spy = vi.spyOn(aiService, "gruppiereEinzelseiten").mockImplementationOnce(async (seiten) => {
+      // Simuliert exakt das Szenario aus Befund 3: waehrend die KI noch
+      // "laeuft", vergeht SPERRE_VERFAELLT_MS, ein zweiter Lauf uebernimmt die
+      // Sperre und schliesst VOR dem ersten ab.
+      await prisma.case.update({
+        where: { id: caseId },
+        data: { buendelStatus: "fertig", buendelStatusAm: new Date() },
+      });
+      await prisma.documentBuendel.create({
+        data: { caseId, reihenfolge: 0, titel: "Vom zweiten, rechtmaessigen Lauf", confidence: 0.9 },
+      });
+      return echtesGruppieren(seiten);
+    });
+
+    await erkenneBuendel(caseId);
+    spy.mockRestore();
+
+    // Der verdraengte (erste) Lauf darf weder den Status noch die Vorschlaege
+    // des zweiten, rechtmaessigen Laufs ueberschreiben.
+    const c = await prisma.case.findUnique({ where: { id: caseId } });
+    expect(c.buendelStatus).toBe("fertig");
+    const buendel = await prisma.documentBuendel.findMany({ where: { caseId } });
+    expect(buendel).toHaveLength(1);
+    expect(buendel[0]!.titel).toBe("Vom zweiten, rechtmaessigen Lauf");
+  });
+
   it("wirft nicht, wenn schon das Setzen der Sperre fehlschlaegt, und laesst den Status unangetastet", async () => {
     const caseId = await fallMitSeiten(3);
     const spy = vi

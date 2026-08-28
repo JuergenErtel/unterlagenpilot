@@ -5,7 +5,7 @@ import { getStorage } from "@/lib/storage";
 import { analysiereDokument } from "@/lib/documents/pipeline";
 import { SEITEN_MUSTER } from "@/lib/detektiv/completeness";
 import { countProcessingDocuments } from "@/lib/documents/processing";
-import { waehleKandidaten, istBuendelKandidat, type Kandidat } from "./kandidaten";
+import { waehleKandidaten, istBuendelKandidat, zuKandidat, type Kandidat } from "./kandidaten";
 import { baueBuendelPdf } from "./pdf";
 import { pruefeBuendel, zeitraumKonflikt } from "./pruefung";
 import { MIN_KANDIDATEN, TEXT_ANFANG, type BuendelVorschlag } from "./types";
@@ -13,6 +13,15 @@ import type { DocumentType } from "@/lib/domain/enums";
 
 /** Nach dieser Zeit gilt ein `laeuft` als haengengeblieben (Absturz, Deploy). */
 const SPERRE_VERFAELLT_MS = 10 * 60_000;
+
+/**
+ * Markiert einen Lauf, dessen Sperre waehrend der KI-Auswertung (Laufzeit
+ * unbestimmt) von einem zweiten Lauf uebernommen wurde (SPERRE_VERFAELLT_MS
+ * ueberschritten). Der zweite Lauf ist danach der rechtmaessige Besitzer -
+ * der erste darf weder sein Ergebnis noch seinen Status ueberschreiben und
+ * muss das von einem echten Fehler unterscheiden koennen (siehe `erkenneBuendel`).
+ */
+class SperreVerdraengtError extends Error {}
 
 /** Steht auf dieser Seite ueberhaupt ein Seitenzaehler ("Seite 2 von 4")? */
 function hatSeitenzaehler(text: string): boolean {
@@ -41,6 +50,14 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
   // der catch-Block unten nicht "fehler" hineinschreiben und damit einen
   // fremden, echten Lauf ueberschreiben.
   let sperreErhalten = false;
+  // Der Zeitstempel, den WIR gleich beim Beanspruchen setzen - das
+  // Fencing-Token. Die abschliessende Schreiboperation (`abschliessen`) gilt
+  // nur, solange dieser Stempel noch in der Datenbank steht. Wurde die Sperre
+  // waehrend der KI-Auswertung von einem zweiten Lauf uebernommen, steht dort
+  // laengst ein neuerer - dann darf dieser Lauf nichts mehr schreiben. Schon
+  // hier (nicht erst in try{}) zugewiesen, sonst saehe TypeScript den Wert im
+  // catch-Block als moeglicherweise nie zugewiesen an.
+  let beanspruchtAm = new Date();
 
   try {
     // Die Sperre liegt in der Datenbank, nicht im Speicher: zwei gleichzeitig
@@ -54,7 +71,7 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
           { buendelStatusAm: { lt: new Date(Date.now() - SPERRE_VERFAELLT_MS) } },
         ],
       },
-      data: { buendelStatus: "laeuft", buendelStatusAm: new Date() },
+      data: { buendelStatus: "laeuft", buendelStatusAm: beanspruchtAm },
     });
     // Verloren - der Nachbar laeuft schon (oder der Fall existiert nicht). Ein
     // stiller Rueckzug, kein Fehler.
@@ -80,25 +97,12 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
     });
 
     const kandidaten: Kandidat[] = waehleKandidaten(
-      docs.map((d) => ({
-        id: d.id,
-        originalName: d.originalName,
-        mimeType: d.mimeType,
-        pageCount: d.pageCount,
-        reviewStatus: d.reviewStatus,
-        ocrStatus: d.ocrStatus,
-        readable: d.readable,
-        zusammengefuegtInId: d.zusammengefuegtInId,
-        documentType: d.documentType as DocumentType | null,
-        period: d.period,
-        createdAt: d.createdAt,
-        text: (d.pages[0]?.ocrText ?? "").trim(),
-      }))
+      docs.map((d) => zuKandidat(d, (d.pages[0]?.ocrText ?? "").trim()))
     );
 
     if (kandidaten.length === 0) {
       // Geprueft und nichts zu tun - das ist kein Fehler.
-      await abschliessen(caseId, "fertig", []);
+      await abschliessen(caseId, "fertig", [], beanspruchtAm);
       return;
     }
 
@@ -129,9 +133,18 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
         vermuteterTyp: b.vermuteterTyp,
         confidence: b.confidence,
         seiten: b.seiten.map((nummer, position) => ({ documentId: kandidaten[nummer]!.id, position })),
-      }))
+      })),
+      beanspruchtAm
     );
   } catch (e) {
+    if (e instanceof SperreVerdraengtError) {
+      // Kein Fehler - ein zweiter Lauf hat die verfallene Sperre uebernommen
+      // und ist jetzt der rechtmaessige Besitzer. Weder sein Ergebnis noch
+      // sein Status duerfen von diesem, verdraengten Lauf ueberschrieben
+      // werden - deshalb hier ohne "fehler"-Schreibvorgang zurueck.
+      console.warn(`[buendelung] Lauf fuer Fall ${caseId} wurde waehrend der Ausfuehrung verdraengt - Ergebnis verworfen.`);
+      return;
+    }
     console.error(`[buendelung] Erkennung fuer Fall ${caseId} fehlgeschlagen:`, e);
     if (!sperreErhalten) {
       // Die Sperre selbst ist gescheitert - wir waren nie der Besitzer dieses
@@ -141,8 +154,16 @@ export async function erkenneBuendel(caseId: string): Promise<void> {
       // Stand eines anderen Aufrufs ueberschreiben.
       return;
     }
+    // Fencing wie bei `abschliessen` unten: nur schreiben, wenn dieser Lauf
+    // die Sperre noch haelt - sonst koennte ein (an dieser Stelle nicht als
+    // SperreVerdraengtError erkannter, aber ebenso verdraengter) Lauf einen
+    // zweiten, inzwischen echten Lauf mit "fehler" ueberschreiben. updateMany
+    // wirft bei null Treffern nicht - ein stiller No-op ist hier korrekt.
     await prisma.case
-      .update({ where: { id: caseId }, data: { buendelStatus: "fehler", buendelStatusAm: new Date() } })
+      .updateMany({
+        where: { id: caseId, buendelStatusAm: beanspruchtAm },
+        data: { buendelStatus: "fehler", buendelStatusAm: new Date() },
+      })
       .catch(() => undefined);
   }
 }
@@ -190,9 +211,31 @@ interface NeuesBuendel {
 /**
  * Setzt Status und Vorschlaege in EINER Transaktion. Ein erneuter Lauf ersetzt
  * den alten Vorschlag, statt ihn zu verdoppeln.
+ *
+ * `beanspruchtAm` ist das Fencing-Token aus `erkenneBuendel`: geschrieben wird
+ * nur, wenn `Case.buendelStatusAm` noch genau diesen Wert traegt. Steht dort
+ * ein anderer (ein zweiter Lauf hat die Sperre uebernommen, weil dieser Lauf
+ * laenger als SPERRE_VERFAELLT_MS brauchte), wirft die Funktion
+ * `SperreVerdraengtError` und die Transaktion rollt komplett zurueck - weder
+ * Status noch `DocumentBuendel`-Zeilen des zweiten, rechtmaessigen Laufs
+ * werden angefasst.
  */
-async function abschliessen(caseId: string, status: "fertig", buendel: NeuesBuendel[]): Promise<void> {
+async function abschliessen(
+  caseId: string,
+  status: "fertig",
+  buendel: NeuesBuendel[],
+  beanspruchtAm: Date
+): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Die Sperr-Pruefung ZUERST, bevor irgendetwas anderes geschrieben wird -
+    // scheitert sie, sollen auch deleteMany/create unten nie anfassen.
+    const haeltNochDieSperre = await tx.case.updateMany({
+      where: { id: caseId, buendelStatusAm: beanspruchtAm },
+      data: { buendelStatus: status, buendelStatusAm: new Date() },
+    });
+    if (haeltNochDieSperre.count !== 1) {
+      throw new SperreVerdraengtError();
+    }
     await tx.documentBuendel.deleteMany({ where: { caseId } });
     for (const b of buendel) {
       await tx.documentBuendel.create({
@@ -206,10 +249,6 @@ async function abschliessen(caseId: string, status: "fertig", buendel: NeuesBuen
         },
       });
     }
-    await tx.case.update({
-      where: { id: caseId },
-      data: { buendelStatus: status, buendelStatusAm: new Date() },
-    });
   });
 }
 
@@ -335,23 +374,10 @@ export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<Zusamme
   // KI-Lauf bindet) - sie hier zu wiederholen waere genau die Falle, gegen
   // die der Export in kandidaten.ts geschaffen wurde. Die Pruefung laeuft
   // VOR jedem Storage-Zugriff, damit ein Ablehnen nie etwas anfasst.
-  const kandidaten: Kandidat[] = docs.map((d) => ({
-    id: d.id,
-    originalName: d.originalName,
-    mimeType: d.mimeType,
-    pageCount: d.pageCount,
-    reviewStatus: d.reviewStatus,
-    ocrStatus: d.ocrStatus,
-    readable: d.readable,
-    zusammengefuegtInId: d.zusammengefuegtInId,
-    documentType: d.documentType as DocumentType | null,
-    period: d.period,
-    createdAt: d.createdAt,
-    // istBuendelKandidat sieht nur Struktur-Felder - der Text ist fuer die
-    // Regel ohne Bedeutung, ein Nachladen aus DocumentPage waere hier
-    // verschwendet.
-    text: "",
-  }));
+  // istBuendelKandidat sieht nur Struktur-Felder - der Text ist fuer die
+  // Regel ohne Bedeutung, ein Nachladen aus DocumentPage waere hier
+  // verschwendet (zuKandidat() ohne zweites Argument laesst ihn leer).
+  const kandidaten: Kandidat[] = docs.map((d) => zuKandidat(d));
   const ungueltig = kandidaten.find((k) => !istBuendelKandidat(k));
   if (ungueltig) {
     return {
@@ -465,10 +491,39 @@ export async function fuegeZusammen(input: ZusammenfuegenInput): Promise<Zusamme
 
     return { ok: true, documentId: neu.id, seiten: teile.length };
   } catch (e) {
-    // Kein Muell im Speicher, und der Fall bleibt exakt so, wie er war.
-    await storage.remove(gespeichert.storageKey).catch(() => undefined);
+    // Der Fall soll exakt so bleiben, wie er war - das PDF, das schon im
+    // Speicher liegt, muss also wieder weg. Scheitert auch DAS, darf es nicht
+    // stillschweigend verschwinden (wie bei macheRueckgaengig unten): sonst
+    // bliebe ein verwaistes Objekt liegen, waehrend hier und im Kommentar
+    // "kein Muell im Speicher" behauptet wuerde.
+    await storage
+      .remove(gespeichert.storageKey)
+      .catch((removeError) =>
+        console.error(`[buendelung] PDF ${gespeichert.storageKey} nicht entfernt:`, removeError)
+      );
     console.error(`[buendelung] Zusammenfuegen im Fall ${caseId} fehlgeschlagen:`, e);
     return { ok: false, grund: "Das Zusammenfügen ist fehlgeschlagen." };
+  }
+}
+
+/**
+ * Warum "Rueckgaengig" fuer ein nicht mehr offenes Dokument abgelehnt wird -
+ * "bereits freigegeben" stimmt nur bei `akzeptiert`, nicht bei `abgelehnt`,
+ * `duplikat` oder `ersetzt`. Nur bei `akzeptiert`/`abgelehnt` fuehrt in der
+ * Oberflaeche ein Weg zurueck ("Freigabe zuruecknehmen"/"Ablehnung
+ * zuruecknehmen", siehe reopenDocument in actions/cases.ts) - bei
+ * `duplikat`/`ersetzt` gibt es keinen, der Text darf das nicht versprechen.
+ */
+function ablehnungsgrundNichtOffen(status: string): string {
+  switch (status) {
+    case "akzeptiert":
+      return "Das Dokument ist bereits freigegeben – bitte zuerst wieder öffnen.";
+    case "abgelehnt":
+      return "Das Dokument wurde bereits abgelehnt – bitte zuerst wieder öffnen.";
+    case "duplikat":
+      return "Das Dokument wurde als Duplikat markiert und lässt sich nicht mehr zurücknehmen.";
+    default:
+      return "Das Dokument wurde bereits durch ein anderes ersetzt und lässt sich nicht mehr zurücknehmen.";
   }
 }
 
@@ -502,7 +557,7 @@ export async function macheRueckgaengig(
     return { ok: false, grund: "Dieses Dokument ist nicht aus Einzelseiten entstanden." };
   }
   if (doc.reviewStatus !== "offen") {
-    return { ok: false, grund: "Das Dokument ist bereits freigegeben – bitte zuerst wieder öffnen." };
+    return { ok: false, grund: ablehnungsgrundNichtOffen(doc.reviewStatus) };
   }
 
   const quellIds = doc.quellseiten.map((q) => q.id);
