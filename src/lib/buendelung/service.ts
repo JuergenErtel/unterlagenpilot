@@ -233,10 +233,24 @@ async function abschliessen(caseId: string, status: "fertig", buendel: NeuesBuen
  * Bereinigung wuerde ein einziges tot haengengebliebenes Nachbardokument den
  * Buendel-Lauf fuer den ganzen restlichen Fall fuer immer verhindern.
  *
+ * Das eigene Dokument zaehlt zusaetzlich nicht, wenn es SELBST aus Einzelseiten
+ * entstanden ist (hat `quellseiten`): seine fertige Analyse traegt fuer die
+ * Buendel-Erkennung keine neue Information, aber `erkenneBuendel` raeumt in
+ * `abschliessen` ALLE Vorschlaege des Falls weg und ersetzt sie durch einen
+ * frischen KI-Lauf - ein gerade erst zusammengefuegtes Dokument wuerde damit
+ * jeden anderen, noch unbearbeiteten Vorschlag lautlos wegraeumen (Befund 2).
+ * Gleiches Muster wie `_count.quellseiten` in `erkenneAufteilung`.
+ *
  * Wirft nie.
  */
 export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocumentId: string): Promise<void> {
   try {
+    const eigenes = await prisma.document.findUnique({
+      where: { id: eigeneDocumentId },
+      select: { _count: { select: { quellseiten: true } } },
+    });
+    if (eigenes && eigenes._count.quellseiten > 0) return;
+
     const kandidaten = await prisma.document.findMany({
       where: {
         caseId,

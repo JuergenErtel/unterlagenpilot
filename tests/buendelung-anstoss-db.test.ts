@@ -176,6 +176,62 @@ describe.runIf(RUN)("Anstoß des Bündel-Laufs (PGlite)", () => {
   // ein wirklich noch laufender Nachbar muss weiterhin blockieren. Beide
   // Richtungen in einem Test, damit keine der beiden versehentlich unbewiesen
   // bleibt.
+  // Schlussbefund 2 (WICHTIG): abschliessen() raeumt in einer Transaktion ALLE
+  // DocumentBuendel-Zeilen des Falls weg, bevor es die neuen anlegt - auch
+  // wenn der neue Lauf null Vorschlaege findet oder gar nicht "muss", weil das
+  // fertig gewordene Dokument selbst aus einer Buendelung stammt. Ohne diesen
+  // Ausschluss raeumte das eigene Fertigwerden des GERADE zusammengefuegten
+  // PDFs die restlichen, noch unbearbeiteten Vorschlaege des Falls weg - der
+  // Vermittler sah eine verschwundene Karte, obwohl niemand sie bearbeitet hat.
+  it("ein gerade zusammengefuegtes Dokument stoesst den Buendel-Lauf nicht erneut an", async () => {
+    const caseId = await fallAnlegen();
+    const uebrig1 = await seite(caseId, 0);
+    const uebrig2 = await seite(caseId, 1);
+    const bestehend = await prisma.documentBuendel.create({
+      data: {
+        caseId,
+        reihenfolge: 0,
+        titel: "Bestehender Vorschlag",
+        confidence: 0.9,
+        seiten: { create: [{ documentId: uebrig1.id, position: 0 }, { documentId: uebrig2.id, position: 1 }] },
+      },
+    });
+    await prisma.case.update({ where: { id: caseId }, data: { buendelStatus: "fertig" } });
+
+    // Ein aus Einzelseiten entstandenes Dokument - traegt eine Quellseite,
+    // genau wie ein echtes Ergebnis von fuegeZusammen.
+    const quelle = await seite(caseId, 2);
+    const geblendetesDokument = await prisma.document.create({
+      data: {
+        caseId,
+        originalName: "gebuendelt.pdf",
+        storageKey: `t/${caseId}/gebuendelt.pdf`,
+        mimeType: "application/pdf",
+        sizeBytes: 500,
+        uploadSource: "kunde",
+        pageCount: 2,
+        scanStatus: "virus_scan_clean",
+        ocrStatus: "fertig",
+        classificationStatus: "fertig",
+        extractionStatus: "fertig",
+      },
+    });
+    await prisma.document.update({
+      where: { id: quelle.id },
+      data: { zusammengefuegtInId: geblendetesDokument.id, reviewStatus: "ersetzt" },
+    });
+
+    await starteBuendelLaufWennFertig(caseId, geblendetesDokument.id);
+
+    // Kein neuer KI-Lauf, kein Wegraeumen - der bestehende Vorschlag steht
+    // unveraendert da.
+    const buendelDanach = await prisma.documentBuendel.findMany({ where: { caseId } });
+    expect(buendelDanach).toHaveLength(1);
+    expect(buendelDanach[0]!.id).toBe(bestehend.id);
+    const c = await prisma.case.findUnique({ where: { id: caseId } });
+    expect(c.buendelStatus).toBe("fertig");
+  });
+
   it("nur ein FRISCHES 'laeuft' beim Nachbarn blockiert - ein veraltetes nicht mehr", async () => {
     // Fall A: der Nachbar haengt seit ueber der Alters-Schwelle
     // (AI_CHECK_STALE_MS = 10 Minuten) auf "laeuft" - vermutlich hart
