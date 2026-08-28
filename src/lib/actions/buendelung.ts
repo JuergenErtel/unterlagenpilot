@@ -159,11 +159,30 @@ export async function seitenZusammenfuegenAction(
   return { grund: ergebnis.grund };
 }
 
-/** Eine Buendelung zuruecknehmen. */
-export async function buendelRueckgaengigAction(formData: FormData): Promise<void> {
+/** Zustand fuer den Rueckgaengig-Knopf in der Dokumentzeile - siehe `buendelRueckgaengigAction`. */
+export interface BuendelRueckgaengigState {
+  /** Kundengrade deutsche Begruendung eines gescheiterten Rueckgaengigmachens. */
+  grund?: string;
+}
+
+/**
+ * Eine Buendelung zuruecknehmen.
+ *
+ * Signatur fuer `useActionState`, wie `buendelZusammenfuegenAction` und
+ * `seitenZusammenfuegenAction` oben: `macheRueckgaengig` lehnt ab, wenn das
+ * Dokument inzwischen freigegeben oder gar nicht mehr da ist ("in einem
+ * anderen Tab freigegeben", "gerade entfernt") - selten, aber genau dann ist
+ * ein schweigender Klick am verwirrendsten, weil der Vermittler keine
+ * Erklaerung fuer das Nichts hat. `grund` ist bereits kundengrader Klartext
+ * aus der Service-Schicht und wird unveraendert durchgereicht.
+ */
+export async function buendelRueckgaengigAction(
+  _bisher: BuendelRueckgaengigState,
+  formData: FormData
+): Promise<BuendelRueckgaengigState> {
   const caseId = String(formData.get("caseId") ?? "");
   const documentId = String(formData.get("documentId") ?? "");
-  if (!caseId || !documentId) return;
+  if (!caseId || !documentId) return { grund: "Fall oder Dokument fehlt." };
   const { ctx } = await requireCaseAccess(caseId);
 
   const ergebnis = await macheRueckgaengig(documentId, ctx.organizationId);
@@ -176,6 +195,9 @@ export async function buendelRueckgaengigAction(formData: FormData): Promise<voi
       entityId: documentId,
       metadata: { buendelungZurueckgenommen: ergebnis.seiten },
     });
+    revalidatePath(`/cases/${caseId}`);
+    return {};
   }
   revalidatePath(`/cases/${caseId}`);
+  return { grund: ergebnis.grund };
 }

@@ -53,6 +53,7 @@ import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
+import { BuendelRueckgaengig } from "@/components/case/buendel-rueckgaengig";
 import { SeitenAuswahl, SeitenKaestchen } from "@/components/case/seiten-auswahl";
 import { istBuendelKandidat } from "@/lib/buendelung/kandidaten";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
@@ -724,61 +725,83 @@ export default async function CaseCockpitPage({
                             <TableCell className="font-mono tabular">{formatConfidence(d.confidence)}</TableCell>
                             <TableCell>{d.warnings.length > 0 ? <Badge variant="warning">{d.warnings.length}</Badge> : "—"}</TableCell>
                             <TableCell className="sticky right-0 z-10 border-l bg-card">
-                              {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
-                              {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
-                                  Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
-                                  bekommt bewusst KEINEN Freigeben-Knopf – freigegeben wurde
-                                  genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
-                                  die Checkliste meldete Gruen fuer ein Dokument, das im Fall
-                                  nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
-                              {d.readable === false ? (
-                                <Badge variant="warning">
-                                  Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
-                                </Badge>
-                              ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
-                                <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
-                              ) : d.reviewStatus === "offen" ? (
-                                // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
-                                // stand nur ein passives Abzeichen, und der einzige Weg zur
-                                // Uebernahme lag im Review-Center - darauf kam niemand, der
-                                // es nicht ohnehin wusste. Erst wenn die KI fertig ist, sonst
-                                // gaebe man ein Dokument ohne erkannte Daten frei.
-                                d.classificationStatus === "fertig" ? (
-                                  <div className="flex items-center gap-2">
-                                    <form action={acceptDocument.bind(null, d.id)}>
-                                      <SubmitButton size="sm" pendingLabel="Wird übernommen …">
-                                        Freigeben
-                                      </SubmitButton>
-                                    </form>
-                                    <Link
-                                      href={`/review?case=${id}`}
-                                      className="whitespace-nowrap text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                                    >
-                                      Felder ansehen
-                                    </Link>
-                                  </div>
-                                ) : (
-                                  <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
-                                )
-                              ) : d.reviewStatus === "akzeptiert" ? (
-                                // Der Weg zurueck gehoert genau hierhin: Erkannte Felder
-                                // sind nur im Review-Center sichtbar, und das laedt nur
-                                // offene Dokumente. Ohne diesen Knopf war ein falsch
-                                // erkannter Wert nach der Freigabe unerreichbar.
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
-                                  <ReopenDocumentButton documentId={d.id} />
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="neutral">
-                                    {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                              {/* Aussenrum EIN Flex-Container fuer alle Zweige: Der
+                                  Rueckgaengig-Knopf haengt unten an einer einzigen
+                                  Stelle an "reviewStatus === offen", statt sich in
+                                  jeden der folgenden Zweige (unlesbar, KI-Fehler,
+                                  KI laeuft noch, freigebbar) einzeln zu wiederholen -
+                                  er gilt fuer alle davon gleichermassen, solange das
+                                  Dokument nicht freigegeben ist. */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Nie den rohen Enum-Wert zeigen ("duplikat", "ersetzt"). */}
+                                {/* Zuerst die wichtigste Wahrheit ueber die Zeile: Aus einer
+                                    Datei ohne lesbaren Text laesst sich kein Typ ableiten. Sie
+                                    bekommt bewusst KEINEN Freigeben-Knopf – freigegeben wurde
+                                    genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
+                                    die Checkliste meldete Gruen fuer ein Dokument, das im Fall
+                                    nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
+                                {d.readable === false ? (
+                                  <Badge variant="warning">
+                                    Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
                                   </Badge>
-                                  {d.reviewStatus === "abgelehnt" && (
-                                    <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
-                                  )}
-                                </div>
-                              )}
+                                ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
+                                  <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
+                                ) : d.reviewStatus === "offen" ? (
+                                  // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
+                                  // stand nur ein passives Abzeichen, und der einzige Weg zur
+                                  // Uebernahme lag im Review-Center - darauf kam niemand, der
+                                  // es nicht ohnehin wusste. Erst wenn die KI fertig ist, sonst
+                                  // gaebe man ein Dokument ohne erkannte Daten frei.
+                                  d.classificationStatus === "fertig" ? (
+                                    <>
+                                      <form action={acceptDocument.bind(null, d.id)}>
+                                        <SubmitButton size="sm" pendingLabel="Wird übernommen …">
+                                          Freigeben
+                                        </SubmitButton>
+                                      </form>
+                                      <Link
+                                        href={`/review?case=${id}`}
+                                        className="whitespace-nowrap text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                      >
+                                        Felder ansehen
+                                      </Link>
+                                    </>
+                                  ) : (
+                                    <Badge variant="ai">{DOCUMENT_REVIEW_STATUS_LABELS.offen}</Badge>
+                                  )
+                                ) : d.reviewStatus === "akzeptiert" ? (
+                                  // Der Weg zurueck gehoert genau hierhin: Erkannte Felder
+                                  // sind nur im Review-Center sichtbar, und das laedt nur
+                                  // offene Dokumente. Ohne diesen Knopf war ein falsch
+                                  // erkannter Wert nach der Freigabe unerreichbar.
+                                  <>
+                                    <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+                                    <ReopenDocumentButton documentId={d.id} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <Badge variant="neutral">
+                                      {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+                                    </Badge>
+                                    {d.reviewStatus === "abgelehnt" && (
+                                      <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
+                                    )}
+                                  </>
+                                )}
+                                {/* Nur bei einem aus Einzelseiten entstandenen, noch
+                                    offenen Dokument - unabhaengig davon, ob die KI
+                                    schon fertig, noch am Laufen oder mit Fehler
+                                    stehengeblieben ist. Danach hat der Vermittler
+                                    entschieden, und der Weg zurueck fuehrt ueber
+                                    "Freigabe zuruecknehmen". */}
+                                {d.reviewStatus === "offen" && d._count.quellseiten > 0 && (
+                                  <BuendelRueckgaengig
+                                    caseId={id}
+                                    documentId={d.id}
+                                    seiten={d._count.quellseiten}
+                                  />
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                           {d.splitSegmente.length >= 2 && (
