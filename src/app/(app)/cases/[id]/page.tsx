@@ -649,6 +649,7 @@ export default async function CaseCockpitPage({
                   caseId={id}
                   status={caseRow.buendelStatus as "ausstehend" | "laeuft" | "fertig" | "fehler"}
                   andererPollerLaeuft={andererPollerLaeuft}
+                  kandidatenAnzahl={auswaehlbareSeiten.length}
                   buendel={buendelVorschlaege.map((b) => ({
                     id: b.id,
                     titel: b.titel,

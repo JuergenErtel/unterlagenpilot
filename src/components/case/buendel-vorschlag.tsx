@@ -39,6 +39,7 @@ export function BuendelVorschlagKarte({
   status,
   buendel,
   andererPollerLaeuft,
+  kandidatenAnzahl,
 }: {
   caseId: string;
   status: "ausstehend" | "laeuft" | "fertig" | "fehler";
@@ -53,6 +54,12 @@ export function BuendelVorschlagKarte({
    * sonst saehe der Vermittler den Vorschlag erst nach manuellem Neuladen.
    */
   andererPollerLaeuft: boolean;
+  /**
+   * Wie viele buendelbare Einzelseiten der Fall gerade hat. Nur dafuer da, im
+   * Zustand "noch nicht geprueft" zu entscheiden, ob es ueberhaupt etwas zu
+   * pruefen gibt - siehe den Kommentar am fruehen Return unten.
+   */
+  kandidatenAnzahl: number;
 }) {
   const router = useRouter();
 
@@ -69,10 +76,6 @@ export function BuendelVorschlagKarte({
     return () => clearInterval(timer);
   }, [status, andererPollerLaeuft, router]);
 
-  // "Noch nicht geprueft" bekommt keine Karte - sonst stuende dort dauerhaft
-  // ein Hinweis, der nichts sagt.
-  if (status === "ausstehend") return null;
-
   const erneutPruefen = (
     <form action={buendelErneutPruefenAction}>
       <input type="hidden" name="caseId" value={caseId} />
@@ -81,6 +84,32 @@ export function BuendelVorschlagKarte({
       </SubmitButton>
     </form>
   );
+
+  // "Noch nicht geprueft": normalerweise keine Karte - ein Dauerhinweis, der
+  // nichts sagt, ist schlimmer als nichts. ABER der Knopf zum Anstossen sass
+  // bis zum 28.08. AUSSCHLIESSLICH in dieser Karte, und die erschien in genau
+  // diesem Zustand nicht: Fuer jeden Fall, der noch nie einen Lauf hatte -
+  // also fuer JEDEN Bestandsfall nach der Einfuehrung - war das Feature
+  // unsichtbar und unerreichbar. Deshalb: sobald es ueberhaupt etwas zu pruefen
+  // gibt, eine schmale Zeile mit dem Weg hinein. Ohne Einzelseiten bleibt es
+  // still, denn dann gaebe es wirklich nichts zu tun.
+  if (status === "ausstehend") {
+    if (kandidatenAnzahl < 2) return null;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+        <p className="text-xs text-muted-foreground">
+          {kandidatenAnzahl} Einzelseiten in diesem Fall – noch nicht darauf geprüft, ob welche
+          zusammengehören.
+        </p>
+        <form action={buendelErneutPruefenAction}>
+          <input type="hidden" name="caseId" value={caseId} />
+          <SubmitButton size="sm" pendingLabel="Wird geprüft …">
+            Auf zusammengehörende Seiten prüfen
+          </SubmitButton>
+        </form>
+      </div>
+    );
+  }
 
   if (status === "laeuft") {
     return (
