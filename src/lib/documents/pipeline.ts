@@ -13,6 +13,7 @@ import { hatTextgrundlage } from "./textsubstanz";
 import { matchApplicant } from "@/lib/documents/applicant-match";
 import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
 import { erkenneAufteilung } from "@/lib/aufteilung/service";
+import { starteBuendelLaufWennFertig } from "@/lib/buendelung/service";
 import type { DocumentScanStatus, UploadSource } from "@/lib/domain/enums";
 
 /**
@@ -429,6 +430,11 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     await erkenneAufteilung(documentId);
     await runReferenceExtraction(documentId);
     await reconcileCase(caseId);
+
+    // ZULETZT: Die Buendelung fragt den ganzen Fall ab und braucht deshalb
+    // alle anderen Analysen fertig. Sie startet nur, wenn dieses Dokument das
+    // letzte laufende war.
+    await starteBuendelLaufWennFertig(caseId, documentId);
   } catch (e) {
     console.error(`[pipeline] Nachlauf für Dokument ${documentId} fehlgeschlagen:`, e);
   }

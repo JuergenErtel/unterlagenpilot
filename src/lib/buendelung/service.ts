@@ -175,3 +175,38 @@ async function abschliessen(caseId: string, status: "fertig", buendel: NeuesBuen
     });
   });
 }
+
+/**
+ * "Wer als Letzter fertig wird, macht das Licht aus."
+ *
+ * Am Ende der Analyse eines Dokuments: laeuft im Fall noch eine andere
+ * Analyse? Wenn nein, startet dieses Dokument den fallweiten Buendel-Lauf.
+ * Ergebnis ist EIN KI-Aufruf je Upload-Schwung, gleich ob drei oder dreissig
+ * Seiten - dreissig Aufrufe wuerden das Mistral-Kontingent (50/Minute)
+ * sprengen.
+ *
+ * Das eigene Dokument wird ausgenommen: sein Status steht zu diesem Zeitpunkt
+ * je nach Reihenfolge der Schreibvorgaenge moeglicherweise noch auf "laeuft",
+ * und es duerfte sich nicht selbst blockieren.
+ *
+ * Wirft nie.
+ */
+export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocumentId: string): Promise<void> {
+  try {
+    const nochLaufend = await prisma.document.count({
+      where: {
+        caseId,
+        id: { not: eigeneDocumentId },
+        OR: [
+          { ocrStatus: "laeuft" },
+          { classificationStatus: "laeuft" },
+          { extractionStatus: "laeuft" },
+        ],
+      },
+    });
+    if (nochLaufend > 0) return;
+    await erkenneBuendel(caseId);
+  } catch (e) {
+    console.error(`[buendelung] Anstoss fuer Fall ${caseId} fehlgeschlagen:`, e);
+  }
+}
