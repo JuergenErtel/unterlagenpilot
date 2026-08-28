@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { aiService } from "@/lib/ai";
 import { SEITEN_MUSTER } from "@/lib/detektiv/completeness";
+import { countProcessingDocuments } from "@/lib/documents/processing";
 import { waehleKandidaten, type Kandidat } from "./kandidaten";
 import { pruefeBuendel } from "./pruefung";
 import { TEXT_ANFANG, type BuendelVorschlag } from "./types";
@@ -189,11 +190,18 @@ async function abschliessen(caseId: string, status: "fertig", buendel: NeuesBuen
  * je nach Reihenfolge der Schreibvorgaenge moeglicherweise noch auf "laeuft",
  * und es duerfte sich nicht selbst blockieren.
  *
+ * Ein Nachbar zaehlt nur mit, wenn sein "laeuft" noch FRISCH ist
+ * (`countProcessingDocuments`, dieselbe Alters-Schwelle wie beim Poll-Status
+ * der Fallseite). Stirbt ein Hintergrundlauf hart (Deploy, Function-Timeout),
+ * gibt es keinen Aufraeum-Cron, der die Zeile zuruecksetzt - ohne diese
+ * Bereinigung wuerde ein einziges tot haengengebliebenes Nachbardokument den
+ * Buendel-Lauf fuer den ganzen restlichen Fall fuer immer verhindern.
+ *
  * Wirft nie.
  */
 export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocumentId: string): Promise<void> {
   try {
-    const nochLaufend = await prisma.document.count({
+    const kandidaten = await prisma.document.findMany({
       where: {
         caseId,
         id: { not: eigeneDocumentId },
@@ -203,8 +211,9 @@ export async function starteBuendelLaufWennFertig(caseId: string, eigeneDocument
           { extractionStatus: "laeuft" },
         ],
       },
+      select: { ocrStatus: true, classificationStatus: true, extractionStatus: true, updatedAt: true },
     });
-    if (nochLaufend > 0) return;
+    if (countProcessingDocuments(kandidaten) > 0) return;
     await erkenneBuendel(caseId);
   } catch (e) {
     console.error(`[buendelung] Anstoss fuer Fall ${caseId} fehlgeschlagen:`, e);

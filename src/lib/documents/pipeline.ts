@@ -430,13 +430,22 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     await erkenneAufteilung(documentId);
     await runReferenceExtraction(documentId);
     await reconcileCase(caseId);
-
-    // ZULETZT: Die Buendelung fragt den ganzen Fall ab und braucht deshalb
-    // alle anderen Analysen fertig. Sie startet nur, wenn dieses Dokument das
-    // letzte laufende war.
-    await starteBuendelLaufWennFertig(caseId, documentId);
   } catch (e) {
     console.error(`[pipeline] Nachlauf für Dokument ${documentId} fehlgeschlagen:`, e);
+  }
+
+  // ZULETZT und in einer EIGENEN try/catch-Grenze: Die Buendelung fragt den
+  // ganzen Fall ab und braucht deshalb alle anderen Analysen fertig. Sie
+  // startet nur, wenn dieses Dokument das letzte laufende war. Ein eigener
+  // Block, weil `reconcileCase` oben - anders als `erkenneAufteilung` und
+  // `runReferenceExtraction` - NICHT intern abgesichert ist: wuerfe es, faengt
+  // das der Block darueber ab und der Anstoss unten wuerde sonst mitgerissen
+  // - der Fall bliebe fuer immer auf "ausstehend" stehen, ohne dass irgendwo
+  // ein Fehler sichtbar wird.
+  try {
+    await starteBuendelLaufWennFertig(caseId, documentId);
+  } catch (e) {
+    console.error(`[pipeline] Buendel-Anstoss fuer Dokument ${documentId} fehlgeschlagen:`, e);
   }
 }
 
