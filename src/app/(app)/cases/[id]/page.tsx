@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
 export const maxDuration = 300;
-import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall, BadgeCheck } from "lucide-react";
+import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall, BadgeCheck, LayoutPanelLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
@@ -643,6 +643,22 @@ export default async function CaseCockpitPage({
 
             <TabsContent value="dokumente">
               <div className="space-y-4">
+                {/* Der Weg zum Arbeitsplatz gehoert VOR die Tabelle: Wer hier
+                    ankommt, will meist pruefen und zuordnen - und das kann die
+                    dreispaltige Ansicht (Soll, Ist, Vorschau) besser als jede
+                    Tabelle. */}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ai/30 bg-ai/[0.05] px-3 py-2">
+                  <p className="text-sm">
+                    <span className="font-medium">Unterlagen-Arbeitsplatz:</span>{" "}
+                    Anforderungen, Dokumente und Vorschau nebeneinander – prüfen und zuordnen an einem Ort.
+                  </p>
+                  <Button asChild size="sm">
+                    <Link href={`/cases/${id}/unterlagen`}>
+                      <LayoutPanelLeft />
+                      Öffnen
+                    </Link>
+                  </Button>
+                </div>
                 <Card id="broker-upload" className="scroll-mt-24">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Dokumente hochladen</CardTitle>

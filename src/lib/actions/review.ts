@@ -136,7 +136,7 @@ export async function assignDocumentApplicant(
     metadata: { assignedApplicant: applicantId ?? "none" },
   });
 
-  revalidatePath(`/cases/${doc!.caseId}`);
+  revalidatePath(`/cases/${doc!.caseId}`, "layout");
   revalidatePath("/review");
 }
 
@@ -207,6 +207,6 @@ export async function reclassifyDocument(
     metadata: { from: doc!.documentType, to: newType },
   });
 
-  revalidatePath(`/cases/${doc!.caseId}`);
+  revalidatePath(`/cases/${doc!.caseId}`, "layout");
   revalidatePath("/review");
 }

@@ -224,7 +224,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
     })
   );
 
-  revalidatePath(`/cases/${caseId}`);
+  revalidatePath(`/cases/${caseId}`, "layout");
 }
 
 /**
@@ -548,7 +548,9 @@ export async function setDocumentReview(
     }
   }
 
-  revalidatePath(`/cases/${doc.caseId}`);
+  // "layout": auch die Unterseiten des Falls (Unterlagen-Arbeitsplatz, Export)
+  // zeigen Dokument-Status - eine Freigabe dort muss sofort sichtbar sein.
+  revalidatePath(`/cases/${doc.caseId}`, "layout");
   revalidatePath(`/review`);
 }
 
@@ -612,7 +614,7 @@ export async function reopenDocument(documentId: string): Promise<void> {
     metadata: { reviewStatus: "offen", vorher },
   });
 
-  revalidatePath(`/cases/${doc!.caseId}`);
+  revalidatePath(`/cases/${doc!.caseId}`, "layout");
   revalidatePath("/review");
 }
 
