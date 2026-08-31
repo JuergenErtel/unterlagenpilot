@@ -15,6 +15,12 @@ import type { DocumentType } from "@/lib/domain/enums";
 export interface ArbeitsplatzDokument {
   id: string;
   name: string;
+  /**
+   * Urspruenglicher Dateiname vom Upload. Im Eingang heissen sonst sechs
+   * Dateien gleich ("Sonstige_Unterlagen.jpg") - erst der Originalname
+   * unterscheidet, welches Foto welches ist.
+   */
+  originalName: string;
   mimeType: string;
   documentType: DocumentType | null;
   applicantId: string | null;
@@ -25,6 +31,12 @@ export interface ArbeitsplatzDokument {
   extractionStatus: string;
   /** ISO-Datum des Uploads - Client-Komponenten bekommen keine Date-Objekte. */
   hochgeladenAm: string;
+  /**
+   * Anzeigetext des Upload-Zeitpunkts, auf dem SERVER formatiert (feste
+   * Zeitzone Europe/Berlin). Im Client formatieren hiesse: Server rendert in
+   * UTC, Browser in Ortszeit - genau die Hydration-Falle (BAUFIDESK-E).
+   */
+  hochgeladenAmText: string;
 }
 
 export interface ArbeitsplatzPosition {

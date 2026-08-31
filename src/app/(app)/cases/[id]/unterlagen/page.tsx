@@ -14,6 +14,19 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
+// Die KI-Nachprüfung eines einzelnen Dokuments läuft synchron in der
+// Server-Action dieser Seite – ihr Zeitbudget muss die KI-Aufrufe tragen.
+export const maxDuration = 300;
+
+/** Fester Formatierer: Serverzeit ist UTC, angezeigt wird Ortszeit. */
+const UPLOAD_ZEIT = new Intl.DateTimeFormat("de-DE", {
+  timeZone: "Europe/Berlin",
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 /**
  * Der Unterlagen-Arbeitsplatz: Soll, Ist und Vorschau nebeneinander.
@@ -76,6 +89,7 @@ export default async function UnterlagenArbeitsplatzPage({
   const arbeitsplatzDokumente: ArbeitsplatzDokument[] = documents.map((d) => ({
     id: d.id,
     name: d.generatedName ?? d.originalName,
+    originalName: d.originalName,
     mimeType: d.mimeType,
     documentType: d.documentType,
     applicantId: d.applicantId,
@@ -85,6 +99,7 @@ export default async function UnterlagenArbeitsplatzPage({
     classificationStatus: d.classificationStatus,
     extractionStatus: d.extractionStatus,
     hochgeladenAm: d.createdAt.toISOString(),
+    hochgeladenAmText: `${UPLOAD_ZEIT.format(d.createdAt)} Uhr`,
   }));
 
   const arbeitsplatz = baueArbeitsplatz(checklist, arbeitsplatzDokumente);

@@ -9,7 +9,7 @@ import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect, type ApplicantOption } from "@/components/review/applicant-select";
 import { RejectDocumentButton } from "@/components/review/reject-document-button";
 import { ReopenDocumentButton } from "@/components/review/reopen-document-button";
-import { acceptDocument } from "@/lib/actions/cases";
+import { acceptDocument, einzelDokumentNachpruefen } from "@/lib/actions/cases";
 import { DOCUMENT_REVIEW_STATUS_LABELS } from "@/lib/domain/enums";
 import type { DocumentReviewStatus, DocumentType } from "@/lib/domain/enums";
 import type {
@@ -301,8 +301,16 @@ function DokumentZeile({
       }`}
     >
       <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0 flex-1 truncate" title={d.name}>
-        {d.name}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate" title={d.name}>
+          {d.name}
+        </span>
+        {/* Sechs Dateien mit identischem erzeugtem Namen sind keine Auskunft -
+            erst Originalname und Upload-Zeit unterscheiden die Fotos. */}
+        <span className="block truncate text-xs text-muted-foreground" title={d.originalName}>
+          {d.originalName !== d.name ? `${d.originalName} · ` : ""}
+          {d.hochgeladenAmText}
+        </span>
       </span>
       <DokumentStatusMarke d={d} />
     </button>
@@ -381,7 +389,18 @@ function Vorschau({ d, applicants }: { d: ArbeitsplatzDokument; applicants: Appl
             Kein lesbarer Text – Typ von Hand setzen oder in besserer Qualität erneut hochladen
           </Badge>
         ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
-          <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ in der Fallakte wiederholt die Auswertung</Badge>
+          <>
+            <Badge variant="warning">KI-Fehler</Badge>
+            {/* Die Wiederholung gehoert an das Dokument, nicht auf eine andere
+                Seite. Synchron: der Knopf zeigt den Lauf, danach steht das
+                ehrliche Ergebnis da (Typ erkannt oder wieder Fehler). */}
+            <form action={einzelDokumentNachpruefen}>
+              <input type="hidden" name="documentId" value={d.id} />
+              <SubmitButton size="sm" variant="outline" pendingLabel="KI-Nachprüfung läuft …">
+                KI-Nachprüfung
+              </SubmitButton>
+            </form>
+          </>
         ) : null}
 
         {d.reviewStatus === "offen" ? (

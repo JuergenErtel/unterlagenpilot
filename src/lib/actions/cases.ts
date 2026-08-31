@@ -32,6 +32,7 @@ import { getStorage } from "@/lib/storage";
 import { mitFallnummer } from "@/lib/cases/fallnummer-vergabe";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { hatTextgrundlage } from "@/lib/documents/textsubstanz";
+import { analysiereDokument } from "@/lib/documents/pipeline";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
 import { isAiCheckRunning } from "@/lib/cases/ai-check-status";
@@ -225,6 +226,36 @@ export async function runAiCheck(caseId: string): Promise<void> {
   );
 
   revalidatePath(`/cases/${caseId}`, "layout");
+}
+
+/**
+ * KI-Nachprüfung für EIN Dokument – der Knopf am Dokument selbst (Unterlagen-
+ * Arbeitsplatz), wenn dessen Auswertung mit KI-Fehler endete.
+ *
+ * Bewusst synchron statt after(): Der Arbeitsplatz pollt nicht, ein
+ * Hintergrundlauf wäre dort unsichtbar. Der SubmitButton zeigt den Lauf an,
+ * und nach der Antwort steht das ehrliche Ergebnis da – Typ erkannt oder
+ * wieder Fehler. Ein einzelnes Dokument bleibt weit unter maxDuration=300.
+ * `analysiereDokument` wirft nie; Fehler werden als Status am Dokument
+ * sichtbar.
+ */
+export async function einzelDokumentNachpruefen(formData: FormData): Promise<void> {
+  const ctx = await requireContext();
+  const documentId = String(formData.get("documentId") ?? "");
+  if (!documentId) return;
+
+  const doc = await prisma.document.findFirst({
+    where: { id: documentId, case: { organizationId: ctx.organizationId } },
+    select: { id: true, caseId: true, case: { select: { status: true } } },
+  });
+  if (!doc) return;
+  // Dieselbe Sperre wie beim fallweiten Lauf: einen exportierten/übertragenen
+  // Fall nicht durch eine Nachprüfung wieder aufreißen.
+  if (LOCKED_CASE_STATUSES.has(doc.case.status as CaseStatus)) return;
+
+  await analysiereDokument(doc.id);
+  revalidatePath(`/cases/${doc.caseId}`, "layout");
+  revalidatePath("/review");
 }
 
 /**

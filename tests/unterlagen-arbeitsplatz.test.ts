@@ -8,6 +8,7 @@ import type { DocumentType } from "@/lib/domain/enums";
 
 const dok = (o: Partial<ArbeitsplatzDokument> & { id: string }): ArbeitsplatzDokument => ({
   name: o.id,
+  originalName: o.id,
   mimeType: "application/pdf",
   documentType: null,
   applicantId: null,
@@ -17,6 +18,7 @@ const dok = (o: Partial<ArbeitsplatzDokument> & { id: string }): ArbeitsplatzDok
   classificationStatus: "fertig",
   extractionStatus: "fertig",
   hochgeladenAm: "2026-08-31T08:00:00.000Z",
+  hochgeladenAmText: "31.08.26, 10:00 Uhr",
   ...o,
 });
 
