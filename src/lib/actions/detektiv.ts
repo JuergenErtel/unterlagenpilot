@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
-import { reconcileCase } from "@/lib/detektiv/service";
+import { reconcileCase, runReferenceExtraction } from "@/lib/detektiv/service";
 import { checklistKeyFor } from "@/lib/detektiv/keys";
+import { setDocumentReview } from "@/lib/actions/cases";
 
 /**
  * Die einzige Stelle, an der aus einem Befund eine Checklistenposition wird –
@@ -151,6 +152,45 @@ export async function alleBefundeUebernehmen(formData: FormData): Promise<void> 
 }
 
 /** Manueller Anstoss des Abgleichslaufs ("Akte prüfen"). */
+/**
+ * KI-Nachpruefung fuer EIN Dokument, dessen Verweislauf fehlgeschlagen ist.
+ *
+ * Bewusst je Dokument statt "alle auf einmal": meist scheitert genau eines
+ * (429/Timeout), und der Vermittler soll an der Warnmeldung selbst entscheiden
+ * koennen, statt den Umweg ueber "Akte pruefen" zu kennen. Laeuft synchron -
+ * ein einzelner KI-Aufruf, der SubmitButton zeigt den Lauf an, und nach der
+ * Antwort ist die Warnung entweder weg oder ehrlich noch da.
+ */
+export async function verweiseNachpruefen(formData: FormData): Promise<void> {
+  const ctx = await requireContext();
+  const documentId = String(formData.get("documentId") ?? "");
+  if (!documentId) return;
+
+  const doc = await prisma.document.findFirst({
+    where: { id: documentId, case: { organizationId: ctx.organizationId } },
+    select: { id: true, caseId: true },
+  });
+  if (!doc) return;
+
+  await runReferenceExtraction(doc.id);
+  // Danach abgleichen: erst der Abgleich macht aus neuen Verweisen Befunde
+  // bzw. loest alte, nun belegte Befunde auf.
+  await reconcileCase(doc.caseId);
+  revalidatePath(`/cases/${doc.caseId}`);
+}
+
+/**
+ * "Dokument verwerfen" direkt an der Warnung "Verweispruefung nicht moeglich":
+ * lehnt das Dokument ab (derselbe Weg wie im Review-Center, inkl. Audit und
+ * Tenant-Pruefung in setDocumentReview). Ein abgelehntes Dokument taucht in
+ * der Warnliste nicht mehr auf - die Fallseite filtert es heraus.
+ */
+export async function verweisDokumentVerwerfen(formData: FormData): Promise<void> {
+  const documentId = String(formData.get("documentId") ?? "");
+  if (!documentId) return;
+  await setDocumentReview(documentId, "abgelehnt");
+}
+
 export async function aktePruefen(formData: FormData): Promise<void> {
   const ctx = await requireContext();
   const caseId = String(formData.get("caseId") ?? "");

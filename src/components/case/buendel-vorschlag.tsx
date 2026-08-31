@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Layers } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, FileText, Layers } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import {
   buendelZusammenfuegenAction,
@@ -15,7 +16,7 @@ export interface BuendelView {
   id: string;
   titel: string;
   /** Die Quellseiten IN DER VORGESCHLAGENEN REIHENFOLGE. */
-  seiten: Array<{ name: string }>;
+  seiten: Array<{ documentId: string; name: string; mimeType: string | null }>;
 }
 
 /**
@@ -174,21 +175,80 @@ function BuendelZeile({ caseId, buendel }: { caseId: string; buendel: BuendelVie
     buendelZusammenfuegenAction,
     {}
   );
+  // Gegenpruef-Vorschau erst auf Klick: Ein Fall kann dutzende Einzelseiten in
+  // mehreren Buendeln haben - alle Bilder sofort zu laden wuerde die schwerste
+  // Seite der App weiter beschweren, obwohl meist nur EIN Buendel fraglich ist.
+  const [vorschauOffen, setVorschauOffen] = useState(false);
 
   return (
     <li className="rounded-md border bg-card p-2.5">
       <p className="text-sm font-medium">
         {buendel.titel} <span className="font-normal text-muted-foreground">· {buendel.seiten.length} Seiten</span>
       </p>
-      {/* Die Reihenfolge IST die Aussage - deshalb nummeriert. */}
-      <ol className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-        {buendel.seiten.map((s, i) => (
-          <li key={`${buendel.id}-${i}`}>
-            {i + 1}. {s.name}
-          </li>
-        ))}
-      </ol>
-      <div className="mt-2 flex gap-2">
+      {/* Die Reihenfolge IST die Aussage - deshalb nummeriert. Bei offener
+          Vorschau tragen die Vorschau-Kacheln Nummer und Name selbst - die
+          Textliste zusaetzlich stehen zu lassen, hiesse alles doppelt. */}
+      {!vorschauOffen && (
+        <ol className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+          {buendel.seiten.map((s, i) => (
+            <li key={`${buendel.id}-${i}`}>
+              {i + 1}. {s.name}
+            </li>
+          ))}
+        </ol>
+      )}
+      {vorschauOffen && (
+        <ol className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {buendel.seiten.map((s, i) => (
+            <li key={`${buendel.id}-vorschau-${i}`} className="min-w-0 rounded-md border bg-muted/30 p-2">
+              <p className="mb-1 truncate text-xs text-muted-foreground" title={s.name}>
+                {i + 1}. {s.name}
+              </p>
+              {s.mimeType?.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/documents/${s.documentId}/download?preview=1`}
+                  alt={`Seite ${i + 1}: ${s.name}`}
+                  className="max-h-56 w-full rounded border bg-card object-contain"
+                />
+              ) : s.mimeType === "application/pdf" ? (
+                <iframe
+                  src={`/api/documents/${s.documentId}/download?preview=1`}
+                  title={`Seite ${i + 1}: ${s.name}`}
+                  className="h-56 w-full rounded border bg-card"
+                />
+              ) : (
+                <div className="flex h-24 items-center justify-center rounded border-2 border-dashed bg-card">
+                  <FileText className="h-6 w-6 text-muted-foreground/60" aria-hidden />
+                </div>
+              )}
+              <a
+                href={`/api/documents/${s.documentId}/download?preview=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-primary underline"
+              >
+                <ExternalLink className="h-3 w-3" aria-hidden /> In voller Größe öffnen
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {/* Gegenpruefen VOR Zusammenfuegen/Verwerfen: "IMG_1234.jpg" sagt
+            nichts darueber, ob die Seite wirklich hierher gehoert - erst der
+            Blick auf die Seite selbst macht die Entscheidung moeglich. */}
+        <Button type="button" size="sm" variant="outline" onClick={() => setVorschauOffen((o) => !o)}>
+          {vorschauOffen ? (
+            <>
+              <EyeOff className="h-3.5 w-3.5" aria-hidden /> Vorschau schließen
+            </>
+          ) : (
+            <>
+              <Eye className="h-3.5 w-3.5" aria-hidden /> Seiten ansehen
+            </>
+          )}
+        </Button>
         <form action={zusammenfuegen}>
           <input type="hidden" name="caseId" value={caseId} />
           <input type="hidden" name="buendelId" value={buendel.id} />

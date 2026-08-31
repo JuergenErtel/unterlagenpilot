@@ -7,6 +7,8 @@ import {
   befundZuordnen,
   alleBefundeUebernehmen,
   aktePruefen,
+  verweiseNachpruefen,
+  verweisDokumentVerwerfen,
 } from "@/lib/actions/detektiv";
 
 export interface FindingView {
@@ -36,7 +38,7 @@ export function FindingsPanel({
   caseId: string;
   findings: FindingView[];
   verworfen: FindingView[];
-  ungeprueft: string[];
+  ungeprueft: Array<{ documentId: string; name: string }>;
 }) {
   const offene = findings.filter((f) => f.status === "offen");
   const unsichere = findings.filter((f) => f.status === "unsicher");
@@ -72,13 +74,43 @@ export function FindingsPanel({
       </div>
 
       {ungeprueft.length > 0 && (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/[0.05] p-3 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          <span>
-            Verweisprüfung nicht möglich für: {ungeprueft.join(", ")}. Diese Dokumente wurden nicht auf
-            Verweise geprüft – ein erneuter Lauf behebt das in der Regel.
-          </span>
-        </p>
+        <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/[0.05] p-3 text-sm">
+          <p className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+            <span>
+              {ungeprueft.length === 1 ? "Ein Dokument wurde" : `${ungeprueft.length} Dokumente wurden`}{" "}
+              nicht auf Verweise geprüft – eine KI-Nachprüfung behebt das in der Regel.
+            </span>
+          </p>
+          {/* Die Entscheidung gehoert an die Meldung selbst: Bis hierher stand
+              hier nur Text, und der einzige Ausweg ("Akte pruefen" oben rechts)
+              war fuer niemanden als Ausweg erkennbar. Je Dokument einzeln -
+              meist scheitert genau eines, und "alle nochmal" wuerde die
+              gesunden Laeufe mitbezahlen. */}
+          <ul className="space-y-1.5">
+            {ungeprueft.map((d) => (
+              <li key={d.documentId} className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-xs text-muted-foreground" title={d.name}>
+                  {d.name}
+                </span>
+                <span className="flex shrink-0 gap-2">
+                  <form action={verweiseNachpruefen}>
+                    <input type="hidden" name="documentId" value={d.documentId} />
+                    <SubmitButton size="sm" variant="outline" pendingLabel="Wird nachgeprüft …">
+                      KI-Nachprüfung
+                    </SubmitButton>
+                  </form>
+                  <form action={verweisDokumentVerwerfen}>
+                    <input type="hidden" name="documentId" value={d.documentId} />
+                    <SubmitButton size="sm" variant="ghost" pendingLabel="Wird verworfen …">
+                      Dokument verwerfen
+                    </SubmitButton>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {findings.length === 0 && ungeprueft.length === 0 && (

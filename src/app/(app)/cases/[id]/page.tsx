@@ -197,7 +197,12 @@ export default async function CaseCockpitPage({
       include: {
         seiten: {
           orderBy: { position: "asc" },
-          select: { document: { select: { generatedName: true, originalName: true } } },
+          // id + mimeType fuer die Gegenpruef-Vorschau in der Vorschlagskarte:
+          // ein Dateiname wie "IMG_1234.jpg" sagt nichts darueber, ob die Seite
+          // wirklich in dieses Buendel gehoert.
+          select: {
+            document: { select: { id: true, generatedName: true, originalName: true, mimeType: true } },
+          },
         },
       },
     }),
@@ -242,9 +247,17 @@ export default async function CaseCockpitPage({
     matchCandidateName: b.matchCandidateId ? (kandidatenNamen.get(b.matchCandidateId) ?? null) : null,
   });
   // Ein gescheiterter Verweislauf darf nicht wie "nichts gefunden" aussehen.
+  // Aber nur fuer Dokumente, die im Fall noch zaehlen: ein abgelehntes,
+  // ersetztes (gebuendeltes) oder Duplikat-Dokument braucht keine
+  // Verweispruefung mehr - "Dokument verwerfen" an der Warnung nimmt die
+  // Zeile genau ueber diesen Filter aus der Liste.
   const detektivUngeprueft = documents
-    .filter((d) => d.referenceStatus === "fehler")
-    .map((d) => d.generatedName ?? d.originalName);
+    .filter(
+      (d) =>
+        d.referenceStatus === "fehler" &&
+        !["abgelehnt", "ersetzt", "duplikat"].includes(d.reviewStatus)
+    )
+    .map((d) => ({ documentId: d.id, name: d.generatedName ?? d.originalName }));
   const applicantOptions = caseRow.applicants.map((a) => ({
     position: a.position,
     name: [a.vorname, a.nachname].filter(Boolean).join(" "),
@@ -654,7 +667,9 @@ export default async function CaseCockpitPage({
                     id: b.id,
                     titel: b.titel,
                     seiten: b.seiten.map((s) => ({
+                      documentId: s.document.id,
                       name: s.document.generatedName ?? s.document.originalName,
+                      mimeType: s.document.mimeType,
                     })),
                   }))}
                 />
@@ -698,7 +713,19 @@ export default async function CaseCockpitPage({
                                 1490px breit in einem 583px schmalen Bereich. Vollstaendig
                                 bleibt der Name im Mauszeiger. */}
                             <TableCell className="max-w-[15rem] truncate font-medium" title={d.generatedName ?? d.originalName}>
-                              {d.generatedName ?? d.originalName}
+                              {/* Der Name IST der Weg zum Dokument: Bis hierher gab es in der
+                                  Fallakte keinen einzigen Klickpfad, das Dokument selbst
+                                  anzusehen - gegenpruefen vor dem Freigeben ging nur ueber
+                                  das Review-Center. Neuer Tab, damit die Fallakte (Auswahl,
+                                  Scrollposition, laufende Formulare) stehen bleibt. */}
+                              <a
+                                href={`/api/documents/${d.id}/download?preview=1`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline-offset-2 hover:underline"
+                              >
+                                {d.generatedName ?? d.originalName}
+                              </a>
                             </TableCell>
                             <TableCell><DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} /></TableCell>
                             {mehrereAntragsteller && (
