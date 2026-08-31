@@ -1,4 +1,4 @@
-import { AlertTriangle, FileSearch, HelpCircle } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileSearch, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import {
@@ -20,6 +20,7 @@ export interface FindingView {
   sourceDocumentName: string;
   sourcePage: number | null;
   sourceQuote: string | null;
+  matchCandidateId: string | null;
   matchCandidateName: string | null;
 }
 
@@ -127,6 +128,20 @@ export function FindingsPanel({
               Ist die vorhandene Datei „{f.matchCandidateName}“ der gesuchte Beleg „{f.title}“?
             </span>
           </p>
+          {/* Die Frage laesst sich nur am Kandidaten selbst beantworten -
+              also fuehrt der Weg dorthin direkt aus der Frage heraus. */}
+          {f.matchCandidateId && (
+            <p className="mt-1">
+              <a
+                href={`/api/documents/${f.matchCandidateId}/download?preview=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2"
+              >
+                <ExternalLink className="h-3 w-3" aria-hidden /> „{f.matchCandidateName}“ ansehen
+              </a>
+            </p>
+          )}
           <Fundstelle f={f} />
           <div className="mt-3 flex gap-2">
             <form action={befundZuordnen}>
@@ -189,8 +204,27 @@ export function FindingsPanel({
 
 /** Die Fundstelle: Quelldokument, Seite und wörtliches Zitat zum Aufklappen. */
 function Fundstelle({ f }: { f: FindingView }) {
+  // Der Weg INS Dokument gehoert an jede Fundstelle: "Grundlage:
+  // Baugenehmigung_1956.jpg, Seite 1" ist nur eine Behauptung - gegenpruefen
+  // kann der Vermittler erst, wenn er die Seite selbst sieht. Neuer Tab,
+  // damit die Befundliste mit ihren Entscheidungen stehen bleibt.
+  const ansehen = (
+    <a
+      href={`/api/documents/${f.sourceDocumentId}/download?preview=1`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2"
+    >
+      <ExternalLink className="h-3 w-3" aria-hidden /> Dokument ansehen
+    </a>
+  );
   if (!f.sourceQuote) {
-    return <p className="mt-2 text-xs text-muted-foreground">Grundlage: {f.sourceDocumentName}</p>;
+    return (
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <span>Grundlage: {f.sourceDocumentName}</span>
+        {ansehen}
+      </p>
+    );
   }
   return (
     <details className="mt-2">
@@ -201,6 +235,7 @@ function Fundstelle({ f }: { f: FindingView }) {
       <blockquote className="mt-1.5 border-l-2 border-border pl-3 text-xs italic text-muted-foreground">
         {f.sourceQuote}
       </blockquote>
+      <p className="mt-1.5">{ansehen}</p>
     </details>
   );
 }

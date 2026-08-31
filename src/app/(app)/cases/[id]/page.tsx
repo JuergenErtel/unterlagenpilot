@@ -244,6 +244,7 @@ export default async function CaseCockpitPage({
     sourceDocumentName: b.sourceDocument.generatedName ?? b.sourceDocument.originalName,
     sourcePage: b.sourcePage,
     sourceQuote: b.sourceQuote,
+    matchCandidateId: b.matchCandidateId,
     matchCandidateName: b.matchCandidateId ? (kandidatenNamen.get(b.matchCandidateId) ?? null) : null,
   });
   // Ein gescheiterter Verweislauf darf nicht wie "nichts gefunden" aussehen.
