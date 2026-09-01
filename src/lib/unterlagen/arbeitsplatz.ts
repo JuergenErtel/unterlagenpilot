@@ -185,3 +185,56 @@ export function abschnittFortschritt(a: ArbeitsplatzAbschnitt): { erfuellt: numb
     gesamt: zaehlbar.length,
   };
 }
+
+/** Zahlen fuer die Ueberblicksleiste ueber den Spalten. */
+export interface ArbeitsplatzUeberblick {
+  /** Ohne Typ - muss erst zugeordnet werden. */
+  eingang: number;
+  /** Zugeordnet, aber noch nicht freigegeben oder abgelehnt. */
+  zuPruefen: number;
+  /** Anforderungen, die noch nicht erfuellt sind. */
+  fehlend: number;
+  erfuellt: number;
+  gesamt: number;
+}
+
+export function arbeitsplatzUeberblick(a: Arbeitsplatz): ArbeitsplatzUeberblick {
+  const positionen = a.abschnitte.flatMap((x) => x.positionen);
+  const zugeordnet = [...positionen.flatMap((p) => p.dokumente), ...a.weitere];
+  const fortschritt = a.abschnitte.map(abschnittFortschritt);
+  return {
+    eingang: a.eingang.length,
+    zuPruefen: zugeordnet.filter((d) => d.reviewStatus === "offen").length,
+    fehlend: positionen.filter((p) => p.status !== "vorhanden" && p.status !== "nicht_erforderlich")
+      .length,
+    erfuellt: fortschritt.reduce((s, f) => s + f.erfuellt, 0),
+    gesamt: fortschritt.reduce((s, f) => s + f.gesamt, 0),
+  };
+}
+
+/**
+ * Womit die Seite aufgeht. Die Vorschau darf nie leer starten, solange es
+ * ein Dokument gibt - "In der Mitte ein Dokument anklicken" war genau die
+ * leere Seite, die niemand versteht. Reihenfolge nach Dringlichkeit: erst der
+ * Eingang (blockiert alles andere), dann das erste ungepruefte Dokument, dann
+ * die erste offene Anforderung (ohne Dokument - die Vorschau erklaert dann,
+ * dass hier noch nichts liegt), zuletzt irgendein Dokument.
+ */
+export function ersterEinstieg(a: Arbeitsplatz): {
+  dokumentId: string | null;
+  positionKey: string | null;
+} {
+  if (a.eingang[0]) return { dokumentId: a.eingang[0].id, positionKey: null };
+  const positionen = a.abschnitte.flatMap((x) => x.positionen);
+  for (const p of positionen) {
+    const offen = p.dokumente.find((d) => d.reviewStatus === "offen");
+    if (offen) return { dokumentId: offen.id, positionKey: p.key };
+  }
+  const luecke = positionen.find((p) => p.dokumente.length === 0 && p.status !== "vorhanden");
+  if (luecke) return { dokumentId: null, positionKey: luecke.key };
+  for (const p of positionen) {
+    if (p.dokumente[0]) return { dokumentId: p.dokumente[0].id, positionKey: p.key };
+  }
+  if (a.weitere[0]) return { dokumentId: a.weitere[0].id, positionKey: null };
+  return { dokumentId: null, positionKey: positionen[0]?.key ?? null };
+}

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, FileText, Inbox } from "lucide-react";
+import { ExternalLink, FileText, Inbox, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
@@ -12,25 +12,28 @@ import { ReopenDocumentButton } from "@/components/review/reopen-document-button
 import { acceptDocument, einzelDokumentNachpruefen } from "@/lib/actions/cases";
 import { DOCUMENT_REVIEW_STATUS_LABELS } from "@/lib/domain/enums";
 import type { DocumentReviewStatus, DocumentType } from "@/lib/domain/enums";
-import type {
-  Arbeitsplatz,
-  ArbeitsplatzDokument,
-  ArbeitsplatzPosition,
+import {
+  arbeitsplatzUeberblick,
+  ersterEinstieg,
+  type Arbeitsplatz,
+  type ArbeitsplatzDokument,
+  type ArbeitsplatzPosition,
 } from "@/lib/unterlagen/arbeitsplatz";
 
 /**
- * Drei Spalten wie ein aufgeschlagener Kreditakt: links das Soll
- * (Anforderungen nach Aktenaufbau), in der Mitte das Ist (Dokumente der
- * angeklickten Position), rechts die Vorschau des angeklickten Dokuments MIT
- * den Entscheidungen daran - ansehen und entscheiden waren bisher immer zwei
- * verschiedene Orte, das ist der Kern dieses Bildschirms.
+ * Zwei Spalten wie ein aufgeschlagener Kreditakt: links die Akte als Baum -
+ * jede Anforderung mit den Dokumenten, die darunter liegen -, rechts die
+ * Vorschau des angeklickten Dokuments MIT den Entscheidungen daran.
  *
- * Client-Komponente wegen der Auswahl (Position, Dokument); alle Daten kommen
- * als einfache Props von der Server-Seite, alle Aenderungen laufen ueber die
- * bestehenden Server-Actions der Review-Bausteine.
+ * Die erste Fassung hatte drei Spalten (Soll, Ist, Vorschau). Das las sich
+ * wie ein Formular: Man musste links klicken, um in der Mitte etwas zu sehen,
+ * und in der Mitte klicken, um rechts etwas zu sehen - und die Vorschau bekam
+ * den schmalsten Rest des Bildschirms. Der Baum zeigt Soll und Ist in einem
+ * Blick; die Vorschau bekommt die Breite, die ein Dokument braucht.
+ *
+ * Client-Komponente wegen der Auswahl; alle Daten kommen als Props von der
+ * Server-Seite, alle Aenderungen laufen ueber die bestehenden Server-Actions.
  */
-
-type Auswahl = { art: "position"; key: string } | { art: "eingang" } | { art: "weitere" };
 
 const STATUS_PUNKT: Record<ArbeitsplatzPosition["status"], string> = {
   vorhanden: "bg-success",
@@ -54,29 +57,17 @@ export function UnterlagenArbeitsplatz({
   caseId,
   arbeitsplatz,
   applicants,
-  fortschritt,
 }: {
   caseId: string;
   arbeitsplatz: Arbeitsplatz;
   applicants: ApplicantOption[];
-  fortschritt: Array<{ titel: string; erfuellt: number; gesamt: number }>;
 }) {
   const { abschnitte, eingang, weitere, aussortiert } = arbeitsplatz;
+  const ueberblick = useMemo(() => arbeitsplatzUeberblick(arbeitsplatz), [arbeitsplatz]);
 
-  // Aktiv fuehren statt suchen lassen: Der Einstieg ist die Stelle mit der
-  // dringendsten Arbeit - erst der Eingang (unzugeordnet blockiert alles
-  // andere), sonst die erste nicht erfuellte Position.
-  const [auswahl, setAuswahl] = useState<Auswahl>(() => {
-    if (eingang.length > 0) return { art: "eingang" };
-    for (const a of abschnitte) {
-      const offen = a.positionen.find((p) => p.status !== "vorhanden");
-      if (offen) return { art: "position", key: offen.key };
-    }
-    return abschnitte[0]?.positionen[0]
-      ? { art: "position", key: abschnitte[0].positionen[0].key }
-      : { art: "eingang" };
-  });
-  const [dokumentId, setDokumentId] = useState<string | null>(null);
+  // Aktiv fuehren statt suchen lassen: Die Seite geht mit dem dringendsten
+  // Dokument auf (Regel in ersterEinstieg), nie mit einer leeren Vorschau.
+  const [auswahl, setAuswahl] = useState(() => ersterEinstieg(arbeitsplatz));
 
   const positionJeKey = useMemo(() => {
     const m = new Map<string, ArbeitsplatzPosition>();
@@ -85,7 +76,7 @@ export function UnterlagenArbeitsplatz({
   }, [abschnitte]);
 
   // Vorschau-Nachschlag ueber ALLE Dokumente: Nach einer Aktion (Typ geaendert,
-  // abgelehnt) wandert ein Dokument in einen anderen Eimer - die Vorschau soll
+  // abgelehnt) wandert ein Dokument in einen anderen Ast - die Vorschau soll
   // dabei nicht verschwinden, solange es das Dokument noch gibt.
   const dokumentJeId = useMemo(() => {
     const m = new Map<string, ArbeitsplatzDokument>();
@@ -99,186 +90,278 @@ export function UnterlagenArbeitsplatz({
     return m;
   }, [abschnitte, eingang, weitere, aussortiert]);
 
-  const gewaehltesDokument = dokumentId ? (dokumentJeId.get(dokumentId) ?? null) : null;
+  const gewaehltesDokument = auswahl.dokumentId
+    ? (dokumentJeId.get(auswahl.dokumentId) ?? null)
+    : null;
+  const gewaehltePosition = auswahl.positionKey
+    ? (positionJeKey.get(auswahl.positionKey) ?? null)
+    : null;
 
-  const waehlePosition = (a: Auswahl, erstesDok: ArbeitsplatzDokument | undefined) => {
-    setAuswahl(a);
-    setDokumentId(erstesDok?.id ?? null);
-  };
+  const waehleDokument = (d: ArbeitsplatzDokument, positionKey: string | null) =>
+    setAuswahl({ dokumentId: d.id, positionKey });
+  const waehlePosition = (p: ArbeitsplatzPosition) =>
+    setAuswahl({ dokumentId: p.dokumente[0]?.id ?? null, positionKey: p.key });
 
-  const mittlereListe: {
-    titel: string;
-    hinweis: string | null;
-    dokumente: ArbeitsplatzDokument[];
-    stapel: ArbeitsplatzDokument[];
-  } =
-    auswahl.art === "eingang"
-      ? {
-          titel: "Eingang – noch nicht zugeordnet",
-          hinweis:
-            eingang.length > 0
-              ? "Diese Dateien haben keinen erkannten Typ. Rechts den Typ setzen, dann ordnet sich das Dokument selbst in die passende Anforderung ein."
-              : "Der Eingang ist leer – alles ist zugeordnet.",
-          dokumente: eingang,
-          stapel: aussortiert,
-        }
-      : auswahl.art === "weitere"
-        ? {
-            titel: "Weitere Dokumente",
-            hinweis:
-              "Dokumente mit einem Typ, den keine Anforderung dieses Falls verlangt (z. B. Sonstiges).",
-            dokumente: weitere,
-            stapel: [],
-          }
-        : (() => {
-            const p = positionJeKey.get(auswahl.key);
-            if (!p) return { titel: "", hinweis: null, dokumente: [], stapel: [] };
-            return {
-              titel: p.name,
-              hinweis:
-                p.dokumente.length === 0
-                  ? "Noch nichts eingegangen. Über „Nachrichten“ lässt sich die Unterlage beim Kunden anfordern."
-                  : null,
-              dokumente: p.dokumente,
-              stapel: p.stapel,
-            };
-          })();
+  const dokumentAktiv = (d: ArbeitsplatzDokument) => auswahl.dokumentId === d.id;
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(15rem,22rem)_minmax(16rem,26rem)_minmax(0,1fr)]">
-      {/* ------- Spalte 1: das Soll ------- */}
-      <nav aria-label="Anforderungen" className="space-y-4">
-        {(eingang.length > 0 || aussortiert.length > 0) && (
-          <button
-            type="button"
-            onClick={() => waehlePosition({ art: "eingang" }, eingang[0])}
-            className={`flex w-full items-center justify-between gap-2 rounded-lg border p-2.5 text-left text-sm transition-colors ${
-              auswahl.art === "eingang" ? "border-ai bg-ai/[0.06]" : "hover:bg-muted/50"
-            }`}
-          >
-            <span className="flex items-center gap-2 font-medium">
-              <Inbox className="h-4 w-4 text-muted-foreground" aria-hidden /> Eingang
-            </span>
-            {eingang.length > 0 && <Badge variant="ai">{eingang.length} zuzuordnen</Badge>}
-          </button>
-        )}
+    <div className="space-y-4">
+      {/* ------- Ueberblick: die vier Zahlen, die sagen, wie viel Arbeit hier liegt ------- */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Kennzahl
+          wert={ueberblick.eingang}
+          label="im Eingang"
+          hinweis="ohne Typ, noch zuzuordnen"
+          ton={ueberblick.eingang > 0 ? "ai" : "neutral"}
+        />
+        <Kennzahl
+          wert={ueberblick.zuPruefen}
+          label="zu prüfen"
+          hinweis="zugeordnet, noch nicht freigegeben"
+          ton={ueberblick.zuPruefen > 0 ? "ai" : "neutral"}
+        />
+        <Kennzahl
+          wert={ueberblick.fehlend}
+          label="fehlen noch"
+          hinweis="Anforderungen ohne passende Unterlage"
+          ton={ueberblick.fehlend > 0 ? "warning" : "neutral"}
+        />
+        <Kennzahl
+          wert={`${ueberblick.erfuellt}/${ueberblick.gesamt}`}
+          label="vollständig"
+          hinweis="Anforderungen erfüllt"
+          ton={ueberblick.gesamt > 0 && ueberblick.erfuellt === ueberblick.gesamt ? "success" : "neutral"}
+        />
+      </div>
 
-        {abschnitte.map((a) => {
-          const f = fortschritt.find((x) => x.titel === a.titel);
-          return (
-            <section key={a.titel}>
-              <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                <h3 className="eyebrow">{a.titel}</h3>
-                {f && (
-                  <span className="font-mono text-xs text-muted-foreground tabular">
-                    {f.erfuellt}/{f.gesamt}
-                  </span>
-                )}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
+        {/* ------- Spalte 1: die Akte als Baum ------- */}
+        <nav aria-label="Akte" className="space-y-4">
+          {(eingang.length > 0 || aussortiert.length > 0) && (
+            <section>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <h3 className="eyebrow flex items-center gap-1.5">
+                  <Inbox className="h-3.5 w-3.5" aria-hidden /> Eingang
+                </h3>
+                {eingang.length > 0 && <Badge variant="ai">{eingang.length} zuzuordnen</Badge>}
               </div>
-              <ul className="space-y-1">
-                {a.positionen.map((p) => {
-                  const aktiv = auswahl.art === "position" && auswahl.key === p.key;
-                  return (
-                    <li key={p.key}>
-                      <button
-                        type="button"
-                        onClick={() => waehlePosition({ art: "position", key: p.key }, p.dokumente[0])}
-                        className={`flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors ${
-                          aktiv ? "border-ai bg-ai/[0.06]" : "border-transparent hover:bg-muted/50"
-                        }`}
-                      >
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_PUNKT[p.status]}`}
-                          aria-hidden
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate" title={p.name}>
-                            {p.name}
-                          </span>
-                          {p.fehltFuer && (
-                            <span className="block truncate text-xs text-warning">{p.fehltFuer}</span>
-                          )}
-                        </span>
-                        <span className="shrink-0 font-mono text-xs text-muted-foreground tabular">
-                          {p.dokumente.length}/{p.effectiveRequiredCount}
-                        </span>
-                      </button>
+              {eingang.length > 0 ? (
+                <ul className="space-y-1">
+                  {eingang.map((d) => (
+                    <li key={d.id}>
+                      <DokumentZeile d={d} aktiv={dokumentAktiv(d)} onClick={() => waehleDokument(d, null)} />
                     </li>
-                  );
-                })}
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-md border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+                  Der Eingang ist leer – alles ist zugeordnet.
+                </p>
+              )}
+              <Stapel dokumente={aussortiert} aktiv={dokumentAktiv} onClick={(d) => waehleDokument(d, null)} />
+            </section>
+          )}
+
+          {abschnitte.map((a) => {
+            const erfuellt = a.positionen.filter((p) => p.status === "vorhanden").length;
+            return (
+              <section key={a.titel}>
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <h3 className="eyebrow">{a.titel}</h3>
+                  <span className="font-mono text-xs text-muted-foreground tabular">
+                    {erfuellt}/{a.positionen.length}
+                  </span>
+                </div>
+                <ul className="space-y-1">
+                  {a.positionen.map((p) => {
+                    const aktiv = auswahl.positionKey === p.key;
+                    return (
+                      <li key={p.key} className={`rounded-md ${aktiv ? "bg-ai/[0.05]" : ""}`}>
+                        <button
+                          type="button"
+                          onClick={() => waehlePosition(p)}
+                          aria-current={aktiv ? "true" : undefined}
+                          className={`flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors ${
+                            aktiv && !gewaehltesDokument
+                              ? "border-ai"
+                              : "border-transparent hover:bg-muted/50"
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_PUNKT[p.status]}`}
+                            aria-hidden
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate" title={p.name}>
+                              {p.name}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {p.fehltFuer ? (
+                                <span className="text-warning">{p.fehltFuer}</span>
+                              ) : (
+                                STATUS_TEXT[p.status]
+                              )}
+                            </span>
+                          </span>
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular">
+                            {p.dokumente.length}/{p.effectiveRequiredCount}
+                          </span>
+                        </button>
+                        {/* Die Dokumente haengen sichtbar UNTER ihrer Anforderung -
+                            das ist der Ueberblick, den drei Spalten nicht konnten. */}
+                        {(p.dokumente.length > 0 || p.stapel.length > 0) && (
+                          <div className="ml-4 border-l pl-2 pb-1">
+                            <ul className="space-y-1">
+                              {p.dokumente.map((d) => (
+                                <li key={d.id}>
+                                  <DokumentZeile
+                                    d={d}
+                                    aktiv={dokumentAktiv(d)}
+                                    onClick={() => waehleDokument(d, p.key)}
+                                  />
+                                </li>
+                              ))}
+                            </ul>
+                            <Stapel
+                              dokumente={p.stapel}
+                              aktiv={dokumentAktiv}
+                              onClick={(d) => waehleDokument(d, p.key)}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+
+          {weitere.length > 0 && (
+            <section>
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <h3 className="eyebrow">Weitere Dokumente</h3>
+                <span className="font-mono text-xs text-muted-foreground tabular">{weitere.length}</span>
+              </div>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                Typ erkannt, aber keine Anforderung dieses Falls verlangt ihn.
+              </p>
+              <ul className="space-y-1">
+                {weitere.map((d) => (
+                  <li key={d.id}>
+                    <DokumentZeile d={d} aktiv={dokumentAktiv(d)} onClick={() => waehleDokument(d, null)} />
+                  </li>
+                ))}
               </ul>
             </section>
-          );
-        })}
+          )}
 
-        {weitere.length > 0 && (
-          <button
-            type="button"
-            onClick={() => waehlePosition({ art: "weitere" }, weitere[0])}
-            className={`flex w-full items-center justify-between gap-2 rounded-lg border p-2.5 text-left text-sm transition-colors ${
-              auswahl.art === "weitere" ? "border-ai bg-ai/[0.06]" : "hover:bg-muted/50"
-            }`}
+          <Link
+            href={`/cases/${caseId}?tab=dokumente#broker-upload`}
+            className="flex items-center gap-2 rounded-md border border-dashed px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
           >
-            <span className="font-medium">Weitere Dokumente</span>
-            <span className="font-mono text-xs text-muted-foreground tabular">{weitere.length}</span>
-          </button>
-        )}
-      </nav>
+            <Upload className="h-4 w-4" aria-hidden /> Dokumente hochladen
+          </Link>
+        </nav>
 
-      {/* ------- Spalte 2: das Ist ------- */}
-      <section aria-label="Dokumente" className="space-y-2">
-        <h3 className="text-sm font-semibold">{mittlereListe.titel}</h3>
-        <p aria-live="polite" className="sr-only">
-          {mittlereListe.dokumente.length} Dokumente
+        {/* ------- Spalte 2: Vorschau + Entscheidung ------- */}
+        <section
+          aria-label="Vorschau"
+          className="card-elevated rounded-lg border bg-card p-3 lg:sticky lg:top-4"
+        >
+          {gewaehltesDokument ? (
+            <Vorschau
+              d={gewaehltesDokument}
+              position={gewaehltePosition}
+              applicants={applicants}
+            />
+          ) : gewaehltePosition ? (
+            <LeerePosition caseId={caseId} p={gewaehltePosition} />
+          ) : (
+            <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+              <FileText className="h-8 w-8 text-muted-foreground/50" aria-hidden />
+              Noch keine Unterlage in dieser Akte.
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Kennzahl({
+  wert,
+  label,
+  hinweis,
+  ton,
+}: {
+  wert: number | string;
+  label: string;
+  hinweis: string;
+  ton: "ai" | "warning" | "success" | "neutral";
+}) {
+  const farbe =
+    ton === "ai"
+      ? "border-ai/40 bg-ai/[0.05]"
+      : ton === "warning"
+        ? "border-warning/40 bg-warning/[0.06]"
+        : ton === "success"
+          ? "border-success/40 bg-success/[0.06]"
+          : "";
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${farbe}`} title={hinweis}>
+      <p className="display tabular text-2xl leading-none">{wert}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function Stapel({
+  dokumente,
+  aktiv,
+  onClick,
+}: {
+  dokumente: ArbeitsplatzDokument[];
+  aktiv: (d: ArbeitsplatzDokument) => boolean;
+  onClick: (d: ArbeitsplatzDokument) => void;
+}) {
+  if (dokumente.length === 0) return null;
+  return (
+    <details className="mt-1 rounded-md border border-border/60 px-2 py-1">
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        {dokumente.length} aussortierte Version{dokumente.length === 1 ? "" : "en"} (ersetzt,
+        abgelehnt, Duplikat)
+      </summary>
+      <ul className="mt-1 space-y-1">
+        {dokumente.map((d) => (
+          <li key={d.id}>
+            <DokumentZeile d={d} aktiv={aktiv(d)} onClick={() => onClick(d)} />
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function LeerePosition({ caseId, p }: { caseId: string; p: ArbeitsplatzPosition }) {
+  return (
+    <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+      <FileText className="h-8 w-8 text-muted-foreground/50" aria-hidden />
+      <div>
+        <p className="text-sm font-medium">{p.name}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Noch nichts eingegangen{p.fehltFuer ? ` – ${p.fehltFuer.toLowerCase()}` : ""}.
         </p>
-        {mittlereListe.hinweis && (
-          <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-            {mittlereListe.hinweis}{" "}
-            {auswahl.art === "position" && mittlereListe.dokumente.length === 0 && (
-              <Link href={`/cases/${caseId}/messages`} className="text-primary underline">
-                Zu den Nachrichten
-              </Link>
-            )}
-          </p>
-        )}
-        <ul className="space-y-1.5">
-          {mittlereListe.dokumente.map((d) => (
-            <li key={d.id}>
-              <DokumentZeile d={d} aktiv={dokumentId === d.id} onClick={() => setDokumentId(d.id)} />
-            </li>
-          ))}
-        </ul>
-        {mittlereListe.stapel.length > 0 && (
-          <details className="rounded-lg border border-border/60 p-2">
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              {mittlereListe.stapel.length} aussortierte Version
-              {mittlereListe.stapel.length === 1 ? "" : "en"} (ersetzt, abgelehnt, Duplikat)
-            </summary>
-            <ul className="mt-1.5 space-y-1.5">
-              {mittlereListe.stapel.map((d) => (
-                <li key={d.id}>
-                  <DokumentZeile d={d} aktiv={dokumentId === d.id} onClick={() => setDokumentId(d.id)} />
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
-
-      {/* ------- Spalte 3: Vorschau + Entscheidung ------- */}
-      <section
-        aria-label="Vorschau"
-        className="card-elevated rounded-lg border bg-card p-3 xl:sticky xl:top-4"
-      >
-        {gewaehltesDokument ? (
-          <Vorschau d={gewaehltesDokument} applicants={applicants} />
-        ) : (
-          <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-            <FileText className="h-8 w-8 text-muted-foreground/50" aria-hidden />
-            In der Mitte ein Dokument anklicken, um es hier zu prüfen.
-          </div>
-        )}
-      </section>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2 text-sm">
+        <Link href={`/cases/${caseId}/messages`} className="text-primary underline">
+          Beim Kunden anfordern
+        </Link>
+        <span className="text-muted-foreground">·</span>
+        <Link href={`/cases/${caseId}?tab=dokumente#broker-upload`} className="text-primary underline">
+          Selbst hochladen
+        </Link>
+      </div>
     </div>
   );
 }
@@ -296,8 +379,9 @@ function DokumentZeile({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors ${
-        aktiv ? "border-ai bg-ai/[0.06]" : "hover:bg-muted/50"
+      aria-current={aktiv ? "true" : undefined}
+      className={`flex w-full items-center gap-2 rounded-md border p-1.5 text-left text-sm transition-colors ${
+        aktiv ? "border-ai bg-ai/[0.08]" : "border-transparent hover:bg-muted/50"
       }`}
     >
       <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -305,8 +389,8 @@ function DokumentZeile({
         <span className="block truncate" title={d.name}>
           {d.name}
         </span>
-        {/* Sechs Dateien mit identischem erzeugtem Namen sind keine Auskunft -
-            erst Originalname und Upload-Zeit unterscheiden die Fotos. */}
+        {/* Sechs Fotos mit identischem erzeugtem Namen sind keine Auskunft -
+            erst Originalname und Upload-Zeit unterscheiden sie. */}
         <span className="block truncate text-xs text-muted-foreground" title={d.originalName}>
           {d.originalName !== d.name ? `${d.originalName} · ` : ""}
           {d.hochgeladenAmText}
@@ -331,14 +415,28 @@ function DokumentStatusMarke({ d }: { d: ArbeitsplatzDokument }) {
   );
 }
 
-function Vorschau({ d, applicants }: { d: ArbeitsplatzDokument; applicants: ApplicantOption[] }) {
+function Vorschau({
+  d,
+  position,
+  applicants,
+}: {
+  d: ArbeitsplatzDokument;
+  position: ArbeitsplatzPosition | null;
+  applicants: ApplicantOption[];
+}) {
   const url = `/api/documents/${d.id}/download?preview=1`;
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-sm font-medium" title={d.name}>
-          {d.name}
-        </p>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium" title={d.name}>
+            {d.name}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {position ? `Anforderung: ${position.name}` : "Noch keiner Anforderung zugeordnet"}
+            {d.originalName !== d.name ? ` · ${d.originalName}` : ""} · {d.hochgeladenAmText}
+          </p>
+        </div>
         <a
           href={url}
           target="_blank"
@@ -349,28 +447,8 @@ function Vorschau({ d, applicants }: { d: ArbeitsplatzDokument; applicants: Appl
         </a>
       </div>
 
-      {d.mimeType.startsWith("image/") ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={`Vorschau: ${d.name}`}
-          className="max-h-[32rem] w-full rounded-md border bg-muted/30 object-contain"
-        />
-      ) : d.mimeType === "application/pdf" ? (
-        <iframe
-          src={url}
-          title={`Vorschau: ${d.name}`}
-          className="h-[32rem] w-full rounded-md border bg-card"
-        />
-      ) : (
-        <div className="flex h-40 items-center justify-center rounded-md border-2 border-dashed">
-          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden />
-        </div>
-      )}
-
-      {/* Zuordnung: Typ + Antragsteller. Der Typ IST die Zuordnung zur
-          Anforderung - nach dem Speichern haengt das Dokument an der Position
-          seines neuen Typs (dieselbe Regel wie in der Checklisten-Engine). */}
+      {/* Entscheidungen ÜBER der Vorschau: Sie sind das, wofuer man hier ist,
+          und sie duerfen nicht unter einem langen Dokument aus dem Bild rutschen. */}
       <div className="grid gap-2 sm:grid-cols-2">
         <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
         {applicants.length > 1 && (
@@ -430,6 +508,25 @@ function Vorschau({ d, applicants }: { d: ArbeitsplatzDokument; applicants: Appl
           </Badge>
         )}
       </div>
+
+      {d.mimeType.startsWith("image/") ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={`Vorschau: ${d.name}`}
+          className="max-h-[75vh] w-full rounded-md border bg-muted/30 object-contain"
+        />
+      ) : d.mimeType === "application/pdf" ? (
+        <iframe
+          src={url}
+          title={`Vorschau: ${d.name}`}
+          className="h-[75vh] w-full rounded-md border bg-card"
+        />
+      ) : (
+        <div className="flex h-40 items-center justify-center rounded-md border-2 border-dashed">
+          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden />
+        </div>
+      )}
     </div>
   );
 }

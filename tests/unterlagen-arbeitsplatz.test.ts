@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   baueArbeitsplatz,
   abschnittFortschritt,
+  arbeitsplatzUeberblick,
+  ersterEinstieg,
   type ArbeitsplatzDokument,
 } from "@/lib/unterlagen/arbeitsplatz";
 import type { DocumentType } from "@/lib/domain/enums";
@@ -103,5 +105,74 @@ describe("baueArbeitsplatz", () => {
     const objekt = ap.abschnitte[0]!;
     expect(objekt.positionen.map((p) => p.key)).toEqual(["expose", "grundbuchauszug"]);
     expect(abschnittFortschritt(objekt)).toEqual({ erfuellt: 1, gesamt: 2 });
+  });
+});
+
+describe("arbeitsplatzUeberblick", () => {
+  it("zaehlt Eingang, Ungeprueftes und offene Anforderungen getrennt", () => {
+    const a = baueArbeitsplatz(
+      [
+        position({ key: "perso", documentType: "personalausweis", status: "vorhanden" }),
+        position({ key: "gehalt", documentType: "gehaltsabrechnung", status: "unvollstaendig" }),
+        position({ key: "gb", documentType: "grundbuchauszug", status: "offen" }),
+      ],
+      [
+        dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" }),
+        dok({ id: "g1", documentType: "gehaltsabrechnung", reviewStatus: "offen" }),
+        dok({ id: "s1", documentType: "sonstige", reviewStatus: "offen" }),
+        dok({ id: "e1" }),
+        dok({ id: "e2" }),
+      ]
+    );
+    expect(arbeitsplatzUeberblick(a)).toEqual({
+      eingang: 2,
+      zuPruefen: 2,
+      fehlend: 2,
+      erfuellt: 1,
+      gesamt: 3,
+    });
+  });
+});
+
+describe("ersterEinstieg", () => {
+  it("beginnt im Eingang, wenn dort etwas liegt", () => {
+    const a = baueArbeitsplatz(
+      [position({ key: "perso", documentType: "personalausweis" })],
+      [dok({ id: "p1", documentType: "personalausweis" }), dok({ id: "e1" })]
+    );
+    expect(ersterEinstieg(a)).toEqual({ dokumentId: "e1", positionKey: null });
+  });
+
+  it("zeigt sonst das erste ungepruefte Dokument mit seiner Position", () => {
+    const a = baueArbeitsplatz(
+      [
+        position({ key: "perso", documentType: "personalausweis", status: "vorhanden" }),
+        position({ key: "gehalt", documentType: "gehaltsabrechnung" }),
+      ],
+      [
+        dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" }),
+        dok({ id: "g1", documentType: "gehaltsabrechnung", reviewStatus: "offen" }),
+      ]
+    );
+    expect(ersterEinstieg(a)).toEqual({ dokumentId: "g1", positionKey: "gehalt" });
+  });
+
+  it("faellt auf die erste offene Anforderung zurueck, wenn nichts zu pruefen ist", () => {
+    const a = baueArbeitsplatz(
+      [
+        position({ key: "perso", documentType: "personalausweis", status: "vorhanden" }),
+        position({ key: "gb", documentType: "grundbuchauszug", status: "offen" }),
+      ],
+      [dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" })]
+    );
+    expect(ersterEinstieg(a)).toEqual({ dokumentId: null, positionKey: "gb" });
+  });
+
+  it("startet nie leer, solange irgendein Dokument existiert", () => {
+    const a = baueArbeitsplatz(
+      [position({ key: "perso", documentType: "personalausweis", status: "vorhanden" })],
+      [dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" })]
+    );
+    expect(ersterEinstieg(a).dokumentId).toBe("p1");
   });
 });

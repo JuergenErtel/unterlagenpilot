@@ -442,6 +442,15 @@ export default async function CaseCockpitPage({
               {cockpit.scoreLabel} · einreichungsfertig
             </p>
             <Pruefleiste segmente={pruefSegmente} groesse="md" className="mt-3" />
+            {/* Der Arbeitsplatz ist DIE Unterlagenansicht - er gehoert neben
+                die Pruefleiste, die ihn abbildet, nicht drei Klicks tief in
+                einen Reiter (Juergen, 01.09.2026: "musste sehr lange suchen"). */}
+            <Button asChild size="sm" className="mt-3 w-full">
+              <Link href={`/cases/${id}/unterlagen`}>
+                <LayoutPanelLeft />
+                Unterlagen prüfen
+              </Link>
+            </Button>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">

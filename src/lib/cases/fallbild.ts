@@ -375,7 +375,9 @@ function baueUnterlagen(id: string, c: CockpitData): Tor {
           ? "Alle erwarteten Unterlagen liegen vor."
           : "Für diesen Fall ist noch keine Unterlage eingegangen."
         : `${fehlt} Unterlage${fehlt === 1 ? "" : "n"} fehlt noch${sofort > 0 ? `, davon ${sofort} sofort erforderlich` : ""}.`,
-    ziel: { label: "Was fehlt noch?", href: `/cases/${id}?tab=fehlt` },
+    // In den Arbeitsplatz, nicht in einen Reiter der Fallakte: Dort steht
+    // Soll und Ist in einem Bild - genau die Antwort auf "was fehlt noch?".
+    ziel: { label: "Unterlagen öffnen", href: `/cases/${id}/unterlagen` },
   };
 }
 

@@ -4,11 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { fehltFuerSatz } from "@/lib/checklists/engine";
-import {
-  baueArbeitsplatz,
-  abschnittFortschritt,
-  type ArbeitsplatzDokument,
-} from "@/lib/unterlagen/arbeitsplatz";
+import { baueArbeitsplatz, type ArbeitsplatzDokument } from "@/lib/unterlagen/arbeitsplatz";
 import { UnterlagenArbeitsplatz } from "@/components/case/unterlagen-arbeitsplatz";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -103,10 +99,6 @@ export default async function UnterlagenArbeitsplatzPage({
   }));
 
   const arbeitsplatz = baueArbeitsplatz(checklist, arbeitsplatzDokumente);
-  const fortschritt = arbeitsplatz.abschnitte.map((a) => ({
-    titel: a.titel,
-    ...abschnittFortschritt(a),
-  }));
 
   const kundenName =
     caseRow.applicants
@@ -126,7 +118,7 @@ export default async function UnterlagenArbeitsplatzPage({
         subtitle={
           <>
             Fall <span className="font-mono tabular">{caseRow.caseNumber}</span> · {kundenName} —
-            links das Soll, in der Mitte das Ist, rechts prüfen und entscheiden.
+            links die Akte mit Soll und Ist, rechts ansehen und entscheiden.
           </>
         }
         actions={
@@ -143,7 +135,6 @@ export default async function UnterlagenArbeitsplatzPage({
         caseId={id}
         arbeitsplatz={arbeitsplatz}
         applicants={applicantOptions}
-        fortschritt={fortschritt}
       />
     </div>
   );
