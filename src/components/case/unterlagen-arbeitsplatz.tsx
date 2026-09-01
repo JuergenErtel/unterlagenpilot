@@ -2,22 +2,26 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, FileText, Inbox, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FileText, Inbox, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { DocumentTypeSelect } from "@/components/review/document-type-select";
 import { ApplicantSelect, type ApplicantOption } from "@/components/review/applicant-select";
 import { RejectDocumentButton } from "@/components/review/reject-document-button";
 import { ReopenDocumentButton } from "@/components/review/reopen-document-button";
 import { acceptDocument, einzelDokumentNachpruefen } from "@/lib/actions/cases";
-import { DOCUMENT_REVIEW_STATUS_LABELS } from "@/lib/domain/enums";
+import { DOCUMENT_REVIEW_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from "@/lib/domain/enums";
 import type { DocumentReviewStatus, DocumentType } from "@/lib/domain/enums";
 import {
   arbeitsplatzUeberblick,
+  baueDurchsicht,
   ersterEinstieg,
+  offeneAnforderungen,
   type Arbeitsplatz,
   type ArbeitsplatzDokument,
   type ArbeitsplatzPosition,
+  type DurchsichtSchritt,
 } from "@/lib/unterlagen/arbeitsplatz";
 
 /**
@@ -30,6 +34,13 @@ import {
  * und in der Mitte klicken, um rechts etwas zu sehen - und die Vorschau bekam
  * den schmalsten Rest des Bildschirms. Der Baum zeigt Soll und Ist in einem
  * Blick; die Vorschau bekommt die Breite, die ein Dokument braucht.
+ *
+ * Die Durchsicht (seit 02.09.2026) fuehrt durch die Dokumente, an denen noch
+ * eine Entscheidung haengt: Sie stellt je Dokument EINE Frage (Welche
+ * Unterlage ist das? / Stimmt der Typ? / Wird das gebraucht?) und bietet die
+ * passenden Antworten an. Die Schlange kommt aus baueDurchsicht; die
+ * Oberflaeche merkt sich nur den Index - erledigt der Nutzer ein Dokument,
+ * faellt es aus der Schlange, und derselbe Index zeigt auf das naechste.
  *
  * Client-Komponente wegen der Auswahl; alle Daten kommen als Props von der
  * Server-Seite, alle Aenderungen laufen ueber die bestehenden Server-Actions.
@@ -53,6 +64,10 @@ const STATUS_TEXT: Record<ArbeitsplatzPosition["status"], string> = {
   nicht_erforderlich: "nicht erforderlich",
 };
 
+type Auswahl =
+  | { modus: "gefuehrt"; index: number }
+  | { modus: "frei"; dokumentId: string | null; positionKey: string | null };
+
 export function UnterlagenArbeitsplatz({
   caseId,
   arbeitsplatz,
@@ -64,10 +79,17 @@ export function UnterlagenArbeitsplatz({
 }) {
   const { abschnitte, eingang, weitere, aussortiert } = arbeitsplatz;
   const ueberblick = useMemo(() => arbeitsplatzUeberblick(arbeitsplatz), [arbeitsplatz]);
+  const durchsicht = useMemo(() => baueDurchsicht(arbeitsplatz), [arbeitsplatz]);
+  const offen = useMemo(() => offeneAnforderungen(arbeitsplatz), [arbeitsplatz]);
 
-  // Aktiv fuehren statt suchen lassen: Die Seite geht mit dem dringendsten
-  // Dokument auf (Regel in ersterEinstieg), nie mit einer leeren Vorschau.
-  const [auswahl, setAuswahl] = useState(() => ersterEinstieg(arbeitsplatz));
+  // Aktiv fuehren statt suchen lassen: Gibt es etwas zu entscheiden, beginnt
+  // die Durchsicht beim ersten Dokument; sonst zeigt die Seite das
+  // Dringendste (ersterEinstieg), nie eine leere Vorschau.
+  const [auswahl, setAuswahl] = useState<Auswahl>(() =>
+    durchsicht.length > 0
+      ? { modus: "gefuehrt", index: 0 }
+      : { modus: "frei", ...ersterEinstieg(arbeitsplatz) }
+  );
 
   const positionJeKey = useMemo(() => {
     const m = new Map<string, ArbeitsplatzPosition>();
@@ -90,19 +112,47 @@ export function UnterlagenArbeitsplatz({
     return m;
   }, [abschnitte, eingang, weitere, aussortiert]);
 
-  const gewaehltesDokument = auswahl.dokumentId
-    ? (dokumentJeId.get(auswahl.dokumentId) ?? null)
-    : null;
-  const gewaehltePosition = auswahl.positionKey
-    ? (positionJeKey.get(auswahl.positionKey) ?? null)
-    : null;
+  const schrittIndexJeDokument = useMemo(() => {
+    const m = new Map<string, number>();
+    durchsicht.forEach((s, i) => m.set(s.dokument.id, i));
+    return m;
+  }, [durchsicht]);
 
-  const waehleDokument = (d: ArbeitsplatzDokument, positionKey: string | null) =>
-    setAuswahl({ dokumentId: d.id, positionKey });
-  const waehlePosition = (p: ArbeitsplatzPosition) =>
-    setAuswahl({ dokumentId: p.dokumente[0]?.id ?? null, positionKey: p.key });
+  // Der Index kann nach einer Aktion ueber das Ende zeigen (letztes Dokument
+  // erledigt) - dann auf das neue letzte, und bei leerer Schlange ist die
+  // Durchsicht fertig.
+  const schritt: DurchsichtSchritt | null =
+    auswahl.modus === "gefuehrt" && durchsicht.length > 0
+      ? (durchsicht[Math.min(auswahl.index, durchsicht.length - 1)] ?? null)
+      : null;
+  const durchsichtFertig = auswahl.modus === "gefuehrt" && durchsicht.length === 0;
 
-  const dokumentAktiv = (d: ArbeitsplatzDokument) => auswahl.dokumentId === d.id;
+  const gewaehltesDokument: ArbeitsplatzDokument | null =
+    auswahl.modus === "gefuehrt"
+      ? (schritt?.dokument ?? null)
+      : auswahl.dokumentId
+        ? (dokumentJeId.get(auswahl.dokumentId) ?? null)
+        : null;
+  const gewaehltePosition: ArbeitsplatzPosition | null =
+    auswahl.modus === "gefuehrt"
+      ? (schritt?.position ?? null)
+      : auswahl.positionKey
+        ? (positionJeKey.get(auswahl.positionKey) ?? null)
+        : null;
+
+  // Ein Klick im Baum: Haengt am Dokument noch eine Entscheidung, springt die
+  // Durchsicht dorthin - sonst freie Ansicht (schon freigegeben/aussortiert).
+  const waehleDokument = (d: ArbeitsplatzDokument, positionKey: string | null) => {
+    const i = schrittIndexJeDokument.get(d.id);
+    setAuswahl(i != null ? { modus: "gefuehrt", index: i } : { modus: "frei", dokumentId: d.id, positionKey });
+  };
+  const waehlePosition = (p: ArbeitsplatzPosition) => {
+    if (p.dokumente[0]) waehleDokument(p.dokumente[0], p.key);
+    else setAuswahl({ modus: "frei", dokumentId: null, positionKey: p.key });
+  };
+  const dokumentAktiv = (d: ArbeitsplatzDokument) => gewaehltesDokument?.id === d.id;
+
+  const aktuellerIndex = schritt ? durchsicht.indexOf(schritt) : -1;
 
   return (
     <div className="space-y-4">
@@ -174,7 +224,7 @@ export function UnterlagenArbeitsplatz({
                 </div>
                 <ul className="space-y-1">
                   {a.positionen.map((p) => {
-                    const aktiv = auswahl.positionKey === p.key;
+                    const aktiv = gewaehltePosition?.key === p.key;
                     return (
                       <li key={p.key} className={`rounded-md ${aktiv ? "bg-ai/[0.05]" : ""}`}>
                         <button
@@ -264,17 +314,35 @@ export function UnterlagenArbeitsplatz({
           </Link>
         </nav>
 
-        {/* ------- Spalte 2: Vorschau + Entscheidung ------- */}
+        {/* ------- Spalte 2: Durchsicht / Vorschau + Entscheidung ------- */}
         <section
           aria-label="Vorschau"
           className="card-elevated rounded-lg border bg-card p-3 lg:sticky lg:top-4"
         >
-          {gewaehltesDokument ? (
-            <Vorschau
-              d={gewaehltesDokument}
-              position={gewaehltePosition}
-              applicants={applicants}
-            />
+          {durchsichtFertig ? (
+            <DurchsichtFertig caseId={caseId} offen={offen} />
+          ) : gewaehltesDokument ? (
+            <Vorschau d={gewaehltesDokument} position={gewaehltePosition}>
+              {schritt ? (
+                <DurchsichtPanel
+                  schritt={schritt}
+                  index={aktuellerIndex}
+                  gesamt={durchsicht.length}
+                  applicants={applicants}
+                  onZurueck={() => setAuswahl({ modus: "gefuehrt", index: Math.max(0, aktuellerIndex - 1) })}
+                  onWeiter={() =>
+                    setAuswahl({ modus: "gefuehrt", index: Math.min(durchsicht.length - 1, aktuellerIndex + 1) })
+                  }
+                />
+              ) : (
+                <FreieEntscheidung
+                  d={gewaehltesDokument}
+                  applicants={applicants}
+                  offeneSchritte={durchsicht.length}
+                  onZurDurchsicht={() => setAuswahl({ modus: "gefuehrt", index: 0 })}
+                />
+              )}
+            </Vorschau>
           ) : gewaehltePosition ? (
             <LeerePosition caseId={caseId} p={gewaehltePosition} />
           ) : (
@@ -288,6 +356,227 @@ export function UnterlagenArbeitsplatz({
     </div>
   );
 }
+
+/* ------------------------------------------------------------------------ */
+/* Durchsicht                                                                */
+/* ------------------------------------------------------------------------ */
+
+function DurchsichtPanel({
+  schritt,
+  index,
+  gesamt,
+  applicants,
+  onZurueck,
+  onWeiter,
+}: {
+  schritt: DurchsichtSchritt;
+  index: number;
+  gesamt: number;
+  applicants: ApplicantOption[];
+  onZurueck: () => void;
+  onWeiter: () => void;
+}) {
+  const d = schritt.dokument;
+  const typLabel = d.documentType ? DOCUMENT_TYPE_LABELS[d.documentType] : null;
+  const antragsteller = applicants.find((a) => a.id === d.applicantId)?.name ?? null;
+  const kiFehler = d.classificationStatus === "fehler" || d.extractionStatus === "fehler";
+  const unlesbar = d.readable === false;
+  const freigebbar = !unlesbar && d.classificationStatus === "fertig";
+
+  // Die eine Frage je Aufgabe - und die Antwort, die man meist geben will,
+  // steht als erster Knopf.
+  const frage =
+    schritt.aufgabe === "zuordnen"
+      ? "Welche Unterlage ist das?"
+      : schritt.aufgabe === "bestaetigen"
+        ? `Erkannt als „${typLabel}“${antragsteller ? ` für ${antragsteller}` : ""} – stimmt das?`
+        : `Erkannt als „${typLabel}“ – wird das gebraucht?`;
+
+  const erklaerung =
+    schritt.aufgabe === "zuordnen"
+      ? unlesbar
+        ? "Die KI konnte keinen Text lesen (Foto unscharf, zu klein oder leer). Typ von Hand wählen – oder aussortieren und in besserer Qualität neu hochladen lassen."
+        : kiFehler
+          ? "Die KI-Erkennung ist fehlgeschlagen. Nachprüfen lassen oder den Typ von Hand wählen."
+          : "Kein Typ erkannt. Typ wählen – dann ordnet sich das Dokument selbst in die passende Anforderung ein."
+      : schritt.aufgabe === "bestaetigen"
+        ? `Gehört zu: ${schritt.position?.name}. Freigeben heißt: Die Unterlage zählt für diese Anforderung und geht mit zur Bank.`
+        : "Keine Anforderung dieses Falls verlangt diese Unterlage. Behalten heißt: Sie bleibt in der Akte und geht mit zur Bank. Aussortieren heißt: Sie wandert in den Stapel, nichts geht verloren.";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-ai/40 bg-ai/[0.05] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="eyebrow">
+          Durchsicht · {index + 1} von {gesamt}
+        </p>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={onZurueck} disabled={index <= 0}>
+            <ArrowLeft /> Zurück
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onWeiter} disabled={index >= gesamt - 1}>
+            Überspringen <ArrowRight />
+          </Button>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-base font-semibold">{frage}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{erklaerung}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {schritt.aufgabe !== "zuordnen" && freigebbar && (
+          <form action={acceptDocument.bind(null, d.id)}>
+            <SubmitButton size="sm" pendingLabel="Wird freigegeben …">
+              <CheckCircle2 />
+              {schritt.aufgabe === "bestaetigen" ? "Ja, freigeben" : "Behalten und freigeben"}
+            </SubmitButton>
+          </form>
+        )}
+        {kiFehler && !unlesbar && (
+          <form action={einzelDokumentNachpruefen}>
+            <input type="hidden" name="documentId" value={d.id} />
+            <SubmitButton size="sm" variant="outline" pendingLabel="KI-Nachprüfung läuft …">
+              KI-Nachprüfung
+            </SubmitButton>
+          </form>
+        )}
+        <RejectDocumentButton key={d.id} documentId={d.id} className="" />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          {schritt.aufgabe === "zuordnen" ? "Typ wählen" : "Anderer Typ?"}
+          <DocumentTypeSelect
+            key={d.id}
+            documentId={d.id}
+            value={d.documentType as DocumentType | null}
+            platzhalter={schritt.aufgabe === "zuordnen" ? "– Typ wählen –" : undefined}
+            className="block h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground disabled:opacity-60"
+          />
+        </label>
+        {applicants.length > 1 && (
+          <label className="space-y-1 text-xs text-muted-foreground">
+            Antragsteller
+            <ApplicantSelect
+              key={d.id}
+              documentId={d.id}
+              value={d.applicantId}
+              source={d.applicantSource}
+              applicants={applicants}
+              className="block h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground disabled:opacity-60"
+            />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DurchsichtFertig({ caseId, offen }: { caseId: string; offen: ArbeitsplatzPosition[] }) {
+  return (
+    <div className="space-y-4 p-2">
+      <div className="flex items-start gap-3">
+        <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-success" aria-hidden />
+        <div>
+          <p className="text-base font-semibold">Alle Dokumente durchgesehen.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {offen.length === 0
+              ? "Jede Anforderung ist erfüllt – die Akte ist vollständig."
+              : `${offen.length} Anforderung${offen.length === 1 ? "" : "en"} ${offen.length === 1 ? "ist" : "sind"} noch offen. Das ist, was beim Kunden anzufordern ist.`}
+          </p>
+        </div>
+      </div>
+
+      {offen.length > 0 && (
+        <ul className="space-y-1 rounded-lg border p-2">
+          {offen.map((p) => (
+            <li key={p.key} className="flex items-center gap-2 px-1 py-1 text-sm">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_PUNKT[p.status]}`} aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{p.name}</span>
+                {p.fehltFuer && <span className="block truncate text-xs text-warning">{p.fehltFuer}</span>}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">{STATUS_TEXT[p.status]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {offen.length > 0 && (
+          <Button asChild size="sm">
+            <Link href={`/cases/${caseId}/messages`}>Beim Kunden anfordern</Link>
+          </Button>
+        )}
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/cases/${caseId}?tab=dokumente#broker-upload`}>
+            <Upload /> Selbst hochladen
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/cases/${caseId}`}>Zur Fallakte</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Entscheidungen an einem Dokument, an dem die Durchsicht nichts mehr zu fragen hat. */
+function FreieEntscheidung({
+  d,
+  applicants,
+  offeneSchritte,
+  onZurDurchsicht,
+}: {
+  d: ArbeitsplatzDokument;
+  applicants: ApplicantOption[];
+  offeneSchritte: number;
+  onZurDurchsicht: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DocumentTypeSelect key={d.id} documentId={d.id} value={d.documentType as DocumentType | null} />
+        {applicants.length > 1 && (
+          <ApplicantSelect
+            key={d.id}
+            documentId={d.id}
+            value={d.applicantId}
+            source={d.applicantSource}
+            applicants={applicants}
+          />
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {d.reviewStatus === "akzeptiert" ? (
+          <>
+            <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
+            <ReopenDocumentButton documentId={d.id} />
+          </>
+        ) : d.reviewStatus === "abgelehnt" ? (
+          <>
+            <Badge variant="destructive">{DOCUMENT_REVIEW_STATUS_LABELS.abgelehnt}</Badge>
+            <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
+          </>
+        ) : (
+          <Badge variant="neutral">
+            {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
+          </Badge>
+        )}
+        {offeneSchritte > 0 && (
+          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onZurDurchsicht}>
+            Zur Durchsicht ({offeneSchritte} offen) <ArrowRight />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Bausteine                                                                 */
+/* ------------------------------------------------------------------------ */
 
 function Kennzahl({
   wert,
@@ -415,14 +704,19 @@ function DokumentStatusMarke({ d }: { d: ArbeitsplatzDokument }) {
   );
 }
 
+/**
+ * Kopf + Bild eines Dokuments. Was dazwischen steht (Durchsicht-Frage oder
+ * freie Entscheidungen), bringt der Aufrufer mit - es gehoert ÜBER das Bild,
+ * damit es nicht unter einem langen Dokument aus dem Blick rutscht.
+ */
 function Vorschau({
   d,
   position,
-  applicants,
+  children,
 }: {
   d: ArbeitsplatzDokument;
   position: ArbeitsplatzPosition | null;
-  applicants: ApplicantOption[];
+  children: React.ReactNode;
 }) {
   const url = `/api/documents/${d.id}/download?preview=1`;
   return (
@@ -447,80 +741,20 @@ function Vorschau({
         </a>
       </div>
 
-      {/* Entscheidungen ÜBER der Vorschau: Sie sind das, wofuer man hier ist,
-          und sie duerfen nicht unter einem langen Dokument aus dem Bild rutschen. */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        <DocumentTypeSelect documentId={d.id} value={d.documentType as DocumentType | null} />
-        {applicants.length > 1 && (
-          <ApplicantSelect
-            documentId={d.id}
-            value={d.applicantId}
-            source={d.applicantSource}
-            applicants={applicants}
-          />
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {d.readable === false ? (
-          <Badge variant="warning">
-            Kein lesbarer Text – Typ von Hand setzen oder in besserer Qualität erneut hochladen
-          </Badge>
-        ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
-          <>
-            <Badge variant="warning">KI-Fehler</Badge>
-            {/* Die Wiederholung gehoert an das Dokument, nicht auf eine andere
-                Seite. Synchron: der Knopf zeigt den Lauf, danach steht das
-                ehrliche Ergebnis da (Typ erkannt oder wieder Fehler). */}
-            <form action={einzelDokumentNachpruefen}>
-              <input type="hidden" name="documentId" value={d.id} />
-              <SubmitButton size="sm" variant="outline" pendingLabel="KI-Nachprüfung läuft …">
-                KI-Nachprüfung
-              </SubmitButton>
-            </form>
-          </>
-        ) : null}
-
-        {d.reviewStatus === "offen" ? (
-          <>
-            {d.readable !== false && d.classificationStatus === "fertig" && (
-              <form action={acceptDocument.bind(null, d.id)}>
-                <SubmitButton size="sm" pendingLabel="Wird freigegeben …">
-                  Freigeben
-                </SubmitButton>
-              </form>
-            )}
-            <RejectDocumentButton documentId={d.id} className="" />
-          </>
-        ) : d.reviewStatus === "akzeptiert" ? (
-          <>
-            <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
-            <ReopenDocumentButton documentId={d.id} />
-          </>
-        ) : d.reviewStatus === "abgelehnt" ? (
-          <>
-            <Badge variant="destructive">{DOCUMENT_REVIEW_STATUS_LABELS.abgelehnt}</Badge>
-            <ReopenDocumentButton documentId={d.id} label="Ablehnung zurücknehmen" />
-          </>
-        ) : (
-          <Badge variant="neutral">
-            {DOCUMENT_REVIEW_STATUS_LABELS[d.reviewStatus as DocumentReviewStatus] ?? d.reviewStatus}
-          </Badge>
-        )}
-      </div>
+      {children}
 
       {d.mimeType.startsWith("image/") ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt={`Vorschau: ${d.name}`}
-          className="max-h-[75vh] w-full rounded-md border bg-muted/30 object-contain"
+          className="max-h-[70vh] w-full rounded-md border bg-muted/30 object-contain"
         />
       ) : d.mimeType === "application/pdf" ? (
         <iframe
           src={url}
           title={`Vorschau: ${d.name}`}
-          className="h-[75vh] w-full rounded-md border bg-card"
+          className="h-[70vh] w-full rounded-md border bg-card"
         />
       ) : (
         <div className="flex h-40 items-center justify-center rounded-md border-2 border-dashed">

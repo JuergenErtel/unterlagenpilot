@@ -4,6 +4,8 @@ import {
   abschnittFortschritt,
   arbeitsplatzUeberblick,
   ersterEinstieg,
+  baueDurchsicht,
+  offeneAnforderungen,
   type ArbeitsplatzDokument,
 } from "@/lib/unterlagen/arbeitsplatz";
 import type { DocumentType } from "@/lib/domain/enums";
@@ -174,5 +176,54 @@ describe("ersterEinstieg", () => {
       [dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" })]
     );
     expect(ersterEinstieg(a).dokumentId).toBe("p1");
+  });
+});
+
+describe("baueDurchsicht", () => {
+  it("reiht zuerst Zuordnen, dann Bestaetigen in Aktenreihenfolge, zuletzt Entscheiden", () => {
+    const a = baueArbeitsplatz(
+      [
+        position({ key: "perso", documentType: "personalausweis" }),
+        position({ key: "gehalt", documentType: "gehaltsabrechnung" }),
+      ],
+      [
+        dok({ id: "s1", documentType: "sonstige" }),
+        dok({ id: "g1", documentType: "gehaltsabrechnung" }),
+        dok({ id: "e1" }),
+        dok({ id: "p1", documentType: "personalausweis" }),
+      ]
+    );
+    expect(baueDurchsicht(a).map((s) => [s.dokument.id, s.aufgabe, s.position?.key ?? null])).toEqual([
+      ["e1", "zuordnen", null],
+      ["p1", "bestaetigen", "perso"],
+      ["g1", "bestaetigen", "gehalt"],
+      ["s1", "entscheiden", null],
+    ]);
+  });
+
+  it("laesst Erledigtes (freigegeben, abgelehnt) aus der Schlange", () => {
+    const a = baueArbeitsplatz(
+      [position({ key: "perso", documentType: "personalausweis" })],
+      [
+        dok({ id: "p1", documentType: "personalausweis", reviewStatus: "akzeptiert" }),
+        dok({ id: "p2", documentType: "personalausweis", reviewStatus: "abgelehnt" }),
+        dok({ id: "s1", documentType: "sonstige", reviewStatus: "akzeptiert" }),
+      ]
+    );
+    expect(baueDurchsicht(a)).toEqual([]);
+  });
+});
+
+describe("offeneAnforderungen", () => {
+  it("nennt alles, was nicht vollstaendig ist", () => {
+    const a = baueArbeitsplatz(
+      [
+        position({ key: "perso", documentType: "personalausweis", status: "vorhanden" }),
+        position({ key: "gehalt", documentType: "gehaltsabrechnung", status: "unvollstaendig" }),
+        position({ key: "gb", documentType: "grundbuchauszug", status: "offen" }),
+      ],
+      []
+    );
+    expect(offeneAnforderungen(a).map((p) => p.key)).toEqual(["gehalt", "gb"]);
   });
 });

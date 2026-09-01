@@ -13,12 +13,19 @@ export function DocumentTypeSelect({
   documentId,
   value,
   className,
+  platzhalter,
 }: {
   documentId: string;
   value: DocumentType | null;
   className?: string;
+  /**
+   * Ohne Typ zeigt das Feld sonst "Sonstige Unterlagen" - als haette die KI
+   * etwas erkannt. Mit Platzhalter steht da "– Typ wählen –", bis der
+   * Nutzer entscheidet.
+   */
+  platzhalter?: string;
 }) {
-  const [current, setCurrent] = useState<string>(value ?? "sonstige");
+  const [current, setCurrent] = useState<string>(value ?? (platzhalter ? "" : "sonstige"));
   const [pending, startTransition] = useTransition();
 
   function onChange(next: string) {
@@ -39,6 +46,11 @@ export function DocumentTypeSelect({
         "h-8 max-w-[16rem] rounded-md border bg-background px-2 text-sm disabled:opacity-60"
       }
     >
+      {platzhalter && (
+        <option value="" disabled>
+          {platzhalter}
+        </option>
+      )}
       {DOCUMENT_TYPES.map((t) => (
         <option key={t} value={t}>
           {DOCUMENT_TYPE_LABELS[t]}

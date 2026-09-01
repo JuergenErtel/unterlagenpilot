@@ -238,3 +238,53 @@ export function ersterEinstieg(a: Arbeitsplatz): {
   if (a.weitere[0]) return { dokumentId: a.weitere[0].id, positionKey: null };
   return { dokumentId: null, positionKey: positionen[0]?.key ?? null };
 }
+
+/**
+ * Die gefuehrte Durchsicht: eine Warteschlange aller Dokumente, an denen noch
+ * eine Entscheidung haengt, mit der Frage, die jeweils zu beantworten ist.
+ *
+ * - `zuordnen`: kein Typ erkannt (Eingang) - "Welche Unterlage ist das?"
+ * - `bestaetigen`: Typ erkannt und von einer Anforderung verlangt -
+ *   "Stimmt der erkannte Typ?" (freigeben, korrigieren oder aussortieren)
+ * - `entscheiden`: Typ erkannt, aber keine Anforderung verlangt ihn -
+ *   "Wird das gebraucht?" (behalten oder aussortieren)
+ *
+ * Reihenfolge nach Dringlichkeit: Zuordnen zuerst (ein Dokument ohne Typ
+ * zaehlt nirgends), dann Bestaetigen in Aktenreihenfolge, zuletzt Entscheiden.
+ * Wer eine Aufgabe erledigt, laesst das Dokument aus der Schlange fallen -
+ * die Oberflaeche merkt sich nur den Index und steht damit automatisch auf
+ * dem naechsten.
+ */
+export type DurchsichtAufgabe = "zuordnen" | "bestaetigen" | "entscheiden";
+
+export interface DurchsichtSchritt {
+  dokument: ArbeitsplatzDokument;
+  aufgabe: DurchsichtAufgabe;
+  /** Die Anforderung, unter der das Dokument haengt (nur bei `bestaetigen`). */
+  position: ArbeitsplatzPosition | null;
+}
+
+export function baueDurchsicht(a: Arbeitsplatz): DurchsichtSchritt[] {
+  const schritte: DurchsichtSchritt[] = [];
+  for (const d of a.eingang) {
+    if (d.reviewStatus === "offen") schritte.push({ dokument: d, aufgabe: "zuordnen", position: null });
+  }
+  for (const abschnitt of a.abschnitte) {
+    for (const p of abschnitt.positionen) {
+      for (const d of p.dokumente) {
+        if (d.reviewStatus === "offen") schritte.push({ dokument: d, aufgabe: "bestaetigen", position: p });
+      }
+    }
+  }
+  for (const d of a.weitere) {
+    if (d.reviewStatus === "offen") schritte.push({ dokument: d, aufgabe: "entscheiden", position: null });
+  }
+  return schritte;
+}
+
+/** Anforderungen, die nach der Durchsicht noch offen sind - fuer den Abschluss. */
+export function offeneAnforderungen(a: Arbeitsplatz): ArbeitsplatzPosition[] {
+  return a.abschnitte
+    .flatMap((x) => x.positionen)
+    .filter((p) => p.status !== "vorhanden" && p.status !== "nicht_erforderlich");
+}
