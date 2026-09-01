@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FileText, Inbox, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -441,7 +441,7 @@ function DurchsichtPanel({
             </SubmitButton>
           </form>
         )}
-        <RejectDocumentButton key={d.id} documentId={d.id} className="" />
+        <RejectDocumentButton key={d.id} documentId={d.id} className="" label="Aussortieren" />
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -664,8 +664,15 @@ function DokumentZeile({
   aktiv: boolean;
   onClick: () => void;
 }) {
+  // Springt die Durchsicht weiter, muss der Baum mitgehen - sonst steht
+  // rechts Dokument 7, waehrend links noch die ersten sechs zu sehen sind.
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (aktiv) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [aktiv]);
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-current={aktiv ? "true" : undefined}

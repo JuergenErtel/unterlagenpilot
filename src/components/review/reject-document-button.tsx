@@ -15,8 +15,11 @@ import { Button } from "@/components/ui/button";
 export function RejectDocumentButton({
   documentId,
   className = "w-full",
+  label = "Ablehnen",
 }: {
   documentId: string;
+  /** Beschriftung des Knopfs - die Durchsicht sagt "Aussortieren", weil der Text daneben es so nennt. */
+  label?: string;
   /** Voreinstellung volle Breite (Review-Center-Raster); im Arbeitsplatz steht er in einer Knopfreihe. */
   className?: string;
 }) {
@@ -33,7 +36,7 @@ export function RejectDocumentButton({
         className={className}
         onClick={() => setOpen(true)}
       >
-        Ablehnen
+        {label}
       </Button>
     );
   }
