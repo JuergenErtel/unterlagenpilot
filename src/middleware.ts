@@ -92,7 +92,13 @@ function buildCsp(nonce: string): string {
     // Dokument-Vorschau (/api/documents/.../download) per iframe ein.
     "frame-ancestors 'self'",
     "form-action 'self'",
-    "img-src 'self' data: blob:",
+    // Die Dokument-Vorschau (/api/documents/.../download?preview=1) leitet
+    // auf eine signierte Supabase-Storage-URL um. Der Browser prueft das
+    // Umleitungsziel gegen img-src bzw. frame-src – ohne den Storage-Origin
+    // hier blieb jede Vorschau (Arbeitsplatz, Review-Center) leer, und zwar
+    // ohne sichtbaren Fehler (Juergen, 01.09.2026: "keine Vorschau zu sehen").
+    `img-src 'self' data: blob: ${supabaseConnectSrc}`,
+    `frame-src 'self' ${supabaseConnectSrc}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
     scriptSrc,
