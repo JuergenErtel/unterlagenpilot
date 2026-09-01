@@ -12,7 +12,14 @@ import { Button } from "@/components/ui/button";
  * das erst nach Klick erscheint – ein einfaches Formular liefert diesen Wert
  * nicht typsicher an eine Funktion mit festen, gebundenen Parametern.
  */
-export function RejectDocumentButton({ documentId }: { documentId: string }) {
+export function RejectDocumentButton({
+  documentId,
+  className = "w-full",
+}: {
+  documentId: string;
+  /** Voreinstellung volle Breite (Review-Center-Raster); im Arbeitsplatz steht er in einer Knopfreihe. */
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [grund, setGrund] = useState("");
   const [pending, startTransition] = useTransition();
@@ -23,7 +30,7 @@ export function RejectDocumentButton({ documentId }: { documentId: string }) {
         type="button"
         size="sm"
         variant="outline"
-        className="w-full"
+        className={className}
         onClick={() => setOpen(true)}
       >
         Ablehnen
@@ -32,7 +39,7 @@ export function RejectDocumentButton({ documentId }: { documentId: string }) {
   }
 
   return (
-    <div className="col-span-2 space-y-1.5">
+    <div className="col-span-2 basis-full space-y-1.5">
       <label className="block text-xs text-muted-foreground" htmlFor={`grund-${documentId}`}>
         Grund für den Kunden (freiwillig)
       </label>

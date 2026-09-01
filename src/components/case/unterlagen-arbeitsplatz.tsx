@@ -490,7 +490,7 @@ function Vorschau({
                 </SubmitButton>
               </form>
             )}
-            <RejectDocumentButton documentId={d.id} />
+            <RejectDocumentButton documentId={d.id} className="" />
           </>
         ) : d.reviewStatus === "akzeptiert" ? (
           <>
