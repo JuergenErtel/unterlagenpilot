@@ -164,7 +164,14 @@ Keine. Alle Änderungen betreffen Autorisierung, Guards und Tests.
 
 ## 11. Commit und Deployment
 
-DEPLOYMENT
+- Commit `0622c2f` „fix(backoffice): zentraler Dokument- und Aktenzugriff, Schreibsperre, negative
+  Sicherheitstests“ auf `main`, gepusht 21:28 Uhr.
+- Vercel-Deployment `unterlagenpilot-e006ukhu6` (Produktion), erstellt 21:28:06 Uhr, Status
+  **Ready**, Alias `baufidesk.de` und `www.baufidesk.de`.
+- Produktionsprüfung ohne Daten: `/backoffice`, `/portal`, `/api/portal/auftraege/x/ergebnis` und
+  `/api/documents/x/download` antworten unangemeldet mit 307 auf den Seitenschutz (`/gate`), ohne
+  Inhalt und ohne Hinweis auf Existenz. Keine Nachrichten, keine Übertragungen, keine produktiven
+  Dokumente berührt.
 
 ## 12. Verbleibende Risiken
 
@@ -180,4 +187,19 @@ DEPLOYMENT
 
 ## 13. Pilotfreigabe
 
-FREIGABE
+Der Backoffice-Prozess läuft im synthetischen Durchlauf vollständig durch. Dokumentzugriffe sind
+zentral, rollen-, akten- und statusabhängig abgesichert, negative Tests decken fremde Organisation,
+fehlende Rolle, Zuweisung, Portal-Trennung, Kontaktbindung, manipulierte Beziehungen, Upload-Token
+und unauthentifizierte Zugriffe ab. Vertrieb und Backoffice bleiben getrennt, es wurde nichts
+versendet und keine Migration nötig.
+
+`PILOTFREIGABE: JA, MIT FOLGENDEN EINSCHRÄNKUNGEN`
+
+1. Pilot mit **einem** externen Auftraggeber, dessen BaufiDesk-Organisation im Backoffice
+   verknüpft ist; Cross-Org-Übergabe aus einem fremden Vertrieb ist nicht Teil des Pilots.
+2. Aufträge entstehen manuell im Backoffice oder über das Portal; kein öffentlicher
+   Einreichungslink.
+3. Abrechnung erfolgt manuell anhand der Kontingent-Ereignisse; keine Zahlungsabwicklung.
+4. Bearbeiter, Prüfer und Manager sind getrennte Konten (Vier-Augen-Prinzip); ein
+   Einpersonen-Backoffice arbeitet mit Manager-Selbstfreigabe, die im Audit vermerkt wird.
+5. Lint bleibt unkonfiguriert; Qualitätssicherung läuft über TypeScript, Tests und Build.
