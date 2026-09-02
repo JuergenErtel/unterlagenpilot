@@ -13,7 +13,7 @@ export default async function NeuerAuftraggeberPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Auftraggeber"
         title="Neuer Auftraggeber"
         subtitle="Stammdaten, Abrechnungsmodell und Frist. Kontakte und die Portal-Verknüpfung folgen auf der Detailseite."
         actions={<Button asChild variant="outline" size="sm"><Link href="/backoffice/auftraggeber"><ArrowLeft /> Zur Liste</Link></Button>}

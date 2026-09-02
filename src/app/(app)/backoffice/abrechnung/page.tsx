@@ -85,7 +85,7 @@ export default async function AbrechnungPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Verwaltung"
         title="Abrechnung"
         subtitle="Kontingentstand und übergebene Aufträge je Auftraggeber und Periode. Keine Zahlungsabwicklung - Kontingente und Ereignisse dienen der Abrechnung."
         actions={

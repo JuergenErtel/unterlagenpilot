@@ -35,7 +35,7 @@ export default async function TeamPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Verwaltung"
         title="Team"
         subtitle="Wer im Backoffice welche Rolle trägt. Die Vertriebsrolle bleibt davon unberührt."
       />

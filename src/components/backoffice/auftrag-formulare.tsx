@@ -47,21 +47,21 @@ const FELD = "h-9 w-full rounded-md border bg-card px-3 text-sm";
 // Statuswechsel
 // ---------------------------------------------------------------------------
 
-export function UebergangsKnoepfe({ auftragId, uebergaenge }: { auftragId: string; uebergaenge: Uebergang[] }) {
+export function UebergangsKnoepfe({ auftragId, uebergaenge, hervorheben = true }: { auftragId: string; uebergaenge: Uebergang[]; hervorheben?: boolean }) {
   const [offen, setOffen] = useState<string | null>(null);
   if (uebergaenge.length === 0) return null;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {uebergaenge.map((u) => (
-          <UebergangsKnopf key={u.nach} auftragId={auftragId} u={u} offen={offen === u.nach} onOffen={() => setOffen(offen === u.nach ? null : u.nach)} />
+          <UebergangsKnopf key={u.nach} auftragId={auftragId} u={u} offen={offen === u.nach} onOffen={() => setOffen(offen === u.nach ? null : u.nach)} hervorheben={hervorheben} />
         ))}
       </div>
     </div>
   );
 }
 
-function UebergangsKnopf({ auftragId, u, offen, onOffen }: { auftragId: string; u: Uebergang; offen: boolean; onOffen: () => void }) {
+function UebergangsKnopf({ auftragId, u, offen, onOffen, hervorheben }: { auftragId: string; u: Uebergang; offen: boolean; onOffen: () => void; hervorheben: boolean }) {
   const [state, formAction] = useActionState<AktionsErgebnis, FormData>(statusWechselnAction, {});
   const wartend = u.nach === "wartet_auf_unterlagen" || u.nach === "rueckfrage_auftraggeber";
   const destruktiv = u.nach === "abgelehnt" || u.nach === "storniert";
@@ -72,7 +72,9 @@ function UebergangsKnopf({ auftragId, u, offen, onOffen }: { auftragId: string; 
       <form action={formAction} className="inline-flex flex-col gap-1">
         <input type="hidden" name="auftragId" value={auftragId} />
         <input type="hidden" name="nach" value={u.nach} />
-        <SubmitButton size="sm" variant={u.nach === "qualitaetskontrolle" || u.nach === "in_aufbereitung" ? "default" : "outline"} pendingLabel="…">
+        {/* Genau EINE Hauptaktion je Seite: Der Vorwaertsschritt traegt die
+            Tinte nur, wenn die Seite keine andere Hauptaktion zeigt. */}
+        <SubmitButton size="sm" variant={hervorheben && (u.nach === "qualitaetskontrolle" || u.nach === "in_aufbereitung") ? "default" : "outline"} pendingLabel="…">
           {u.label}
         </SubmitButton>
         {state.error && <span className="text-xs text-destructive" role="alert">{state.error}</span>}

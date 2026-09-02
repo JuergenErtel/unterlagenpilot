@@ -28,7 +28,7 @@ export default async function UebergabePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Mein Arbeitstag"
         title="Übergabe"
         subtitle="Freigegebene Aufträge, die an den Auftraggeber übergeben werden können - und übergebene, deren Abnahme noch aussteht."
       />

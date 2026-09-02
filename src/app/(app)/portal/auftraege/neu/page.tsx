@@ -13,7 +13,7 @@ export default async function PortalNeuerAuftrag() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Neuer Auftrag"
         title="Neuer Auftrag"
         subtitle={
           partner.length === 1

@@ -47,7 +47,7 @@ export default async function AuftraggeberDetailPage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Auftraggeber"
         title={ag.name}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">

@@ -66,6 +66,19 @@
     --input: 212 16% 83%;
     --ring: 176 100% 24%;            /* Fokus traegt das Tuerkis – nie uebersehbar */
 
+    /* Oberflaechenhierarchie (seit 02.09.2026): drei Stufen, keine Schatten.
+       canvas = Schreibtisch, card = Blatt, raised = ein Blatt, das obenauf
+       liegt (Hero, naechster Schritt). sunken = Ablage unter dem Blatt
+       (Tabellenkopf, Filterleiste). */
+    --surface-raised: 0 0% 100%;
+    --surface-sunken: 210 16% 95%;
+    /* Deaktivierter Text: sichtbar, aber eindeutig zurueckgenommen. */
+    --text-disabled: 214 10% 62%;
+    /* Information ohne Wertung – Hinweise, die weder loben noch warnen.
+       Bewusst die Tinte in duenner Auflage, kein Blau aus dem Baukasten. */
+    --info: 214 45% 34%;
+    --info-foreground: 210 30% 98%;
+
     /* Praezisionsgeraet, kein weiches SaaS */
     --radius: 0.375rem;
   }
@@ -103,6 +116,12 @@
     --border: 215 16% 21%;
     --input: 215 16% 24%;
     --ring: 176 58% 62%;
+
+    --surface-raised: 215 26% 14%;
+    --surface-sunken: 215 28% 9.5%;
+    --text-disabled: 214 10% 42%;
+    --info: 214 40% 70%;
+    --info-foreground: 215 40% 9%;
   }
 }
 
@@ -122,6 +141,27 @@
    */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Wer Bewegung abgeschaltet hat, bekommt keine – auch nicht die kleine
+   * Einblendung des Seiteninhalts.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Sichtbarer Fokus fuer alles, was kein eigenes Fokusmuster mitbringt. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
@@ -204,5 +244,90 @@
     font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
     letter-spacing: -0.02em;
     font-weight: 600;
+  }
+
+  /*
+   * Typografische Stufen (seit 02.09.2026). Eine Seite benutzt genau diese
+   * Groessen, damit Vertrieb, Backoffice und Portal gleich lesen:
+   *   .t-seitentitel   Seitentitel (Archivo, eng)
+   *   .t-abschnitt     Abschnittstitel in Karten
+   *   .t-kpi           grosse Zahl
+   *   .t-hilfe         Hilfetext – nie heller als muted-foreground
+   */
+  .t-seitentitel {
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    font-size: 1.75rem;
+    line-height: 1.05;
+  }
+  .t-abschnitt {
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+  .t-kpi {
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.03em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .t-hilfe {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /*
+   * Oberflaechen. Nicht jede Information ist ein weisses Blatt mit Rahmen:
+   *   .flaeche-blatt    das Dokument (Karte) – Kante, kurzer Schatten
+   *   .flaeche-oben     liegt obenauf: Hero, naechster Schritt, Onboarding
+   *   .flaeche-ablage   liegt darunter: Filter, Tabellenkopf, Nebenlisten
+   *   .flaeche-warnung  Warnkarte – Ocker als Kante, nicht als Fuellung
+   *   .flaeche-blocker  kritischer Blocker – Rot als Kante
+   */
+  .flaeche-blatt {
+    @apply rounded-lg border bg-card text-card-foreground card-elevated;
+  }
+  .flaeche-oben {
+    @apply rounded-lg border border-primary/15 text-card-foreground;
+    background:
+      linear-gradient(180deg, hsl(var(--surface-raised)) 0%, hsl(var(--card)) 100%);
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.06),
+      0 1px 2px hsl(215 45% 12% / 0.05),
+      0 12px 32px -18px hsl(214 76% 14% / 0.25);
+  }
+  .flaeche-ablage {
+    @apply rounded-lg border border-border/80 bg-[hsl(var(--surface-sunken))] text-foreground;
+  }
+  .flaeche-warnung {
+    @apply rounded-lg border border-l-[3px] border-l-warning bg-card card-elevated;
+  }
+  .flaeche-blocker {
+    @apply rounded-lg border border-l-[3px] border-l-destructive bg-card card-elevated;
+  }
+
+  /*
+   * Horizontaler Scrollbereich mit sichtbarer, zurueckhaltender Leiste.
+   * macOS blendet Leisten aus; hier ist sie mit der Maus der einzige Griff.
+   */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scroll-x::-webkit-scrollbar {
+    height: 8px;
+  }
+  .scroll-x::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: hsl(var(--border));
+  }
+  .scroll-x::-webkit-scrollbar-track {
+    background: transparent;
   }
 }

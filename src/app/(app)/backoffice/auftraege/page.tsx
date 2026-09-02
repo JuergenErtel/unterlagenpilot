@@ -29,7 +29,7 @@ export default async function AuftraegePage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Übersicht"
         title="Alle Aufträge"
         subtitle="Jeder Auftrag, den Sie sehen dürfen - aktive wie abgeschlossene."
         actions={

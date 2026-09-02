@@ -40,18 +40,33 @@ import { cn } from "@/lib/utils";
 import {
   BEREICH_LABELS,
   BEREICH_START,
+  LEERE_ZAEHLER,
   bereichAusPfad,
   verfuegbareBereiche,
+  type BackofficeZaehler,
   type Bereich,
   type Bereiche,
 } from "@/lib/backoffice/bereich";
+import { Zaehler } from "@/components/ui/flaechen";
 
-export const NAV_GROUPS: Array<{
+export interface NavEintrag {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Welcher Zaehler an diesem Eintrag haengt (nur Backoffice). */
+  zaehler?: keyof BackofficeZaehler;
+  /** Ton des Zaehlers: Handlungsbedarf (neutral) oder Wartezustand (warnung). */
+  zaehlerTon?: "neutral" | "warnung";
+}
+
+export interface NavGruppe {
   label: string;
   /** Zugeklappt starten; die Überschrift wird zum Auf-/Zuklapp-Knopf. */
   einklappbar?: boolean;
-  items: Array<{ href: string; label: string; icon: LucideIcon }>;
-}> = [
+  items: NavEintrag[];
+}
+
+export const NAV_GROUPS: NavGruppe[] = [
   {
     label: "Arbeit",
     items: [
@@ -93,7 +108,7 @@ export const NAV_GROUPS: Array<{
 /** Nur fuer den Plattformbetreiber (User.platformAdmin). Die Sichtbarkeit hier
  *  ist reine Auffindbarkeit – den Zugang selbst regelt requirePlatformAdmin auf
  *  der Seite und in jeder Server Action (404 statt 403). */
-export const PLATTFORM_GRUPPE: (typeof NAV_GROUPS)[number] = {
+export const PLATTFORM_GRUPPE: NavGruppe = {
   label: "Plattform",
   items: [
     { href: "/admin/anmeldungen", label: "Anmeldungen", icon: UserCheck },
@@ -108,18 +123,31 @@ export const PLATTFORM_GRUPPE: (typeof NAV_GROUPS)[number] = {
  * Konfiguration). Sichtbar nur mit Backoffice-Rolle UND Feature Flag - die
  * Regel steht in ladeBereiche (src/lib/backoffice/zugriff.ts).
  */
-export const BACKOFFICE_GRUPPEN: typeof NAV_GROUPS = [
+export const BACKOFFICE_GRUPPEN: NavGruppe[] = [
   {
-    label: "Aufträge",
+    label: "Übersicht",
     items: [
-      { href: "/backoffice", label: "Auftragsdashboard", icon: Gauge },
-      { href: "/backoffice/queue", label: "Bearbeitungsqueue", icon: ListOrdered },
-      { href: "/backoffice/auftraege", label: "Aufträge", icon: Inbox },
-      { href: "/backoffice/fehlende-unterlagen", label: "Fehlende Unterlagen", icon: FileWarning },
-      { href: "/backoffice/dokumentenpruefung", label: "Dokumentenprüfung", icon: FileSearch },
-      { href: "/backoffice/rueckfragen", label: "Rückfragen", icon: MessageSquareText },
-      { href: "/backoffice/qualitaetskontrolle", label: "Qualitätskontrolle", icon: ClipboardCheck },
-      { href: "/backoffice/uebergabe", label: "Fertig zur Übergabe", icon: PackageCheck },
+      { href: "/backoffice", label: "Dashboard", icon: Gauge },
+      { href: "/backoffice/auftraege", label: "Alle Aufträge", icon: Inbox },
+    ],
+  },
+  {
+    // Der taegliche Arbeitsplatz: was das Backoffice selbst in der Hand hat,
+    // in der Reihenfolge des Wegs - bearbeiten, pruefen, uebergeben.
+    label: "Mein Arbeitstag",
+    items: [
+      { href: "/backoffice/queue", label: "Jetzt bearbeiten", icon: ListOrdered, zaehler: "jetztBearbeiten" },
+      { href: "/backoffice/qualitaetskontrolle", label: "Qualitätskontrolle", icon: ClipboardCheck, zaehler: "qualitaetskontrolle" },
+      { href: "/backoffice/uebergabe", label: "Fertig zur Übergabe", icon: PackageCheck, zaehler: "uebergabe" },
+    ],
+  },
+  {
+    // Alles, was auf jemand anderen wartet oder eine Entscheidung braucht.
+    label: "Klärungsbedarf",
+    items: [
+      { href: "/backoffice/fehlende-unterlagen", label: "Fehlende Unterlagen", icon: FileWarning, zaehler: "fehlendeUnterlagen", zaehlerTon: "warnung" },
+      { href: "/backoffice/dokumentenpruefung", label: "Dokumente zu prüfen", icon: FileSearch, zaehler: "dokumentePruefen" },
+      { href: "/backoffice/rueckfragen", label: "Rückfragen", icon: MessageSquareText, zaehler: "rueckfragen", zaehlerTon: "warnung" },
     ],
   },
   {
@@ -129,14 +157,14 @@ export const BACKOFFICE_GRUPPEN: typeof NAV_GROUPS = [
       { href: "/backoffice/auftraggeber", label: "Auftraggeber", icon: Handshake },
       { href: "/backoffice/team", label: "Team", icon: Users },
       { href: "/backoffice/abrechnung", label: "Abrechnung & Kontingente", icon: Receipt },
-      { href: "/backoffice/konfiguration", label: "Backoffice-Konfiguration", icon: SlidersHorizontal },
+      { href: "/backoffice/konfiguration", label: "Konfiguration", icon: SlidersHorizontal },
       { href: "/audit", label: "Audit-Log", icon: ShieldCheck },
     ],
   },
 ];
 
 /** Das reduzierte Portal eines Auftraggebers. Keine interne Queue, keine fremden Auftraggeber. */
-export const PORTAL_GRUPPEN: typeof NAV_GROUPS = [
+export const PORTAL_GRUPPEN: NavGruppe[] = [
   {
     label: "Meine Aufträge",
     items: [
@@ -152,14 +180,14 @@ export const PORTAL_GRUPPEN: typeof NAV_GROUPS = [
     label: "Organisation",
     einklappbar: true,
     items: [
-      { href: "/portal/kontingent", label: "Kontingent & Tarif", icon: Receipt },
-      { href: "/portal/organisation", label: "Organisation & Mitarbeiter", icon: Building2 },
+      { href: "/portal/kontingent", label: "Kontingent", icon: Receipt },
+      { href: "/portal/organisation", label: "Organisation & Team", icon: Building2 },
     ],
   },
 ];
 
 /** Welche Gruppen ein Nutzer im Vertrieb sieht. Reine Funktion, damit ohne DOM pruefbar. */
-export function navGruppen(platformAdmin: boolean): typeof NAV_GROUPS {
+export function navGruppen(platformAdmin: boolean): NavGruppe[] {
   return platformAdmin ? [...NAV_GROUPS, PLATTFORM_GRUPPE] : NAV_GROUPS;
 }
 
@@ -167,24 +195,43 @@ export function navGruppen(platformAdmin: boolean): typeof NAV_GROUPS {
  * Gruppen je Bereich. Der Plattform-Eintrag haengt am Vertrieb - dort ist der
  * Betreiber zu Hause. Backoffice und Portal bleiben frei davon.
  */
-export function navGruppenFuer(bereich: Bereich, platformAdmin: boolean): typeof NAV_GROUPS {
+export function navGruppenFuer(bereich: Bereich, platformAdmin: boolean): NavGruppe[] {
   if (bereich === "backoffice") return BACKOFFICE_GRUPPEN;
   if (bereich === "portal") return PORTAL_GRUPPEN;
   return navGruppen(platformAdmin);
 }
 
 /** Dieselbe Aktiv-Regel wie beim Markieren des Eintrags – auch fürs Aufklappen. */
+/** Startseiten der Bereiche leuchten nur bei exaktem Pfad - sonst waere
+ *  "Dashboard" auf jeder Unterseite des Bereichs markiert. */
+const NUR_EXAKT = new Set(["/dashboard", "/backoffice", "/portal"]);
+
 function istAktiv(pathname: string, href: string): boolean {
-  return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
+  return pathname === href || (!NUR_EXAKT.has(href) && pathname.startsWith(href + "/"));
 }
 
 const NUR_VERTRIEB: Bereiche = { vertrieb: true, backoffice: false, portal: false };
+
+const BEREICH_ICON: Record<Bereich, LucideIcon> = {
+  vertrieb: KanbanSquare,
+  backoffice: ClipboardCheck,
+  portal: Handshake,
+};
+
+/**
+ * Reine Regel fuer den Umschalter: Er erscheint nur, wenn es etwas
+ * umzuschalten gibt. Ein Nutzer mit einem Bereich sieht keinen.
+ */
+export function zeigeUmschalter(bereiche: Bereiche): boolean {
+  return verfuegbareBereiche(bereiche).length > 1;
+}
 
 export function SidebarNav({
   onNavigate,
   platformAdmin = false,
   bereiche = NUR_VERTRIEB,
-}: { onNavigate?: () => void; platformAdmin?: boolean; bereiche?: Bereiche } = {}) {
+  zaehler = LEERE_ZAEHLER,
+}: { onNavigate?: () => void; platformAdmin?: boolean; bereiche?: Bereiche; zaehler?: BackofficeZaehler } = {}) {
   const pathname = usePathname();
   // Der Bereich kommt aus dem Pfad, nicht aus einem gespeicherten Zustand:
   // Wer einen Backoffice-Link oeffnet, steht im Backoffice - auch wenn er
@@ -229,37 +276,36 @@ export function SidebarNav({
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
       {umschalter.length > 1 && (
         <div>
-          <div className="eyebrow px-3 pb-2 text-[0.625rem]">Bereich</div>
+          <div className="eyebrow px-3 pb-2 text-[0.625rem]">Produktbereich</div>
           {/*
-            Der Umschalter ist eine Registerleiste, kein Dropdown: Alle
-            Bereiche stehen nebeneinander, der aktive ist eingefaerbt. Wer hier
-            steht, soll auf einen Blick sehen, in welchem Produkt er arbeitet.
+            Der Umschalter ist ein Produktwechsel, kein Filter: gestapelte
+            Reiter mit Symbol, der aktive traegt die Tinte und den Namen als
+            Ueberschrift. Wer hier steht, soll auf einen Blick sehen, in
+            welchem Produkt er arbeitet - und beim Wechsel spueren, dass
+            sich die ganze Leiste darunter austauscht.
           */}
-          <div
-            role="tablist"
-            aria-label="Arbeitsbereich"
-            className="grid gap-px rounded-md border bg-border p-px"
-            style={{ gridTemplateColumns: `repeat(${umschalter.length}, minmax(0, 1fr))` }}
-          >
+          <nav aria-label="Produktbereich" className="space-y-px rounded-md border bg-card p-1">
             {umschalter.map((b) => {
               const aktiv = b === bereich;
+              const Icon = BEREICH_ICON[b];
               return (
                 <Link
                   key={b}
-                  role="tab"
-                  aria-selected={aktiv}
+                  aria-current={aktiv ? "true" : undefined}
                   href={BEREICH_START[b]}
                   onClick={onNavigate}
                   className={cn(
-                    "truncate rounded-[5px] px-2 py-1.5 text-center text-xs font-medium transition-colors",
-                    aktiv ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+                    "flex items-center gap-2.5 rounded-[5px] px-2.5 py-1.5 text-[0.8125rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                    aktiv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                   )}
                 >
-                  {BEREICH_LABELS[b]}
+                  <Icon className={cn("h-4 w-4 shrink-0", aktiv ? "text-primary-foreground/80" : "text-muted-foreground")} aria-hidden />
+                  <span className="truncate">{BEREICH_LABELS[b]}</span>
+                  {aktiv && <span className="ml-auto text-[0.625rem] font-semibold uppercase tracking-wider text-primary-foreground/70">aktiv</span>}
                 </Link>
               );
             })}
-          </div>
+          </nav>
         </div>
       )}
       {gruppen.map((g) => (
@@ -304,8 +350,9 @@ export function SidebarNav({
                       : "font-medium text-muted-foreground before:bg-transparent hover:bg-accent/60 hover:text-foreground"
                   )}
                 >
-                  <it.icon className={cn("h-4 w-4 shrink-0", active ? "text-ai" : "text-muted-foreground")} />
-                  {it.label}
+                  <it.icon className={cn("h-4 w-4 shrink-0", active ? "text-ai" : "text-muted-foreground")} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                  {it.zaehler && <Zaehler n={zaehler[it.zaehler]} ton={it.zaehlerTon ?? "neutral"} />}
                 </Link>
               );
             })}

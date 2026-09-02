@@ -20,7 +20,7 @@ export default async function DokumentenpruefungPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Klärungsbedarf"
         title="Dokumentenprüfung"
         subtitle="Aktive Aufträge mit Dokumenten, über die noch nicht entschieden wurde. Die Auftragsnummer führt direkt in den Unterlagen-Arbeitsplatz der Akte."
       />

@@ -19,7 +19,7 @@ export default async function RueckfragenPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Klärungsbedarf"
         title="Rückfragen"
         subtitle="Rückfragen an Auftraggeber: was beantwortet ist und auf Ihre Sichtung wartet, und was noch beim Auftraggeber liegt."
       />

@@ -20,7 +20,7 @@ export default async function PortalFehlendeUnterlagen() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Mitwirkung"
         title="Fehlende Unterlagen"
         subtitle={
           zeilen.length === 0

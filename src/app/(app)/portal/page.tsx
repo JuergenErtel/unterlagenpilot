@@ -1,47 +1,31 @@
 import Link from "next/link";
-import { Plus, ArrowRight } from "lucide-react";
+import { Plus, ArrowRight, FilePlus2, Inbox } from "lucide-react";
+import { prisma } from "@/lib/db";
 import { requirePortal, portalAuftraegeFilter } from "@/lib/backoffice/zugriff";
 import { ladeAuftragZeilen, type AuftragZeile } from "@/lib/backoffice/auftraege";
 import { istAktiv, wartetAufAuftraggeber } from "@/lib/backoffice/status";
 import { auftragsartLabel } from "@/lib/backoffice/leistungen";
+import { berechneKontingent, vorperiode, type KontingentEreignisRoh } from "@/lib/backoffice/kontingent";
+import { periodeVon } from "@/lib/backoffice/sla";
 import { datumText, datumZeitText } from "@/lib/backoffice/anzeige";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGruppe, KpiKarte, LeerZustand } from "@/components/ui/flaechen";
 import { StatusMarke } from "@/components/backoffice/status-anzeigen";
 import { fehltText } from "@/components/portal/hilfen";
+import type { BackofficeAbrechnungsmodell } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
-
-function Kachel({ titel, wert, href, ton }: { titel: string; wert: number; href: string; ton?: "warnung" | "bereit" }) {
-  return (
-    <Link
-      href={href}
-      className="group rounded-lg border bg-card p-4 transition-colors hover:border-foreground/25"
-    >
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{titel}</div>
-      <div
-        className={`display mt-2 text-3xl tabular ${
-          wert > 0 && ton === "warnung" ? "text-[hsl(var(--warning))]" : wert > 0 && ton === "bereit" ? "text-success" : "text-foreground"
-        }`}
-      >
-        {wert}
-      </div>
-      <div className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-foreground">
-        Anzeigen <ArrowRight className="h-3 w-3" />
-      </div>
-    </Link>
-  );
-}
 
 function AuftragZeileKompakt({ z, grund }: { z: AuftragZeile; grund: string }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
-        <Link href={`/portal/auftraege/${z.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
-          {z.auftragsnummer}
+        <Link href={`/portal/auftraege/${z.id}`} className="font-medium text-foreground underline-offset-4 hover:underline">
+          {z.aktenbezeichnung ?? auftragsartLabel(z.auftragsart)}
         </Link>
-        <span className="ml-2 text-sm text-muted-foreground">{z.aktenbezeichnung ?? auftragsartLabel(z.auftragsart)}</span>
+        <span className="ml-2 font-mono text-xs tabular text-muted-foreground">{z.auftragsnummer}</span>
         <div className="text-xs text-muted-foreground">{grund}</div>
       </div>
       <StatusMarke status={z.status} pausiert={Boolean(z.pausiertSeit)} portal />
@@ -49,97 +33,128 @@ function AuftragZeileKompakt({ z, grund }: { z: AuftragZeile; grund: string }) {
   );
 }
 
+/**
+ * Die Portal-Uebersicht beantwortet in Sekunden: Wo ist meine Mitwirkung
+ * gefragt, was ist fertig, wie viel Kontingent bleibt. Kein internes
+ * Dashboard, keine Bearbeiterzahlen.
+ */
 export default async function PortalUebersicht() {
   const ctx = await requirePortal();
+  const jetzt = new Date();
   const zeilen = await ladeAuftragZeilen(portalAuftraegeFilter(ctx));
+  const vorname = ctx.userName.split(" ")[0] ?? ctx.userName;
+  const partnerNamen = Array.from(new Set(ctx.auftraggeber.map((a) => a.backofficeName)));
+  const partnerText = partnerNamen.length === 1 ? partnerNamen[0] : partnerNamen.join(", ");
+
+  if (zeilen.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Übersicht" title={`Guten Tag, ${vorname}.`} subtitle={`Ihr Backoffice-Partner ${partnerText} bereitet Ihre Finanzierungsfälle auf.`} />
+        <section className="flaeche-oben">
+          <LeerZustand
+            icon={FilePlus2}
+            titel="Noch kein Auftrag"
+            text="Legen Sie den ersten Auftrag an: Antragsteller, Auftragsart und Leistungsumfang genügen. Unterlagen laden Sie danach hoch oder lassen sie den Antragsteller über einen sicheren Link hochladen."
+            aktion={{ href: "/portal/auftraege/neu", label: "Neuen Auftrag anlegen" }}
+            nebenAktion={{ href: "/portal/kontingent", label: "Kontingent ansehen" }}
+          />
+        </section>
+      </div>
+    );
+  }
 
   const aktiv = zeilen.filter((z) => istAktiv(z.status));
-  const inBearbeitung = aktiv.filter((z) => !wartetAufAuftraggeber(z.status) && z.status !== "uebergeben");
-  const rueckmeldung = aktiv.filter((z) => wartetAufAuftraggeber(z.status));
+  // Mitwirkung ist gefragt, wenn das Backoffice ausdruecklich wartet oder eine
+  // Rueckfrage offen ist - nicht bei jeder offenen Checklistenposition, die
+  // das Backoffice gerade selbst bearbeitet.
+  const mitwirkung = aktiv.filter((z) => wartetAufAuftraggeber(z.status) || z.offeneRueckfragen > 0);
+  const neueRueckfragen = aktiv.reduce((acc, z) => acc + z.offeneRueckfragen, 0);
   const ergebnisse = zeilen.filter((z) => z.status === "uebergeben");
   const abgeschlossen = zeilen.filter((z) => z.status === "abgeschlossen");
-
-  const gefragt = aktiv
-    .filter((z) => z.offeneRueckfragen > 0 || z.fehlendeUnterlagen > 0 || wartetAufAuftraggeber(z.status))
-    .slice(0, 8);
   const zuletzt = [...zeilen].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 6);
 
-  const partnerNamen = Array.from(new Set(ctx.auftraggeber.map((a) => a.backofficeName)));
-  const begruessung =
-    partnerNamen.length === 1
-      ? `Ihr Backoffice-Partner ${partnerNamen[0]} bearbeitet Ihre Aufträge. Hier sehen Sie, wo Ihre Mitwirkung gefragt ist und welche Ergebnisse bereitstehen.`
-      : `Ihre Backoffice-Partner ${partnerNamen.join(", ")} bearbeiten Ihre Aufträge. Hier sehen Sie, wo Ihre Mitwirkung gefragt ist und welche Ergebnisse bereitstehen.`;
+  // Kontingent der aktuellen Periode je Auftraggeber-Datensatz
+  const periode = periodeVon(jetzt);
+  const ereignisse = await prisma.backofficeKontingentEreignis.findMany({
+    where: { auftraggeberId: { in: ctx.auftraggeber.map((a) => a.id) }, periode: { in: [periode, vorperiode(periode)] } },
+    select: { auftraggeberId: true, art: true, menge: true, periode: true },
+  });
+  const staende = ctx.auftraggeber.map((a) =>
+    berechneKontingent({
+      periode,
+      modell: a.abrechnungsmodell as BackofficeAbrechnungsmodell,
+      kontingentMonatlich: a.kontingentMonatlich,
+      carryOverMax: a.carryOverMax,
+      ereignisse: ereignisse.filter((e) => e.auftraggeberId === a.id) as KontingentEreignisRoh[],
+    })
+  );
+  const frei = staende.reduce<number | null>((acc, s) => (s.frei == null ? acc : (acc ?? 0) + s.frei), null);
+
+  const grund = (z: AuftragZeile) =>
+    z.offeneRueckfragen > 0
+      ? `${z.offeneRueckfragen} ${z.offeneRueckfragen === 1 ? "Rückfrage wartet" : "Rückfragen warten"} auf Ihre Antwort`
+      : z.fehlendeUnterlagen > 0
+        ? `Ihr Backoffice wartet auf Unterlagen – ${fehltText(z.fehlendeUnterlagen)}`
+        : "Ihr Backoffice wartet auf Unterlagen";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
-        title={`Guten Tag, ${ctx.userName}`}
-        subtitle={begruessung}
+        eyebrow="Übersicht"
+        title={`Guten Tag, ${vorname}.`}
+        subtitle={`${partnerText} bearbeitet ${aktiv.length} ${aktiv.length === 1 ? "Auftrag" : "Aufträge"} für Sie.${mitwirkung.length > 0 ? ` Bei ${mitwirkung.length} ${mitwirkung.length === 1 ? "davon ist" : "davon ist"} Ihre Mitwirkung gefragt.` : " Derzeit ist nichts von Ihnen zu tun."}`}
         actions={
           <Button asChild size="sm">
-            <Link href="/portal/auftraege/neu">
-              <Plus />
-              Neuer Auftrag
-            </Link>
+            <Link href="/portal/auftraege/neu"><Plus aria-hidden />Neuen Auftrag anlegen</Link>
           </Button>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kachel titel="In Bearbeitung" wert={inBearbeitung.length} href="/portal/auftraege?status=aktiv" />
-        <Kachel titel="Ihre Rückmeldung wird benötigt" wert={rueckmeldung.length} href="/portal/rueckfragen" ton="warnung" />
-        <Kachel titel="Ergebnisse verfügbar" wert={ergebnisse.length} href="/portal/ergebnisse" ton="bereit" />
-        <Kachel titel="Abgeschlossen" wert={abgeschlossen.length} href="/portal/auftraege?status=abgeschlossen" />
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <KpiGruppe titel="Ihre Mitwirkung" beschreibung="Hier wartet Ihr Backoffice auf Sie" ton={mitwirkung.length > 0 ? "warten" : "neutral"} className="[&>div:last-child]:sm:grid-cols-3 [&>div:last-child]:lg:grid-cols-3">
+          <KpiKarte wert={mitwirkung.length} label="Aufträge mit Handlungsbedarf" ton="warnung" href="/portal/fehlende-unterlagen" />
+          <KpiKarte wert={neueRueckfragen} label="Offene Rückfragen" ton="warnung" href="/portal/rueckfragen" />
+          <KpiKarte wert={ergebnisse.length} label="Ergebnisse verfügbar" hinweis="zur Abnahme" ton="erfolg" href="/portal/ergebnisse" />
+        </KpiGruppe>
+        <KpiGruppe titel="Stand" className="[&>div:last-child]:sm:grid-cols-3 [&>div:last-child]:lg:grid-cols-3">
+          <KpiKarte wert={aktiv.length} label="In Bearbeitung" href="/portal/auftraege?status=aktiv" klein />
+          <KpiKarte wert={abgeschlossen.length} label="Abgeschlossen" href="/portal/auftraege?status=abgeschlossen" klein />
+          <KpiKarte wert={frei == null ? "—" : frei} label="Fälle frei" hinweis={frei == null ? "Einzelabrechnung" : `Kontingent ${periode}`} href="/portal/kontingent" klein />
+        </KpiGruppe>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Jetzt gefragt</CardTitle>
-            <CardDescription>Aufträge, bei denen das Backoffice auf Sie wartet.</CardDescription>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className={mitwirkung.length > 0 ? "border-l-[3px] border-l-warning" : undefined}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Jetzt gefragt</CardTitle>
+            <CardDescription>Aufträge, bei denen Unterlagen oder eine Antwort von Ihnen fehlen.</CardDescription>
           </CardHeader>
           <CardContent>
-            {gefragt.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nichts offen. Das Backoffice hat alles, was es braucht.</p>
+            {mitwirkung.length === 0 ? (
+              <LeerZustand kompakt icon={Inbox} titel="Nichts zu tun" text="Ihr Backoffice hat alles, was es braucht. Sie werden hier sehen, sobald etwas fehlt." />
             ) : (
               <ul className="divide-y">
-                {gefragt.map((z) => {
-                  const gruende: string[] = [];
-                  if (z.offeneRueckfragen > 0) gruende.push(`${z.offeneRueckfragen} offene Rückfrage${z.offeneRueckfragen === 1 ? "" : "n"}`);
-                  if (z.fehlendeUnterlagen > 0) gruende.push(fehltText(z.fehlendeUnterlagen));
-                  if (gruende.length === 0 && z.wartegrund) gruende.push(z.wartegrund);
-                  return <AuftragZeileKompakt key={z.id} z={z} grund={gruende.join(" · ") || "Rückmeldung erbeten"} />;
-                })}
+                {mitwirkung.slice(0, 8).map((z) => (
+                  <AuftragZeileKompakt key={z.id} z={z} grund={grund(z)} />
+                ))}
               </ul>
             )}
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle>Zuletzt aktualisiert</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Zuletzt aktualisiert</CardTitle>
             <CardDescription>Die jüngsten Bewegungen in Ihren Aufträgen.</CardDescription>
           </CardHeader>
           <CardContent>
-            {zuletzt.length === 0 ? (
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>Noch keine Aufträge. Erteilen Sie den ersten Auftrag an Ihr Backoffice.</p>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/portal/auftraege/neu">Neuer Auftrag</Link>
-                </Button>
-              </div>
-            ) : (
-              <ul className="divide-y">
-                {zuletzt.map((z) => (
-                  <AuftragZeileKompakt
-                    key={z.id}
-                    z={z}
-                    grund={`Aktualisiert ${datumZeitText(z.updatedAt)}${z.faelligAm ? ` · Frist ${datumText(z.faelligAm)}` : ""}`}
-                  />
-                ))}
-              </ul>
-            )}
+            <ul className="divide-y">
+              {zuletzt.map((z) => (
+                <AuftragZeileKompakt key={z.id} z={z} grund={`${datumZeitText(z.updatedAt)}${z.faelligAm ? ` · zugesagt bis ${datumText(z.faelligAm)}` : ""}`} />
+              ))}
+            </ul>
+            <Link href="/portal/auftraege" className="mt-3 inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline">
+              Alle Aufträge <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
           </CardContent>
         </Card>
       </div>

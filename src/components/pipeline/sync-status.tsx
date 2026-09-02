@@ -45,9 +45,12 @@ export function SyncStatus({
       </div>
       <div className="flex items-center gap-2">
         {meldung && <span className="text-muted-foreground">{meldung}</span>}
+        {/* Utility-Aktion, keine Hauptaktion: Textknopf statt Rahmen, damit
+            die Kopfzeile nicht fuenf gleichwertige Knoepfe traegt. */}
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
+          className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
           disabled={pending}
           onClick={() =>
             startTransition(async () => {

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, CalendarClock, Landmark, MoreHorizontal, PhoneCall, RotateCcw } from "lucide-react";
+import { Check, CalendarClock, ChevronLeft, ChevronRight, Landmark, MoreHorizontal, PhoneCall, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LEAD_PHASES, LEAD_PHASE_LABELS, type LeadPhase } from "@/lib/domain/enums";
 import { setzePhase, setzeVerloren, hebeVerlustAuf } from "@/lib/actions/lead-phase";
@@ -156,6 +156,44 @@ export function LeadBoard({
   // durch – das Formular haelt ihn nicht auf.
   const [erfassenFuer, setErfassenFuer] = useState<string | null>(null);
 
+  // Horizontale Fuehrung: Der Scrollbereich meldet, ob links oder rechts noch
+  // Spalten liegen; die Pfeile springen spaltenweise, die Tastatur ebenso.
+  const bahn = useRef<HTMLDivElement>(null);
+  const [kannLinks, setKannLinks] = useState(false);
+  const [kannRechts, setKannRechts] = useState(false);
+  const messen = useCallback(() => {
+    const el = bahn.current;
+    if (!el) return;
+    setKannLinks(el.scrollLeft > 4);
+    setKannRechts(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+  useEffect(() => {
+    messen();
+    const el = bahn.current;
+    if (!el) return;
+    const ro = new ResizeObserver(messen);
+    ro.observe(el);
+    window.addEventListener("resize", messen);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", messen);
+    };
+  }, [messen, spalten.length, zeigeVerlorene]);
+  const springe = (richtung: 1 | -1) => {
+    const el = bahn.current;
+    if (!el) return;
+    // Eine Spalte ist 17 rem breit plus 0.75 rem Luecke.
+    const schritt = 17.75 * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+    el.scrollBy({ left: richtung * schritt, behavior: "smooth" });
+  };
+  const tastatur = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); springe(1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); springe(-1); }
+    if (e.key === "Home") { e.preventDefault(); bahn.current?.scrollTo({ left: 0, behavior: "smooth" }); }
+    if (e.key === "End") { e.preventDefault(); bahn.current?.scrollTo({ left: bahn.current.scrollWidth, behavior: "smooth" }); }
+  };
+
   const verschieben = (caseId: string, phase: string) =>
     startTransition(async () => {
       await setzePhase(caseId, phase);
@@ -182,6 +220,29 @@ export function LeadBoard({
           Verlorene anzeigen ({verloren.anzahl})
         </label>
         {pending && <span className="text-xs text-muted-foreground">wird gespeichert …</span>}
+        <div className="hidden items-center gap-1 md:flex" role="group" aria-label="Phasen verschieben">
+          <span className="mr-1 text-xs text-muted-foreground">
+            {kannRechts ? "Weitere Phasen rechts" : kannLinks ? "Ende der Pipeline" : "Alle Phasen sichtbar"}
+          </span>
+          <button
+            type="button"
+            onClick={() => springe(-1)}
+            disabled={!kannLinks}
+            aria-label="Eine Phase nach links"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => springe(1)}
+            disabled={!kannRechts}
+            aria-label="Eine Phase nach rechts"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
       </div>
 
       {/* Der Schleier am rechten Rand sagt ohne Worte: Da drüben geht es
@@ -191,13 +252,24 @@ export function LeadBoard({
           darüber sind zusammen ~19 rem hoch; das Minimum fängt kleine
           Fenster ab. */}
       <div className="relative md:h-[calc(100dvh-19.5rem)] md:min-h-[24rem]">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-background to-transparent md:block"
-        />
+        {kannRechts && (
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-gradient-to-l from-canvas via-canvas/70 to-transparent md:block" />
+        )}
+        {kannLinks && (
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-10 bg-gradient-to-r from-canvas via-canvas/70 to-transparent md:block" />
+        )}
         {/* Die Scrollleiste ist bewusst IMMER sichtbar (statt macOS-Overlay):
-            Mit der Maus ist sie der einzige Griff, um nach rechts zu kommen. */}
-        <div className="flex h-full gap-3 overflow-x-auto pb-1 max-md:flex-col max-md:overflow-visible md:snap-x md:snap-proximity md:[scrollbar-width:thin] md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-border md:[&::-webkit-scrollbar-track]:bg-transparent md:[&::-webkit-scrollbar]:h-2">
+            Mit der Maus ist sie der einzige Griff, um nach rechts zu kommen.
+            tabIndex macht die Bahn fokussierbar: Pfeiltasten schieben. */}
+        <div
+          ref={bahn}
+          onScroll={messen}
+          onKeyDown={tastatur}
+          tabIndex={0}
+          role="region"
+          aria-label="Vertriebsphasen, mit Pfeiltasten verschiebbar"
+          className="scroll-x flex h-full gap-3 rounded-lg pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 max-md:flex-col max-md:overflow-visible md:snap-x md:snap-proximity"
+        >
           {[...spalten, ...(zeigeVerlorene ? [verloren] : [])].map((s) => {
             const farbe = PHASEN_FARBE[s.phase] ?? PHASE_STANDARD;
             const leer = s.karten.length === 0 && s.weitere === 0;
@@ -265,7 +337,7 @@ export function LeadBoard({
                       draggable={s.phase !== "verloren"}
                       onDragStart={() => setGezogen(k.caseId)}
                       onDragEnd={() => setGezogen(null)}
-                      className={`rounded-lg border border-l-[3px] bg-background p-2.5 text-sm shadow-sm transition-[box-shadow,opacity] hover:shadow-md ${
+                      className={`rounded-lg border border-l-[3px] bg-card p-2.5 text-sm transition-[box-shadow,opacity,border-color] hover:border-foreground/20 hover:shadow-soft focus-within:ring-2 focus-within:ring-ring/40 ${
                         (k.ampel && AMPEL_KANTE[k.ampel.farbe]) || "border-l-border"
                       } ${gezogen === k.caseId ? "opacity-50" : ""}`}
                     >
@@ -314,13 +386,6 @@ export function LeadBoard({
                         </details>
                       </div>
 
-                      <p className="text-xs text-muted-foreground">
-                        <span className="tabular">{k.volumen != null ? eur(k.volumen) : "—"}</span> ·{" "}
-                        {liegezeitText(k.liegezeit)}
-                        {/* "· Unbekannt" las sich wie ein Datenfehler – eine
-                            unbekannte Quelle sagt schlicht nichts und schweigt. */}
-                        {k.quelle !== "Unbekannt" && <> · {k.quelle}</>}
-                      </p>
 
                       {/*
                         Erste Aufgabe nach dem Leadeingang (14.08.2026): Der frische
@@ -366,13 +431,26 @@ export function LeadBoard({
                       {/* Der volle Satz (Auslauf, Rate, Überschuss) hängt als
                           Mauszeiger-Hinweis an dieser Zeile – für grüne Karten
                           war er vorher unerreichbar, weil es die Zeile nicht gab. */}
-                      {k.ampel && (
+                      {/* Reihenfolge der Karte: Name, naechste Aktion, Blocker,
+                          dann Volumen/Alter/Quelle, zuletzt die Einschaetzung.
+                          Die Machbarkeits-Ampel spricht nur, wenn sie Rot oder
+                          Gelb zeigt - ein gruener Satz auf jeder Karte war
+                          Tapete. Die Farbkante links traegt den Ton weiter. */}
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        <span className="tabular">{k.volumen != null ? eur(k.volumen) : "—"}</span> ·{" "}
+                        {liegezeitText(k.liegezeit)}
+                        {k.quelle !== "Unbekannt" && <> · {k.quelle}</>}
+                      </p>
+                      {k.ampel && k.ampel.farbe !== "gruen" && k.ampel.farbe !== "grau" && (
                         <p
                           className={`mt-1 text-xs ${AMPEL_TEXT[k.ampel.farbe] ?? "text-muted-foreground"}`}
                           title={k.ampel.grund}
                         >
                           {k.ampel.text}
                         </p>
+                      )}
+                      {k.ampel && (k.ampel.farbe === "gruen" || k.ampel.farbe === "grau") && (
+                        <span className="sr-only">{k.ampel.text}</span>
                       )}
 
                       {k.wiedervorlage && (

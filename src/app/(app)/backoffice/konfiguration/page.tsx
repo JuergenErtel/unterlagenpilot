@@ -22,7 +22,7 @@ export default async function KonfigurationPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Verwaltung"
         title="Konfiguration"
         subtitle="Fristvorgabe und Leistungskatalog des Backoffice. Das Produkt selbst wird durch den Plattformbetreiber je Organisation aktiviert."
       />

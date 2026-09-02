@@ -17,7 +17,7 @@ export default async function QualitaetskontrollePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Mein Arbeitstag"
         title="Qualitätskontrolle"
         subtitle="Aufträge, die auf die Freigabe warten - und solche, die aus der Prüfung zurück in die Nachbearbeitung gingen."
       />

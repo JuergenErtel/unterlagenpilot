@@ -6,7 +6,7 @@ import { MobileNav } from "@/components/mobile-nav";
 import { logout } from "@/lib/actions/auth";
 import { USER_ROLE_LABELS } from "@/lib/domain/enums";
 import { BereichKopf } from "@/components/bereich-kopf";
-import type { Bereiche } from "@/lib/backoffice/bereich";
+import type { BackofficeZaehler, Bereiche } from "@/lib/backoffice/bereich";
 
 export function AppShell({
   children,
@@ -20,6 +20,7 @@ export function AppShell({
     isDemo?: boolean;
     platformAdmin?: boolean;
     bereiche?: Bereiche;
+    zaehler?: BackofficeZaehler;
   };
 }) {
   const initials = context.userName
@@ -37,7 +38,7 @@ export function AppShell({
           <Logo className="h-7 w-auto" />
         </Link>
 
-        <SidebarNav platformAdmin={context.platformAdmin} bereiche={context.bereiche} />
+        <SidebarNav platformAdmin={context.platformAdmin} bereiche={context.bereiche} zaehler={context.zaehler} />
 
         <div className="shrink-0 space-y-2 border-t p-3">
           <div className="flex items-center gap-3 px-2 py-1.5">

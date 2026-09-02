@@ -18,7 +18,7 @@ export default async function NeuerAuftragPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Auftragssteuerung"
         title="Neuer Auftrag"
         subtitle="Auftraggeber, Antragsteller und Leistungsumfang. Es werden keine Vertriebsdaten benötigt."
         actions={

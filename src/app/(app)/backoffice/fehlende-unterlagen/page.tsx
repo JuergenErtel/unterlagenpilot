@@ -19,7 +19,7 @@ export default async function FehlendeUnterlagenPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Klärungsbedarf"
         title="Fehlende Unterlagen"
         subtitle="Aktive Aufträge, deren Akte offene Positionen hat oder die auf Unterlagen warten. Die Nachforderung läuft über den Unterlagen-Arbeitsplatz der Akte."
       />

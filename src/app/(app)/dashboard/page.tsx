@@ -63,20 +63,24 @@ export default async function DashboardPage({
         }
         actions={
           <>
+            {/* Hierarchie: Ansichtswechsel links als stiller Umschalter, dann
+                die sekundaere und zuletzt die EINE Hauptaktion. Der Demo-Fall
+                ist ein Textlink - er gehoert nicht in die Knopfreihe. */}
             <AnsichtUmschalter aktiv={aktiv} />
-            <Button asChild>
-              <Link href="/cases/new"><Plus />Neuen Fall anlegen</Link>
-            </Button>
+            <span className="hidden h-6 w-px bg-border sm:inline-block" aria-hidden />
+            {demoCase && (
+              <Link href={`/cases/${demoCase.id}`} className="inline-flex items-center gap-1.5 px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                <PlayCircle className="h-3.5 w-3.5" aria-hidden />Demo-Fall
+              </Link>
+            )}
             <Button asChild variant="outline">
               <Link href="/cases/import">
-                <Download />Aus FinLink importieren
+                <Download aria-hidden />Aus FinLink importieren
               </Link>
             </Button>
-            {demoCase && (
-              <Button asChild variant="ghost">
-                <Link href={`/cases/${demoCase.id}`}><PlayCircle />Demo-Fall öffnen</Link>
-              </Button>
-            )}
+            <Button asChild>
+              <Link href="/cases/new"><Plus aria-hidden />Neuen Fall anlegen</Link>
+            </Button>
           </>
         }
       />

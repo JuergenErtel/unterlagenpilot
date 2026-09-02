@@ -20,7 +20,7 @@ export default async function PortalOrganisation() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Organisation"
         title="Organisation und Mitarbeiter"
         subtitle={`${ctx.organizationName} · Wer aus Ihrem Haus Aufträge sieht und Rückfragen beantwortet.${
           ctx.istAdmin ? "" : " Änderungen nimmt ein Administrator Ihrer Organisation vor."

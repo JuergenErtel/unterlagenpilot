@@ -18,7 +18,7 @@ export default async function AuftraggeberListePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Auftraggeber"
         title="Auftraggeber"
         subtitle="Die Vermittler und Vermittlungsunternehmen, für die dieses Backoffice arbeitet. Der Antragsteller steht nie hier, sondern an der Akte."
         actions={manager ? <Button asChild size="sm"><Link href="/backoffice/auftraggeber/neu"><Plus /> Neuer Auftraggeber</Link></Button> : undefined}

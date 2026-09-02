@@ -63,7 +63,7 @@ export default async function PortalKontingent() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Kontingent"
         title="Kontingent"
         subtitle={`Stand ${periodeText(periode)}. Ein Fall zählt mit der Übergabe des Ergebnisses – nicht mit der Beauftragung.`}
       />

@@ -20,7 +20,28 @@ export function AuftragsTabelle({ zeilen, leerText }: { zeilen: AuftragZeile[]; 
     );
   }
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <>
+      {/* Mobil: eine Karte je Auftrag - Status, Frist und was fehlt, ohne
+          Querscrollen. Ab md die Tabelle. */}
+      <ul className="space-y-2 md:hidden">
+        {zeilen.map((z) => (
+          <li key={z.id} className="flaeche-blatt p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link href={`/portal/auftraege/${z.id}`} className="block truncate font-medium text-foreground underline-offset-4 hover:underline">{z.aktenbezeichnung ?? auftragsartLabel(z.auftragsart)}</Link>
+                <div className="font-mono text-xs tabular text-muted-foreground">{z.auftragsnummer} · {auftragsartLabel(z.auftragsart)}</div>
+              </div>
+              <StatusMarke status={z.status} pausiert={Boolean(z.pausiertSeit)} portal />
+            </div>
+            <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <div><dt className="inline">Frist </dt><dd className="inline tabular text-foreground">{datumText(z.faelligAm)}</dd></div>
+              {z.fehlendeUnterlagen > 0 && <div className="text-[hsl(var(--warning))]">{fehltText(z.fehlendeUnterlagen)}</div>}
+              {z.offeneRueckfragen > 0 && <div className="font-medium text-[hsl(var(--warning))]">{z.offeneRueckfragen} {z.offeneRueckfragen === 1 ? "Rückfrage" : "Rückfragen"} offen</div>}
+            </dl>
+          </li>
+        ))}
+      </ul>
+    <div className="scroll-x hidden rounded-lg border bg-card md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -60,5 +81,6 @@ export function AuftragsTabelle({ zeilen, leerText }: { zeilen: AuftragZeile[]; 
         </TableBody>
       </Table>
     </div>
+    </>
   );
 }

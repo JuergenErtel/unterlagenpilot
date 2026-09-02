@@ -28,7 +28,7 @@ export default async function PortalRueckfragen() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Mitwirkung"
         title="Rückfragen"
         subtitle={
           offene.length === 0

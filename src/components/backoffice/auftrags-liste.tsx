@@ -8,6 +8,7 @@ import { auftragsartLabel } from "@/lib/backoffice/leistungen";
 import { bewerteSla } from "@/lib/backoffice/sla";
 import { datumZeitText } from "@/lib/backoffice/anzeige";
 import { AktionKnopf } from "./aktion-formular";
+import { naechsteHandlung } from "@/lib/backoffice/fokus";
 import { FristMarke, PrioritaetMarke, StatusMarke } from "./status-anzeigen";
 
 /**
@@ -54,19 +55,48 @@ export function AuftragsListe({
     return <p className="px-1 py-3 text-sm text-muted-foreground">{leerText}</p>;
   }
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Mobil: Karten statt Tabelle - Status lesen und die naechste Aufgabe
+        erkennen geht ohne Querscrollen. */}
+    <ul className="divide-y md:hidden">
+      {zeilen.map((z) => {
+        const pausiert = z.pausiertSeit != null;
+        const h = naechsteHandlung(z);
+        return (
+          <li key={z.id} className="space-y-1.5 px-4 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <Link href={zielHref(z, ziel)} className="min-w-0 truncate font-medium text-foreground underline-offset-4 hover:underline">{z.aktenbezeichnung}</Link>
+              <StatusMarke status={z.status} pausiert={pausiert} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <span className="font-mono tabular">{z.auftragsnummer}</span>
+              <span>·</span>
+              <span>{z.auftraggeberName}</span>
+              <PrioritaetMarke prioritaet={z.prioritaet} />
+            </div>
+            <div className={cn("text-sm", h.wartet ? "text-muted-foreground" : "font-medium text-foreground")}>{h.text}</div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <FristMarke faelligAm={z.faelligAm} status={z.status} pausiert={pausiert} jetzt={jetzt} />
+              <span className="text-muted-foreground">{z.bearbeiterName ?? "nicht zugewiesen"}</span>
+              {uebernehmen && z.bearbeiterId == null && (
+                <AktionKnopf aktion={uebernehmenAction.bind(null, z.id)} pendingLabel="Übernehme …">Übernehmen</AktionKnopf>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+    <div className="scroll-x hidden md:block">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Auftrag</TableHead>
-            <TableHead>Akte</TableHead>
+            {!kompakt && <TableHead>Nächste Handlung</TableHead>}
             <TableHead>Auftraggeber</TableHead>
-            {!kompakt && <TableHead>Auftragsart</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead>Frist</TableHead>
             {!kompakt && <TableHead>Bearbeiter</TableHead>}
             <TableHead>Offen</TableHead>
-            {!kompakt && <TableHead>Letzte Aktivität</TableHead>}
             {uebernehmen && <TableHead className="text-right">Aktion</TableHead>}
           </TableRow>
         </TableHeader>
@@ -78,17 +108,24 @@ export function AuftragsListe({
             const nichtsOffen = z.fehlendeUnterlagen === 0 && z.ungepruefteDokumente === 0 && z.offeneRueckfragen === 0;
             return (
               <TableRow key={z.id} className={cn(ueberfaellig && "[&>td:first-child]:border-l-2 [&>td:first-child]:border-destructive")}>
-                <TableCell className="whitespace-nowrap">
-                  <Link href={zielHref(z, ziel)} className="font-mono text-sm tabular text-primary underline-offset-4 hover:underline">
-                    {z.auftragsnummer}
+                <TableCell className="min-w-[11rem] max-w-[16rem]">
+                  <Link href={zielHref(z, ziel)} className="block truncate font-medium text-foreground underline-offset-4 hover:underline" title={z.aktenbezeichnung}>
+                    {z.aktenbezeichnung}
                   </Link>
+                  <span className="block font-mono text-xs tabular text-muted-foreground">{z.auftragsnummer}</span>
                 </TableCell>
-                <TableCell className="min-w-[10rem]">
-                  <span className="font-medium text-foreground">{z.aktenbezeichnung}</span>
-                  <span className="block font-mono text-xs text-muted-foreground">{z.caseNumber}</span>
+                {!kompakt && (
+                  <TableCell className="min-w-[12rem] max-w-[16rem]">
+                    {(() => {
+                      const h = naechsteHandlung(z);
+                      return <span className={cn("text-sm", h.wartet ? "text-muted-foreground" : "font-medium text-foreground")}>{h.text}</span>;
+                    })()}
+                  </TableCell>
+                )}
+                <TableCell className="min-w-[9rem]">
+                  <span className="block">{z.auftraggeberName}</span>
+                  {!kompakt && <span className="block text-xs text-muted-foreground">{auftragsartLabel(z.auftragsart)}</span>}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">{z.auftraggeberName}</TableCell>
-                {!kompakt && <TableCell className="text-muted-foreground">{auftragsartLabel(z.auftragsart)}</TableCell>}
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusMarke status={z.status} pausiert={pausiert} />
@@ -100,7 +137,8 @@ export function AuftragsListe({
                 </TableCell>
                 {!kompakt && (
                   <TableCell className="whitespace-nowrap">
-                    {z.bearbeiterName ?? <span className="text-muted-foreground">nicht zugewiesen</span>}
+                    <span className="block">{z.bearbeiterName ?? <span className="text-muted-foreground">nicht zugewiesen</span>}</span>
+                    <span className="block text-xs tabular text-muted-foreground" title="Letzte Aktivität">{datumZeitText(z.updatedAt)}</span>
                   </TableCell>
                 )}
                 <TableCell>
@@ -114,9 +152,6 @@ export function AuftragsListe({
                     </div>
                   )}
                 </TableCell>
-                {!kompakt && (
-                  <TableCell className="whitespace-nowrap text-xs tabular text-muted-foreground">{datumZeitText(z.updatedAt)}</TableCell>
-                )}
                 {uebernehmen && (
                   <TableCell className="text-right">
                     {z.bearbeiterId == null ? (
@@ -132,6 +167,7 @@ export function AuftragsListe({
         </TableBody>
       </Table>
     </div>
+    </>
   );
 }
 

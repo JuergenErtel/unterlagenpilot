@@ -4,6 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { getCurrentContext } from "@/lib/auth/context";
 import { getEnv } from "@/lib/env";
 import { ladeBereiche } from "@/lib/backoffice/zugriff";
+import { ladeBackofficeZaehler } from "@/lib/backoffice/zaehler";
+import { LEERE_ZAEHLER } from "@/lib/backoffice/bereich";
 
 // DB-gestützte Seiten immer zur Laufzeit rendern (kein Build-Time-Prerender).
 export const dynamic = "force-dynamic";
@@ -37,6 +39,9 @@ export default async function AppLayout({
   // Rolle + Flag; Portal, wenn seine Organisation als Auftraggeber verknuepft
   // ist). Ohne zweiten Bereich sieht die Oberflaeche aus wie bisher.
   const bereiche = await ladeBereiche(ctx);
+  // Zaehler nur, wenn das Backoffice ueberhaupt sichtbar ist - sonst kostet
+  // die Leiste den Vertrieb keine einzige Abfrage.
+  const zaehler = bereiche.backoffice ? await ladeBackofficeZaehler(ctx) : LEERE_ZAEHLER;
 
   return (
     <AppShell
@@ -47,6 +52,7 @@ export default async function AppLayout({
         platformAdmin: ctx.platformAdmin,
         isDemo: ctx.isDemo,
         bereiche,
+        zaehler,
       }}
     >
       {children}

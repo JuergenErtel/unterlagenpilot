@@ -59,6 +59,15 @@ const config: Config = {
           DEFAULT: "hsl(var(--ai))",
           foreground: "hsl(var(--ai-foreground))",
         },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        surface: {
+          raised: "hsl(var(--surface-raised))",
+          sunken: "hsl(var(--surface-sunken))",
+        },
+        disabled: "hsl(var(--text-disabled))",
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",

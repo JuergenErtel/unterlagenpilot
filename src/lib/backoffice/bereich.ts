@@ -40,3 +40,25 @@ export function bereichAusPfad(pathname: string): Bereich {
 export function verfuegbareBereiche(b: Bereiche): Bereich[] {
   return (["vertrieb", "backoffice", "portal"] as Bereich[]).filter((k) => b[k]);
 }
+
+/**
+ * Zaehler fuer die Backoffice-Navigation. Nur Aufgaben, die eine Handlung
+ * verlangen - eine Null wird nicht angezeigt.
+ */
+export interface BackofficeZaehler {
+  jetztBearbeiten: number;
+  qualitaetskontrolle: number;
+  uebergabe: number;
+  fehlendeUnterlagen: number;
+  dokumentePruefen: number;
+  rueckfragen: number;
+}
+
+export const LEERE_ZAEHLER: BackofficeZaehler = {
+  jetztBearbeiten: 0,
+  qualitaetskontrolle: 0,
+  uebergabe: 0,
+  fehlendeUnterlagen: 0,
+  dokumentePruefen: 0,
+  rueckfragen: 0,
+};

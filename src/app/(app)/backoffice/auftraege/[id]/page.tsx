@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, LayoutPanelLeft, Users, Calculator, Scale, FileText, ScanSearch, ClipboardList } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, LayoutPanelLeft, Users, Calculator, Scale, FileText, ScanSearch, ClipboardList } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { getCaseAggregate } from "@/lib/cases/service";
 import { darfQualitaetPruefen, darfVerwalten, istAktiv, moeglicheUebergaenge, pruefeUebergang } from "@/lib/backoffice/status";
 import { auftragsartLabel, ergebnisseFuer, ERGEBNIS_LABELS, leistungsLabel } from "@/lib/backoffice/leistungen";
 import { datumFeld, datumText, datumZeitText } from "@/lib/backoffice/anzeige";
+import { naechsteHandlung } from "@/lib/backoffice/fokus";
+import { Seitenpanel } from "@/components/ui/flaechen";
 import {
   BACKOFFICE_ABRECHNUNGSSTATUS_LABELS,
   BACKOFFICE_STATUS_LABELS,
@@ -91,6 +93,15 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
   const ergebnisse = ergebnisseFuer(auftrag.leistungen);
   const empfaenger = kontakt ? `${auftraggeber?.name} · ${kontakt.name}${kontakt.email ? ` (${kontakt.email})` : ""}` : (auftraggeber?.name ?? "Auftraggeber");
   const akte = `/cases/${auftrag.caseId}`;
+  const handlung = zeile ? naechsteHandlung(zeile) : null;
+  const fortschritt = {
+    dokumente: aggregate.documentCount,
+    ungeprueft: zeile?.ungepruefteDokumente ?? 0,
+    fehlend: zeile?.fehlendeUnterlagen ?? 0,
+    rueckfragen: zeile?.offeneRueckfragen ?? 0,
+    reife: aggregate.readiness.score,
+    warnungen: aggregate.plausibility.filter((p) => p.status !== "ok").length,
+  };
 
   const werkzeuge = [
     { href: `${akte}/unterlagen`, label: "Unterlagen-Arbeitsplatz", icon: LayoutPanelLeft, hinweis: "Soll/Ist, Durchsicht, Entscheidungen" },
@@ -105,53 +116,89 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="BaufiDesk Backoffice"
+        eyebrow="Auftrag"
         title={
-          <span className="flex flex-wrap items-center gap-3">
-            <span className="font-mono tabular">{auftrag.auftragsnummer}</span>
-            <span className="text-muted-foreground">·</span>
-            <span>{auftrag.aktenbezeichnung}</span>
+          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="min-w-0 break-words">{auftrag.aktenbezeichnung}</span>
+            <span className="font-mono text-lg tabular text-muted-foreground">{auftrag.auftragsnummer}</span>
           </span>
         }
         subtitle={
-          <span className="flex flex-wrap items-center gap-2">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <StatusMarke status={status} pausiert={pausiert} />
             <PrioritaetMarke prioritaet={auftrag.prioritaet} />
             <FristMarke faelligAm={auftrag.faelligAm} status={status} pausiert={pausiert} jetzt={jetzt} />
             <span className="text-muted-foreground">{auftragsartLabel(auftrag.auftragsart)}</span>
+            <span className="text-muted-foreground">für {auftraggeber?.name ?? "—"}</span>
           </span>
         }
         actions={
           <Button asChild variant="outline" size="sm">
-            <Link href="/backoffice/queue"><ArrowLeft /> Zur Queue</Link>
+            <Link href="/backoffice/queue"><ArrowLeft aria-hidden /> Jetzt bearbeiten</Link>
           </Button>
         }
       />
 
-      <StationenLeiste status={status} />
+      {/* Kopf: die Fakten, die man in Sekunden braucht - eine Zeile je Fakt. */}
+      <div className="flaeche-ablage grid grid-cols-2 gap-px overflow-hidden bg-border/60 sm:grid-cols-3 lg:grid-cols-6 [&>div]:bg-surface-sunken">
+        <Fakt label="Auftraggeber" wert={auftraggeber?.name ?? "—"} />
+        <Fakt label="Ansprechpartner" wert={kontakt?.name ?? "—"} />
+        <Fakt label="Antragsteller" wert={auftrag.aktenbezeichnung} />
+        <Fakt label="Bearbeiter" wert={name(auftrag.bearbeiterId) ?? "nicht zugewiesen"} leer={!auftrag.bearbeiterId} />
+        <Fakt label="Qualitätsprüfer" wert={name(auftrag.prueferId) ?? "—"} />
+        <Fakt label="Frist" wert={datumText(auftrag.faelligAm)} />
+      </div>
+
+      {/* Fortschritt zur Uebergabe */}
+      <section aria-label="Fortschritt zur Übergabe" className="flaeche-blatt px-5 py-4">
+        <StationenLeiste status={status} />
+        <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t pt-3 text-sm">
+          <Zahl label="Dokumente" wert={fortschritt.dokumente} />
+          <Zahl label="zu prüfen" wert={fortschritt.ungeprueft} ton={fortschritt.ungeprueft > 0 ? "aktion" : "leer"} />
+          <Zahl label="fehlende Unterlagen" wert={fortschritt.fehlend} ton={fortschritt.fehlend > 0 ? "warnung" : "leer"} />
+          <Zahl label="offene Rückfragen" wert={fortschritt.rueckfragen} ton={fortschritt.rueckfragen > 0 ? "warnung" : "leer"} />
+          <Zahl label="Plausibilitätshinweise" wert={fortschritt.warnungen} ton={fortschritt.warnungen > 0 ? "warnung" : "leer"} />
+          <Zahl label="Einreichungsreife" wert={`${fortschritt.reife} %`} />
+        </dl>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {/* Naechste Handlung */}
-          <Card className={aktiv ? "border-ai/40" : undefined}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Nächste Handlung</CardTitle>
-              <CardDescription>
-                {pausiert
-                  ? `Pausiert seit ${datumText(auftrag.pausiertSeit)}${auftrag.pausiertGrund ? ` – ${auftrag.pausiertGrund}` : ""}.`
-                  : auftrag.wartegrund
-                    ? `${BACKOFFICE_STATUS_LABELS[status]} – ${auftrag.wartegrund}`
-                    : BACKOFFICE_STATUS_LABELS[status]}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          {/* Naechster Schritt - die eine hervorgehobene Flaeche der Seite */}
+          <section aria-labelledby="naechster-schritt" className={aktiv ? "flaeche-oben" : "flaeche-blatt"}>
+            <div className="space-y-4 p-5">
+              <div>
+                <div className="eyebrow" id="naechster-schritt">Nächster Schritt</div>
+                <p className="mt-1 t-abschnitt text-lg">{handlung?.text ?? BACKOFFICE_STATUS_LABELS[status]}</p>
+                <p className="t-hilfe mt-1">
+                  {pausiert
+                    ? `Pausiert seit ${datumText(auftrag.pausiertSeit)}${auftrag.pausiertGrund ? ` – ${auftrag.pausiertGrund}` : ""}.`
+                    : auftrag.wartegrund
+                      ? `${BACKOFFICE_STATUS_LABELS[status]} – ${auftrag.wartegrund}`
+                      : handlung?.blocker
+                        ? `Blocker: ${handlung.blocker}`
+                        : BACKOFFICE_STATUS_LABELS[status]}
+                </p>
+              </div>
+              {handlung && handlung.ziel !== "auftrag" && aktiv && (
+                <Button asChild>
+                  <Link href={handlung.ziel === "unterlagen" ? `${akte}/unterlagen` : `/review?case=${auftrag.caseId}`}>
+                    {handlung.text} <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
+              )}
               {auftrag.bearbeiterId == null && aktiv && rolle !== "pruefer" && (
                 <div className="flex flex-wrap items-center gap-3 rounded-md bg-accent px-3 py-2 text-sm">
                   <span>Dieser Auftrag ist noch niemandem zugewiesen.</span>
                   <UebernehmenKnopf auftragId={auftrag.id} />
                 </div>
               )}
-              {!pausiert && darfArbeiten && <UebergangsKnoepfe auftragId={auftrag.id} uebergaenge={uebergaenge} />}
+              {!pausiert && darfArbeiten && uebergaenge.length > 0 && (
+                <div>
+                  <div className="t-hilfe mb-2 text-xs">Status ändern</div>
+                  <UebergangsKnoepfe auftragId={auftrag.id} uebergaenge={uebergaenge} hervorheben={!(handlung && handlung.ziel !== "auftrag" && aktiv)} />
+                </div>
+              )}
               {status === "einreichungsfertig" && !pausiert && darfArbeiten && (
                 <UebergabeKnopf
                   auftragId={auftrag.id}
@@ -164,12 +211,12 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                       <p className="text-muted-foreground">
                         Qualitätsfreigabe durch {name(auftrag.qualitaetFreigegebenVonId) ?? "—"} am {datumZeitText(auftrag.qualitaetFreigegebenAm)}.
                       </p>
-                      {(zeile?.fehlendeUnterlagen ?? 0) + (zeile?.ungepruefteDokumente ?? 0) > 0 && (
+                      {fortschritt.fehlend + fortschritt.ungeprueft > 0 && (
                         <p className="rounded-md bg-warning/15 px-3 py-2 text-[hsl(var(--warning))]">
-                          Offen: {zeile?.fehlendeUnterlagen ?? 0} fehlende Unterlagen, {zeile?.ungepruefteDokumente ?? 0} ungeprüfte Dokumente. Der Auftraggeber sieht diese Punkte.
+                          Offen: {fortschritt.fehlend} fehlende Unterlagen, {fortschritt.ungeprueft} ungeprüfte Dokumente. Der Auftraggeber sieht diese Punkte.
                         </p>
                       )}
-                      <p className="text-muted-foreground">Der Auftraggeber sieht danach Ergebnis und Lieferumfang im Portal. Das Kontingent wird um einen Fall belastet.</p>
+                      <p className="text-muted-foreground">Danach: Der Auftraggeber sieht Ergebnis und Lieferumfang im Portal und nimmt ab. Das Kontingent wird um einen Fall belastet. Es wird keine E-Mail versendet. Eine Nachbearbeitung bleibt möglich.</p>
                     </div>
                   }
                 />
@@ -179,9 +226,9 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                   <PauseSteuerung auftragId={auftrag.id} pausiert={pausiert} />
                 </div>
               )}
-              {!aktiv && <p className="text-sm text-muted-foreground">Der Auftrag ist {BACKOFFICE_STATUS_LABELS[status].toLowerCase()}.</p>}
-            </CardContent>
-          </Card>
+              {!aktiv && <p className="text-sm text-muted-foreground">Der Auftrag ist {BACKOFFICE_STATUS_LABELS[status].toLowerCase()}. Die Akte bleibt lesbar, Änderungen sind nicht mehr möglich.</p>}
+            </div>
+          </section>
 
           {/* Qualitaetskontrolle */}
           {darfQualitaetPruefen(rolle) && (status === "qualitaetskontrolle" || status === "einreichungsfertig") && (
@@ -189,8 +236,8 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Qualitätskontrolle</CardTitle>
                 <CardDescription>
-                  AI prepared. Human verified. Vor der Freigabe: {zeile?.ungepruefteDokumente ?? 0} ungeprüfte Dokumente, {zeile?.fehlendeUnterlagen ?? 0} fehlende Positionen,{" "}
-                  {aggregate.plausibility.filter((p) => p.status !== "ok").length} offene Plausibilitätshinweise, Einreichungsreife {aggregate.readiness.score} %.
+                  AI prepared. Human verified. Vor der Freigabe: {fortschritt.ungeprueft} ungeprüfte Dokumente, {fortschritt.fehlend} fehlende Positionen, {fortschritt.warnungen} offene Plausibilitätshinweise, Einreichungsreife {fortschritt.reife} %.
+                  Eine Freigabe macht den Auftrag übergabebereit; eine Rückgabe schickt ihn mit Begründung an den Bearbeiter. Beides ist im Verlauf nachvollziehbar.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -199,20 +246,18 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
             </Card>
           )}
 
-          {/* Akte */}
+          {/* Arbeitsbereiche der Akte */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Akte {aggregate.caseNumber}</CardTitle>
-              <CardDescription>
-                {zeile?.fehlendeUnterlagen ?? 0} fehlende Unterlagen · {zeile?.ungepruefteDokumente ?? 0} ungeprüfte Dokumente · {aggregate.documentCount} Dokumente gesamt · Einreichungsreife {aggregate.readiness.score} %
-              </CardDescription>
+              <CardDescription>Die Arbeit an den Unterlagen läuft in den bestehenden Werkzeugen der Akte.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-2">
-                {werkzeuge.map((w) => (
-                  <Link key={w.href} href={w.href} className="flex items-start gap-3 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent/60">
+                {werkzeuge.map((w, i) => (
+                  <Link key={w.href} href={w.href} className={"flex items-start gap-3 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent/60 " + (i === 0 ? "border-primary/30 bg-surface-sunken" : "")}>
                     <w.icon className="mt-0.5 h-4 w-4 shrink-0 text-ai" aria-hidden />
-                    <span>
+                    <span className="min-w-0">
                       <span className="font-medium text-foreground">{w.label}</span>
                       <span className="block text-xs text-muted-foreground">{w.hinweis}</span>
                     </span>
@@ -221,9 +266,12 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                 ))}
               </div>
               {missing.length > 0 && (
-                <div>
-                  <div className="mb-1.5 text-xs font-medium text-muted-foreground">Fehlende Positionen</div>
-                  <ul className="grid gap-1 sm:grid-cols-2">
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                    <span>{missing.length} fehlende {missing.length === 1 ? "Position" : "Positionen"}</span>
+                    <span className="group-open:hidden">anzeigen</span><span className="hidden group-open:inline">ausblenden</span>
+                  </summary>
+                  <ul className="mt-2 grid gap-1 sm:grid-cols-2">
                     {missing.map((m) => (
                       <li key={m.key} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs">
                         <span>{m.name}</span>
@@ -231,7 +279,7 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                       </li>
                     ))}
                   </ul>
-                </div>
+                </details>
               )}
             </CardContent>
           </Card>
@@ -240,7 +288,7 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Rückfragen an den Auftraggeber</CardTitle>
-              <CardDescription>Entwürfe werden erst nach Vorschau und Bestätigung gestellt. Es wird keine E-Mail versendet.</CardDescription>
+              <CardDescription>Entwürfe werden erst nach Vorschau und Bestätigung gestellt. Sie erscheinen im Portal, es wird keine E-Mail versendet.</CardDescription>
             </CardHeader>
             <CardContent>
               <RueckfragenKarte
@@ -260,24 +308,25 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
-          {/* Notizen und Ergebnis */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardContent className="pt-6">
-                <TextFormular auftragId={auftrag.id} feld="interneNotizen" wert={auftrag.interneNotizen} label="Interne Notizen" hinweis="Nicht für den Auftraggeber sichtbar." submitLabel="Notizen speichern" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <TextFormular auftragId={auftrag.id} feld="ergebnisText" wert={auftrag.ergebnisText} label="Ergebnis / Lieferumfang" hinweis="Sichtbar im Portal ab Übergabe." submitLabel="Ergebnis speichern" />
-              </CardContent>
-            </Card>
-          </div>
+          {/* Notizen und Ergebnis - eingeklappt, bis man sie braucht */}
+          <details className="flaeche-blatt group" open={Boolean(auftrag.interneNotizen || auftrag.ergebnisText)}>
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3 [&::-webkit-details-marker]:hidden">
+              <span className="t-abschnitt">Interne Notizen und Lieferumfang</span>
+              <span className="t-hilfe text-xs group-open:hidden">anzeigen</span><span className="t-hilfe hidden text-xs group-open:inline">ausblenden</span>
+            </summary>
+            <div className="grid gap-6 border-t p-5 md:grid-cols-2">
+              <TextFormular auftragId={auftrag.id} feld="interneNotizen" wert={auftrag.interneNotizen} label="Interne Notizen" hinweis="Nicht für den Auftraggeber sichtbar." submitLabel="Notizen speichern" />
+              <TextFormular auftragId={auftrag.id} feld="ergebnisText" wert={auftrag.ergebnisText} label="Ergebnis / Lieferumfang" hinweis="Sichtbar im Portal ab Übergabe." submitLabel="Ergebnis speichern" />
+            </div>
+          </details>
 
           {/* Verlauf */}
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Verlauf</CardTitle></CardHeader>
-            <CardContent>
+          <details className="flaeche-blatt group">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3 [&::-webkit-details-marker]:hidden">
+              <span className="t-abschnitt">Verlauf <span className="t-hilfe ml-1 text-xs">{verlauf.length} {verlauf.length === 1 ? "Eintrag" : "Einträge"}</span></span>
+              <span className="t-hilfe text-xs group-open:hidden">anzeigen</span><span className="t-hilfe hidden text-xs group-open:inline">ausblenden</span>
+            </summary>
+            <div className="border-t p-5">
               {verlauf.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Noch keine Einträge.</p>
               ) : (
@@ -299,46 +348,36 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                   ))}
                 </ol>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </details>
         </div>
 
-        {/* Seitenspalte */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Auftrag</CardTitle></CardHeader>
-            <CardContent className="space-y-1.5 text-sm">
-              <Zeile k="Auftraggeber" v={auftraggeber?.name ?? "—"} />
-              <Zeile k="Ansprechpartner" v={kontakt ? `${kontakt.name}${kontakt.email ? ` · ${kontakt.email}` : ""}` : "—"} />
-              <Zeile k="Auftragsart" v={auftragsartLabel(auftrag.auftragsart)} />
+        {/* Kontextspalte */}
+        <div className="space-y-4">
+          {darfVerwalten(rolle) && aktiv && (
+            <Seitenpanel titel="Steuerung">
+              <SteuerungFormular auftragId={auftrag.id} bearbeiterId={auftrag.bearbeiterId} prioritaet={auftrag.prioritaet} faelligAm={datumFeld(auftrag.faelligAm)} team={team.map((t) => ({ id: t.id, name: t.name }))} />
+            </Seitenpanel>
+          )}
+
+          <Seitenpanel titel="Auftrag">
+            <div className="space-y-1.5">
               <Zeile k="Leistungen" v={auftrag.leistungen.map(leistungsLabel).join(", ") || "—"} />
               <Zeile k="Eingang" v={datumZeitText(auftrag.eingangAm)} />
-              <Zeile k="Frist" v={datumText(auftrag.faelligAm)} />
-              <Zeile k="Bearbeiter" v={name(auftrag.bearbeiterId) ?? "nicht zugewiesen"} />
-              <Zeile k="Prüfer" v={name(auftrag.prueferId) ?? "—"} />
               <Zeile k="Quelle" v={auftrag.quelle === "portal" ? "Portal" : auftrag.quelle === "vertrieb_uebergabe" ? "Übergabe aus dem Vertrieb" : "Manuell"} />
               {auftrag.referenzExtern && <Zeile k="Referenz" v={auftrag.referenzExtern} />}
+              {kontakt?.email && <Zeile k="E-Mail" v={kontakt.email} />}
               {auftrag.hinweiseAuftraggeber && (
                 <div className="pt-2">
                   <div className="text-xs font-medium text-muted-foreground">Hinweise des Auftraggebers</div>
                   <p className="whitespace-pre-wrap">{auftrag.hinweiseAuftraggeber}</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Seitenpanel>
 
-          {darfVerwalten(rolle) && aktiv && (
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Steuerung</CardTitle></CardHeader>
-              <CardContent>
-                <SteuerungFormular auftragId={auftrag.id} bearbeiterId={auftrag.bearbeiterId} prioritaet={auftrag.prioritaet} faelligAm={datumFeld(auftrag.faelligAm)} team={team.map((t) => ({ id: t.id, name: t.name }))} />
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Qualitätsnachweis</CardTitle></CardHeader>
-            <CardContent className="space-y-1.5 text-sm">
+          <Seitenpanel titel="Qualitätsnachweis">
+            <div className="space-y-1.5">
               <Zeile k="Freigegeben von" v={name(auftrag.qualitaetFreigegebenVonId) ?? "—"} />
               <Zeile k="Freigegeben am" v={datumZeitText(auftrag.qualitaetFreigegebenAm)} />
               {auftrag.qualitaetBegruendung && <Zeile k="Anmerkung" v={auftrag.qualitaetBegruendung} />}
@@ -354,10 +393,29 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
                   <div>{auftraggeber?.abrechnungsmodell === "intern" ? "Interne Übergabe, keine Abrechnung" : BACKOFFICE_ABRECHNUNGSSTATUS_LABELS[auftrag.abrechnungsstatus]}</div>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Seitenpanel>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Fakt({ label, wert, leer }: { label: string; wert: string; leer?: boolean }) {
+  return (
+    <div className="min-w-0 px-3.5 py-2.5">
+      <div className="eyebrow text-[0.625rem]">{label}</div>
+      <div className={"mt-0.5 truncate text-sm " + (leer ? "text-muted-foreground" : "font-medium text-foreground")} title={wert}>{wert}</div>
+    </div>
+  );
+}
+
+function Zahl({ label, wert, ton = "neutral" }: { label: string; wert: number | string; ton?: "neutral" | "aktion" | "warnung" | "leer" }) {
+  const farbe = ton === "aktion" ? "text-primary" : ton === "warnung" ? "text-[hsl(var(--warning))]" : ton === "leer" ? "text-muted-foreground/60" : "text-foreground";
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <dd className={"t-kpi text-lg " + farbe}>{wert}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
     </div>
   );
 }
@@ -366,7 +424,7 @@ function Zeile({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-3">
       <span className="shrink-0 text-muted-foreground">{k}</span>
-      <span className="text-right">{v}</span>
+      <span className="min-w-0 break-words text-right">{v}</span>
     </div>
   );
 }

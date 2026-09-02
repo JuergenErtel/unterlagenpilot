@@ -34,7 +34,7 @@ export default async function PortalErgebnisse() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Ergebnisse"
         title="Ergebnisse"
         subtitle={
           zeilen.length === 0

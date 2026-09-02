@@ -35,7 +35,7 @@ export default async function PortalAuftraege({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Meine Aufträge"
         title="Aufträge"
         subtitle={`${zeilen.length} ${zeilen.length === 1 ? "Auftrag" : "Aufträge"} in dieser Ansicht.`}
         actions={

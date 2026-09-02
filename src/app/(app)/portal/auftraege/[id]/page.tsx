@@ -78,7 +78,7 @@ export default async function PortalAuftragDetail({ params }: { params: Promise<
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Auftraggeberportal"
+        eyebrow="Auftrag"
         title={
           <span className="flex flex-wrap items-center gap-3">
             {auftrag.auftragsnummer}

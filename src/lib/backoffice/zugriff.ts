@@ -191,7 +191,7 @@ export async function requirePortalAuftrag(auftragId: string): Promise<{ ctx: Po
 // Arbeitsbereiche (fuer Navigation und Umschalter)
 // ---------------------------------------------------------------------------
 
-export type { Bereich, Bereiche } from "./bereich";
+export type { Bereich, Bereiche, BackofficeZaehler } from "./bereich";
 export { bereichAusPfad } from "./bereich";
 
 /** Welche Produkte dieser Nutzer sieht. Vertrieb hat jeder Organisationsnutzer. */
