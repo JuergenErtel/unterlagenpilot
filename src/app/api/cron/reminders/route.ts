@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { getCaseAggregate } from "@/lib/cases/service";
@@ -40,6 +41,9 @@ export async function GET(req: NextRequest) {
   // Kandidaten: nur offene Fälle mit aktivem, gültigem Upload-Link.
   const candidates = await prisma.case.findMany({
     where: {
+      // Erinnerungen an den Vermittler sind ein Vertriebsinstrument; die
+      // Backoffice-Akte hat ihren eigenen Fristenlauf.
+      ...nurVertrieb,
       status: { in: [...OPEN_STATUSES_LIST] },
       uploadLinks: { some: { active: true, expiresAt: { gt: now } } },
     },

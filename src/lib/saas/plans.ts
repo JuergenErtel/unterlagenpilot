@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import type { PlanTier, UserRole } from "@/lib/domain/enums";
 
 /**
@@ -144,7 +145,9 @@ export async function checkLimit(
   let used = 0;
   switch (key) {
     case "monthlyCases":
-      used = await prisma.case.count({ where: { organizationId, createdAt: { gte: startOfMonth() } } });
+      // Nur Vertriebsfaelle zaehlen gegen das Fallkontingent des Tarifs -
+      // Backoffice-Auftraege haben ihr eigenes Kontingent je Auftraggeber.
+      used = await prisma.case.count({ where: { organizationId, ...nurVertrieb, createdAt: { gte: startOfMonth() } } });
       break;
     case "documentsPerCase":
       used = scope?.caseId

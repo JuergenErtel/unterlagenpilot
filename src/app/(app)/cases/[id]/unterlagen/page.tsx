@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { fehltFuerSatz } from "@/lib/checklists/engine";
 import { baueArbeitsplatz, type ArbeitsplatzDokument } from "@/lib/unterlagen/arbeitsplatz";
@@ -40,7 +40,7 @@ export default async function UnterlagenArbeitsplatzPage({
   const ctx = await requireContext();
 
   const caseRow = await prisma.case.findFirstOrThrow({
-    where: { id, organizationId: ctx.organizationId },
+    where: { id, ...akteSichtbarWhere(ctx) },
     select: {
       caseNumber: true,
       applicants: {

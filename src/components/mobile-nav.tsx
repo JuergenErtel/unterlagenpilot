@@ -8,6 +8,7 @@ import { Logo } from "@/components/brand/logo";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { logout } from "@/lib/actions/auth";
 import { USER_ROLE_LABELS } from "@/lib/domain/enums";
+import type { Bereiche } from "@/lib/backoffice/bereich";
 
 /**
  * Mobile-Navigation (< md): Hamburger im Header öffnet ein Slide-over-Drawer
@@ -22,6 +23,7 @@ export function MobileNav({
     role: string;
     isDemo?: boolean;
     platformAdmin?: boolean;
+    bereiche?: Bereiche;
   };
 }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +67,7 @@ export function MobileNav({
             </Dialog.Close>
           </div>
 
-          <SidebarNav onNavigate={() => setOpen(false)} platformAdmin={context.platformAdmin} />
+          <SidebarNav onNavigate={() => setOpen(false)} platformAdmin={context.platformAdmin} bereiche={context.bereiche} />
 
           <div className="space-y-2 border-t p-3">
             <div className="flex items-center gap-3 rounded-md px-2 py-1.5">

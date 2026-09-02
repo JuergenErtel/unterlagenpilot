@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireCaseAccess } from "@/lib/auth/context";
+import { requireCaseAccess, akteSichtbarWhere } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default async function EinkommenPage({
   const { ctx } = await requireCaseAccess(id);
 
   const caseRow = await prisma.case.findFirst({
-    where: { id, organizationId: ctx.organizationId },
+    where: { id, ...akteSichtbarWhere(ctx) },
     include: {
       applicants: {
         orderBy: { position: "asc" },

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { reconcileCase, runReferenceExtraction } from "@/lib/detektiv/service";
 import { checklistKeyFor } from "@/lib/detektiv/keys";
@@ -133,7 +133,7 @@ export async function alleBefundeUebernehmen(formData: FormData): Promise<void> 
   if (!caseId) return;
 
   const fall = await prisma.case.findFirst({
-    where: { id: caseId, organizationId: ctx.organizationId },
+    where: { id: caseId, ...akteSichtbarWhere(ctx) },
     select: { id: true },
   });
   if (!fall) return;
@@ -167,7 +167,7 @@ export async function verweiseNachpruefen(formData: FormData): Promise<void> {
   if (!documentId) return;
 
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, case: { organizationId: ctx.organizationId } },
+    where: { id: documentId, case: akteSichtbarWhere(ctx) },
     select: { id: true, caseId: true },
   });
   if (!doc) return;
@@ -197,7 +197,7 @@ export async function aktePruefen(formData: FormData): Promise<void> {
   if (!caseId) return;
 
   const fall = await prisma.case.findFirst({
-    where: { id: caseId, organizationId: ctx.organizationId },
+    where: { id: caseId, ...akteSichtbarWhere(ctx) },
     select: { id: true },
   });
   if (!fall) return;

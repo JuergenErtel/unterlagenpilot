@@ -19,9 +19,32 @@ import {
   Landmark,
   Settings,
   UserCheck,
+  Inbox,
+  ListOrdered,
+  FileWarning,
+  FileSearch,
+  MessageSquareText,
+  ClipboardCheck,
+  PackageCheck,
+  Handshake,
+  Users,
+  Receipt,
+  SlidersHorizontal,
+  Home,
+  FilePlus2,
+  FolderCheck,
+  Gauge,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  BEREICH_LABELS,
+  BEREICH_START,
+  bereichAusPfad,
+  verfuegbareBereiche,
+  type Bereich,
+  type Bereiche,
+} from "@/lib/backoffice/bereich";
 
 export const NAV_GROUPS: Array<{
   label: string;
@@ -72,12 +95,82 @@ export const NAV_GROUPS: Array<{
  *  der Seite und in jeder Server Action (404 statt 403). */
 export const PLATTFORM_GRUPPE: (typeof NAV_GROUPS)[number] = {
   label: "Plattform",
-  items: [{ href: "/admin/anmeldungen", label: "Anmeldungen", icon: UserCheck }],
+  items: [
+    { href: "/admin/anmeldungen", label: "Anmeldungen", icon: UserCheck },
+    { href: "/admin/backoffice", label: "Backoffice-Steuerung", icon: SlidersHorizontal },
+  ],
 };
 
-/** Welche Gruppen ein Nutzer sieht. Reine Funktion, damit ohne DOM pruefbar. */
+/**
+ * BaufiDesk Backoffice: die Navigation des Sachbearbeiter-Arbeitsplatzes.
+ * Eigenes Produkt, eigene Reihenfolge: oben die Arbeit (Dashboard, Queue,
+ * die Wartelisten), unten die Verwaltung (Auftraggeber, Team, Abrechnung,
+ * Konfiguration). Sichtbar nur mit Backoffice-Rolle UND Feature Flag - die
+ * Regel steht in ladeBereiche (src/lib/backoffice/zugriff.ts).
+ */
+export const BACKOFFICE_GRUPPEN: typeof NAV_GROUPS = [
+  {
+    label: "Aufträge",
+    items: [
+      { href: "/backoffice", label: "Auftragsdashboard", icon: Gauge },
+      { href: "/backoffice/queue", label: "Bearbeitungsqueue", icon: ListOrdered },
+      { href: "/backoffice/auftraege", label: "Aufträge", icon: Inbox },
+      { href: "/backoffice/fehlende-unterlagen", label: "Fehlende Unterlagen", icon: FileWarning },
+      { href: "/backoffice/dokumentenpruefung", label: "Dokumentenprüfung", icon: FileSearch },
+      { href: "/backoffice/rueckfragen", label: "Rückfragen", icon: MessageSquareText },
+      { href: "/backoffice/qualitaetskontrolle", label: "Qualitätskontrolle", icon: ClipboardCheck },
+      { href: "/backoffice/uebergabe", label: "Fertig zur Übergabe", icon: PackageCheck },
+    ],
+  },
+  {
+    label: "Verwaltung",
+    einklappbar: true,
+    items: [
+      { href: "/backoffice/auftraggeber", label: "Auftraggeber", icon: Handshake },
+      { href: "/backoffice/team", label: "Team", icon: Users },
+      { href: "/backoffice/abrechnung", label: "Abrechnung & Kontingente", icon: Receipt },
+      { href: "/backoffice/konfiguration", label: "Backoffice-Konfiguration", icon: SlidersHorizontal },
+      { href: "/audit", label: "Audit-Log", icon: ShieldCheck },
+    ],
+  },
+];
+
+/** Das reduzierte Portal eines Auftraggebers. Keine interne Queue, keine fremden Auftraggeber. */
+export const PORTAL_GRUPPEN: typeof NAV_GROUPS = [
+  {
+    label: "Meine Aufträge",
+    items: [
+      { href: "/portal", label: "Übersicht", icon: Home },
+      { href: "/portal/auftraege", label: "Meine Aufträge", icon: Inbox },
+      { href: "/portal/auftraege/neu", label: "Neuer Auftrag", icon: FilePlus2 },
+      { href: "/portal/fehlende-unterlagen", label: "Fehlende Unterlagen", icon: FileWarning },
+      { href: "/portal/rueckfragen", label: "Rückfragen", icon: MessageSquareText },
+      { href: "/portal/ergebnisse", label: "Ergebnisse", icon: FolderCheck },
+    ],
+  },
+  {
+    label: "Organisation",
+    einklappbar: true,
+    items: [
+      { href: "/portal/kontingent", label: "Kontingent & Tarif", icon: Receipt },
+      { href: "/portal/organisation", label: "Organisation & Mitarbeiter", icon: Building2 },
+    ],
+  },
+];
+
+/** Welche Gruppen ein Nutzer im Vertrieb sieht. Reine Funktion, damit ohne DOM pruefbar. */
 export function navGruppen(platformAdmin: boolean): typeof NAV_GROUPS {
   return platformAdmin ? [...NAV_GROUPS, PLATTFORM_GRUPPE] : NAV_GROUPS;
+}
+
+/**
+ * Gruppen je Bereich. Der Plattform-Eintrag haengt am Vertrieb - dort ist der
+ * Betreiber zu Hause. Backoffice und Portal bleiben frei davon.
+ */
+export function navGruppenFuer(bereich: Bereich, platformAdmin: boolean): typeof NAV_GROUPS {
+  if (bereich === "backoffice") return BACKOFFICE_GRUPPEN;
+  if (bereich === "portal") return PORTAL_GRUPPEN;
+  return navGruppen(platformAdmin);
 }
 
 /** Dieselbe Aktiv-Regel wie beim Markieren des Eintrags – auch fürs Aufklappen. */
@@ -85,12 +178,22 @@ function istAktiv(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
 }
 
+const NUR_VERTRIEB: Bereiche = { vertrieb: true, backoffice: false, portal: false };
+
 export function SidebarNav({
   onNavigate,
   platformAdmin = false,
-}: { onNavigate?: () => void; platformAdmin?: boolean } = {}) {
+  bereiche = NUR_VERTRIEB,
+}: { onNavigate?: () => void; platformAdmin?: boolean; bereiche?: Bereiche } = {}) {
   const pathname = usePathname();
-  const gruppen = navGruppen(platformAdmin);
+  // Der Bereich kommt aus dem Pfad, nicht aus einem gespeicherten Zustand:
+  // Wer einen Backoffice-Link oeffnet, steht im Backoffice - auch wenn er
+  // zuletzt im Vertrieb war. Ein Bereich, den der Nutzer nicht hat, faellt
+  // auf den Vertrieb zurueck (die Seite selbst antwortet dann mit 404).
+  const rohBereich = bereichAusPfad(pathname);
+  const bereich: Bereich = bereiche[rohBereich] ? rohBereich : "vertrieb";
+  const gruppen = navGruppenFuer(bereich, platformAdmin);
+  const umschalter = verfuegbareBereiche(bereiche);
 
   // Einklappbare Gruppen starten zu – AUSSER man steht gerade auf einer ihrer
   // Seiten: Dann wäre der aktive Eintrag unsichtbar und die Leiste behauptete,
@@ -120,10 +223,45 @@ export function SidebarNav({
     // gruppen ist aus platformAdmin abgeleitet und je Render neu – als
     // Abhängigkeit würde der Effekt jeden Render laufen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, platformAdmin]);
+  }, [pathname, platformAdmin, bereich]);
 
   return (
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+      {umschalter.length > 1 && (
+        <div>
+          <div className="eyebrow px-3 pb-2 text-[0.625rem]">Bereich</div>
+          {/*
+            Der Umschalter ist eine Registerleiste, kein Dropdown: Alle
+            Bereiche stehen nebeneinander, der aktive ist eingefaerbt. Wer hier
+            steht, soll auf einen Blick sehen, in welchem Produkt er arbeitet.
+          */}
+          <div
+            role="tablist"
+            aria-label="Arbeitsbereich"
+            className="grid gap-px rounded-md border bg-border p-px"
+            style={{ gridTemplateColumns: `repeat(${umschalter.length}, minmax(0, 1fr))` }}
+          >
+            {umschalter.map((b) => {
+              const aktiv = b === bereich;
+              return (
+                <Link
+                  key={b}
+                  role="tab"
+                  aria-selected={aktiv}
+                  href={BEREICH_START[b]}
+                  onClick={onNavigate}
+                  className={cn(
+                    "truncate rounded-[5px] px-2 py-1.5 text-center text-xs font-medium transition-colors",
+                    aktiv ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {BEREICH_LABELS[b]}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {gruppen.map((g) => (
         <div key={g.label}>
           {g.einklappbar ? (

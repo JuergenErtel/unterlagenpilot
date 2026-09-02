@@ -307,6 +307,78 @@ enum AiJobType {
   platform_mapping
 }
 
+// ============================ BACKOFFICE ============================
+
+/// Welches Produkt eine Akte traegt. `vertrieb` ist der Bestand: ein Fall mit
+/// Leadphase, Quelle und Provision. `backoffice` ist die Finanzierungsakte
+/// eines externen Auftrags - sie ist kein Lead und erscheint in keiner
+/// Vertriebsliste. Jede org-weite Fallabfrage des Vertriebs filtert darauf
+/// (src/lib/cases/aktenart.ts).
+enum AkteArt {
+  vertrieb
+  backoffice
+}
+
+/// Stellung eines Nutzers im Backoffice seiner Organisation. Bewusst ein
+/// eigenes Feld neben UserRole: Die Vertriebsrolle sagt nichts darueber,
+/// ob jemand Auftraege aufbereiten oder freigeben darf.
+enum BackofficeRolle {
+  manager
+  bearbeiter
+  pruefer
+}
+
+enum BackofficeStatus {
+  neu_eingegangen
+  auftrag_pruefen
+  wartet_auf_unterlagen
+  in_aufbereitung
+  rueckfrage_auftraggeber
+  qualitaetskontrolle
+  einreichungsfertig
+  uebergeben
+  abgeschlossen
+  nachbearbeitung
+  abgelehnt
+  storniert
+}
+
+enum BackofficePrioritaet {
+  niedrig
+  normal
+  hoch
+  dringend
+}
+
+enum BackofficeRueckfrageStatus {
+  entwurf
+  offen
+  beantwortet
+  erledigt
+}
+
+/// Wie ein Auftraggeber abgerechnet wird. `intern` ist die eigene
+/// Organisation bei einer Uebergabe aus dem Vertrieb - dort gibt es kein
+/// Kontingent.
+enum BackofficeAbrechnungsmodell {
+  testfall
+  abo
+  partner
+  intern
+}
+
+enum BackofficeAbrechnungsstatus {
+  offen
+  abgerechnet
+  nicht_abrechenbar
+}
+
+enum BackofficeKontingentArt {
+  verbrauch
+  zusatzfall
+  korrektur
+}
+
 // ============================ MANDANT / NUTZER ============================
 
 model Organization {
@@ -334,53 +406,70 @@ model Organization {
   // Datenschutz: Aufbewahrungsfrist (0 = bis manuelle Loeschung)
   retentionDays      Int      @default(0)
   isWhiteLabel       Boolean  @default(false)
+  /// Vorgabe fuer die Bearbeitungsfrist neuer Backoffice-Auftraege in
+  /// Werktagen, wenn der Auftraggeber keine eigene nennt.
+  backofficeSlaTage  Int      @default(3)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  users                User[]
-  customers            Customer[]
-  cases                Case[]
-  checklistTemplates   ChecklistTemplate[]
-  platformConnections  PlatformConnection[]
-  messageTemplates     MessageTemplate[]
-  subscription         Subscription?
-  featureFlags         FeatureFlag[]
-  whiteLabelSettings   WhiteLabelSettings?
-  bankRequirements     BankRequirement[]
-  auditLogs            AuditLog[]
-  leadSyncStates       LeadSyncState[]
-  machbarkeitsAnnahmen MachbarkeitsAnnahmen?
-  leadformulare        Leadformular[]
+  users                  User[]
+  customers              Customer[]
+  cases                  Case[]
+  checklistTemplates     ChecklistTemplate[]
+  platformConnections    PlatformConnection[]
+  messageTemplates       MessageTemplate[]
+  subscription           Subscription?
+  featureFlags           FeatureFlag[]
+  whiteLabelSettings     WhiteLabelSettings?
+  bankRequirements       BankRequirement[]
+  auditLogs              AuditLog[]
+  leadSyncStates         LeadSyncState[]
+  machbarkeitsAnnahmen   MachbarkeitsAnnahmen?
+  leadformulare          Leadformular[]
+  /// Auftraggeber, die DIESE Organisation als Backoffice betreut.
+  backofficeAuftraggeber BackofficeAuftraggeber[] @relation("BackofficeMandant")
+  /// Backoffice-Partner, bei denen DIESE Organisation Auftraggeber ist (Portal).
+  auftraggeberZugaenge   BackofficeAuftraggeber[] @relation("AuftraggeberOrganisation")
+  backofficeAuftraege    BackofficeAuftrag[]
 
   @@map("organizations")
 }
 
 model User {
-  id                  String       @id @default(cuid())
+  id                  String           @id @default(cuid())
   organizationId      String
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email               String       @unique
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email               String           @unique
   name                String
   // Passwort-Hash – niemals Klartext. Auth via Provider moeglich.
   passwordHash        String?
-  role                UserRole     @default(vermittler)
-  active              Boolean      @default(true)
+  role                UserRole         @default(vermittler)
+  active              Boolean          @default(true)
   // Plattform-Ebene: darf Registrierungsantraege freigeben. Bewusst KEIN Wert im
   // UserRole-Enum – die Rollen beschreiben die Stellung innerhalb einer
   // Organisation, nicht ueber ihnen.
-  platformAdmin       Boolean      @default(false)
+  platformAdmin       Boolean          @default(false)
+  /// Stellung im Backoffice der eigenen Organisation. null = kein Zugang zum
+  /// Backoffice-Produkt, unabhaengig von der Vertriebsrolle.
+  backofficeRolle     BackofficeRolle?
   invitedAt           DateTime?
   // Sperre gegen wiederholte "Adresse bereits vergeben"-Mails. Liegt am User,
   // weil es zu direkt angelegten Konten keinen SignupRequest gibt.
   letzteHinweisMailAm DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   casesAsBroker     Case[]            @relation("CaseBroker")
   auditLogs         AuditLog[]
   caseNotes         CaseNote[]
   authTokens        AuthToken[]
   erledigteAufgaben AufgabeErledigt[]
+
+  backofficeBearbeitet BackofficeAuftrag[]             @relation("BackofficeBearbeiter")
+  backofficeGeprueft   BackofficeAuftrag[]             @relation("BackofficePruefer")
+  backofficeErstellt   BackofficeAuftrag[]             @relation("BackofficeErsteller")
+  backofficeEreignisse BackofficeAuftragEreignis[]
+  auftraggeberKontakte BackofficeAuftraggeberKontakt[]
 
   @@index([organizationId])
   @@map("users")
@@ -457,6 +546,9 @@ model Case {
   customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   brokerId       String?
   broker         User?        @relation("CaseBroker", fields: [brokerId], references: [id], onDelete: SetNull)
+
+  /// Vertriebsfall oder Backoffice-Akte. Siehe enum AkteArt.
+  akteArt AkteArt @default(vertrieb)
 
   status              CaseStatus  @default(neu)
   // Status vor dem Archivieren – beim Entarchivieren wiederhergestellt, damit ein
@@ -571,9 +663,11 @@ model Case {
   anforderungsAbrufe  BankAnforderungsAbruf[]
   erledigteAufgaben   AufgabeErledigt[]
   kreditpruefung      Kreditpruefung?
+  backofficeAuftraege BackofficeAuftrag[]
 
   @@unique([organizationId, caseNumber])
   @@index([organizationId, status])
+  @@index([organizationId, akteArt])
   // Die Dublettenprüfung des Lead-Abgleichs läuft je Lead über dieses Feld.
   @@index([finlinkId])
   @@map("cases")
@@ -1905,4 +1999,225 @@ model BankAnforderung {
 
   @@unique([abrufId, externeId])
   @@map("bank_anforderungen")
+}
+
+// ============================ BACKOFFICE ============================
+
+/**
+ * Ein Auftraggeber des Backoffice: der Vermittler oder das Vermittlungs-
+ * unternehmen, das Aufbereitung beauftragt. Gehoert dem Backoffice-Partner
+ * (`backofficeOrganizationId`) - das ist der Mandant, der ihn sieht.
+ * `organizationId` verknuepft optional eine BaufiDesk-Organisation, deren
+ * Nutzer dann das Auftraggeberportal fuer GENAU diese Auftraege sehen.
+ * Der Antragsteller (Endkunde) steht NIE hier, sondern an der Akte.
+ */
+model BackofficeAuftraggeber {
+  id                       String        @id @default(cuid())
+  backofficeOrganizationId String
+  backofficeOrganization   Organization  @relation("BackofficeMandant", fields: [backofficeOrganizationId], references: [id], onDelete: Cascade)
+  organizationId           String?
+  organization             Organization? @relation("AuftraggeberOrganisation", fields: [organizationId], references: [id], onDelete: SetNull)
+
+  name                        String
+  kurzname                    String?
+  street                      String?
+  zip                         String?
+  city                        String?
+  email                       String?
+  phone                       String?
+  abrechnungsmodell           BackofficeAbrechnungsmodell @default(testfall)
+  /// Enthaltene Faelle je Monat beim Abo. null = kein Kontingent (Einzelpreis).
+  kontingentMonatlich         Int?
+  /// Wie viele ungenutzte Faelle in den Folgemonat mitgenommen werden duerfen.
+  carryOverMax                Int                         @default(0)
+  /// Vereinbarte Frist in Werktagen; null = Vorgabe der Organisation.
+  slaTage                     Int?
+  /// Darf das Backoffice den Antragsteller direkt ansprechen (Upload-Link,
+  /// Nachforderung)? Voreinstellung nein: der Auftraggeber bleibt Herr des
+  /// Kundenkontakts.
+  antragstellerKontaktErlaubt Boolean                     @default(false)
+  aktiv                       Boolean                     @default(true)
+  notizIntern                 String?
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+
+  kontakte             BackofficeAuftraggeberKontakt[]
+  auftraege            BackofficeAuftrag[]
+  kontingentEreignisse BackofficeKontingentEreignis[]
+
+  @@unique([backofficeOrganizationId, organizationId])
+  @@index([backofficeOrganizationId])
+  @@index([organizationId])
+  @@map("backoffice_auftraggeber")
+}
+
+/// Ansprechperson beim Auftraggeber. `userId` bindet sie an einen Portal-
+/// Nutzer der verknuepften Organisation.
+model BackofficeAuftraggeberKontakt {
+  id                     String                 @id @default(cuid())
+  auftraggeberId         String
+  auftraggeber           BackofficeAuftraggeber @relation(fields: [auftraggeberId], references: [id], onDelete: Cascade)
+  name                   String
+  email                  String?
+  phone                  String?
+  userId                 String?
+  user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Sieht im Portal alle Auftraege des Auftraggebers, nicht nur die eigenen.
+  darfAlleAuftraegeSehen Boolean                @default(true)
+  aktiv                  Boolean                @default(true)
+  createdAt              DateTime               @default(now())
+
+  auftraege BackofficeAuftrag[]
+
+  @@index([auftraggeberId])
+  @@index([userId])
+  @@map("backoffice_auftraggeber_kontakte")
+}
+
+/**
+ * Ein Backoffice-Auftrag. Eigenes Hauptobjekt neben dem Fall: Der Fall ist
+ * die Finanzierungsakte (Antragsteller, Objekt, Dokumente), der Auftrag ist
+ * die Arbeit daran im Auftrag eines Dritten - mit eigenem Status, eigener
+ * Frist, eigenem Bearbeiter. Kein Statuswechsel hier beruehrt Case.status
+ * oder Case.leadPhase.
+ */
+model BackofficeAuftrag {
+  id                       String                         @id @default(cuid())
+  backofficeOrganizationId String
+  backofficeOrganization   Organization                   @relation(fields: [backofficeOrganizationId], references: [id], onDelete: Cascade)
+  auftragsnummer           String
+  auftraggeberId           String
+  auftraggeber             BackofficeAuftraggeber         @relation(fields: [auftraggeberId], references: [id], onDelete: Restrict)
+  kontaktId                String?
+  kontakt                  BackofficeAuftraggeberKontakt? @relation(fields: [kontaktId], references: [id], onDelete: SetNull)
+  caseId                   String
+  case                     Case                           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  /// Anzeigename der Akte, meist der Antragsteller. Steht hier, damit die
+  /// Queue ohne Join auf die Antragsteller lesbar bleibt.
+  aktenbezeichnung String
+  /// Schluessel aus AUFTRAGSARTEN (src/lib/backoffice/leistungen.ts). Text
+  /// statt Enum, damit eine neue Auftragsart keine Migration erzwingt.
+  auftragsart      String
+  /// Schluessel aus LEISTUNGSBAUSTEINE.
+  leistungen       String[]             @default([])
+  prioritaet       BackofficePrioritaet @default(normal)
+  eingangAm        DateTime             @default(now())
+  faelligAm        DateTime?
+  /// manuell | portal | vertrieb_uebergabe
+  quelle           String               @default("manuell")
+  /// Externe Referenz des Auftraggebers (eigene Vorgangsnummer, Plattform-ID).
+  referenzExtern   String?
+
+  status        BackofficeStatus @default(neu_eingegangen)
+  statusSeit    DateTime         @default(now())
+  wartegrund    String?
+  pausiertSeit  DateTime?
+  pausiertGrund String?
+
+  bearbeiterId  String?
+  bearbeiter    User?   @relation("BackofficeBearbeiter", fields: [bearbeiterId], references: [id], onDelete: SetNull)
+  prueferId     String?
+  pruefer       User?   @relation("BackofficePruefer", fields: [prueferId], references: [id], onDelete: SetNull)
+  erstelltVonId String?
+  erstelltVon   User?   @relation("BackofficeErsteller", fields: [erstelltVonId], references: [id], onDelete: SetNull)
+
+  /// Hinweise des Auftraggebers - fuer beide Seiten sichtbar.
+  hinweiseAuftraggeber String?
+  /// Interne Notizen des Backoffice - NIE im Portal.
+  interneNotizen       String?
+  /// Beschreibung des Lieferumfangs; im Portal sichtbar ab Uebergabe.
+  ergebnisText         String?
+
+  qualitaetFreigegebenAm    DateTime?
+  qualitaetFreigegebenVonId String?
+  qualitaetBegruendung      String?
+  uebergebenAm              DateTime?
+  abgenommenAm              DateTime?
+  abnahmeKommentar          String?
+  abrechnungsstatus         BackofficeAbrechnungsstatus @default(offen)
+  feedbackBewertung         Int?
+  feedbackText              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ereignisse           BackofficeAuftragEreignis[]
+  rueckfragen          BackofficeRueckfrage[]
+  kontingentEreignisse BackofficeKontingentEreignis[]
+
+  @@unique([backofficeOrganizationId, auftragsnummer])
+  @@index([backofficeOrganizationId, status])
+  @@index([auftraggeberId])
+  @@index([caseId])
+  @@index([bearbeiterId])
+  @@index([faelligAm])
+  @@map("backoffice_auftraege")
+}
+
+/// Verlauf eines Auftrags: jeder Statuswechsel, jede Zuweisung, jede
+/// Freigabe. Ergaenzt das AuditLog um die fachliche Lesbarkeit; das Portal
+/// zeigt nur Eintraege mit `sichtbarFuerAuftraggeber`.
+model BackofficeAuftragEreignis {
+  id                       String            @id @default(cuid())
+  auftragId                String
+  auftrag                  BackofficeAuftrag @relation(fields: [auftragId], references: [id], onDelete: Cascade)
+  /// status_wechsel | zuweisung | pause | qc_freigabe | qc_rueckgabe |
+  /// uebergabe | abnahme | rueckfrage | notiz | nachbearbeitung_angefordert
+  art                      String
+  vonStatus                BackofficeStatus?
+  nachStatus               BackofficeStatus?
+  text                     String?
+  sichtbarFuerAuftraggeber Boolean           @default(false)
+  userId                   String?
+  user                     User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt                DateTime          @default(now())
+
+  @@index([auftragId, createdAt])
+  @@map("backoffice_auftrag_ereignisse")
+}
+
+/// Rueckfrage des Backoffice an den Auftraggeber. Entsteht als Entwurf und
+/// wird erst nach bewusster Freigabe (Vorschau + Bestaetigung) im Portal
+/// sichtbar. Es wird nichts automatisch versendet.
+model BackofficeRueckfrage {
+  id               String                     @id @default(cuid())
+  auftragId        String
+  auftrag          BackofficeAuftrag          @relation(fields: [auftragId], references: [id], onDelete: Cascade)
+  betreff          String
+  frage            String
+  antwort          String?
+  status           BackofficeRueckfrageStatus @default(entwurf)
+  gestelltVonId    String?
+  gestelltAm       DateTime?
+  beantwortetVonId String?
+  beantwortetAm    DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([auftragId, status])
+  @@map("backoffice_rueckfragen")
+}
+
+/// Ein Kontingent-Ereignis: Verbrauch (bei Uebergabe), Zusatzfall oder
+/// Korrektur durch einen Manager. `menge` ist das Vorzeichen: +1 verbraucht,
+/// -1 gibt zurueck. Der Idempotenzschluessel verhindert Doppelzaehlung, wenn
+/// eine Uebergabe zweimal ausgeloest wird.
+model BackofficeKontingentEreignis {
+  id                   String                  @id @default(cuid())
+  auftraggeberId       String
+  auftraggeber         BackofficeAuftraggeber  @relation(fields: [auftraggeberId], references: [id], onDelete: Cascade)
+  auftragId            String?
+  auftrag              BackofficeAuftrag?      @relation(fields: [auftragId], references: [id], onDelete: SetNull)
+  art                  BackofficeKontingentArt
+  menge                Int
+  /// Abrechnungsperiode "JJJJ-MM".
+  periode              String
+  begruendung          String?
+  idempotenzSchluessel String                  @unique
+  userId               String?
+  createdAt            DateTime                @default(now())
+
+  @@index([auftraggeberId, periode])
+  @@map("backoffice_kontingent_ereignisse")
 }

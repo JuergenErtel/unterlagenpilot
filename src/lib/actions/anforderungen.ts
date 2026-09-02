@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere, type AppContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { getEuropaceClient } from "@/lib/platforms/europace/client";
 import { auswahlAus } from "@/lib/platforms/europace/anforderungen";
@@ -15,9 +15,9 @@ import { speichereAbruf } from "@/lib/anforderungen/speicher";
  */
 
 /** Stellt sicher, dass der Fall zur Organisation des Nutzers gehoert. */
-async function ladeFall(caseId: string, organizationId: string) {
+async function ladeFall(caseId: string, ctx: AppContext) {
   return prisma.case.findFirst({
-    where: { id: caseId, organizationId },
+    where: { id: caseId, ...akteSichtbarWhere(ctx) },
     select: { id: true },
   });
 }
@@ -33,7 +33,7 @@ export async function vorgangsnummerSetzen(formData: FormData): Promise<void> {
   const caseId = String(formData.get("caseId") ?? "");
   const nummer = String(formData.get("vorgangsnummer") ?? "").trim();
   if (!caseId || !nummer) return;
-  if (!(await ladeFall(caseId, ctx.organizationId))) return;
+  if (!(await ladeFall(caseId, ctx))) return;
 
   // Dasselbe Feld, das die bestehende Uebertragung fuellt – dadurch profitiert
   // auch der Unterlagen-Upload von der Eingabe.
@@ -64,7 +64,7 @@ export async function anforderungenAbrufen(formData: FormData): Promise<void> {
 
   if (!caseId || !bezugsId) return;
   if (quelle !== "antrag" && quelle !== "vorschlag") return;
-  if (!(await ladeFall(caseId, ctx.organizationId))) return;
+  if (!(await ladeFall(caseId, ctx))) return;
 
   const mapping = await prisma.platformMapping.findUnique({
     where: { caseId_platform: { caseId, platform: "europace" } },
@@ -128,7 +128,7 @@ export async function anforderungenAbrufen(formData: FormData): Promise<void> {
 /** Was Europace zu diesem Vorgang anbietet – fuer die Auswahl in der Karte. */
 export async function auswahlLaden(caseId: string) {
   const ctx = await requireContext();
-  if (!(await ladeFall(caseId, ctx.organizationId))) return { fehler: "Fall nicht gefunden." };
+  if (!(await ladeFall(caseId, ctx))) return { fehler: "Fall nicht gefunden." };
 
   const mapping = await prisma.platformMapping.findUnique({
     where: { caseId_platform: { caseId, platform: "europace" } },

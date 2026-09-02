@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { getCaseAggregate } from "./service";
 import { computeNextStep } from "@/lib/cases/next-step";
 import {
@@ -62,7 +63,7 @@ export async function ladeHeute(organizationId: string): Promise<HeuteDaten> {
   // Verlorene Fälle erzeugen keine Aufgaben mehr: Ein "Erstgespräch führen"
   // für einen Kunden, der längst bei der Hausbank abgeschlossen hat, lehrt
   // den Vermittler nur, der Liste nicht zu trauen.
-  const activeWhere = { organizationId, status: { notIn: TERMINAL_STATUSES }, verlorenAm: null };
+  const activeWhere = { organizationId, ...nurVertrieb, status: { notIn: TERMINAL_STATUSES }, verlorenAm: null };
 
   const [aktiveGesamt, kandidaten] = await Promise.all([
     prisma.case.count({ where: activeWhere }),

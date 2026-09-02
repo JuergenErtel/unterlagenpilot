@@ -174,6 +174,19 @@ Faustregel: **Datenfluss (Upload → Validierung → Virenscan → OCR → KI �
 
 ---
 
+## BaufiDesk Backoffice (seit 02.09.2026)
+
+Zweites Produkt auf derselben Plattform: Aufbereitung von Finanzierungsunterlagen **im Auftrag anderer Vermittler**. Getrennt vom Vertrieb, gemeinsamer Unterbau.
+
+- **Hauptobjekt** ist der `BackofficeAuftrag` (Auftragsnummer `BO-JJJJ-NNNN`, Auftraggeber, Kontakt, Auftragsart, Leistungsbausteine, Priorität, Frist, eigener Status, Bearbeiter, Prüfer, Rückfragen, Verlauf, Kontingent). Er hängt an einer Akte (`Case`).
+- **Aktenart**: `Case.akteArt` ist `vertrieb` (Bestand) oder `backoffice` (Akte eines externen Auftrags). Jede org-weite Vertriebsabfrage filtert mit `nurVertrieb` (`src/lib/cases/aktenart.ts`); ein Vertragstest (`tests/backoffice-vertrieb-trennung.test.ts`) erzwingt das. Backoffice-Akten erscheinen nie als Lead, in keiner Pipeline, keiner Kennzahl, keiner Tagesliste.
+- **Interne Übergabe** („An Backoffice übergeben“ in der Fallverwaltung) legt einen Auftrag zur bestehenden Vertriebsakte an. Der Fall bleibt Vertriebsfall; Leadphase, Status und Quelle werden vom Backoffice nie geschrieben.
+- **Rollen**: `User.backofficeRolle` (`manager` | `bearbeiter` | `pruefer`) neben der Vertriebsrolle. Auftraggeber-Nutzer kommen über die Verknüpfung `BackofficeAuftraggeber.organizationId` ins reduzierte Portal (`/portal`). Plattform-Admin schaltet das Feature Flag `backoffice` je Organisation (`/admin/backoffice`).
+- **Zugriff**: `requireBackoffice`, `requireBackofficeAuftrag`, `requirePortal`, `requirePortalAuftrag` (`src/lib/backoffice/zugriff.ts`), 404 statt 403. `requireCaseAccess` und `akteSichtbarWhere` verweigern Vermittlern ohne Backoffice-Rolle den Zugriff auf Backoffice-Akten derselben Organisation.
+- **Statusmodell** als Tabelle (`src/lib/backoffice/status.ts`), Wechsel als bedingtes `updateMany` mit Ereignis + Audit. Übergabe nur aus `einreichungsfertig`, und dorthin führt nur die Qualitätsfreigabe (Vier-Augen: der eigene Bearbeiter gibt nicht frei; Manager-Selbstfreigabe wird im Audit vermerkt). Kontingentverbrauch entsteht genau einmal bei der Übergabe (`idempotenzSchluessel`).
+- **Kommunikation**: Rückfragen an den Auftraggeber sind Entwürfe, bis sie nach Vorschau bewusst gestellt werden; sie erscheinen im Portal, es wird keine E-Mail versendet.
+- **Migration**: `sql/2026-09-02-backoffice.sql` (additiv, idempotent), Spec `docs/superpowers/specs/2026-09-02-backoffice-design.md`.
+
 ## Datenschutz / DSGVO
 
 - Verarbeitung in der **EU-Region** (Storage, Datenbank, KI/OCR).

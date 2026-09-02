@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { getCaseAggregate } from "./service";
 import { buildPlatformMapping } from "@/lib/platforms/mapping";
 import { casesToCanonical } from "@/lib/platforms/case-loader";
@@ -42,14 +43,14 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   // Auswertung des „letzte 12"-Ausschnitts lieferte ab dem 13. Fall stillschweigend
   // zu niedrige Zahlen.
   const [statusGroups, neueUploads, pruefbereit, docsProcessed] = await Promise.all([
-    prisma.case.groupBy({ by: ["status"], where: { organizationId }, _count: { _all: true } }),
-    prisma.document.count({ where: { case: { organizationId }, reviewStatus: "offen", ocrStatus: "fertig" } }),
-    prisma.document.count({ where: { case: { organizationId }, reviewStatus: "offen", classificationStatus: "fertig" } }),
+    prisma.case.groupBy({ by: ["status"], where: { organizationId, ...nurVertrieb }, _count: { _all: true } }),
+    prisma.document.count({ where: { case: { organizationId, ...nurVertrieb }, reviewStatus: "offen", ocrStatus: "fertig" } }),
+    prisma.document.count({ where: { case: { organizationId, ...nurVertrieb }, reviewStatus: "offen", classificationStatus: "fertig" } }),
     // Nur die letzten 7 Tage – das Label verspricht "diese Woche", gezählt
     // wurde bis zum 20.08.2026 aber der gesamte Bestand.
     prisma.document.count({
       where: {
-        case: { organizationId },
+        case: { organizationId, ...nurVertrieb },
         classificationStatus: "fertig",
         updatedAt: { gte: new Date(Date.now() - 7 * 86400_000) },
       },
@@ -66,7 +67,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
 
   // Plattform-Bereitschaft über ALLE aktiven Fälle – Batch-Load (eine Query)
   // statt einer Abfrage je Fall.
-  const activeWhere = { organizationId, status: { notIn: TERMINAL_STATUSES } };
+  const activeWhere = { organizationId, ...nurVertrieb, status: { notIn: TERMINAL_STATUSES } };
   const canonicalByCase = await casesToCanonical(activeWhere);
   const readyCount: Record<Platform, number> = { europace: 0, finlink: 0, ehyp_home: 0 };
   const readyByCase = new Map<string, Record<Platform, boolean>>();
@@ -83,6 +84,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   const neueLeads = await prisma.case.count({
     where: {
       organizationId,
+      ...nurVertrieb,
       createdAt: { gte: new Date(Date.now() - 7 * 86400_000) },
       quelle: { not: "manuell" },
     },

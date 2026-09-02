@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, PlayCircle, ListTodo } from "lucide-react";
 import { getDashboardData } from "@/lib/cases/dashboard";
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { Button } from "@/components/ui/button";
 import { Kennzahlenband } from "@/components/dashboard/kennzahlenband";
 import { Pipeline } from "@/components/case/pipeline";
@@ -23,7 +24,7 @@ export async function ArbeitsAnsicht({
 }) {
   const [data, caseCount] = await Promise.all([
     getDashboardData(organizationId),
-    prisma.case.count({ where: { organizationId } }),
+    prisma.case.count({ where: { organizationId, ...nurVertrieb } }),
   ]);
 
   const hours = Math.floor(data.kpis.zeitersparnisMin / 60);

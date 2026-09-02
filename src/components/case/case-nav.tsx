@@ -10,10 +10,19 @@ import {
   Calculator,
   Scale,
   ClipboardList,
+  ClipboardCheck,
   FileText,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export interface FallBereich {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+export type CaseNavVariante = "vertrieb" | "backoffice";
 
 /**
  * Die Arbeitsbereiche eines Falls als feste Leiste ueber JEDER Fall-Unterseite.
@@ -29,7 +38,7 @@ import { cn } from "@/lib/utils";
  * Kundendaten), bleiben in der Fallakte - die Leiste soll tragen, nicht
  * alles auflisten.
  */
-export function fallBereiche(caseId: string): Array<{ href: string; label: string; icon: LucideIcon }> {
+export function fallBereiche(caseId: string): FallBereich[] {
   const base = `/cases/${caseId}`;
   return [
     { href: base, label: "Fallakte", icon: FolderOpen },
@@ -44,30 +53,67 @@ export function fallBereiche(caseId: string): Array<{ href: string; label: strin
 }
 
 /**
+ * Dieselbe Leiste fuer eine Backoffice-Akte. Der erste Reiter fuehrt zum
+ * Auftrag (der die Rolle der Fallakte einnimmt); "Fallakte" und
+ * "Erstgespraech" fehlen, weil beides Vertrieb ist - ein Backoffice-Auftrag
+ * hat keine Leadphase und kein Telefonat vor dem Lead.
+ */
+export function backofficeBereiche(caseId: string, auftragId: string): FallBereich[] {
+  const base = `/cases/${caseId}`;
+  return [
+    { href: `/backoffice/auftraege/${auftragId}`, label: "Auftrag", icon: ClipboardCheck },
+    { href: `${base}/unterlagen`, label: "Unterlagen", icon: LayoutPanelLeft },
+    { href: `${base}/messages`, label: "Nachrichten", icon: Send },
+    { href: `${base}/haushalt`, label: "Haushalt", icon: Calculator },
+    { href: `${base}/machbarkeit`, label: "Machbarkeit", icon: Scale },
+    { href: `${base}/verwaltung`, label: "Verwaltung", icon: ClipboardList },
+    { href: `${base}/export`, label: "Einreichung", icon: FileText },
+  ];
+}
+
+/**
  * Welcher Bereich aktiv ist. Die Fallakte selbst nur bei exaktem Pfad -
  * sonst leuchtete sie auf jeder Unterseite mit. Unterseiten ohne eigenen
  * Reiter (z. B. /wohnflaeche) markieren nichts: Die Leiste behauptet dann
  * nicht, man stuende woanders.
+ *
+ * `bereiche` ist die Liste, in der gesucht wird - ohne Angabe die des
+ * Vertriebsfalls.
  */
-export function aktiverBereich(pathname: string, caseId: string): string | null {
+export function aktiverBereich(
+  pathname: string,
+  caseId: string,
+  bereiche: FallBereich[] = fallBereiche(caseId)
+): string | null {
   const base = `/cases/${caseId}`;
   if (pathname === base) return base;
-  const treffer = fallBereiche(caseId).find(
+  const treffer = bereiche.find(
     (b) => b.href !== base && (pathname === b.href || pathname.startsWith(b.href + "/"))
   );
   return treffer?.href ?? null;
 }
 
-export function CaseNav({ caseId }: { caseId: string }) {
+export function CaseNav({
+  caseId,
+  variante = "vertrieb",
+  auftragId,
+}: {
+  caseId: string;
+  variante?: CaseNavVariante;
+  /** Pflicht bei variante "backoffice": Ziel des Reiters "Auftrag". */
+  auftragId?: string;
+}) {
   const pathname = usePathname();
-  const aktiv = aktiverBereich(pathname, caseId);
+  const bereiche =
+    variante === "backoffice" && auftragId ? backofficeBereiche(caseId, auftragId) : fallBereiche(caseId);
+  const aktiv = aktiverBereich(pathname, caseId, bereiche);
   return (
     <nav
       aria-label="Bereiche des Falls"
       className="-mx-4 overflow-x-auto border-b px-4 sm:-mx-8 sm:px-8"
     >
       <ul className="flex min-w-max gap-1">
-        {fallBereiche(caseId).map((b) => {
+        {bereiche.map((b) => {
           const istAktiv = aktiv === b.href;
           return (
             <li key={b.href}>

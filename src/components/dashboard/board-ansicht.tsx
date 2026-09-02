@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
@@ -47,6 +48,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
   const rows = await prisma.case.findMany({
     where: {
       organizationId,
+      ...nurVertrieb,
       status: { not: "archiviert" },
       OR: [{ darlehensbetrag: { not: null } }, { courtageProzent: { not: null } }, { leadPhase: "abgeschlossen" }],
     },
@@ -102,7 +104,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
   // Kanban: eigene Abfrage, weil die Courtage-Liste bewusst nur bepreiste Fälle
   // zeigt – im Board sollen aber ALLE nicht archivierten Fälle stehen.
   const boardRows = await prisma.case.findMany({
-    where: { organizationId, status: { not: "archiviert" } },
+    where: { organizationId, ...nurVertrieb, status: { not: "archiviert" } },
     select: {
       id: true,
       caseNumber: true,

@@ -5,6 +5,8 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { logout } from "@/lib/actions/auth";
 import { USER_ROLE_LABELS } from "@/lib/domain/enums";
+import { BereichKopf } from "@/components/bereich-kopf";
+import type { Bereiche } from "@/lib/backoffice/bereich";
 
 export function AppShell({
   children,
@@ -17,6 +19,7 @@ export function AppShell({
     role: string;
     isDemo?: boolean;
     platformAdmin?: boolean;
+    bereiche?: Bereiche;
   };
 }) {
   const initials = context.userName
@@ -34,7 +37,7 @@ export function AppShell({
           <Logo className="h-7 w-auto" />
         </Link>
 
-        <SidebarNav platformAdmin={context.platformAdmin} />
+        <SidebarNav platformAdmin={context.platformAdmin} bereiche={context.bereiche} />
 
         <div className="shrink-0 space-y-2 border-t p-3">
           <div className="flex items-center gap-3 px-2 py-1.5">
@@ -77,9 +80,14 @@ export function AppShell({
           konstitutiv ist – dass nichts ohne Freigabe das Haus verlaesst.
         */}
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-2 border-b bg-canvas/85 px-4 backdrop-blur sm:px-6">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-3">
             <MobileNav context={context} />
             <Logo className="h-6 w-auto md:hidden" />
+            {/* Der Produktname steht auf jedem Bildschirm des Bereichs: Wer
+                im Backoffice arbeitet, soll es nie mit dem Vertrieb
+                verwechseln - und umgekehrt. Ohne zweiten Bereich bleibt die
+                Kopfzeile, wie sie war. */}
+            <BereichKopf bereiche={context.bereiche} />
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" aria-hidden />

@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere, type AppContext } from "@/lib/auth/context";
 import { BUNDESLAENDER } from "@/lib/machbarkeit/bundesland";
 
 /** Stellt sicher, dass der Fall zur Organisation des Nutzers gehoert. */
-async function pruefeFall(caseId: string, organizationId: string): Promise<boolean> {
+async function pruefeFall(caseId: string, ctx: AppContext): Promise<boolean> {
   if (!caseId) return false;
   const fall = await prisma.case.findFirst({
-    where: { id: caseId, organizationId },
+    where: { id: caseId, ...akteSichtbarWhere(ctx) },
     select: { id: true },
   });
   return fall != null;
@@ -24,7 +24,7 @@ export async function setzeBundesland(formData: FormData): Promise<void> {
   const caseId = String(formData.get("caseId") ?? "");
   const wert = String(formData.get("bundesland") ?? "");
   if (!(BUNDESLAENDER as readonly string[]).includes(wert)) return;
-  if (!(await pruefeFall(caseId, ctx.organizationId))) return;
+  if (!(await pruefeFall(caseId, ctx))) return;
 
   // Ein Fall ohne Objektdatensatz soll daran nicht scheitern.
   await prisma.property.upsert({
@@ -41,7 +41,7 @@ export async function setzeGrunderwerbsteuer(formData: FormData): Promise<void> 
   const caseId = String(formData.get("caseId") ?? "");
   const roh = Number(String(formData.get("satz") ?? "").replace(",", "."));
   if (!Number.isFinite(roh) || roh < 0 || roh > 10) return;
-  if (!(await pruefeFall(caseId, ctx.organizationId))) return;
+  if (!(await pruefeFall(caseId, ctx))) return;
 
   await prisma.financingRequest.upsert({
     where: { caseId },

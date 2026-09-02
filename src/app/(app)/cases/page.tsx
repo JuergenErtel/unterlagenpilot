@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, FolderOpen, Search, X, FileText } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { normalizeSearchQuery, caseSearchOR, documentMatchWhere } from "@/lib/cases/search";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ export default async function CasesPage({
   const cases = await prisma.case.findMany({
     where: {
       organizationId: ctx.organizationId,
+      ...nurVertrieb,
       // Archivierte Fälle standardmäßig ausblenden; per ?status=archiviert einsehbar.
       status: statusFilter ?? { not: "archiviert" },
       ...(q ? { OR: caseSearchOR(q) } : {}),

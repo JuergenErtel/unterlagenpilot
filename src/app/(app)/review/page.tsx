@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ExternalLink, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { nurVertrieb } from "@/lib/cases/aktenart";
+import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
 import { acceptDocument } from "@/lib/actions/cases";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { computeNextStep } from "@/lib/cases/next-step";
@@ -35,7 +36,10 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
 
   const documents = await prisma.document.findMany({
     where: {
-      case: { organizationId: ctx.organizationId },
+      // Ohne Fallbezug zeigt das Review-Center nur Vertriebsakten. Die
+      // Dokumentenpruefung des Backoffice ruft dieselbe Seite mit einem
+      // Fallbezug auf (?case=), dort greift der Zugriffsschutz der Akte.
+      case: caseId ? akteSichtbarWhere(ctx) : { organizationId: ctx.organizationId, ...nurVertrieb },
       caseId: caseId || undefined,
       reviewStatus: "offen",
       classificationStatus: "fertig",
@@ -48,7 +52,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
   // Geführter Modus: aus einem Fall heraus geöffnet („Nächster Schritt“-Karte).
   const caseScope = caseId
     ? await prisma.case.findFirst({
-        where: { id: caseId, organizationId: ctx.organizationId },
+        where: { id: caseId, ...akteSichtbarWhere(ctx) },
         select: {
           id: true,
           caseNumber: true,

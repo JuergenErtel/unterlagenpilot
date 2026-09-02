@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 import { caseToCanonical } from "@/lib/platforms/case-loader";
 import {
   buildChecklistForCase,
@@ -191,20 +192,20 @@ export async function getDashboardBuckets(
     exportprobleme,
   ] = await Promise.all([
     prisma.case.count({
-      where: { organizationId, status: { notIn: ["abgeschlossen", "archiviert"] } },
+      where: { organizationId, ...nurVertrieb, status: { notIn: ["abgeschlossen", "archiviert"] } },
     }),
     prisma.document.count({
-      where: { case: { organizationId }, reviewStatus: "offen", ocrStatus: "fertig" },
+      where: { case: { organizationId, ...nurVertrieb }, reviewStatus: "offen", ocrStatus: "fertig" },
     }),
     prisma.case.count({
-      where: { organizationId, status: "vermittlerpruefung_erforderlich" },
+      where: { organizationId, ...nurVertrieb, status: "vermittlerpruefung_erforderlich" },
     }),
-    prisma.case.count({ where: { organizationId, status: "unterlagen_fehlen" } }),
+    prisma.case.count({ where: { organizationId, ...nurVertrieb, status: "unterlagen_fehlen" } }),
     prisma.missingDocumentRequest.count({
-      where: { case: { organizationId }, bank: { not: null }, resolved: false },
+      where: { case: { organizationId, ...nurVertrieb }, bank: { not: null }, resolved: false },
     }),
     prisma.platformMapping.findMany({
-      where: { case: { organizationId }, released: true },
+      where: { case: { organizationId, ...nurVertrieb }, released: true },
       select: { platform: true },
     }),
     prisma.exportJob.count({ where: { case: { organizationId }, status: "failed" } }),

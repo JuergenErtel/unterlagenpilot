@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
 // die Vermittler-Upload-Actions, die von dieser Route ausgeführt werden.
 export const maxDuration = 300;
 import { ScanSearch, Link2, Send, FileText, FileBarChart, AlertTriangle, MapPin, FolderArchive, UserRound, Ruler, TrendingUp, ArrowLeft, Calculator, Scale, ClipboardList, Banknote, CalendarClock, PhoneCall, BadgeCheck, LayoutPanelLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
 import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
@@ -50,6 +50,7 @@ import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { Notizblock } from "@/components/case/notizblock";
 import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
+import { BackofficeStatusKarte } from "@/components/case/backoffice-status-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
 import { AufteilungVorschlag } from "@/components/case/aufteilung-vorschlag";
 import { BuendelVorschlagKarte } from "@/components/case/buendel-vorschlag";
@@ -96,7 +97,7 @@ export default async function CaseCockpitPage({
   const ctx = await requireContext();
 
   const caseRow = await prisma.case.findFirst({
-    where: { id, organizationId: ctx.organizationId },
+    where: { id, ...akteSichtbarWhere(ctx) },
     include: {
       // Beschaeftigung und Einkommen gehoeren mit an die Antragsteller-Karte:
       // Sie standen bisher NUR als Haushaltssumme in der Rechnung, das Gehalt
@@ -126,6 +127,19 @@ export default async function CaseCockpitPage({
     },
   });
   if (!caseRow) notFound();
+
+  // Eine Backoffice-Akte hat keine Fallakte im Vertriebssinn (keine Leadphase,
+  // keine Roadmap zum Abschluss): Ihr Kopf ist der Auftrag. Dorthin - und ob
+  // der Nutzer ihn sehen darf, entscheidet die Auftragsseite (404 sonst).
+  if (caseRow.akteArt === "backoffice") {
+    const auftrag = await prisma.backofficeAuftrag.findFirst({
+      where: { caseId: id, backofficeOrganizationId: ctx.organizationId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    if (!auftrag) notFound();
+    redirect(`/backoffice/auftraege/${auftrag.id}`);
+  }
 
   const cockpit = await getCaseCockpit(id);
 
@@ -961,6 +975,14 @@ export default async function CaseCockpitPage({
         {/* Sidebar */}
         <div className="space-y-4">
           <NextBestAction actions={cockpit.nextActions} />
+          {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
+              rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
+              unveraendert). Rein lesend, Aussensicht. */}
+          <BackofficeStatusKarte
+            caseId={id}
+            organizationId={ctx.organizationId}
+            istBackofficeNutzer={ctx.backofficeRolle != null}
+          />
           {/* Erst ab der Einreichungsphase: Vorher gibt es keine Bank und keine
               Konditionen, und eine leere Karte im Kopf der Seitenspalte
               verdraengt nur, was gerade wirklich dran ist. */}

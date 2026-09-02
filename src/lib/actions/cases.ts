@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireContext, requireCaseAccess } from "@/lib/auth/context";
+import { requireContext, requireCaseAccess, akteSichtbarWhere } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import {
   createSecureUploadLink,
@@ -245,7 +245,7 @@ export async function einzelDokumentNachpruefen(formData: FormData): Promise<voi
   if (!documentId) return;
 
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, case: { organizationId: ctx.organizationId } },
+    where: { id: documentId, case: akteSichtbarWhere(ctx) },
     select: { id: true, caseId: true, case: { select: { status: true } } },
   });
   if (!doc) return;

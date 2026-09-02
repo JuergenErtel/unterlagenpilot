@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { verifyUploadToken } from "@/lib/security/upload-token";
 import { readSessionToken, verifySessionToken } from "@/lib/auth/session";
-import type { CaseStatus, UserRole } from "@/lib/domain/enums";
+import type { AkteArt, BackofficeRolle, CaseStatus, UserRole } from "@/lib/domain/enums";
 
 /**
  * Auth-/Zugriffskontext (mandantenfähig).
@@ -26,6 +27,10 @@ export interface AppContext {
    *  zusaetzliche Datenbankrunde. Massgeblich fuer den Zugang bleibt
    *  requirePlatformAdmin. */
   platformAdmin: boolean;
+  /** Stellung im Backoffice der eigenen Organisation; null = kein Zugang.
+   *  Kommt aus derselben Abfrage wie die Rolle. Ob das Backoffice fuer die
+   *  Organisation freigeschaltet ist, prueft requireBackoffice zusaetzlich. */
+  backofficeRolle: BackofficeRolle | null;
   /** true, wenn der Kontext aus dem Demo-Fallback stammt (kein echter Login). */
   isDemo: boolean;
 }
@@ -61,6 +66,7 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         name: true,
         role: true,
         platformAdmin: true,
+        backofficeRolle: true,
         organization: { select: { name: true } },
       },
     });
@@ -72,6 +78,7 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         userName: nutzer.name,
         role: nutzer.role as UserRole,
         platformAdmin: nutzer.platformAdmin,
+        backofficeRolle: (nutzer.backofficeRolle as BackofficeRolle | null) ?? null,
         isDemo: false,
       };
     }
@@ -100,6 +107,7 @@ export async function getCurrentContext(): Promise<AppContext | null> {
         // Der Demo-Kontext haengt an keinem echten Login – Plattformrechte
         // gibt es dort grundsaetzlich nicht (vgl. requirePlatformAdmin).
         platformAdmin: false,
+        backofficeRolle: (user.backofficeRolle as BackofficeRolle | null) ?? null,
         isDemo: true,
       };
     }
@@ -159,18 +167,74 @@ export async function requireCaseAccess(
   caseId: string
 ): Promise<{
   ctx: AppContext;
-  caseRow: { id: string; organizationId: string; status: CaseStatus };
+  caseRow: { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt };
 }> {
   const ctx = await requireContext();
   const caseRow = await prisma.case.findUnique({
     where: { id: caseId },
-    select: { id: true, organizationId: true, status: true },
+    select: { id: true, organizationId: true, status: true, akteArt: true },
   });
   if (!caseRow || caseRow.organizationId !== ctx.organizationId) {
     const { notFound } = await import("next/navigation");
     notFound();
   }
-  return { ctx, caseRow: caseRow! };
+  // Backoffice-Akten gehoeren zwar der Organisation, sind aber kein
+  // Vertriebsfall: Ein Vermittler ohne Backoffice-Rolle sieht sie nicht, ein
+  // Bearbeiter nur, wenn ein Auftrag dazu ihm gehoert oder frei ist.
+  // Dieselbe Antwort wie bei "gibt es nicht" - 404, kein 403.
+  if (caseRow!.akteArt === "backoffice" && !(await darfBackofficeAkteSehen(ctx, caseRow!.id))) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+  return { ctx, caseRow: caseRow as { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt } };
+}
+
+/**
+ * Prisma-Where fuer "Akten, die dieser Kontext sehen darf" - fuer Stellen,
+ * die den Fall per Abfrage statt ueber requireCaseAccess laden (Seiten mit
+ * findFirst, Dokument-Actions mit `case: {...}`). Dieselbe Regel wie
+ * requireCaseAccess: eigene Organisation, Vertriebsakten immer, Backoffice-
+ * Akten nur mit Backoffice-Rolle, fuer Bearbeiter nur mit eigenem oder freiem
+ * Auftrag.
+ */
+export function akteSichtbarWhere(ctx: AppContext): Prisma.CaseWhereInput {
+  const backoffice: Prisma.CaseWhereInput[] = ctx.backofficeRolle
+    ? [
+        {
+          akteArt: "backoffice",
+          ...(ctx.backofficeRolle === "bearbeiter"
+            ? {
+                backofficeAuftraege: {
+                  some: {
+                    backofficeOrganizationId: ctx.organizationId,
+                    OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }],
+                  },
+                },
+              }
+            : {}),
+        },
+      ]
+    : [];
+  return { organizationId: ctx.organizationId, OR: [{ akteArt: "vertrieb" }, ...backoffice] };
+}
+
+/**
+ * Sichtbarkeit einer Backoffice-Akte fuer den Kontext. Die Regel selbst
+ * steht in src/lib/backoffice/sichtbarkeit.ts (darfAuftragSehen); hier wird
+ * nur der passende Auftrag gesucht.
+ */
+export async function darfBackofficeAkteSehen(ctx: AppContext, caseId: string): Promise<boolean> {
+  if (!ctx.backofficeRolle) return false;
+  if (ctx.backofficeRolle !== "bearbeiter") return true;
+  const auftrag = await prisma.backofficeAuftrag.findFirst({
+    where: {
+      caseId,
+      backofficeOrganizationId: ctx.organizationId,
+      OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }],
+    },
+    select: { id: true },
+  });
+  return auftrag != null;
 }
 
 export interface UploadTokenAccess {

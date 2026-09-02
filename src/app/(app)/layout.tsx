@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentContext } from "@/lib/auth/context";
 import { getEnv } from "@/lib/env";
+import { ladeBereiche } from "@/lib/backoffice/zugriff";
 
 // DB-gestützte Seiten immer zur Laufzeit rendern (kein Build-Time-Prerender).
 export const dynamic = "force-dynamic";
@@ -32,6 +33,11 @@ export default async function AppLayout({
     );
   }
 
+  // Welche Produkte dieser Nutzer sieht (Vertrieb immer; Backoffice mit
+  // Rolle + Flag; Portal, wenn seine Organisation als Auftraggeber verknuepft
+  // ist). Ohne zweiten Bereich sieht die Oberflaeche aus wie bisher.
+  const bereiche = await ladeBereiche(ctx);
+
   return (
     <AppShell
       context={{
@@ -40,6 +46,7 @@ export default async function AppLayout({
         role: ctx.role,
         platformAdmin: ctx.platformAdmin,
         isDemo: ctx.isDemo,
+        bereiche,
       }}
     >
       {children}

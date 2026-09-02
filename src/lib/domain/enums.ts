@@ -618,8 +618,141 @@ export const AUDIT_ACTIONS = [
   // Gehoert ins Log, weil diese Angaben auf jedem erzeugten Papier stehen -
   // wer sie aendert, aendert rueckwirkend nichts, aber alles Kuenftige.
   "organization.updated",
+  // BaufiDesk Backoffice: jeder Statuswechsel, jede Zuweisung und jede
+  // Freigabe eines Auftrags. Metadaten tragen nur Schluessel (Auftrags-
+  // nummer, Status, Rollen) - nie Notizen oder Rueckfragetexte.
+  "backoffice.auftrag_erstellt",
+  "backoffice.status_geaendert",
+  "backoffice.zugewiesen",
+  "backoffice.pausiert",
+  "backoffice.qc_freigegeben",
+  "backoffice.qc_zurueckgegeben",
+  "backoffice.uebergeben",
+  "backoffice.abgenommen",
+  "backoffice.nachbearbeitung_angefordert",
+  "backoffice.rueckfrage_gestellt",
+  "backoffice.rueckfrage_beantwortet",
+  "backoffice.auftraggeber_angelegt",
+  "backoffice.auftraggeber_geaendert",
+  "backoffice.kontingent_korrigiert",
+  "backoffice.rolle_geaendert",
+  "backoffice.flag_geaendert",
+  "backoffice.dokument_hochgeladen",
+  "backoffice.ergebnis_abgerufen",
+  "backoffice.vertrieb_uebergabe",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+// ============================ BACKOFFICE ============================
+
+/** Aktenart: Vertriebsfall oder Backoffice-Akte (synchron zu enum AkteArt). */
+export const AKTE_ARTEN = ["vertrieb", "backoffice"] as const;
+export type AkteArt = (typeof AKTE_ARTEN)[number];
+
+export const BACKOFFICE_ROLLEN = ["manager", "bearbeiter", "pruefer"] as const;
+export type BackofficeRolle = (typeof BACKOFFICE_ROLLEN)[number];
+
+export const BACKOFFICE_ROLLE_LABELS: Record<BackofficeRolle, string> = {
+  manager: "Backoffice-Manager",
+  bearbeiter: "Backoffice-Bearbeiter",
+  pruefer: "Qualitätsprüfer",
+};
+
+/** Hauptstatus in Prozessreihenfolge, danach die Sonderstatus. */
+export const BACKOFFICE_STATUS = [
+  "neu_eingegangen",
+  "auftrag_pruefen",
+  "wartet_auf_unterlagen",
+  "in_aufbereitung",
+  "rueckfrage_auftraggeber",
+  "qualitaetskontrolle",
+  "einreichungsfertig",
+  "uebergeben",
+  "abgeschlossen",
+  "nachbearbeitung",
+  "abgelehnt",
+  "storniert",
+] as const;
+export type BackofficeStatus = (typeof BACKOFFICE_STATUS)[number];
+
+export const BACKOFFICE_STATUS_LABELS: Record<BackofficeStatus, string> = {
+  neu_eingegangen: "Neu eingegangen",
+  auftrag_pruefen: "Auftrag prüfen",
+  wartet_auf_unterlagen: "Wartet auf Unterlagen",
+  in_aufbereitung: "In Aufbereitung",
+  rueckfrage_auftraggeber: "Rückfrage an Auftraggeber",
+  qualitaetskontrolle: "Qualitätskontrolle",
+  einreichungsfertig: "Einreichungsfertig",
+  uebergeben: "Übergeben",
+  abgeschlossen: "Abgeschlossen",
+  nachbearbeitung: "Nachbearbeitung erforderlich",
+  abgelehnt: "Abgelehnt",
+  storniert: "Storniert",
+};
+
+/** Kundentaugliche Fassung fuer das Auftraggeberportal - ohne Innenansicht. */
+export const BACKOFFICE_STATUS_PORTAL_LABELS: Record<BackofficeStatus, string> = {
+  neu_eingegangen: "Eingegangen",
+  auftrag_pruefen: "In Prüfung",
+  wartet_auf_unterlagen: "Unterlagen fehlen",
+  in_aufbereitung: "In Bearbeitung",
+  rueckfrage_auftraggeber: "Ihre Rückmeldung wird benötigt",
+  qualitaetskontrolle: "In Bearbeitung",
+  einreichungsfertig: "In Bearbeitung",
+  uebergeben: "Ergebnis verfügbar",
+  abgeschlossen: "Abgeschlossen",
+  nachbearbeitung: "In Bearbeitung",
+  abgelehnt: "Abgelehnt",
+  storniert: "Storniert",
+};
+
+/** Status, in denen nichts mehr zu tun ist. */
+export const BACKOFFICE_TERMINAL_STATUS: ReadonlySet<BackofficeStatus> = new Set<BackofficeStatus>([
+  "abgeschlossen",
+  "abgelehnt",
+  "storniert",
+]);
+
+export const BACKOFFICE_PRIORITAETEN = ["niedrig", "normal", "hoch", "dringend"] as const;
+export type BackofficePrioritaet = (typeof BACKOFFICE_PRIORITAETEN)[number];
+export const BACKOFFICE_PRIORITAET_LABELS: Record<BackofficePrioritaet, string> = {
+  niedrig: "Niedrig",
+  normal: "Normal",
+  hoch: "Hoch",
+  dringend: "Dringend",
+};
+
+export const BACKOFFICE_RUECKFRAGE_STATUS = ["entwurf", "offen", "beantwortet", "erledigt"] as const;
+export type BackofficeRueckfrageStatus = (typeof BACKOFFICE_RUECKFRAGE_STATUS)[number];
+export const BACKOFFICE_RUECKFRAGE_STATUS_LABELS: Record<BackofficeRueckfrageStatus, string> = {
+  entwurf: "Entwurf",
+  offen: "Offen",
+  beantwortet: "Beantwortet",
+  erledigt: "Erledigt",
+};
+
+export const BACKOFFICE_ABRECHNUNGSMODELLE = ["testfall", "abo", "partner", "intern"] as const;
+export type BackofficeAbrechnungsmodell = (typeof BACKOFFICE_ABRECHNUNGSMODELLE)[number];
+export const BACKOFFICE_ABRECHNUNGSMODELL_LABELS: Record<BackofficeAbrechnungsmodell, string> = {
+  testfall: "Einzelner Testfall",
+  abo: "Backoffice-Abonnement",
+  partner: "Partner-Modell",
+  intern: "Interne Übergabe",
+};
+
+export const BACKOFFICE_ABRECHNUNGSSTATUS = ["offen", "abgerechnet", "nicht_abrechenbar"] as const;
+export type BackofficeAbrechnungsstatus = (typeof BACKOFFICE_ABRECHNUNGSSTATUS)[number];
+export const BACKOFFICE_ABRECHNUNGSSTATUS_LABELS: Record<BackofficeAbrechnungsstatus, string> = {
+  offen: "Offen",
+  abgerechnet: "Abgerechnet",
+  nicht_abrechenbar: "Nicht abrechenbar",
+};
+
+export const BACKOFFICE_KONTINGENT_ARTEN = ["verbrauch", "zusatzfall", "korrektur"] as const;
+export type BackofficeKontingentArt = (typeof BACKOFFICE_KONTINGENT_ARTEN)[number];
+
+/** Schluessel des Feature Flags, das BaufiDesk Backoffice je Organisation freischaltet. */
+export const BACKOFFICE_FEATURE_KEY = "backoffice";
 
 /** Zustaende eines Registrierungsantrags. */
 export const SIGNUP_STATUSES = ["neu", "bestaetigt", "freigegeben", "abgelehnt"] as const;

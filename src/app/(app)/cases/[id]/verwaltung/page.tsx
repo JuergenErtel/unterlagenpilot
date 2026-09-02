@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { BackofficeUebergabeKarte } from "@/components/case/backoffice-uebergabe-karte";
 import {
   setCaseBank,
   addCaseNote,
@@ -53,7 +54,7 @@ const NOTE_ICON: Record<CaseNoteKind, typeof Phone> = {
 
 export default async function VerwaltungPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireCaseAccess(id);
+  const { ctx, caseRow } = await requireCaseAccess(id);
 
   const c = await prisma.case.findUniqueOrThrow({
     where: { id },
@@ -317,6 +318,15 @@ export default async function VerwaltungPage({ params }: { params: Promise<{ id:
           </form>
         </CardContent>
       </Card>
+
+      {/* Uebergabe an das Backoffice - rendert nichts ohne Freischaltung oder
+          bei Backoffice-Akten (siehe backoffice-uebergabe-karte.tsx). */}
+      <BackofficeUebergabeKarte
+        caseId={id}
+        organizationId={ctx.organizationId}
+        akteArt={caseRow.akteArt}
+        istBackofficeNutzer={ctx.backofficeRolle != null}
+      />
     </div>
   );
 }

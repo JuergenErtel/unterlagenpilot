@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { teileAuf } from "@/lib/aufteilung/service";
 
@@ -38,7 +38,7 @@ export async function aufteilungVerwerfenAction(formData: FormData): Promise<voi
   if (!documentId || !caseId) return;
 
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, case: { organizationId: ctx.organizationId } },
+    where: { id: documentId, case: akteSichtbarWhere(ctx) },
     select: { id: true },
   });
   if (!doc) return;
