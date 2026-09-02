@@ -112,6 +112,7 @@ export const LOSS_REASONS = [
   "kondition",
   "objekt_weg",
   "bank_abgelehnt",
+  "nicht_finanzierbar",
   "nicht_erreichbar",
   "anderer_vermittler",
   "verschoben",
@@ -123,8 +124,9 @@ export const LOSS_REASON_LABELS: Record<LossReason, string> = {
   kondition: "Kondition zu teuer",
   objekt_weg: "Objekt anderweitig vergeben",
   bank_abgelehnt: "Bank hat abgelehnt",
+  nicht_finanzierbar: "Nicht finanzierbar",
   nicht_erreichbar: "Kunde nicht erreichbar",
-  anderer_vermittler: "Anderer Vermittler",
+  anderer_vermittler: "Anderer Vermittler/Bank",
   verschoben: "Vorhaben verschoben",
   sonstiges: "Sonstiges",
 };
