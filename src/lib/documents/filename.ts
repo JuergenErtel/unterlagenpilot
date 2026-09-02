@@ -66,7 +66,7 @@ export function generateFileName(input: FilenameInput): string {
   // Objektbezug (für Grundbuch/Exposé/Objektunterlagen)
   if (
     input.propertyRef &&
-    ["grundbuchauszug", "expose", "flurkarte_lageplan", "teilungserklaerung", "wohnflaechenberechnung", "kaufvertragsentwurf"].includes(
+    ["grundbuchauszug", "expose", "flurkarte_lageplan", "teilungserklaerung", "wohnflaechenberechnung", "grundriss", "ansichten", "skizze", "kaufvertragsentwurf"].includes(
       type
     )
   ) {

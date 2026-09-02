@@ -42,6 +42,14 @@ export const KATEGORIE: Record<DocumentType, string> = {
   // Flurkarte + Lageplan sind Katasteramt-Plandokumente; "Bauplan" meint das
   // Gebaeude selbst, "Zahlungsplan" passt thematisch nicht.
   flurkarte_lageplan: "Plankarten",
+  // Bauzeichnungen des Gebaeudes sind genau das, was Europace mit "Bauplan"
+  // meint. Grundriss steht in DOCUMENT_TYPES vor Ansichten und Skizze, damit
+  // eine Bauplan-Anforderung rueckwaerts auf den Grundriss zeigt.
+  grundriss: "Bauplan",
+  ansichten: "Bauplan",
+  // Eine Skizze ist eine unverbindliche Bauzeichnung - fachlich immer noch ein
+  // Bauplan, kein "Sonstiges".
+  skizze: "Bauplan",
   baubeschreibung: "Baubeschreibung",
   // Baukostenaufstellung ist eine spezielle Kostenaufstellung, keine eigene
   // Kategorie vorhanden.

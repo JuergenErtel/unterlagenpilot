@@ -156,6 +156,9 @@ enum DocumentType {
   kaufvertragsentwurf
   teilungserklaerung
   wohnflaechenberechnung
+  grundriss
+  ansichten
+  skizze
   flurkarte_lageplan
   baubeschreibung
   baukostenaufstellung

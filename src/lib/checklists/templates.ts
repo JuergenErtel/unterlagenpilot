@@ -162,6 +162,34 @@ const I = {
     level: "optional",
     example: "Wohnflaechenberechnung_Musterstrasse_12.pdf",
   }),
+  grundriss: item({
+    key: "grundriss",
+    name: "Grundrisse",
+    customerDescription:
+      "Bitte laden Sie die Grundrisse der Immobilie hoch, falls vorhanden – oft sind sie Teil des Exposés oder der Bauunterlagen. Bitte laden Sie alle Geschosse gut lesbar hoch.",
+    documentType: "grundriss",
+    level: "optional",
+    example: "Grundriss_EG_Musterstrasse_12.pdf",
+  }),
+  // Neubau: ohne Bauzeichnungen prueft keine Bank. Eigene Positionen mit
+  // eigenem Schluessel, damit die optionale Bestands-Position "grundriss"
+  // nicht mit der Pflicht-Position kollidiert.
+  bauzeichnungGrundrisse: item({
+    key: "bauzeichnung_grundrisse",
+    name: "Bauzeichnungen: Grundrisse",
+    customerDescription:
+      "Bitte laden Sie die Grundrisse aller Geschosse aus den Bauzeichnungen hoch – die bekommen Sie von Ihrem Architekten oder Bauunternehmen. Bitte laden Sie die Zeichnungen gut lesbar und mit Maßstab hoch.",
+    documentType: "grundriss",
+    example: "Bauzeichnung_Grundrisse_Musterstrasse.pdf",
+  }),
+  bauzeichnungAnsichten: item({
+    key: "bauzeichnung_ansichten",
+    name: "Bauzeichnungen: Ansichten und Schnitte",
+    customerDescription:
+      "Bitte laden Sie die Ansichten und Schnitte aus den Bauzeichnungen hoch – die bekommen Sie von Ihrem Architekten oder Bauunternehmen. Bitte laden Sie die Zeichnungen gut lesbar und mit Maßstab hoch.",
+    documentType: "ansichten",
+    example: "Bauzeichnung_Ansichten_Musterstrasse.pdf",
+  }),
   flurkarte: item({
     key: "flurkarte_lageplan",
     name: "Flurkarte / Lageplan",
@@ -317,7 +345,7 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplateDef[] = [
     key: "neubau",
     name: "Neubau",
     description: "Neubauvorhaben.",
-    items: [I.ausweis, I.gehalt, I.eigenkapital, I.grundbuch, I.baubeschreibung, I.baukosten, I.baugenehmigung, I.flurkarte],
+    items: [I.ausweis, I.gehalt, I.eigenkapital, I.grundbuch, I.baubeschreibung, I.baukosten, I.bauzeichnungGrundrisse, I.bauzeichnungAnsichten, I.baugenehmigung, I.flurkarte],
   },
   {
     key: "anschlussfinanzierung",
@@ -371,19 +399,19 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplateDef[] = [
     key: "eigentumswohnung",
     name: "Eigentumswohnung",
     description: "Objektzusatz ETW.",
-    items: [I.teilung, I.wohnflaeche, I.grundbuch, I.expose],
+    items: [I.teilung, I.wohnflaeche, I.grundriss, I.grundbuch, I.expose],
   },
   {
     key: "einfamilienhaus",
     name: "Einfamilienhaus",
     description: "Objektzusatz EFH.",
-    items: [I.grundbuch, I.expose, I.wohnflaeche, I.flurkarte],
+    items: [I.grundbuch, I.expose, I.wohnflaeche, I.grundriss, I.flurkarte],
   },
   {
     key: "mehrfamilienhaus",
     name: "Mehrfamilienhaus",
     description: "Objektzusatz MFH.",
-    items: [I.grundbuch, I.expose, I.mietaufstellung, I.wohnflaeche, I.flurkarte],
+    items: [I.grundbuch, I.expose, I.mietaufstellung, I.wohnflaeche, I.grundriss, I.flurkarte],
   },
   {
     key: "grundstueck",

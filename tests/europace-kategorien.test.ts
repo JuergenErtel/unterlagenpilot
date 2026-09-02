@@ -21,6 +21,12 @@ describe("europaceKategorie", () => {
     expect(europaceKategorie("personalausweis")).toBe("Ausweis");
   });
 
+  it("legt Bauzeichnungen unter Bauplan ab", () => {
+    expect(europaceKategorie("grundriss")).toBe("Bauplan");
+    expect(europaceKategorie("ansichten")).toBe("Bauplan");
+    expect(europaceKategorie("skizze")).toBe("Bauplan");
+  });
+
   it("faellt fuer unbekannte Typen auf Sonstiges zurueck", () => {
     expect(europaceKategorie(null)).toBe("Sonstiges");
   });

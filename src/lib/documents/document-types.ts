@@ -149,6 +149,35 @@ export const DOCUMENT_TYPE_SPECS: Record<DocumentType, DocumentTypeSpec> = {
     platformRelevance: ALL,
     checklistKey: "wohnflaechenberechnung",
   },
+  // ---------- Bauzeichnungen (02.09.2026) ----------
+  // Grundriss, Ansichten und Skizze fehlten in der Typenliste - beim Zuordnen
+  // per Hand blieb nur "Exposé" oder "Sonstige". Bei Neubau verlangt jede
+  // Bank Bauzeichnungen, im Bestand ist der Grundriss die Grundlage der
+  // Wohnflaechenpruefung. Zeichnungen tragen kaum Text: die Schluesselwoerter
+  // sind die Beschriftungen des Planstempels und der Raeume.
+  grundriss: {
+    type: "grundriss",
+    keywords: ["grundriss", "erdgeschoss", "obergeschoss", "dachgeschoss", "kellergeschoss", "m 1:100", "maßstab", "schlafen", "wohnen", "bad", "flur"],
+    fields: [opt("geschoss", "Geschoss"), opt("massstab", "Maßstab"), opt("wohnflaeche", "Wohnfläche"), opt("objektadresse", "Objektadresse")],
+    warningCodes: [...QUALITY],
+    platformRelevance: ALL,
+    checklistKey: "grundriss",
+  },
+  ansichten: {
+    type: "ansichten",
+    keywords: ["ansicht", "ansichten", "schnitt", "nordansicht", "südansicht", "ostansicht", "westansicht", "firsthöhe", "traufhöhe", "m 1:100"],
+    fields: [opt("massstab", "Maßstab"), opt("objektadresse", "Objektadresse")],
+    warningCodes: [...QUALITY],
+    platformRelevance: ALL,
+    checklistKey: "ansichten",
+  },
+  skizze: {
+    type: "skizze",
+    keywords: ["skizze", "handskizze", "lageskizze", "entwurf", "vorentwurf"],
+    fields: [opt("beschreibung", "Beschreibung")],
+    warningCodes: [...QUALITY],
+    platformRelevance: ALL,
+  },
   darlehensvertrag: {
     type: "darlehensvertrag",
     keywords: ["darlehensvertrag", "darlehen", "sollzins", "tilgung", "restschuld", "annuität"],

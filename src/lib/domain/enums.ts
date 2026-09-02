@@ -314,6 +314,12 @@ export const DOCUMENT_TYPES = [
   "kaufvertragsentwurf",
   "teilungserklaerung",
   "wohnflaechenberechnung",
+  // Bauzeichnungen (02.09.2026, Jürgen): Grundriss vor Ansichten vor Skizze -
+  // die Reihenfolge entscheidet, welcher Typ die Europace-Kategorie "Bauplan"
+  // rueckwaerts gewinnt (src/lib/anforderungen/zuordnung.ts).
+  "grundriss",
+  "ansichten",
+  "skizze",
   "flurkarte_lageplan",
   "baubeschreibung",
   "baukostenaufstellung",
@@ -345,6 +351,9 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   kaufvertragsentwurf: "Kaufvertragsentwurf",
   teilungserklaerung: "Teilungserklärung",
   wohnflaechenberechnung: "Wohnflächenberechnung",
+  grundriss: "Grundriss",
+  ansichten: "Ansichten / Schnitte",
+  skizze: "Skizze",
   flurkarte_lageplan: "Flurkarte / Lageplan",
   baubeschreibung: "Baubeschreibung",
   baukostenaufstellung: "Baukostenaufstellung",

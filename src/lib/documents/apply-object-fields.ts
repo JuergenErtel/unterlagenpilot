@@ -22,6 +22,8 @@ const OBJECT_DOCUMENT_TYPES = new Set([
   "grundbuchauszug",
   "teilungserklaerung",
   "wohnflaechenberechnung",
+  "grundriss",
+  "ansichten",
   "flurkarte_lageplan",
   "baubeschreibung",
   "baukostenaufstellung",

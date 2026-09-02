@@ -19,6 +19,9 @@ describe("Kategorie -> Dokumenttyp", () => {
     // der in DOCUMENT_TYPES zuerst steht - sonst haengt das Ergebnis an der
     // Schluesselreihenfolge eines Objekts.
     expect(dokumenttypFuer(["BWA"])).toBe("bwa");
+    // Bauplan ist Ziel von grundriss, ansichten UND skizze - eine
+    // Bauplan-Anforderung der Bank meint zuerst den Grundriss.
+    expect(dokumenttypFuer(["Bauplan"])).toBe("grundriss");
   });
 
   it("liefert null fuer Sonstiges", () => {
