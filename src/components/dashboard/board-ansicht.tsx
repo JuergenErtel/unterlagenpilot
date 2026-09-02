@@ -92,7 +92,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
   // weil sie das ist, was BaufiDesk dem Vermittler jeden Tag abnimmt.
   const docsWoche = await prisma.document.count({
     where: {
-      case: { organizationId },
+      case: { organizationId, ...nurVertrieb },
       classificationStatus: "fertig",
       updatedAt: { gte: new Date(Date.now() - 7 * 86400_000) },
     },

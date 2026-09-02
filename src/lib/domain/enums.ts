@@ -604,6 +604,9 @@ export const AUDIT_ACTIONS = [
   "customer.data_exported",
   "customer.deleted",
   "access.viewed",
+  // Verweigerter Zugriff auf Akte oder Dokument (fremde Organisation,
+  // fehlende Backoffice-Rolle, abgeschlossener Auftrag). Nur IDs, kein Inhalt.
+  "access.denied",
   // Unterlagen-Detektiv: Freigabe und Verwerfen sind fachliche Entscheidungen
   // mit Haftungsbezug und gehoeren deshalb ins Audit-Log.
   "finding.accepted",

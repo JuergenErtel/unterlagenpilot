@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireContext, akteSichtbarWhere, type AppContext } from "@/lib/auth/context";
+import { requireAkteAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { reconcileCase, runReferenceExtraction } from "@/lib/detektiv/service";
 import { checklistKeyFor } from "@/lib/detektiv/keys";
@@ -14,11 +15,18 @@ import { setDocumentReview } from "@/lib/actions/cases";
  * entschieden wird hier.
  */
 
-/** Laedt den Befund und stellt sicher, dass er zur Organisation des Nutzers gehoert. */
-async function ladeBefund(findingId: string, organizationId: string) {
-  return prisma.caseFinding.findFirst({
-    where: { id: findingId, case: { organizationId } },
+/**
+ * Laedt den Befund NUR, wenn der Kontext die Akte sehen darf (Organisation,
+ * Aktenart, Rolle) - und, weil jede Befund-Action schreibt, nur bei offenem
+ * Auftrag einer Backoffice-Akte.
+ */
+async function ladeBefund(findingId: string, ctx: AppContext) {
+  const fund = await prisma.caseFinding.findFirst({
+    where: { id: findingId, case: akteSichtbarWhere(ctx) },
   });
+  if (!fund) return null;
+  await requireAkteAccess(fund.caseId, { schreibend: true });
+  return fund;
 }
 
 export async function befundUebernehmen(formData: FormData): Promise<void> {
@@ -26,7 +34,7 @@ export async function befundUebernehmen(formData: FormData): Promise<void> {
   const findingId = String(formData.get("findingId") ?? "");
   if (!findingId) return;
 
-  const fund = await ladeBefund(findingId, ctx.organizationId);
+  const fund = await ladeBefund(findingId, ctx);
   if (!fund || fund.status === "freigegeben") return;
 
   if (fund.resolution === "neue_position") {
@@ -82,7 +90,7 @@ export async function befundVerwerfen(formData: FormData): Promise<void> {
   const findingId = String(formData.get("findingId") ?? "");
   if (!findingId) return;
 
-  const fund = await ladeBefund(findingId, ctx.organizationId);
+  const fund = await ladeBefund(findingId, ctx);
   if (!fund) return;
 
   await prisma.caseFinding.update({ where: { id: fund.id }, data: { status: "verworfen" } });
@@ -107,7 +115,7 @@ export async function befundZuordnen(formData: FormData): Promise<void> {
   const findingId = String(formData.get("findingId") ?? "");
   if (!findingId) return;
 
-  const fund = await ladeBefund(findingId, ctx.organizationId);
+  const fund = await ladeBefund(findingId, ctx);
   if (!fund || !fund.matchCandidateId) return;
 
   await prisma.caseFinding.update({ where: { id: fund.id }, data: { status: "erledigt" } });

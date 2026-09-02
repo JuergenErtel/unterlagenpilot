@@ -243,7 +243,7 @@ export async function ladeHeute(organizationId: string): Promise<HeuteDaten> {
   // auffangen, kein Archiv sein.
   const erledigtRows = await prisma.aufgabeErledigt.findMany({
     where: {
-      case: { organizationId },
+      case: { organizationId, ...nurVertrieb },
       erledigtAm: { gte: new Date(jetzt.getTime() - 24 * 3600_000) },
     },
     orderBy: { erledigtAm: "desc" },

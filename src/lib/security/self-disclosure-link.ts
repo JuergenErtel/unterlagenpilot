@@ -138,7 +138,7 @@ export async function resolveSelfDisclosureToken(
 /** Widerruft einen Link sofort. Fremde Organisationen bekommen kein Signal. */
 export async function deactivateSelfDisclosureLink(
   linkId: string,
-  ctx: { organizationId: string; userId?: string | null }
+  ctx: { organizationId: string; userId?: string | null; caseId?: string }
 ): Promise<void> {
   const link = await prisma.selfDisclosureLink.findUnique({
     where: { id: linkId },
@@ -147,6 +147,7 @@ export async function deactivateSelfDisclosureLink(
   // Formular-Links haengen hier nicht: kein Fall, kein Widerruf ueber diesen
   // Weg. Fremde Organisationen bekommen dieselbe Antwort wie "nicht gefunden".
   if (!link?.caseId || link.case?.organizationId !== ctx.organizationId) return;
+  if (ctx.caseId && link.caseId !== ctx.caseId) return;
   await prisma.selfDisclosureLink.update({ where: { id: linkId }, data: { active: false } });
   await audit({
     organizationId: ctx.organizationId,

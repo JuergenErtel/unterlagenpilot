@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireContext } from "@/lib/auth/context";
+import { requireDocumentAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { teileAuf } from "@/lib/aufteilung/service";
 
@@ -15,6 +16,11 @@ export async function aufteilenAction(formData: FormData): Promise<void> {
   const documentId = String(formData.get("documentId") ?? "");
   const caseId = String(formData.get("caseId") ?? "");
   if (!documentId || !caseId) return;
+  // Zentraler Zugriffsschutz (Aktenart, Rolle, offener Auftrag); die caseId
+  // aus dem Formular dient nur der Revalidierung und wird gegen die
+  // Datenbank geprueft, nicht umgekehrt.
+  const { dokument } = await requireDocumentAccess(documentId, { schreibend: true });
+  if (dokument.caseId !== caseId) return;
 
   const ergebnis = await teileAuf(documentId, ctx.organizationId);
   if (ergebnis.ok) {
@@ -37,11 +43,8 @@ export async function aufteilungVerwerfenAction(formData: FormData): Promise<voi
   const caseId = String(formData.get("caseId") ?? "");
   if (!documentId || !caseId) return;
 
-  const doc = await prisma.document.findFirst({
-    where: { id: documentId, case: akteSichtbarWhere(ctx) },
-    select: { id: true },
-  });
-  if (!doc) return;
+  const { dokument } = await requireDocumentAccess(documentId, { schreibend: true });
+  if (dokument.caseId !== caseId) return;
 
   await prisma.documentSplitSegment.deleteMany({ where: { documentId } });
   revalidatePath(`/cases/${caseId}`);

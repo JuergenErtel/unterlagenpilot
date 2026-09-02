@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext, requireCaseAccess } from "@/lib/auth/context";
+import { requireAkteAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { rematchCaseDocuments } from "@/lib/documents/rematch";
 import { MARITAL_STATUSES, MAX_APPLICANTS, type MaritalStatus } from "@/lib/domain/enums";
@@ -23,17 +24,14 @@ export async function editApplicant(
   applicantId: string,
   formData: FormData
 ): Promise<void> {
-  const ctx = await requireContext();
-
-  // Tenant-Isolation: Antragsteller muss zu einem Fall der eigenen Organisation gehören.
-  const owner = await prisma.applicant.findUnique({
+  // Der Antragsteller haengt an einer Akte - fuer DIE gilt der zentrale
+  // Zugriffsschutz (Organisation, Aktenart, Rolle, offener Auftrag).
+  const zeile = await prisma.applicant.findUnique({ where: { id: applicantId }, select: { caseId: true } });
+  const { ctx } = await requireAkteAccess(zeile?.caseId ?? "", { schreibend: true });
+  const owner = await prisma.applicant.findUniqueOrThrow({
     where: { id: applicantId },
     select: { caseId: true, case: { select: { organizationId: true } } },
   });
-  if (!owner || owner.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
 
   const vorname = field(formData, "vorname");
   const nachname = field(formData, "nachname");
@@ -146,16 +144,12 @@ export async function addApplicant(caseId: string): Promise<void> {
  * gelöscht (Relation ist onDelete: SetNull).
  */
 export async function removeApplicant(applicantId: string): Promise<void> {
-  const ctx = await requireContext();
-
-  const owner = await prisma.applicant.findUnique({
+  const zeile = await prisma.applicant.findUnique({ where: { id: applicantId }, select: { caseId: true } });
+  const { ctx } = await requireAkteAccess(zeile?.caseId ?? "", { schreibend: true });
+  const owner = await prisma.applicant.findUniqueOrThrow({
     where: { id: applicantId },
     select: { caseId: true, position: true, case: { select: { organizationId: true } } },
   });
-  if (!owner || owner.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
 
   const total = await prisma.applicant.count({ where: { caseId: owner!.caseId } });
   if (total <= 1) return; // den letzten Antragsteller nicht entfernen

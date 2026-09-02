@@ -9,6 +9,15 @@ vi.mock("@/lib/auth/context", () => ({
   requireContext: vi.fn(async () => ctx),
   requireCaseAccess: vi.fn(async () => ({ ctx, caseRow: { id: "case-A", organizationId: "org-A" } })),
 }));
+// Zentraler Zugriffsschutz der Akte: hier nur die Organisation der Akte, wie
+// sie das Applicant-Mock liefert (case.organizationId).
+vi.mock("@/lib/auth/akte-zugriff", () => ({
+  requireAkteAccess: vi.fn(async (caseId: string) => {
+    const owner = await findUnique({});
+    if (!owner || owner.case?.organizationId !== "org-A") throw new Error("NEXT_NOT_FOUND");
+    return { ctx, akte: { id: caseId, organizationId: "org-A", akteArt: "vertrieb", status: "neu", caseNumber: "UP-1" } };
+  }),
+}));
 
 const count = vi.fn();
 const findFirst = vi.fn();
@@ -26,6 +35,7 @@ vi.mock("@/lib/db", () => ({
       count: (...a: unknown[]) => count(...a),
       findFirst: (...a: unknown[]) => findFirst(...a),
       findUnique: (...a: unknown[]) => findUnique(...a),
+      findUniqueOrThrow: (...a: unknown[]) => findUnique(...a),
       findMany: (...a: unknown[]) => findMany(...a),
       create: (...a: unknown[]) => create(...a),
       delete: (...a: unknown[]) => del(...a),

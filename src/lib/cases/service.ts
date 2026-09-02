@@ -208,7 +208,7 @@ export async function getDashboardBuckets(
       where: { case: { organizationId, ...nurVertrieb }, released: true },
       select: { platform: true },
     }),
-    prisma.exportJob.count({ where: { case: { organizationId }, status: "failed" } }),
+    prisma.exportJob.count({ where: { case: { organizationId, ...nurVertrieb }, status: "failed" } }),
   ]);
 
   return {

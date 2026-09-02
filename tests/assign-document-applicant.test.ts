@@ -17,6 +17,16 @@ vi.mock("@/lib/auth/context", () => ({
     isDemo: false,
   })),
 }));
+vi.mock("@/lib/auth/akte-zugriff", () => ({
+  requireDocumentAccess: vi.fn(async (id: string) => {
+    const d = await documentFindUnique({ where: { id } });
+    if (!d || d.case?.organizationId !== "org-A") throw new Error("NEXT_NOT_FOUND");
+    return {
+      ctx: { organizationId: "org-A", userId: "user-1" },
+      dokument: { id, caseId: d.caseId, organizationId: "org-A", akteArt: "vertrieb", caseStatus: "neu" },
+    };
+  }),
+}));
 
 const documentFindUnique = vi.fn();
 const documentUpdate = vi.fn();
@@ -25,6 +35,7 @@ vi.mock("@/lib/db", () => ({
   prisma: {
     document: {
       findUnique: (...a: unknown[]) => documentFindUnique(...a),
+      findUniqueOrThrow: (...a: unknown[]) => documentFindUnique(...a),
       update: (...a: unknown[]) => documentUpdate(...a),
     },
     applicant: { findFirst: (...a: unknown[]) => applicantFindFirst(...a) },

@@ -4,6 +4,13 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ notFound: vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/auth/context", () => ({ requireContext: vi.fn(async () => ctx) }));
+vi.mock("@/lib/auth/akte-zugriff", () => ({
+  requireAkteAccess: vi.fn(async (caseId: string) => {
+    const m = await messageFindUnique({});
+    if (!m || m.case?.organizationId !== "org-A") throw new Error("NEXT_NOT_FOUND");
+    return { ctx, akte: { id: caseId, organizationId: "org-A", akteArt: "vertrieb", status: "neu", caseNumber: "UP-1" } };
+  }),
+}));
 
 const ctx = { organizationId: "org-A", userId: "user-1" };
 

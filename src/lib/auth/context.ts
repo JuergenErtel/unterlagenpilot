@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { verifyUploadToken } from "@/lib/security/upload-token";
 import { readSessionToken, verifySessionToken } from "@/lib/auth/session";
-import type { AkteArt, BackofficeRolle, CaseStatus, UserRole } from "@/lib/domain/enums";
+import { BACKOFFICE_TERMINAL_STATUS, type AkteArt, type BackofficeRolle, type CaseStatus, type UserRole } from "@/lib/domain/enums";
 
 /**
  * Auth-/Zugriffskontext (mandantenfähig).
@@ -164,7 +164,8 @@ export async function requireOrganizationAccess(organizationId: string): Promise
  * (Erstgespräch) wäre das eine zusätzliche Datenbankrunde je Tastendruckende.
  */
 export async function requireCaseAccess(
-  caseId: string
+  caseId: string,
+  optionen: { schreibend?: boolean } = {}
 ): Promise<{
   ctx: AppContext;
   caseRow: { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt };
@@ -186,7 +187,33 @@ export async function requireCaseAccess(
     const { notFound } = await import("next/navigation");
     notFound();
   }
+  // Schreibend an einer Backoffice-Akte: nur mit offenem Auftrag. Eine
+  // abgeschlossene, abgelehnte oder stornierte Akte ist fertig.
+  if (optionen.schreibend && caseRow!.akteArt === "backoffice" && !(await darfBackofficeAkteBearbeiten(ctx, caseRow!.id))) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
   return { ctx, caseRow: caseRow as { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt } };
+}
+
+/**
+ * Darf der Kontext an dieser Backoffice-Akte noch ARBEITEN? Ja, wenn ein
+ * sichtbarer Auftrag existiert, der nicht abgeschlossen, abgelehnt oder
+ * storniert ist. Lesen bleibt danach erlaubt (Verlauf, Ergebnis), Schreiben
+ * nicht.
+ */
+export async function darfBackofficeAkteBearbeiten(ctx: AppContext, caseId: string): Promise<boolean> {
+  if (!ctx.backofficeRolle) return false;
+  const auftrag = await prisma.backofficeAuftrag.findFirst({
+    where: {
+      caseId,
+      backofficeOrganizationId: ctx.organizationId,
+      status: { notIn: [...BACKOFFICE_TERMINAL_STATUS] },
+      ...(ctx.backofficeRolle === "bearbeiter" ? { OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }] } : {}),
+    },
+    select: { id: true },
+  });
+  return auftrag != null;
 }
 
 /**

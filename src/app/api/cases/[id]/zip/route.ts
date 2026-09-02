@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { zipSync } from "fflate";
 import { prisma } from "@/lib/db";
-import { getCurrentContext } from "@/lib/auth/context";
+import { ladeAkteFuerRoute } from "@/lib/auth/akte-zugriff";
 import { getStorage } from "@/lib/storage";
 import { audit } from "@/lib/audit";
 import { buildZipManifest, type ZipDoc } from "@/lib/documents/zip";
@@ -17,16 +17,11 @@ export const runtime = "nodejs";
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const ctx = await getCurrentContext();
-  if (!ctx) return new NextResponse("Nicht angemeldet.", { status: 401 });
-
-  const caseRow = await prisma.case.findUnique({
-    where: { id },
-    select: { organizationId: true, caseNumber: true },
-  });
-  if (!caseRow || caseRow.organizationId !== ctx.organizationId) {
-    return new NextResponse("Nicht gefunden.", { status: 404 });
-  }
+  const zugriff = await ladeAkteFuerRoute(id);
+  if (zugriff.status === 401) return new NextResponse("Nicht angemeldet.", { status: 401 });
+  if (zugriff.status !== 200) return new NextResponse("Nicht gefunden.", { status: 404 });
+  const { ctx } = zugriff;
+  const caseRow = { caseNumber: zugriff.akte.caseNumber };
 
   const docs = (await prisma.document.findMany({
     where: { caseId: id },

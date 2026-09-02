@@ -35,7 +35,7 @@ describe.runIf(RUN)("Backoffice-Zugriff (PGlite)", () => {
   let zugriff: typeof import("@/lib/backoffice/zugriff");
   let auftraege: typeof import("@/lib/backoffice/auftraege");
   let ctxModul: typeof import("@/lib/auth/context");
-  const org: Record<string, string> = {};
+  const org = { A: "", B: "", C: "", D: "", E: "" };
   const nutzer: Record<string, any> = {};
   let a1: string;
   let a2: string;
@@ -58,7 +58,7 @@ describe.runIf(RUN)("Backoffice-Zugriff (PGlite)", () => {
     const { startPGlite } = await import("./helpers/pglite-setup");
     prisma = await startPGlite();
     for (const [k, slug] of [["A", "bo-zugriff-a"], ["B", "bo-zugriff-b"], ["C", "bo-zugriff-c"], ["D", "bo-zugriff-d"], ["E", "bo-zugriff-e"]]) {
-      org[k!] = (await prisma.organization.create({ data: { name: `Org ${k}`, slug } })).id;
+      org[k as keyof typeof org] = (await prisma.organization.create({ data: { name: `Org ${k}`, slug } })).id;
     }
     await prisma.featureFlag.create({ data: { organizationId: org.A, key: "backoffice", enabled: true } });
     await prisma.featureFlag.create({ data: { organizationId: org.E, key: "backoffice", enabled: false } });

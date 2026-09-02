@@ -57,8 +57,8 @@ export async function analyzeFloorplanAction(
       if (VISION_MIME.has(file.type)) {
         images.push({ base64: buffer.toString("base64"), mimeType: file.type });
       } else if (file.type === "application/pdf") {
-        const doc = await prisma.document.findUnique({
-          where: { id: result.documentId },
+        const doc = await prisma.document.findFirst({
+          where: { id: result.documentId, caseId },
           select: { storageKey: true },
         });
         const signed = doc ? await storage.createSignedUrl(doc.storageKey, 300) : null;

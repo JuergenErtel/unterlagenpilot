@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
+import { requireDocumentAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { generateFileName } from "@/lib/documents/filename";
 import { DOCUMENT_TYPES, type DocumentType } from "@/lib/domain/enums";
@@ -21,17 +22,17 @@ export async function reviewExtractedField(
   mode: FieldReviewMode,
   value?: string
 ): Promise<void> {
-  const ctx = await requireContext();
-
-  // Tenant-Isolation: Feld muss zu einem Dokument der eigenen Organisation gehören.
-  const field = await prisma.extractedFieldRecord.findUnique({
+  // Das Feld gehoert zu einem Dokument - und fuer DAS gilt der zentrale
+  // Zugriffsschutz (Organisation, Aktenart, Rolle, offener Auftrag).
+  const feldZeile = await prisma.extractedFieldRecord.findUnique({
     where: { id: fieldId },
-    select: { id: true, document: { select: { caseId: true, case: { select: { organizationId: true } } } } },
+    select: { id: true, documentId: true },
   });
-  if (!field || field.document.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
+  const { ctx } = await requireDocumentAccess(feldZeile?.documentId ?? "", { schreibend: true });
+  const field = await prisma.extractedFieldRecord.findUniqueOrThrow({
+    where: { id: fieldId },
+    select: { id: true, document: { select: { caseId: true } } },
+  });
 
   const trimmed = value?.trim();
   if (mode === "korrigieren" && !trimmed) {
@@ -78,9 +79,9 @@ export async function assignDocumentApplicant(
   documentId: string,
   applicantId: string | null
 ): Promise<void> {
-  const ctx = await requireContext();
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
 
-  const doc = await prisma.document.findUnique({
+  const doc = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
     select: {
       id: true,
@@ -88,13 +89,8 @@ export async function assignDocumentApplicant(
       originalName: true,
       period: true,
       documentType: true,
-      case: { select: { organizationId: true } },
     },
   });
-  if (!doc || doc.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
 
   // Der Antragsteller MUSS zum selben Fall gehören (kein Querschreiben).
   let applicantName: string | null = null;
@@ -154,10 +150,10 @@ export async function reclassifyDocument(
     throw new Error(`Unbekannter Dokumenttyp: ${newType}`);
   }
 
-  const ctx = await requireContext();
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
 
   // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
-  const doc = await prisma.document.findUnique({
+  const doc = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
     select: {
       id: true,
@@ -165,14 +161,9 @@ export async function reclassifyDocument(
       originalName: true,
       period: true,
       documentType: true,
-      case: { select: { organizationId: true } },
       applicant: { select: { vorname: true, nachname: true } },
     },
   });
-  if (!doc || doc.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
 
   const applicantName =
     [doc!.applicant?.vorname, doc!.applicant?.nachname].filter(Boolean).join(" ") || null;

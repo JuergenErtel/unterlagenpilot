@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentContext } from "@/lib/auth/context";
+import { ladeAkteFuerRoute } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { buildDsgvoExport } from "@/lib/dsgvo/export";
 
@@ -14,8 +14,11 @@ export const runtime = "nodejs";
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const ctx = await getCurrentContext();
-  if (!ctx) return new NextResponse("Nicht angemeldet.", { status: 401 });
+  // Zentraler Zugriffsschutz VOR dem Laden der Auskunft.
+  const zugriff = await ladeAkteFuerRoute(id);
+  if (zugriff.status === 401) return new NextResponse("Nicht angemeldet.", { status: 401 });
+  if (zugriff.status !== 200) return new NextResponse("Nicht gefunden.", { status: 404 });
+  const { ctx } = zugriff;
 
   const caseRow = await prisma.case.findUnique({
     where: { id },
@@ -41,9 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
-  if (!caseRow || caseRow.organizationId !== ctx.organizationId) {
-    return new NextResponse("Nicht gefunden.", { status: 404 });
-  }
+  if (!caseRow) return new NextResponse("Nicht gefunden.", { status: 404 });
 
   // Audit-Einträge für den Fall UND seine Dokumente.
   const entityIds = [id, ...caseRow.documents.map((d) => d.id)];

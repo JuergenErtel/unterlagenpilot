@@ -66,13 +66,17 @@ export async function createSecureUploadLink(
 /** Deaktiviert einen Link sofort (nicht mehr nutzbar). */
 export async function deactivateUploadLink(
   linkId: string,
-  ctx: { organizationId: string; userId?: string | null }
+  ctx: { organizationId: string; userId?: string | null; caseId?: string }
 ): Promise<void> {
   const link = await prisma.uploadLink.findUnique({
     where: { id: linkId },
     select: { id: true, caseId: true, case: { select: { organizationId: true } } },
   });
   if (!link || link.case.organizationId !== ctx.organizationId) return; // kein Leak
+  // Der Aufrufer hat den Zugang zu GENAU dieser Akte geprueft - ein Link
+  // einer anderen Akte (etwa einer Backoffice-Akte) ist ueber diesen Weg
+  // nicht erreichbar.
+  if (ctx.caseId && link.caseId !== ctx.caseId) return;
   await prisma.uploadLink.update({ where: { id: linkId }, data: { active: false } });
   await audit({
     organizationId: ctx.organizationId,

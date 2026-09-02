@@ -5,6 +5,13 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 
 const ctx = { organizationId: "org-A", userId: "user-1" };
 vi.mock("@/lib/auth/context", () => ({ getCurrentContext: vi.fn(async () => ctx) }));
+vi.mock("@/lib/auth/akte-zugriff", () => ({
+  ladeAkteFuerRoute: vi.fn(async (id: string) => {
+    const c = await caseFindUnique({ where: { id } });
+    if (!c || c.organizationId !== "org-A") return { status: 404 };
+    return { status: 200, ctx, akte: { id, organizationId: "org-A", akteArt: "vertrieb", status: "neu", caseNumber: c.caseNumber } };
+  }),
+}));
 
 const caseFindUnique = vi.fn();
 const documentFindMany = vi.fn();

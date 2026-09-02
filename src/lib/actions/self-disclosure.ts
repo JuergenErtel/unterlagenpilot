@@ -373,6 +373,7 @@ export async function widerrufeSelbstauskunftLink(caseId: string, linkId: string
   await deactivateSelfDisclosureLink(linkId, {
     organizationId: ctx.organizationId,
     userId: ctx.userId,
+    caseId,
   });
   revalidatePath(`/cases/${caseId}`);
 }

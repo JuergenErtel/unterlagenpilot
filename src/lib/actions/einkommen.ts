@@ -66,7 +66,7 @@ export async function analyzeSelfEmployedAction(
       if (VISION_MIME.has(file.type)) {
         images.push({ base64: buffer.toString("base64"), mimeType: file.type });
       } else if (file.type === "application/pdf") {
-        const d = await prisma.document.findUnique({ where: { id: result.documentId }, select: { storageKey: true } });
+        const d = await prisma.document.findFirst({ where: { id: result.documentId, caseId }, select: { storageKey: true } });
         const signed = d ? await storage.createSignedUrl(d.storageKey, 300) : null;
         if (signed) {
           documents.push({ url: signed, name: file.name });
@@ -144,9 +144,11 @@ export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds:
   const { ctx } = await requireCaseAccess(caseId);
   if (documentIds.length === 0) return { matrix: null, docNotes: [], error: "Keine Dokumente zur Analyse ausgewählt." };
 
-  // Tenant- und Fall-Isolation direkt in der Query: nur Dokumente des eigenen Falls & der eigenen Organisation.
+  // Fall-Isolation direkt in der Query: requireCaseAccess hat den Fall bereits
+  // gegen Organisation, Aktenart und Rolle geprueft; die Dokumente muessen zu
+  // GENAU diesem Fall gehoeren.
   const docs = await prisma.document.findMany({
-    where: { id: { in: documentIds }, caseId, case: { organizationId: ctx.organizationId } },
+    where: { id: { in: documentIds }, caseId },
     select: { id: true, originalName: true, mimeType: true, storageKey: true, scanStatus: true },
   });
   if (docs.length === 0) return { matrix: null, docNotes: [], error: "Dokumente nicht gefunden." };

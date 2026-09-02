@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireContext, requireCaseAccess, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireDocumentAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import {
   createSecureUploadLink,
@@ -174,7 +175,8 @@ export async function regenerateUploadLinkAction(
 /** Deaktiviert einen einzelnen Upload-Link. */
 export async function deactivateUploadLinkAction(caseId: string, linkId: string): Promise<void> {
   const { ctx } = await requireCaseAccess(caseId);
-  await deactivateUploadLink(linkId, { organizationId: ctx.organizationId, userId: ctx.userId });
+  // caseId ist geprueft - der Link muss zu GENAU dieser Akte gehoeren.
+  await deactivateUploadLink(linkId, { organizationId: ctx.organizationId, userId: ctx.userId, caseId });
   revalidatePath(`/cases/${caseId}`);
 }
 
@@ -189,7 +191,7 @@ export async function deactivateUploadLinkAction(caseId: string, linkId: string)
  * `ki_pruefung_laeuft` plus Dokument-Status, die Seite pollt selbst.
  */
 export async function runAiCheck(caseId: string): Promise<void> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   // Status-Guard: einen bereits exportierten/übertragenen/abgeschlossenen Fall
   // nicht durch eine erneute KI-Prüfung zurücksetzen.
@@ -241,6 +243,7 @@ export async function runAiCheck(caseId: string): Promise<void> {
  */
 export async function einzelDokumentNachpruefen(formData: FormData): Promise<void> {
   const ctx = await requireContext();
+  await requireDocumentAccess(String(formData.get("documentId") ?? ""), { schreibend: true });
   const documentId = String(formData.get("documentId") ?? "");
   if (!documentId) return;
 
@@ -520,21 +523,13 @@ export async function setDocumentReview(
   reviewStatus: "akzeptiert" | "abgelehnt" | "duplikat" | "ersetzt",
   grund?: string
 ): Promise<void> {
-  const ctx = await requireContext();
-  // Tenant-Isolation: Dokument muss zur Organisation des Nutzers gehören.
-  const owner = await prisma.document.findUnique({
+  // Zentraler Zugriffsschutz: Organisation, Aktenart, Backoffice-Rolle und
+  // -Zuweisung, offener Auftrag (schreibend). 404 statt 403.
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
+  const owner = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
-    select: {
-      caseId: true,
-      applicantId: true,
-      readable: true,
-      case: { select: { organizationId: true } },
-    },
+    select: { caseId: true, applicantId: true, readable: true },
   });
-  if (!owner || owner.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
   // Nichts freigeben, was keine Textgrundlage hat: Der erfundene Typ waere
   // damit bestaetigt und faerbte eine Checklistenposition gruen. Die Oberflaeche
   // bietet den Knopf gar nicht erst an – diese Pruefung deckt den direkten
@@ -605,9 +600,9 @@ export async function setDocumentReview(
  * Herkunftsdokument stuende neben seinen Teildokumenten in der Checkliste.
  */
 export async function reopenDocument(documentId: string): Promise<void> {
-  const ctx = await requireContext();
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
 
-  const doc = await prisma.document.findUnique({
+  const doc = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
     select: {
       caseId: true,
@@ -615,10 +610,6 @@ export async function reopenDocument(documentId: string): Promise<void> {
       case: { select: { organizationId: true, status: true } },
     },
   });
-  if (!doc || doc.case.organizationId !== ctx.organizationId) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
 
   // Nur zurueckholen, was ein Mensch entschieden hat.
   if (doc!.reviewStatus !== "akzeptiert" && doc!.reviewStatus !== "abgelehnt") return;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentContext } from "@/lib/auth/context";
+import { ladeDokumentFuerRoute } from "@/lib/auth/akte-zugriff";
 import { getStorage } from "@/lib/storage";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
@@ -17,11 +17,16 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const ctx = await getCurrentContext();
-  if (!ctx) return new NextResponse("Nicht angemeldet.", { status: 401 });
+  // Zentraler Zugriffsschutz (Organisation, Aktenart, Backoffice-Rolle und
+  // -Zuweisung). Existenz nicht preisgeben: gleiche Antwort bei "nicht da",
+  // "fremde Organisation" und "Backoffice-Akte ohne Rolle".
+  const zugriff = await ladeDokumentFuerRoute(id);
+  if (zugriff.status === 401) return new NextResponse("Nicht angemeldet.", { status: 401 });
+  if (zugriff.status !== 200) return new NextResponse("Nicht gefunden.", { status: 404 });
+  const { ctx } = zugriff;
 
-  const doc = await prisma.document.findUnique({
-    where: { id },
+  const doc = await prisma.document.findUniqueOrThrow({
+    where: { id: zugriff.dokument.id },
     select: {
       id: true,
       storageKey: true,
@@ -29,13 +34,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       generatedName: true,
       originalName: true,
       scanStatus: true,
-      case: { select: { id: true, organizationId: true } },
     },
   });
-  // Existenz nicht preisgeben: gleiche Antwort bei „nicht da" und „fremde Org".
-  if (!doc || doc.case.organizationId !== ctx.organizationId) {
-    return new NextResponse("Nicht gefunden.", { status: 404 });
-  }
   // Allowlist statt Sperrliste: nur nachweislich sauber gescannte Dateien
   // verlassen den Storage. `virus_scan_failed`/`virus_scan_pending` bleiben
   // gesperrt, sonst wäre eine nie geprüfte Datei abrufbar (fail-closed).

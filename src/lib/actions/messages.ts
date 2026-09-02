@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireContext } from "@/lib/auth/context";
+import { requireAkteAccess } from "@/lib/auth/akte-zugriff";
 import { audit } from "@/lib/audit";
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
 import { antwortAdresse } from "@/lib/email/antwortadresse";
@@ -43,11 +44,13 @@ export async function sendMessageByEmail(messageId: string): Promise<SendMessage
     },
   });
 
-  // Tenant-Isolation: gleiche Antwort wie "nicht gefunden".
-  if (!message || message.case.organizationId !== ctx.organizationId) {
+  // Zentraler Zugriffsschutz der Akte (Organisation, Aktenart, Rolle) -
+  // gleiche Antwort wie "nicht gefunden".
+  if (!message) {
     const { notFound } = await import("next/navigation");
     notFound();
   }
+  await requireAkteAccess(message!.caseId, { schreibend: true });
 
   if (message!.channel !== "email") {
     return { ok: false, error: "Nur E-Mail-Nachrichten können versendet werden." };

@@ -144,7 +144,7 @@ export async function finishCustomerUpload(token: string, uploaded: number): Pro
  * ("1" | "2" | "none"). Revalidierung erfolgt gesammelt über `finishBrokerUpload`.
  */
 export async function brokerUploadOne(caseId: string, formData: FormData): Promise<UploadState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   const env = getEnv();
   const limit = await checkRateLimit(
@@ -216,7 +216,7 @@ export async function requestBrokerUploadSlot(
   originalName: string,
   _mimeType: string
 ): Promise<UploadSlot> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
   const env = getEnv();
   const limit = await checkRateLimit(`broker-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
@@ -232,7 +232,7 @@ export async function processBrokerStoredUpload(
   applicantPosition: string,
   meta: StoredUploadMeta
 ): Promise<UploadState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   // Tenant-Isolation: der storageKey MUSS im eigenen Org-/Fall-Pfad liegen.
   if (!isStorageKeyForCase(meta.storageKey, ctx.organizationId, caseId)) {

@@ -35,7 +35,7 @@ export async function buendelZusammenfuegenAction(
   const caseId = String(formData.get("caseId") ?? "");
   const buendelId = String(formData.get("buendelId") ?? "");
   if (!caseId || !buendelId) return { grund: "Fall oder Bündel fehlt." };
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   const buendel = await prisma.documentBuendel.findFirst({
     where: { id: buendelId, caseId },
@@ -73,7 +73,7 @@ export async function buendelVerwerfenAction(formData: FormData): Promise<void> 
   const caseId = String(formData.get("caseId") ?? "");
   const buendelId = String(formData.get("buendelId") ?? "");
   if (!caseId || !buendelId) return;
-  await requireCaseAccess(caseId);
+  await requireCaseAccess(caseId, { schreibend: true });
   await prisma.documentBuendel.deleteMany({ where: { id: buendelId, caseId } });
   revalidatePath(`/cases/${caseId}`);
 }
@@ -85,7 +85,7 @@ export async function buendelVerwerfenAction(formData: FormData): Promise<void> 
 export async function buendelErneutPruefenAction(formData: FormData): Promise<void> {
   const caseId = String(formData.get("caseId") ?? "");
   if (!caseId) return;
-  await requireCaseAccess(caseId);
+  await requireCaseAccess(caseId, { schreibend: true });
   // Die Sperre nur zuruecksetzen, wenn sie NICHT mehr frisch ist - sonst
   // wuerde dieser Klick einen echten, gerade laufenden Hintergrundlauf
   // aushebeln und einen zweiten, ueberlappenden Lauf starten. Haelt ein
@@ -124,7 +124,7 @@ export async function seitenZusammenfuegenAction(
   if (!caseId || documentIds.length < 2) {
     return { grund: "Es sind weniger als zwei Seiten ausgewählt." };
   }
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   // Der Titel kommt aus dem erkannten Typ der ersten Seite; ohne Typ ein
   // neutraler Name, den der Vermittler danach ueber die Typ-Auswahl schaerft.
@@ -183,7 +183,7 @@ export async function buendelRueckgaengigAction(
   const caseId = String(formData.get("caseId") ?? "");
   const documentId = String(formData.get("documentId") ?? "");
   if (!caseId || !documentId) return { grund: "Fall oder Dokument fehlt." };
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
 
   const ergebnis = await macheRueckgaengig(documentId, ctx.organizationId);
   if (ergebnis.ok) {
