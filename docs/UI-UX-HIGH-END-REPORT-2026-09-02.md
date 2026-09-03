@@ -90,6 +90,22 @@ Portal ohne Aufträge: `LeerZustand` mit Weg zum ersten Auftrag.
 - Aktionen: Ansichtswechsel links, Trennlinie, Demo-Fall als Textlink, „Aus FinLink importieren“ als
   Kante, „Neuen Fall anlegen“ als einzige Tinte; „Jetzt abgleichen“ als stiller Textknopf.
 
+## 7a. Tagesliste und Fallakte (Nachtrag 03.09.2026)
+
+- **Tagesliste**: Arbeitsfokus oben („Jetzt dran“, die eine Aufgabe auf der Hero-Fläche mit
+  Tintenknopf), darunter die Bänder als Flächen mit Gewicht (überfällig als Blocker-Fläche, heute als
+  Blatt, später als Ablage). Eine Hauptaktion je Karte: die konkrete Handlung in Tinte, „Fall öffnen“
+  als Textlink, „Erledigt“ als stiller Haken; Wiedervorlage-Datum bleibt. Eyebrow „Mein Arbeitstag“,
+  leerer Zustand mit Weg zum Board und zum neuen Fall. Berechnung und Actions unverändert.
+- **Fallakte**: Kopf als Seitentitel mit Eyebrow „Fallakte“, Statuschips, Phasenwahl und Blockern;
+  Reifegrad mit Prüfleiste rechts. Neue Faktenleiste (Finanzierungsart, Kaufpreis, Darlehenswunsch,
+  Eigenkapital, Objekt, Vertriebsphase). Der Beratungskreislauf liegt jetzt auf der Hero-Fläche,
+  darunter die Zahlenzeile (Dokumente, zu prüfen, fehlend, Plausibilitätshinweise, Reifegrad) und die
+  Plattform-Bereitschaft. Die Reiter „Was fehlt noch?“, „Dokumente“, „Plausibilität“, „Übersicht“
+  bleiben mit ihren Funktionen erhalten (Upload, Bündelung, Aufteilung, Detektiv, Bank-Anforderungen
+  hängen daran); die Werkzeugkisten liegen auf der Ablagefläche. Stationen, Zustände und die Regel
+  des offenen Bogens sind unverändert.
+
 ## 8. Portal
 
 Übersicht mit **Ihre Mitwirkung** (Aufträge mit Handlungsbedarf, offene Rückfragen, Ergebnisse
@@ -160,7 +176,8 @@ automatische JSX-Laufzeit. Ergebnisse: siehe Abschnitt „Ergebnisse“.
 1. Vereinfachte Markenfassung des Logos für kleine Flächen (nur Haus, klarere Wortmarke); nicht Teil
    dieses Auftrags.
 2. Automatisierter Accessibility-Lauf (axe) und Screenshot-Regression in CI.
-3. Fallakte und Tagesliste im Vertrieb auf die neuen Flächen umstellen (heute unverändert, bewusst).
+3. Fallakte: die Reiter „Dokumente“ und „Plausibilität“ langfristig in Unterlagen-Arbeitsplatz und
+   KI-Prüfung überführen, sobald Upload, Bündelung und Detektiv dort einen Platz haben.
 4. Formulare: Portal-Auftragsanlage in zwei Schritte teilen, wenn Nutzer den Umfang als lang empfinden.
 5. Zähler „Jetzt bearbeiten“ zählt bearbeitbare Aufträge, die Seite zeigt alle aktiven; wenn das
    irritiert, Zähler und Liste angleichen.

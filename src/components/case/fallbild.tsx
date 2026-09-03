@@ -130,7 +130,9 @@ export function FallbildAnsicht({
        liegen. Den bekommt die Empfehlung – das spart zugleich Hoehe, und Hoehe
        ist hier die knappe Groesse. */
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <Card className="overflow-hidden">
+      {/* Die Zeichnung liegt obenauf (Hero-Flaeche): Sie ist der Signatur-
+          baustein der Fallakte und beantwortet als Erstes, wo der Fall steht. */}
+      <div className="flaeche-oben overflow-hidden">
         <CardContent className="p-2">
           {/* Der Bogen erklaert sich nicht von selbst. Eine Zeile darueber sagt,
               was man da sieht – Juergens Wortlaut. */}
@@ -375,7 +377,7 @@ export function FallbildAnsicht({
             </text>
           </svg>
         </CardContent>
-      </Card>
+      </div>
 
       {/* ── Das Band: Empfehlung, oder das angeklickte Element ──
           Bewusst dieselbe Bildsprache wie die bisherige NextStepCard: helle

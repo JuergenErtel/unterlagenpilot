@@ -234,3 +234,51 @@ export function Zaehler({ n, ton = "neutral", className }: { n: number; ton?: "n
     </span>
   );
 }
+
+/** Faktenleiste: die Angaben, die man in Sekunden braucht - ein Feld je Fakt. */
+export function Faktenleiste({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <dl className={cn("flaeche-ablage grid grid-cols-2 gap-px overflow-hidden bg-border/60 sm:grid-cols-3 lg:grid-cols-6 [&>div]:bg-surface-sunken", className)}>
+      {children}
+    </dl>
+  );
+}
+
+export function Fakt({ label, wert, leer, href }: { label: string; wert: string; leer?: boolean; href?: string }) {
+  const inhalt = (
+    <>
+      <dt className="eyebrow text-[0.625rem]">{label}</dt>
+      <dd className={cn("mt-0.5 truncate text-sm", leer ? "text-muted-foreground" : "font-medium text-foreground")} title={wert}>
+        {wert}
+      </dd>
+    </>
+  );
+  return href ? (
+    <div className="min-w-0">
+      <Link href={href} className="block px-3.5 py-2.5 transition-colors hover:bg-accent/60">{inhalt}</Link>
+    </div>
+  ) : (
+    <div className="min-w-0 px-3.5 py-2.5">{inhalt}</div>
+  );
+}
+
+/** Zahlenzeile unter einem Fortschrittsbild: Zahl gross, Beschriftung leise. */
+export function Kennzahlzeile({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <dl className={cn("flex flex-wrap gap-x-6 gap-y-2 text-sm", className)}>{children}</dl>;
+}
+
+export function Kennzahlwert({ label, wert, ton = "neutral" }: { label: string; wert: number | string; ton?: "neutral" | "aktion" | "warnung" | "kritisch" | "leer" }) {
+  const farbe = {
+    aktion: "text-primary",
+    warnung: "text-[hsl(var(--warning))]",
+    kritisch: "text-destructive",
+    leer: "text-muted-foreground/60",
+    neutral: "text-foreground",
+  }[ton];
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <dd className={cn("t-kpi text-lg", farbe)}>{wert}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+    </div>
+  );
+}

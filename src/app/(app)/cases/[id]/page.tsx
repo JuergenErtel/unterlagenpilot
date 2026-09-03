@@ -16,7 +16,7 @@ import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
 import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
-import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/domain/enums";
+import { LEAD_SOURCE_LABELS, FINANCING_TYPE_LABELS, LEAD_PHASE_LABELS, type LeadSource, type FinancingType, type LeadPhase } from "@/lib/domain/enums";
 import { brauchtSelbststaendigenEinkommensnachweis } from "@/lib/checklists/case-input";
 import { zertifikatFehlendeAngaben } from "@/lib/pdf/zertifikat";
 import { SelfDisclosureInbox } from "@/components/case/self-disclosure-inbox";
@@ -72,6 +72,7 @@ import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { Fakt, Faktenleiste, Kennzahlzeile, Kennzahlwert } from "@/components/ui/flaechen";
 import {
   CASE_STATUS_LABELS,
   DOCUMENT_REVIEW_STATUS_LABELS,
@@ -438,89 +439,79 @@ export default async function CaseCockpitPage({
         Alle Fälle
       </Link>
 
-      {/* Hero / Case-Kopf */}
-      <Card>
-        <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center">
-          {/*
-            Reifegrad. Der Prozentwert sagt "wie weit", die Pruefleiste darunter
-            sagt "woran" – ein Fach je Unterlage. Beides zusammen ersetzt den
-            frueheren Ring, der nur die eine Zahl konnte.
-          */}
-          <div className="w-full shrink-0 lg:w-52">
-            <p className="eyebrow">Reifegrad</p>
-            <p className="display tabular mt-1.5 text-[2.5rem] leading-none">
-              {cockpit.score}
-              <span className="text-xl text-muted-foreground">%</span>
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {cockpit.scoreLabel} · einreichungsfertig
-            </p>
-            <Pruefleiste segmente={pruefSegmente} groesse="md" className="mt-3" />
-            {/* Der Arbeitsplatz ist DIE Unterlagenansicht - er gehoert neben
-                die Pruefleiste, die ihn abbildet, nicht drei Klicks tief in
-                einen Reiter (Juergen, 01.09.2026: "musste sehr lange suchen"). */}
-            <Button asChild size="sm" className="mt-3 w-full">
-              <Link href={`/cases/${id}/unterlagen`}>
-                <LayoutPanelLeft />
-                Unterlagen prüfen
-              </Link>
-            </Button>
+      {/* Kopf: Titel, Zustand, Steuerung - und darunter die Fakten, die man
+          in Sekunden braucht. Der Reifegrad mit der Pruefleiste bleibt der
+          Einstieg in die Unterlagen. */}
+      <div className="flex flex-col gap-6 border-b pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="eyebrow mb-2">Fallakte</div>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="t-seitentitel min-w-0 break-words">{cockpit.applicantNames}</h1>
+            <span className="font-mono text-lg tabular text-muted-foreground">{cockpit.caseNumber}</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-semibold tracking-tight">{cockpit.applicantNames}</h1>
-              <span className="font-mono text-sm text-muted-foreground">{cockpit.caseNumber}</span>
-              <CaseStatusBadge status={caseRow.status as CaseStatus} />
-              {caseRow.bankName && (
-                <Badge variant="neutral" className="gap-1"><Banknote className="h-3 w-3" />{caseRow.bankName}</Badge>
-              )}
-              {caseRow.wiedervorlage && (
-                <Badge variant={caseRow.wiedervorlage < new Date() ? "warning" : "neutral"} className="gap-1">
-                  <CalendarClock className="h-3 w-3" />
-                  WV {caseRow.wiedervorlage.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                </Badge>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {/* Beschriftet und nur wenn bekannt: Der nackte Chip "Unbekannt"
-                  las sich wie ein Datenfehler oder ein mysteriöser Status. */}
-              {caseRow.quelle !== "unbekannt" && (
-                <Badge variant="neutral">Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
-              )}
-              <Badge variant={caseRow.einwilligungKontakt === true ? "success" : "neutral"}>
-                Telefon:{" "}
-                {caseRow.einwilligungKontakt === true
-                  ? "erlaubt"
-                  : caseRow.einwilligungKontakt === false
-                    ? "nicht erlaubt"
-                    : "keine Angabe"}
-              </Badge>
-            </div>
-            <div className="mt-2">
-              <LeadPhaseSelect
-                caseId={id}
-                phase={caseRow.leadPhase}
-                vorschlag={phasenVorschlag}
-                verlorenGrund={caseRow.verlorenAm ? caseRow.verlorenGrund : null}
-              />
-            </div>
-            {cockpit.blockers.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {cockpit.blockers.map((b, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-sm text-destructive">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    {b}
-                  </div>
-                ))}
-              </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <CaseStatusBadge status={caseRow.status as CaseStatus} />
+            {caseRow.bankName && (
+              <Badge variant="neutral" className="gap-1"><Banknote className="h-3 w-3" aria-hidden />{caseRow.bankName}</Badge>
             )}
-            <div className="mt-4">
-              <div className="mb-1.5 text-xs font-medium text-muted-foreground">Plattform-Bereitschaft</div>
-              <PlatformReadiness items={cockpit.platformReadiness} />
-            </div>
+            {caseRow.wiedervorlage && (
+              <Badge variant={caseRow.wiedervorlage < new Date() ? "warning" : "neutral"} className="gap-1">
+                <CalendarClock className="h-3 w-3" aria-hidden />
+                WV {caseRow.wiedervorlage.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+              </Badge>
+            )}
+            {caseRow.quelle !== "unbekannt" && (
+              <Badge variant="neutral">Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
+            )}
+            <Badge variant={caseRow.einwilligungKontakt === true ? "success" : "neutral"}>
+              Telefon:{" "}
+              {caseRow.einwilligungKontakt === true ? "erlaubt" : caseRow.einwilligungKontakt === false ? "nicht erlaubt" : "keine Angabe"}
+            </Badge>
           </div>
-        </CardContent>
-      </Card>
+          <div className="mt-3">
+            <LeadPhaseSelect
+              caseId={id}
+              phase={caseRow.leadPhase}
+              vorschlag={phasenVorschlag}
+              verlorenGrund={caseRow.verlorenAm ? caseRow.verlorenGrund : null}
+            />
+          </div>
+          {cockpit.blockers.length > 0 && (
+            <div className="mt-3 space-y-1" role="alert">
+              {cockpit.blockers.map((b, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-sm text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {b}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="w-full shrink-0 lg:w-64">
+          <p className="eyebrow">Reifegrad</p>
+          <p className="t-kpi mt-1.5 text-[2.25rem]">
+            {cockpit.score}
+            <span className="text-xl text-muted-foreground">%</span>
+          </p>
+          <p className="t-hilfe mt-1 text-xs">{cockpit.scoreLabel} · einreichungsfertig</p>
+          <Pruefleiste segmente={pruefSegmente} groesse="md" className="mt-3" />
+          <Button asChild size="sm" className="mt-3 w-full">
+            <Link href={`/cases/${id}/unterlagen`}>
+              <LayoutPanelLeft aria-hidden />
+              Unterlagen prüfen
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <Faktenleiste>
+        <Fakt label="Finanzierungsart" wert={caseRow.financingType ? FINANCING_TYPE_LABELS[caseRow.financingType as FinancingType] : "—"} leer={!caseRow.financingType} />
+        <Fakt label="Kaufpreis" wert={formatEUR(caseRow.financingRequest?.kaufpreis)} leer={caseRow.financingRequest?.kaufpreis == null} />
+        <Fakt label="Darlehenswunsch" wert={formatEUR(caseRow.financingRequest?.darlehenswunsch)} leer={caseRow.financingRequest?.darlehenswunsch == null} />
+        <Fakt label="Eigenkapital" wert={formatEUR(caseRow.financingRequest?.eigenkapital)} leer={caseRow.financingRequest?.eigenkapital == null} />
+        <Fakt label="Objekt" wert={[caseRow.property?.objektart, caseRow.property?.city].filter(Boolean).join(" · ") || "—"} leer={!caseRow.property?.city} href={`/cases/${id}/edit`} />
+        <Fakt label="Vertriebsphase" wert={LEAD_PHASE_LABELS[caseRow.leadPhase as LeadPhase]} />
+      </Faktenleiste>
 
       {/* Geführte Fallreise: die eine Antwort auf „Was muss ich jetzt tun?“ –
           der Erstkontakt ist Teil dieser Leiter (next-step.ts), keine eigene
@@ -623,6 +614,21 @@ export default async function CaseCockpitPage({
             </div>
             <div className="lg:hidden">
               <NextStepCard step={step} actionSlot={actionSlot} caseId={id} telefon={telefon} />
+            </div>
+            {/* Dieselbe Zahlenzeile wie im Auftragsdetail: der Kreislauf sagt
+                WO der Fall steht, die Zeile sagt WIE VIEL noch zu tun ist. */}
+            <Kennzahlzeile className="px-1">
+              <Kennzahlwert label="Dokumente" wert={documents.length} />
+              <Kennzahlwert label="zu prüfen" wert={cockpit.counts.pruefbereit} ton={cockpit.counts.pruefbereit > 0 ? "aktion" : "leer"} />
+              <Kennzahlwert label="fehlende Unterlagen" wert={cockpit.counts.docsMissing} ton={cockpit.counts.docsMissing > 0 ? "warnung" : "leer"} />
+              <Kennzahlwert label="Plausibilitätshinweise" wert={cockpit.counts.warnings} ton={cockpit.counts.criticals > 0 ? "kritisch" : cockpit.counts.warnings > 0 ? "warnung" : "leer"} />
+              <Kennzahlwert label="Reifegrad" wert={`${cockpit.score} %`} />
+            </Kennzahlzeile>
+            {/* Die Plattform-Bereitschaft folgt dem Bild: erst wo der Fall
+                steht, dann was die Plattformen davon schon annehmen. */}
+            <div className="flaeche-ablage px-4 py-3">
+              <div className="eyebrow mb-2">Plattform-Bereitschaft</div>
+              <PlatformReadiness items={cockpit.platformReadiness} />
             </div>
           </>
         );
@@ -1047,7 +1053,7 @@ export default async function CaseCockpitPage({
             </CardContent>
           </Card>
 
-          <Card>
+          <div className="flaeche-ablage">
             <CardContent className="p-0">
               {/* Beide Gruppen zugeklappt: Wer ein Werkzeug sucht, findet es
                   in einem Klick – wer geführt arbeitet, wird nicht von 13
@@ -1122,7 +1128,7 @@ export default async function CaseCockpitPage({
                 </div>
               </details>
             </CardContent>
-          </Card>
+          </div>
           <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />
         </div>
       </div>
