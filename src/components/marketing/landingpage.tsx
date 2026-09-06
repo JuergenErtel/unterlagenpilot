@@ -121,8 +121,8 @@ const VERSPRECHEN = [
     text: "Akten und Dateien liegen in Frankfurt am Main. Die KI-Auswertung läuft bei Mistral AI auf Servern in der EU.",
   },
   {
-    titel: "Auftragsverarbeitung nach Art. 28 DSGVO",
-    text: "Sie bleiben Verantwortlicher für die Daten Ihrer Kunden, BaufiDesk arbeitet als Auftragsverarbeiter – mit Vertrag und Nachweis.",
+    titel: "Sie bleiben Herr Ihrer Kundendaten",
+    text: "Sie sind Verantwortlicher für die Daten Ihrer Kunden, BaufiDesk verarbeitet sie nur in Ihrem Auftrag. Der Vertrag dazu wird vor dem Start mit Ihnen geschlossen.",
   },
   {
     titel: "KI liefert Fakten, keine Urteile",
