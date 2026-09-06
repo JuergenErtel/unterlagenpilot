@@ -22,7 +22,7 @@ export interface FallBereich {
   icon: LucideIcon;
 }
 
-export type CaseNavVariante = "vertrieb" | "backoffice";
+export type CaseNavVariante = "vertrieb" | "backoffice" | "fremd";
 
 /**
  * Die Arbeitsbereiche eines Falls als feste Leiste ueber JEDER Fall-Unterseite.
@@ -72,6 +72,20 @@ export function backofficeBereiche(caseId: string, auftragId: string): FallBerei
 }
 
 /**
+ * Fremdakte (Cross-Org-Uebergabe): eine Akte einer anderen Organisation, an
+ * der ein Auftrag der eigenen Backoffice-Organisation haengt. Nur Auftrag und
+ * Unterlagen - die Vertriebsseiten gehoeren dem Eigentuemer und antworten fuer
+ * diesen Kontext mit 404 (requireCaseAccess ohne fremdakteErlaubt).
+ */
+export function fremdBereiche(caseId: string, auftragId: string): FallBereich[] {
+  const base = `/cases/${caseId}`;
+  return [
+    { href: `/backoffice/auftraege/${auftragId}`, label: "Auftrag", icon: ClipboardCheck },
+    { href: `${base}/unterlagen`, label: "Unterlagen", icon: LayoutPanelLeft },
+  ];
+}
+
+/**
  * Welcher Bereich aktiv ist. Die Fallakte selbst nur bei exaktem Pfad -
  * sonst leuchtete sie auf jeder Unterseite mit. Unterseiten ohne eigenen
  * Reiter (z. B. /wohnflaeche) markieren nichts: Die Leiste behauptet dann
@@ -100,12 +114,16 @@ export function CaseNav({
 }: {
   caseId: string;
   variante?: CaseNavVariante;
-  /** Pflicht bei variante "backoffice": Ziel des Reiters "Auftrag". */
+  /** Pflicht bei variante "backoffice" und "fremd": Ziel des Reiters "Auftrag". */
   auftragId?: string;
 }) {
   const pathname = usePathname();
   const bereiche =
-    variante === "backoffice" && auftragId ? backofficeBereiche(caseId, auftragId) : fallBereiche(caseId);
+    variante === "fremd" && auftragId
+      ? fremdBereiche(caseId, auftragId)
+      : variante === "backoffice" && auftragId
+        ? backofficeBereiche(caseId, auftragId)
+        : fallBereiche(caseId);
   const aktiv = aktiverBereich(pathname, caseId, bereiche);
   return (
     <nav

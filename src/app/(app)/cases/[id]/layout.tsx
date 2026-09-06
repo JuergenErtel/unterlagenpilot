@@ -11,9 +11,12 @@ import type { BackofficeStatus } from "@/lib/domain/enums";
  * Der Rahmen prueft KEINEN Zugang - das tun die Seiten selbst (requireContext
  * + Organisationsfilter). Die eine kleine Abfrage hier dient nur der Form der
  * Leiste: Eine Backoffice-Akte bekommt den Reiter "Auftrag" statt "Fallakte",
- * ein Vertriebsfall mit laufendem Auftrag eine Hinweisleiste. Beides nur,
- * wenn die Akte zur Organisation des Kontexts gehoert; sonst rendert der
- * Rahmen die schlichte Vertriebsleiste und ueberlaesst der Seite das 404.
+ * ein Vertriebsfall mit laufendem Auftrag eine Hinweisleiste. Eine Fremdakte
+ * (Cross-Org-Uebergabe: Auftrag der eigenen Backoffice-Organisation an einer
+ * Akte einer anderen Organisation) bekommt die Variante "fremd" - nur Auftrag
+ * und Unterlagen; ob die Seite darunter sie zeigt, entscheidet
+ * requireCaseAccess. Ohne eigenen Auftrag rendert der Rahmen die schlichte
+ * Vertriebsleiste und ueberlaesst der Seite das 404.
  */
 export default async function CaseLayout({
   params,
@@ -52,11 +55,12 @@ export default async function CaseLayout({
       })
     : null;
 
-  const eigene = ctx != null && akte != null && akte.organizationId === ctx.organizationId;
-  const auftrag = eigene ? (akte.backofficeAuftraege[0] ?? null) : null;
+  const fremd = ctx != null && akte != null && akte.organizationId !== ctx.organizationId;
+  const auftrag = akte?.backofficeAuftraege[0] ?? null;
   const status = auftrag ? (auftrag.status as BackofficeStatus) : null;
 
-  const istBackofficeAkte = eigene && akte.akteArt === "backoffice" && auftrag != null;
+  // Eigene Backoffice-Akte ODER Fremdakte mit eigenem Auftrag: der Kopf ist der Auftrag.
+  const istBackofficeAkte = auftrag != null && (fremd || akte!.akteArt === "backoffice");
   const zeigeLeiste =
     auftrag != null &&
     status != null &&
@@ -76,7 +80,7 @@ export default async function CaseLayout({
         />
       )}
       {istBackofficeAkte ? (
-        <CaseNav caseId={id} variante="backoffice" auftragId={auftrag.id} />
+        <CaseNav caseId={id} variante={fremd ? "fremd" : "backoffice"} auftragId={auftrag.id} />
       ) : (
         <CaseNav caseId={id} />
       )}

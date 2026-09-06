@@ -130,9 +130,10 @@ export default async function CaseCockpitPage({
   if (!caseRow) notFound();
 
   // Eine Backoffice-Akte hat keine Fallakte im Vertriebssinn (keine Leadphase,
-  // keine Roadmap zum Abschluss): Ihr Kopf ist der Auftrag. Dorthin - und ob
-  // der Nutzer ihn sehen darf, entscheidet die Auftragsseite (404 sonst).
-  if (caseRow.akteArt === "backoffice") {
+  // keine Roadmap zum Abschluss): Ihr Kopf ist der Auftrag. Eine Fremdakte
+  // (Cross-Org) zeigt diesem Kontext ihre Vertriebsdaten nicht. Beide: zum
+  // Auftrag - ob der Nutzer ihn sehen darf, entscheidet die Auftragsseite.
+  if (caseRow.akteArt === "backoffice" || caseRow.organizationId !== ctx.organizationId) {
     const auftrag = await prisma.backofficeAuftrag.findFirst({
       where: { caseId: id, backofficeOrganizationId: ctx.organizationId },
       orderBy: { createdAt: "desc" },
