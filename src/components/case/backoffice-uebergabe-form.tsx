@@ -14,12 +14,23 @@ import { cn } from "@/lib/utils";
  * die Leistungsbausteine vor; der Vermittler kann sie danach noch anpassen.
  * Bei Erfolg leitet die Action zurueck in die Fallakte - dort steht dann
  * die Statuskarte.
+ *
+ * `ziele`: eigenes Backoffice und/oder Backoffice-Partner. Bei genau einem
+ * Ziel gibt es keine Auswahl, nur den Namen - eine Radiogruppe mit einer
+ * Option waere Laerm.
  */
-export function BackofficeUebergabeForm({ caseId }: { caseId: string }) {
+export function BackofficeUebergabeForm({
+  caseId,
+  ziele,
+}: {
+  caseId: string;
+  ziele: Array<{ schluessel: string; name: string }>;
+}) {
   const [state, formAction] = useActionState<AktionsErgebnis, FormData>(anBackofficeUebergebenAction, {});
   const erste = AUFTRAGSARTEN[0];
   const [auftragsart, setAuftragsart] = useState<string>(erste?.key ?? "");
   const [leistungen, setLeistungen] = useState<ReadonlySet<string>>(new Set(erste?.leistungen ?? []));
+  const [ziel, setZiel] = useState<string>(ziele[0]?.schluessel ?? "intern");
 
   function waehleArt(key: string) {
     setAuftragsart(key);
@@ -39,6 +50,45 @@ export function BackofficeUebergabeForm({ caseId }: { caseId: string }) {
   return (
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="caseId" value={caseId} />
+
+      {ziele.length <= 1 ? (
+        <>
+          <input type="hidden" name="ziel" value={ziel} />
+          {ziele[0] && (
+            <p className="text-sm">
+              Geht an: <span className="font-medium">{ziele[0].name}</span>
+            </p>
+          )}
+        </>
+      ) : (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Backoffice</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {ziele.map((z) => {
+              const gewaehlt = z.schluessel === ziel;
+              return (
+                <label
+                  key={z.schluessel}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2.5 rounded-md border p-3 text-sm transition-colors",
+                    gewaehlt ? "border-primary bg-primary/5" : "hover:border-foreground/25"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="ziel"
+                    value={z.schluessel}
+                    checked={gewaehlt}
+                    onChange={() => setZiel(z.schluessel)}
+                    className="h-4 w-4"
+                  />
+                  <span className="font-medium">{z.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Auftragsart</legend>

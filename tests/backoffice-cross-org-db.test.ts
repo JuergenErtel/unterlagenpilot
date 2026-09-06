@@ -213,8 +213,8 @@ describe.runIf(RUN)("Cross-Org-Uebergabe (PGlite)", () => {
     const { ladeUebergabeZiele } = await import("@/lib/backoffice/uebergabe-ziele");
     const zieleA = await ladeUebergabeZiele(org.A);
     expect(zieleA.map((z) => z.schluessel)).toEqual([agAinB]);
-    expect(zieleA[0].backofficeOrganizationId).toBe(org.B);
-    expect(zieleA[0].intern).toBe(false);
+    expect(zieleA[0]!.backofficeOrganizationId).toBe(org.B);
+    expect(zieleA[0]!.intern).toBe(false);
     const zieleC = await ladeUebergabeZiele(org.C);
     expect(zieleC.map((z) => z.schluessel)).toEqual(["intern"]);
   });

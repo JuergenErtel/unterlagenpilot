@@ -17,7 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
  * QC-Begruendung bleiben aussen vor.
  *
  * Rendert nichts, wenn es keinen Auftrag gibt - eine Akte ohne Backoffice
- * darf sich durch diese Karte nicht veraendern.
+ * darf sich durch diese Karte nicht veraendern. Zeigt den juengsten Auftrag
+ * JEDES Backoffice an dieser Akte: Beim eigenen fuehrt der Link in den
+ * Auftrag (mit Rolle), bei einem Partner-Backoffice ins Auftraggeberportal.
  */
 export async function BackofficeStatusKarte({
   caseId,
@@ -30,10 +32,11 @@ export async function BackofficeStatusKarte({
   istBackofficeNutzer: boolean;
 }) {
   const auftrag = await prisma.backofficeAuftrag.findFirst({
-    where: { caseId, backofficeOrganizationId: organizationId },
+    where: { caseId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      backofficeOrganizationId: true,
       auftragsnummer: true,
       status: true,
       pausiertSeit: true,
@@ -88,13 +91,25 @@ export async function BackofficeStatusKarte({
           label="Ergebnis verfügbar"
           wert={auftrag.uebergebenAm ? datumText(auftrag.uebergebenAm) : "noch nicht"}
         />
-        {istBackofficeNutzer && (
+        {auftrag.backofficeOrganizationId === organizationId ? (
+          istBackofficeNutzer && (
+            <div className="pt-2">
+              <Link
+                href={`/backoffice/auftraege/${auftrag.id}`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                Zum Auftrag
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </Link>
+            </div>
+          )
+        ) : (
           <div className="pt-2">
             <Link
-              href={`/backoffice/auftraege/${auftrag.id}`}
+              href={`/portal/auftraege/${auftrag.id}`}
               className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              Zum Auftrag
+              Im Auftraggeberportal ansehen
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </div>
