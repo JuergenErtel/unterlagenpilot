@@ -263,14 +263,19 @@ export async function getCaseCockpit(caseId: string): Promise<CockpitData> {
   };
 }
 
-function buildMissingGroups(
+export function buildMissingGroups(
   aggMissing: Awaited<ReturnType<typeof getCaseAggregate>>["missing"],
   requests: Array<{ requirementKey: string; title: string; reason: string; level: string; platform: string | null }>,
   applicants: Array<{ id: string; position: number; vorname: string | null; nachname: string | null }>
 ): CockpitData["missingGroups"] {
-  const sofort = aggMissing.filter((m) => m.level === "zwingend");
-  const spaeter = aggMissing.filter((m) => m.level === "spaeter");
-  const bank = aggMissing.filter((m) => m.level === "bankabhaengig");
+  // Eine behaltene, aber nachgeforderte Unterlage steht IMMER unter "Sofort":
+  // Der Vermittler hat sie ausdruecklich angefordert – auch wenn die Position
+  // an sich nur "optional" ist (Wohnflaechenberechnung, Fall Schmidt). Ohne
+  // diesen Zweig zaehlte die Kopfzeile sie mit, die Liste zeigte sie nicht.
+  const nachgefordert = (m: (typeof aggMissing)[number]) => (m.nachforderungGruende?.length ?? 0) > 0;
+  const sofort = aggMissing.filter((m) => m.level === "zwingend" || nachgefordert(m));
+  const spaeter = aggMissing.filter((m) => m.level === "spaeter" && !nachgefordert(m));
+  const bank = aggMissing.filter((m) => m.level === "bankabhaengig" && !nachgefordert(m));
 
   /*
    * Bei personenbezogenen Positionen MUSS dazustehen, für wen sie offen ist.
