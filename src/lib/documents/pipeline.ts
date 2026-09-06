@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { kiFehlerText } from "@/lib/ai/fehlertext";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { audit } from "@/lib/audit";
@@ -320,6 +321,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
   let ext: Awaited<ReturnType<typeof ai.extractFields>> | null = null;
   let bild: BildEinstufung | null = null;
+  let fehler: unknown = null;
   try {
     ocrResult = await ocr.extractText({
       storageKey: stored.storageKey,
@@ -345,6 +347,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
       bild = await stufeBildEin({ storageKey: stored.storageKey, mimeType: stored.mimeType, originalName, buffer }, ai);
     }
   } catch (e) {
+    fehler = e;
     // KI/OCR nicht verfuegbar. Fehlerart loggen (ohne Kundendaten und ohne
     // Dokumenttext) - bis 06.09.2026 wurde hier alles geschluckt, und der 429
     // des Falls Schmidt war in keinem Log und keinem Sentry zu finden.
@@ -407,12 +410,23 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         extractionStatus: ext || bild || lesbar === false ? "fertig" : "fehler",
         confidence: cls?.confidence ?? bild?.confidence,
         readable: lesbar,
+        // Der Grund steht am Dokument, damit der Arbeitsplatz ihn zeigen kann
+        // – und verschwindet, sobald ein Lauf gelingt.
+        aiErrorMessage: fehler ? kiFehlerText(fehler) : null,
         period: cls?.period ?? undefined,
+        // Vor dem Neuschreiben leeren: Diese Funktion laeuft auch bei der
+        // KI-Nachpruefung ueber ein bestehendes Dokument (analysiereDokument).
+        // Ohne deleteMany bekam das Grundbuch im Fall Schmidt seine Seite
+        // doppelt, und Felder/Warnungen haetten sich je Lauf vervielfacht.
         pages: ocrResult
-          ? { create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })) }
+          ? {
+              deleteMany: {},
+              create: ocrResult.pages.map((p) => ({ pageNumber: p.pageNumber, ocrText: p.text, width: p.width, height: p.height })),
+            }
           : undefined,
         extractedFields: ext
           ? {
+              deleteMany: {},
               create: ext.fields.map((f) => ({
                 key: f.key,
                 label: f.label,
@@ -423,7 +437,10 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
             }
           : undefined,
         warnings: ext
-          ? { create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })) }
+          ? {
+              deleteMany: {},
+              create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })),
+            }
           : undefined,
       },
     });

@@ -76,6 +76,10 @@ export async function fetchWithRateLimitRetry(
   for (let versuch = 0; versuch < RATE_LIMIT_BACKOFF_MS.length; versuch++) {
     const ueberlast = UEBERLAST_STATUS.has(res.status);
     if (res.status !== 429 && !ueberlast) return res;
+    // Kontingent 0/min ist kein volles Fenster, sondern ein gesperrtes Modell
+    // (Abo-Stufe des Kontos). Gemessen am 06.09.2026: Ein einzelner Klick auf
+    // "KI-Nachpruefung" lief so vier Backoffs lang (2 Minuten) ins Leere.
+    if (istKontingentGesperrt(res)) return res;
 
     const retryAfterSeconds = Number(res.headers?.get?.("retry-after"));
     const grundwartezeit = ueberlast
@@ -89,4 +93,43 @@ export async function fetchWithRateLimitRetry(
     res = await fetchWithTimeout(url, init, timeoutMs, fetchImpl);
   }
   return res;
+}
+
+/**
+ * 429, bei dem der Anbieter im Header ein Kontingent von 0 Anfragen je Minute
+ * meldet. Mistral tut das fuer Modelle, die die Abo-Stufe des Kontos nicht
+ * einschliesst – warten aendert daran nichts, nur das Konto.
+ */
+export function istKontingentGesperrt(res: Pick<Response, "status" | "headers">): boolean {
+  if (res.status !== 429) return false;
+  const limit = res.headers?.get?.("x-ratelimit-limit-req-minute");
+  return limit != null && Number(limit) === 0;
+}
+
+/**
+ * Fehler, den der KI-Anbieter selbst gemeldet hat (HTTP-Status ausserhalb 2xx).
+ * Eigene Klasse, damit die AIService ihn von einer ungueltigen Modellantwort
+ * unterscheiden kann: Letztere bekommt einen Reparatur-Versuch, ein
+ * Anbieterfehler nicht – der Aufruf waere derselbe und das Ergebnis auch.
+ */
+export class KiAnbieterFehler extends Error {
+  readonly status: number;
+  readonly kontingentGesperrt: boolean;
+
+  constructor(message: string, opt: { status: number; kontingentGesperrt?: boolean }) {
+    super(message);
+    this.name = "KiAnbieterFehler";
+    this.status = opt.status;
+    this.kontingentGesperrt = opt.kontingentGesperrt ?? false;
+  }
+}
+
+/** Sucht in einer Fehlerkette (cause) nach dem Anbieterfehler. */
+export function findeAnbieterFehler(e: unknown): KiAnbieterFehler | null {
+  let cur: unknown = e;
+  for (let i = 0; i < 5 && cur != null; i++) {
+    if (cur instanceof KiAnbieterFehler) return cur;
+    cur = cur instanceof Error ? cur.cause : null;
+  }
+  return null;
 }

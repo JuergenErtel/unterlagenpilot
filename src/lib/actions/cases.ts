@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { kiFehlerText } from "@/lib/ai/fehlertext";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { prisma } from "@/lib/db";
@@ -364,6 +365,7 @@ async function processAiCheckInBackground(params: {
             classificationStatus: "fertig",
             extractionStatus: "fertig",
             readable: true,
+            aiErrorMessage: null,
             extractedFields: {
               deleteMany: {},
               create: ext.fields.map((f) => ({
@@ -396,7 +398,7 @@ async function processAiCheckInBackground(params: {
         );
         await prisma.document.update({
           where: { id: doc.id },
-          data: { classificationStatus: "fehler", extractionStatus: "fehler" },
+          data: { classificationStatus: "fehler", extractionStatus: "fehler", aiErrorMessage: kiFehlerText(e) },
         });
       }
     });

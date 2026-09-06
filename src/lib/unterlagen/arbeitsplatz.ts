@@ -29,6 +29,8 @@ export interface ArbeitsplatzDokument {
   readable: boolean | null;
   classificationStatus: string;
   extractionStatus: string;
+  /** Grund des letzten KI-Fehlers in Alltagssprache, sonst null. */
+  aiErrorMessage: string | null;
   /** ISO-Datum des Uploads - Client-Komponenten bekommen keine Date-Objekte. */
   hochgeladenAm: string;
   /**

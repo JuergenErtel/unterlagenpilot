@@ -397,7 +397,9 @@ function DurchsichtPanel({
       ? unlesbar
         ? "Die KI konnte keinen Text lesen (Foto unscharf, zu klein oder leer). Typ von Hand wählen – oder aussortieren und in besserer Qualität neu hochladen lassen."
         : kiFehler
-          ? "Die KI-Erkennung ist fehlgeschlagen. Nachprüfen lassen oder den Typ von Hand wählen."
+          ? `Die KI-Erkennung ist fehlgeschlagen${d.aiErrorMessage ? `: ${d.aiErrorMessage}` : "."} ${
+              d.aiErrorMessage ? "" : "Nachprüfen lassen oder den Typ von Hand wählen."
+            }`.trim()
           : "Kein Typ erkannt. Typ wählen – dann ordnet sich das Dokument selbst in die passende Anforderung ein."
       : schritt.aufgabe === "bestaetigen"
         ? `Gehört zu: ${schritt.position?.name}. Freigeben heißt: Die Unterlage zählt für diese Anforderung und geht mit zur Bank.`
@@ -700,7 +702,11 @@ function DokumentZeile({
 function DokumentStatusMarke({ d }: { d: ArbeitsplatzDokument }) {
   if (d.readable === false) return <Badge variant="warning">unlesbar</Badge>;
   if (d.classificationStatus === "fehler" || d.extractionStatus === "fehler")
-    return <Badge variant="warning">KI-Fehler</Badge>;
+    return (
+      <Badge variant="warning" title={d.aiErrorMessage ?? undefined}>
+        KI-Fehler
+      </Badge>
+    );
   if (d.classificationStatus === "laeuft") return <Badge variant="ai">KI läuft</Badge>;
   if (d.reviewStatus === "akzeptiert") return <Badge variant="success">freigegeben</Badge>;
   if (d.reviewStatus === "offen") return <Badge variant="ai">zu prüfen</Badge>;

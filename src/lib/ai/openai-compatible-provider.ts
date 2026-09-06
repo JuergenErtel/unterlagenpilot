@@ -2,7 +2,7 @@ import type { AICompletionRequest, AIProvider } from "./types";
 import { getEnv } from "@/lib/env";
 import { extractJson } from "./json-extract";
 import { buildSystemPrompt } from "./azure-provider";
-import { fetchWithRateLimitRetry, AI_TIMEOUT_MS } from "./http";
+import { fetchWithRateLimitRetry, AI_TIMEOUT_MS, KiAnbieterFehler, istKontingentGesperrt } from "./http";
 import { kiDrossel } from "./drossel";
 
 /**
@@ -94,8 +94,9 @@ export class OpenAICompatibleProvider implements AIProvider {
       // Antwort-Body mitnehmen (gekürzt, keine Kundendaten – nur die Anbieter-Fehlermeldung),
       // damit z.B. "document_url not supported" im Log sichtbar wird statt nur "HTTP 422".
       const body = await res.text().catch(() => "");
-      throw new Error(
+      throw new KiAnbieterFehler(
         `EU-OpenAI-kompatibel HTTP ${res.status}${body ? `: ${body.slice(0, 600)}` : ""}`,
+        { status: res.status, kontingentGesperrt: istKontingentGesperrt(res) },
       );
     }
     const data = (await res.json()) as {

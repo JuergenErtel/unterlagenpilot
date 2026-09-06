@@ -66,6 +66,7 @@ export default async function UnterlagenArbeitsplatzPage({
         reviewStatus: true,
         readable: true,
         classificationStatus: true,
+        aiErrorMessage: true,
         extractionStatus: true,
         createdAt: true,
       },
@@ -95,6 +96,7 @@ export default async function UnterlagenArbeitsplatzPage({
     classificationStatus: d.classificationStatus,
     extractionStatus: d.extractionStatus,
     hochgeladenAm: d.createdAt.toISOString(),
+    aiErrorMessage: d.aiErrorMessage ?? null,
     hochgeladenAmText: `${UPLOAD_ZEIT.format(d.createdAt)} Uhr`,
   }));
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { KiAnbieterFehler } from "./http";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AICompletionRequest, AIProvider } from "./types";
 import { getAIProvider } from "./factory";
@@ -85,10 +86,16 @@ export class AIService {
         return schema.parse(raw);
       } catch (err) {
         lastError = err;
+        // Ein Anbieterfehler (429/403/5xx) ist keine ungueltige Antwort, die
+        // ein Reparatur-Hinweis besser machen koennte. Der zweite Versuch
+        // liefe denselben Backoff noch einmal – am 06.09.2026 vier Minuten
+        // Spinner fuer einen Klick, bei gesperrtem Modell ohne jede Chance.
+        if (err instanceof KiAnbieterFehler) break;
       }
     }
     throw new Error(
-      `KI-Ausgabe konnte nach ${maxAttempts} Versuchen nicht validiert werden (${schemaName}): ${describe(lastError)}`
+      `KI-Ausgabe konnte nach ${lastError instanceof KiAnbieterFehler ? 1 : maxAttempts} Versuchen nicht validiert werden (${schemaName}): ${describe(lastError)}`,
+      { cause: lastError }
     );
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchWithRateLimitRetry } from "@/lib/ai/http";
+import { fetchWithRateLimitRetry, istKontingentGesperrt } from "@/lib/ai/http";
 
 /**
  * Hintergrund (05.08.): Beim Fall Colell scheiterten alle 19 Dokumente der
@@ -144,5 +144,30 @@ describe("fetchWithRateLimitRetry", () => {
     // 1 Erstversuch + begrenzte Wiederholungen (kein Endlos-Retry).
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(5);
+  });
+
+  it("wiederholt NICHT, wenn der Anbieter ein Kontingent von 0/min meldet – warten hilft dort nie", async () => {
+    // Gemessen am 06.09.2026 (Fall Schmidt, ein einzelner Klick auf
+    // "KI-Nachpruefung"): Mistral antwortete 429 mit
+    // x-ratelimit-limit-req-minute: 0. Das ist kein volles Fenster, sondern
+    // ein gesperrtes Modell (Abo-Stufe). Vier Backoffs mal zwei
+    // Validierungsversuche hielten den Knopf trotzdem vier Minuten im Spinner.
+    vi.useFakeTimers();
+    const gesperrt = {
+      ok: false,
+      status: 429,
+      headers: new Headers({ "x-ratelimit-limit-req-minute": "0", "x-ratelimit-remaining-req-minute": "0" }),
+      text: async () => '{"message":"Rate limit exceeded","code":"1300"}',
+    } as unknown as Response;
+    const fetchMock = vi.fn().mockResolvedValue(gesperrt);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRateLimitRetry("https://api.example.test/v1/chat", { method: "POST" }, 60_000);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+
+    expect(res.status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(istKontingentGesperrt(res)).toBe(true);
   });
 });

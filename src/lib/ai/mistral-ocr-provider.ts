@@ -1,6 +1,6 @@
 import type { OCRProvider, OcrInput, OcrResult } from "./types";
 import { getEnv } from "@/lib/env";
-import { fetchWithRateLimitRetry, OCR_TIMEOUT_MS } from "./http";
+import { fetchWithRateLimitRetry, OCR_TIMEOUT_MS, KiAnbieterFehler, istKontingentGesperrt } from "./http";
 import { kiDrossel } from "./drossel";
 
 /**
@@ -59,7 +59,7 @@ export class MistralOCRProvider implements OCRProvider {
 
     if (!res.ok) {
       // Nur Status loggen – keine Kundendaten.
-      throw new Error(`Mistral OCR HTTP ${res.status}`);
+      throw new KiAnbieterFehler(`Mistral OCR HTTP ${res.status}`, { status: res.status, kontingentGesperrt: istKontingentGesperrt(res) });
     }
 
     const data = (await res.json()) as {

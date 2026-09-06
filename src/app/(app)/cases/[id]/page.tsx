@@ -803,7 +803,9 @@ export default async function CaseCockpitPage({
                                     Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
                                   </Badge>
                                 ) : d.classificationStatus === "fehler" || d.extractionStatus === "fehler" ? (
-                                  <Badge variant="warning">KI-Fehler – „KI-Prüfung starten“ wiederholt die Auswertung</Badge>
+                                  <Badge variant="warning">
+                                    KI-Fehler{d.aiErrorMessage ? `: ${d.aiErrorMessage}` : " – „KI-Prüfung starten“ wiederholt die Auswertung"}
+                                  </Badge>
                                 ) : d.reviewStatus === "offen" ? (
                                   // Freigabe dort anbieten, wo das Dokument liegt: Bis hierher
                                   // stand nur ein passives Abzeichen, und der einzige Weg zur

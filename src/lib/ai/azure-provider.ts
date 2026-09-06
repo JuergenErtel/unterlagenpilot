@@ -1,4 +1,5 @@
 import type { AICompletionRequest, AIProvider } from "./types";
+import { KiAnbieterFehler } from "./http";
 import { getEnv } from "@/lib/env";
 import { extractJson } from "./json-extract";
 
@@ -51,7 +52,7 @@ export class AzureOpenAIProvider implements AIProvider {
 
     if (!res.ok) {
       // Kein Response-Body mit Kundendaten loggen – nur Status.
-      throw new Error(`Azure OpenAI HTTP ${res.status}`);
+      throw new KiAnbieterFehler(`Azure OpenAI HTTP ${res.status}`, { status: res.status });
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;

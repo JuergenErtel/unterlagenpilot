@@ -1011,6 +1011,10 @@ model Document {
 
   // Qualitaet / Duplikat
   readable      Boolean?
+  /// Grund des letzten KI-Fehlers in Alltagssprache (keine Kundendaten),
+  /// null sobald ein Lauf gelingt. Seit 06.09.2026 – bis dahin sagte die
+  /// Oberflaeche nur "KI-Fehler", und das Nachpruefen endete beim selben Satz.
+  aiErrorMessage String?
   missingPages  Boolean?
   isDuplicate   Boolean  @default(false)
   duplicateOfId String?
