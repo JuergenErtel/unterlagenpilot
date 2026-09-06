@@ -12,10 +12,12 @@ import { join } from "node:path";
  * requireAkteAccess / requireCaseAccess / akteSichtbarWhere (Vertrieb und
  * Backoffice), ladeAkteFuerRoute / ladeDokumentFuerRoute (Routen),
  * requirePortalAuftrag / ladePortalAuftragFuerRoute (Portal) oder ueber ein
- * Upload-Token (Kunde). Die Grenze: Statisch laesst sich nur pruefen, DASS ein
- * Guard importiert wird und dass die verbotenen Muster fehlen - nicht, dass
- * der Guard vor jedem Zugriff aufgerufen wird. Dafuer stehen die DB-Tests
- * (tests/backoffice-dokument-zugriff-db.test.ts).
+ * Upload-Token (Kunde). Statisch pruefbar ist: DASS ein Guard importiert wird,
+ * dass die verbotenen Muster fehlen - und seit 06.09.2026 zusaetzlich, dass in
+ * jeder exportierten Funktion der erste Guard-Aufruf textlich vor dem ersten
+ * Datenbankzugriff steht (Ausnahmen namentlich in REIHENFOLGE_AUSNAHMEN).
+ * Was hier nicht geht: beweisen, dass der Guard fuer DIESE Akte gefragt wurde.
+ * Dafuer stehen die DB-Tests (tests/backoffice-dokument-zugriff-db.test.ts).
  */
 
 const WURZEL = process.cwd();
@@ -65,6 +67,87 @@ const SERVICE_AUSNAHMEN: Record<string, string> = {
   "src/lib/saas/plans.ts": "Tarifzaehler (Dokumente je Fall, KI-Laeufe je Monat): Ressourcenverbrauch der Organisation, bewusst inklusive Backoffice-Akten",
 };
 
+/**
+ * Schneidet exportierte async-Funktionen in Ruempfe: {name, rumpf}. Klammer-
+ * zaehlung ab der ersten "{" nach dem Funktionskopf; Strings mit
+ * unbalancierten Klammern gibt es in den Actions nicht - kippt das einmal,
+ * meldet der Selbsttest unten die Datei.
+ */
+function funktionsRuempfe(src: string): Array<{ name: string; rumpf: string }> {
+  const out: Array<{ name: string; rumpf: string }> = [];
+  const re = /export async function (\w+)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    const start = src.indexOf("{", re.lastIndex);
+    if (start < 0) continue;
+    let tiefe = 0;
+    let i = start;
+    for (; i < src.length; i++) {
+      if (src[i] === "{") tiefe++;
+      else if (src[i] === "}") {
+        tiefe--;
+        if (tiefe === 0) break;
+      }
+    }
+    out.push({ name: m[1]!, rumpf: src.slice(start, i + 1) });
+  }
+  return out;
+}
+
+/** Aufrufe, die als Zugriffsschutz gelten - die Akten-Guards, die Bereichs-Guards, die Token-Guards. */
+const GUARD_NAMEN = [
+  ...ERLAUBTE_GUARDS,
+  "requireBackoffice",
+  "requireBackofficeManager",
+  "requirePortal",
+  "requirePlatformAdmin",
+  "resolveSelfDisclosureToken",
+];
+const DB_ZUGRIFF = /\b(prisma|tx)\./;
+
+function guardRegex(namen: string[]): RegExp {
+  return new RegExp(`\\b(${namen.join("|")})\\s*\\(`);
+}
+
+/**
+ * Private Hilfsfunktionen einer Datei, die selbst einen Guard rufen
+ * (ladeFall, ladeBefund, pruefeFall ...): Ein Aufruf von ihnen zaehlt in
+ * dieser Datei wie der Guard selbst.
+ */
+function guardHelfer(src: string): string[] {
+  const out: string[] = [];
+  const re = /(?<!export )(?:async )?function (\w+)\s*\(/g;
+  const basis = guardRegex(GUARD_NAMEN);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    const start = src.indexOf("{", re.lastIndex);
+    if (start < 0) continue;
+    let tiefe = 0;
+    let i = start;
+    for (; i < src.length; i++) {
+      if (src[i] === "{") tiefe++;
+      else if (src[i] === "}") {
+        tiefe--;
+        if (tiefe === 0) break;
+      }
+    }
+    if (basis.test(src.slice(start, i + 1))) out.push(m[1]!);
+  }
+  return out;
+}
+
+/**
+ * Funktionen, die vor dem Guard (oder ohne) in die Datenbank duerfen - jede
+ * mit Grund. Schluessel: "<Pfad relativ>#<Funktion>". Gemeinsam ist ihnen:
+ * Es gibt (noch) keine Akte, die ein Guard schuetzen koennte.
+ */
+const REIHENFOLGE_AUSNAHMEN: Record<string, string> = {
+  "src/lib/actions/cases.ts#createCase": "legt eine neue Akte der eigenen Organisation an - es gibt noch nichts zu schuetzen",
+  "src/lib/actions/finlink.ts#importFromFinLink": "der Connector legt die Akte selbst an; das Nachlesen betrifft nur die eben erzeugte ID (Fallnummer)",
+  "src/lib/actions/machbarkeit.ts#speichereAnnahmen": "organisationsweite Zinsannahmen, keine Akte",
+  "src/lib/actions/review.ts#reviewExtractedField": "liest vor dem Guard nur die documentId des Feldes, um requireDocumentAccess zu fragen; kein Inhalt",
+};
+
 describe("Vertrag: Dokument- und Aktenzugriff nur ueber den zentralen Guard", () => {
   const actions = dateienUnter(join(WURZEL, "src/lib/actions"), (p) => p.endsWith(".ts"));
   const routen = dateienUnter(join(WURZEL, "src/app/api"), (p) => p.endsWith("route.ts"));
@@ -106,5 +189,40 @@ describe("Vertrag: Dokument- und Aktenzugriff nur ueber den zentralen Guard", ()
     expect(s).toContain("notFound()");
     expect(s).toContain('action: "access.denied"');
     expect(s).not.toMatch(/metadata:\s*\{[^}]*(storageKey|originalName|generatedName)/);
+  });
+  describe("Reihenfolge: Guard vor dem ersten Datenbankzugriff", () => {
+    for (const datei of kandidaten) {
+      const rel = datei.slice(WURZEL.length + 1);
+      const quelle = readFileSync(datei, "utf-8");
+      const ruempfe = funktionsRuempfe(quelle);
+      const guardInDatei = guardRegex([...GUARD_NAMEN, ...guardHelfer(quelle)]);
+      for (const { name, rumpf } of ruempfe) {
+        const db = rumpf.search(DB_ZUGRIFF);
+        if (db < 0) continue;
+        it(`${rel}#${name}`, () => {
+          if (REIHENFOLGE_AUSNAHMEN[`${rel}#${name}`]) return;
+          const guard = rumpf.search(guardInDatei);
+          // Der Guard darf im SELBEN Statement stehen wie der erste Zugriff
+          // (findFirst({ where: { ...akteSichtbarWhere(ctx) } })).
+          const statementEnde = rumpf.indexOf(";", db);
+          const grenze = statementEnde < 0 ? rumpf.length : statementEnde;
+          expect(guard >= 0 && guard < grenze, `${rel}#${name}: erster Datenbankzugriff vor dem Guard (oder ohne Guard)`).toBe(true);
+        });
+      }
+    }
+
+    it("Selbsttest: findet Funktionsruempfe und Guard-Helfer", () => {
+      const s = readFileSync(join(WURZEL, "src/lib/actions/upload.ts"), "utf-8");
+      expect(funktionsRuempfe(s).length).toBeGreaterThan(3);
+      expect(guardHelfer(readFileSync(join(WURZEL, "src/lib/actions/detektiv.ts"), "utf-8"))).toContain("ladeBefund");
+    });
+
+    it("jede Ausnahme zeigt auf eine existierende Funktion", () => {
+      for (const key of Object.keys(REIHENFOLGE_AUSNAHMEN)) {
+        const [rel, fn] = key.split("#");
+        const quelle = readFileSync(join(WURZEL, rel!), "utf-8");
+        expect(funktionsRuempfe(quelle).some((r) => r.name === fn), key).toBe(true);
+      }
+    });
   });
 });
