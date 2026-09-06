@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
+import { isPublicPath } from "@/lib/security/public-paths";
 
 /**
  * Globaler Passwortschutz (Site-Gate) für den Pilotbetrieb.
@@ -8,53 +9,9 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  * geteilte Passwort eingeben, bevor die App überhaupt erreichbar ist. Ohne die
  * Variable ist das Gate deaktiviert (Dev/Demo unverändert).
  *
- * Bewusst ausgenommen (dürfen NIE hinter dem Gate liegen):
- *  - `/upload/*`      Kunden-Upload-Links (Externe kennen das Gate-Passwort nicht)
- *  - `/selbstauskunft/*` Kunden-Selbstauskunft (gleicher Grund)
- *  - `/anfrage/*`     Oeffentliches Anfrageformular (Externe kennen das Gate-Passwort nicht)
- *  - `/einreichen/*`  Einreichungslink des Backoffice (Externe ohne Konto, Geheimnis im Pfad)
- *  - `/datenschutz`, `/agb`, `/avv`, `/impressum` Oeffentliche Rechtsseiten. Die oeffentliche
- *    Kundenstrecke (`/anfrage`, `/selbstauskunft`) verlinkt neben dem
- *    Einwilligungs-Haekchen auf `/datenschutz` – landete der Klick hinter dem
- *    Gate, koennte die betroffene Person den Text nie lesen und die
- *    Einwilligung, deren Nachweis eigens im Datenmodell steht, waere wertlos.
- *  - `/api/cron/*`    Vercel-Cron (per CRON_SECRET geschützt)
- *  - `/monitoring`    Sentry-Tunnel (Fehler-Reports)
- *  - `/gate`, `/api/gate`  das Gate selbst
- *  - `/registrieren/bestaetigen/*`, `/passwort-neu/*`, `/einladung/*`
- *    Magic-Link-Strecken (tragen ihr eigenes Geheimnis im Pfad). Das
- *    Formular `/registrieren` selbst bleibt bewusst HINTER dem Gate.
+ * Welche Pfade ausgenommen sind (Landingpage, Kundenstrecken, Rechtsseiten,
+ * Magic Links), steht mit Begruendung in `src/lib/security/public-paths.ts`.
  */
-
-const PUBLIC_PREFIXES = [
-  "/upload",
-  "/selbstauskunft",
-  "/anfrage",
-  // Einreichungslink des Backoffice: Externe ohne Konto, Geheimnis im Pfad.
-  "/einreichen",
-  "/datenschutz",
-  "/agb",
-  "/avv",
-  // Impressumspflicht laeuft ins Leere, wenn die Seite hinter einem Passwort
-  // liegt: Sie muss "leicht erkennbar, unmittelbar erreichbar" sein (§ 5 DDG).
-  "/impressum",
-  "/api/cron",
-  "/monitoring",
-  "/gate",
-  "/api/gate",
-  // Magic-Link-Strecken: tragen ihr eigenes Geheimnis im Pfad. Ohne diese
-  // Ausnahme scheitert jeder, der die Mail auf einem anderen Geraet oeffnet,
-  // am Gate. Das Formular /registrieren bleibt bewusst HINTER dem Gate.
-  "/registrieren/bestaetigen",
-  "/passwort-neu",
-  "/einladung",
-];
-
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
-  );
-}
 
 /**
  * Content-Security-Policy mit per-Request-Nonce.

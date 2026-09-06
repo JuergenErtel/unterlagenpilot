@@ -1,3 +1,4 @@
+import { isPublicPath } from "@/lib/security/public-paths";
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -51,8 +52,7 @@ describe("Anbieterangaben", () => {
   it("machen aus der Impressumsseite keine Seite hinter dem Gate", () => {
     // Eine Impressumspflicht läuft ins Leere, wenn die Seite ein Passwort
     // verlangt (§ 5 DDG: "leicht erkennbar, unmittelbar erreichbar").
-    const middleware = readFileSync(join(process.cwd(), "src", "middleware.ts"), "utf-8");
-    expect(middleware).toContain('"/impressum"');
+    expect(isPublicPath("/impressum")).toBe(true);
   });
 });
 

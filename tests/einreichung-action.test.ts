@@ -1,6 +1,5 @@
+import { isPublicPath } from "@/lib/security/public-paths";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 const reicheEin = vi.fn();
 const loeseEinreichungsToken = vi.fn();
@@ -93,7 +92,6 @@ describe("einreichungAbsendenAction", () => {
   });
 
   it("Vertrag: /einreichen liegt vor dem Site-Gate", () => {
-    const mw = readFileSync(resolve(__dirname, "../src/middleware.ts"), "utf-8");
-    expect(mw).toMatch(/"\/einreichen",/);
+    expect(isPublicPath("/einreichen/abc")).toBe(true);
   });
 });
