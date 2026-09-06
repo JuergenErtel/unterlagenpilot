@@ -156,6 +156,7 @@ describe("Falsches Gruen: der KI-Prueflauf", () => {
         applicantId: null,
         applicantSource: null,
         documentType: null,
+        originalName: "scan.pdf",
         pages: [{ ocrText: "Grundbuch von Woerth Blatt 1234 Abteilung II Lasten und Beschraenkungen" }],
         extractedFields: [],
       },
