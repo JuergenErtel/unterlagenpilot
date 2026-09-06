@@ -46,6 +46,27 @@ describe("Checklisten-Logik", () => {
     expect(ausweis?.status).toBe("vorhanden");
   });
 
+  it("ein behaltenes, aber nachgefordertes Dokument erfuellt die Position nicht und traegt den Grund", () => {
+    // Fall Schmidt (06.09.2026): Wohnflaechenberechnung richtig erkannt, aber
+    // nicht bankkonform. Behalten – und trotzdem die bankkonforme Fassung
+    // nachfordern. Ohne diesen Zustand verschwand die Position mit der
+    // Freigabe aus jeder Nachforderung.
+    const list = buildChecklistForCase(
+      { employmentType: "angestellter", financingType: "kauf", propertyType: "einfamilienhaus" },
+      [
+        {
+          documentType: "wohnflaechenberechnung",
+          reviewStatus: "akzeptiert",
+          readable: true,
+          nachforderungGrund: "Nicht bankkonform, Berechnung nach WoFlV erforderlich.",
+        },
+      ]
+    );
+    const pos = list.find((i) => i.documentType === "wohnflaechenberechnung");
+    expect(pos?.status).toBe("unvollstaendig");
+    expect(pos?.nachforderungGruende).toEqual(["Nicht bankkonform, Berechnung nach WoFlV erforderlich."]);
+  });
+
   it("ein Dokument mit fehlenden Seiten erfuellt die Position nicht – sie bleibt unvollstaendig", () => {
     // Fall Schmidt (06.09.2026): ein Blatt "Seite 5 von 9" als Grundbuchauszug.
     const list = buildChecklistForCase(

@@ -799,6 +799,11 @@ export default async function CaseCockpitPage({
                                     genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
                                     die Checkliste meldete Gruen fuer ein Dokument, das im Fall
                                     nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
+                                {d.nachforderungGrund && (
+                                  <Badge variant="warning" title={d.nachforderungGrund}>
+                                    behalten, aber nachgefordert
+                                  </Badge>
+                                )}
                                 {d.missingPages && (
                                   <Badge variant="warning">
                                     unvollständig – {d.warnings.find((w) => w.code === SEITEN_FEHLEN_CODE)?.message.split(" – ")[0] ?? "Seiten fehlen"}

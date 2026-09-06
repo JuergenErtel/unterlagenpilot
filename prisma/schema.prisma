@@ -1015,6 +1015,10 @@ model Document {
   /// null sobald ein Lauf gelingt. Seit 06.09.2026 – bis dahin sagte die
   /// Oberflaeche nur "KI-Fehler", und das Nachpruefen endete beim selben Satz.
   aiErrorMessage String?
+  /// "Behalten, aber nachfordern": Grund, warum die Bank diese freigegebene
+  /// Unterlage nicht anerkennt. Gesetzt = zaehlt nicht als Erfuellung, die
+  /// Position bleibt in der Nachforderung. Seit 06.09.2026 (Fall Schmidt).
+  nachforderungGrund String?
   missingPages  Boolean?
   isDuplicate   Boolean  @default(false)
   duplicateOfId String?

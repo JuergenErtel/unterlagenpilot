@@ -23,6 +23,7 @@ const dok = (o: Partial<ArbeitsplatzDokument> & { id: string }): ArbeitsplatzDok
   extractionStatus: "fertig",
   aiErrorMessage: null,
   seitenHinweis: null,
+  nachforderungGrund: null,
   hochgeladenAm: "2026-08-31T08:00:00.000Z",
   hochgeladenAmText: "31.08.26, 10:00 Uhr",
   ...o,

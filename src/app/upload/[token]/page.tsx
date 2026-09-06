@@ -97,6 +97,7 @@ export default async function PublicUploadPage({
       documentType: d.documentType,
       reviewStatus: d.reviewStatus,
       reviewNote: d.reviewNote,
+      nachforderungGrund: d.nachforderungGrund,
       createdAt: d.createdAt,
       applicantId: d.applicantId,
     })),
@@ -192,6 +193,11 @@ export default async function PublicUploadPage({
                   </div>
                   <PositionZustand zustand={p.zustand} verlangt={p.verlangt} akzeptiert={p.akzeptiert} />
                 </div>
+                {p.zustand === "nachgefordert" && p.grund && (
+                  <p className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-[hsl(var(--warning))]">
+                    {p.grund}
+                  </p>
+                )}
                 {p.zustand === "abgelehnt" && p.grund && (
                   <p className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
                     {p.grund}
@@ -303,6 +309,9 @@ function PositionZustand({
     },
     angenommen: { punkt: "bg-success", text: "Angenommen", farbe: "text-success" },
     abgelehnt: { punkt: "bg-destructive", text: "Bitte erneut hochladen", farbe: "text-destructive" },
+    // Liegt vor, wird von der Bank so aber nicht anerkannt – der Grund steht
+    // darunter. Kein "angenommen", sonst laedt der Kunde nichts nach.
+    nachgefordert: { punkt: "bg-warning", text: "Andere Fassung erforderlich", farbe: "text-[hsl(var(--warning))]" },
   };
   const { punkt, text, farbe } = config[zustand];
   return (

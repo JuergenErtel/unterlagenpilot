@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { NachfordernButton, NachforderungAufhebenButton } from "@/components/review/nachfordern-button";
+import { nachforderungVorlage } from "@/lib/documents/nachforderung";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FileText, Inbox, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -424,6 +426,11 @@ function DurchsichtPanel({
       <div>
         <p className="text-base font-semibold">{frage}</p>
         <p className="mt-1 text-sm text-muted-foreground">{erklaerung}</p>
+        {d.nachforderungGrund && (
+          <p className="mt-2 rounded-md border border-warning/50 bg-warning/10 px-2 py-1.5 text-sm">
+            <span className="font-semibold">Behalten, aber nachgefordert:</span> {d.nachforderungGrund}
+          </p>
+        )}
         {d.seitenHinweis && (
           // Fall Schmidt: ein Blatt "Seite 5 von 9" als Grundbuchauszug. Der Typ
           // stimmt, das Dokument ist trotzdem unbrauchbar - die Position bleibt
@@ -443,6 +450,11 @@ function DurchsichtPanel({
               {schritt.aufgabe === "bestaetigen" ? "Ja, freigeben" : "Behalten und freigeben"}
             </SubmitButton>
           </form>
+        )}
+        {schritt.aufgabe !== "zuordnen" && freigebbar && (
+          // Behalten, aber nachfordern: Typ stimmt, die Bank erkennt die
+          // Fassung aber nicht an (Wohnflaechenberechnung ohne WoFlV).
+          <NachfordernButton documentId={d.id} vorlage={nachforderungVorlage(d.documentType)} />
         )}
         {kiFehler && !unlesbar && (
           <form action={einzelDokumentNachpruefen}>
@@ -564,6 +576,17 @@ function FreieEntscheidung({
           <>
             <Badge variant="success">{DOCUMENT_REVIEW_STATUS_LABELS.akzeptiert}</Badge>
             <ReopenDocumentButton documentId={d.id} />
+            {d.nachforderungGrund ? (
+              <>
+                <Badge variant="warning" title={d.nachforderungGrund}>
+                  nachgefordert
+                </Badge>
+                <NachforderungAufhebenButton documentId={d.id} />
+              </>
+            ) : (
+              // Auch nachtraeglich: Die Bank meldet sich erst nach der Freigabe.
+              <NachfordernButton documentId={d.id} vorlage={nachforderungVorlage(d.documentType)} />
+            )}
           </>
         ) : d.reviewStatus === "abgelehnt" ? (
           <>
@@ -714,6 +737,12 @@ function DokumentStatusMarke({ d }: { d: ArbeitsplatzDokument }) {
     return (
       <Badge variant="warning" title={d.seitenHinweis}>
         unvollständig
+      </Badge>
+    );
+  if (d.nachforderungGrund)
+    return (
+      <Badge variant="warning" title={d.nachforderungGrund}>
+        nachgefordert
       </Badge>
     );
   if (d.classificationStatus === "fehler" || d.extractionStatus === "fehler")

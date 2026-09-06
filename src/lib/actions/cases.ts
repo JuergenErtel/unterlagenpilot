@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { nachforderungTitel, NACHFORDERUNG_GRUND_MAX } from "@/lib/documents/nachforderung";
 import { erkenneFehlendeSeiten, seitenWarnung } from "@/lib/documents/seitenzaehlung";
 import { generateFileName } from "@/lib/documents/filename";
 import { kiFehlerText } from "@/lib/ai/fehlertext";
@@ -485,7 +486,7 @@ export async function generateMessage(
   }
 
   const kundeName = [a?.vorname, a?.nachname].filter(Boolean).join(" ");
-  const items = agg.missing.map((m) => ({ title: m.name }));
+  const items = agg.missing.map((m) => ({ title: nachforderungTitel(m) }));
 
   // Signatur aus den Organisationsdaten (mandantenfähig statt hartkodiert).
   const broker = await getBrokerInfo(ctx.organizationId);
@@ -598,6 +599,10 @@ export async function setDocumentReview(
       // Review-Center) – sonst ausdrücklich leeren, damit ein alter Grund nicht
       // an einem später angenommenen Dokument kleben bleibt.
       reviewNote: reviewStatus === "abgelehnt" ? grund?.trim().slice(0, 500) || null : null,
+      // Eine Nachforderung haengt nur an einer freigegebenen Unterlage. Wird
+      // sie abgelehnt, ersetzt oder als Duplikat markiert, ist der Grund
+      // gegenstandslos – sonst bliebe die Position fuer immer "unvollstaendig".
+      ...(reviewStatus === "akzeptiert" ? {} : { nachforderungGrund: null }),
     },
     select: { caseId: true, documentType: true },
   });
@@ -679,7 +684,7 @@ export async function reopenDocument(documentId: string): Promise<void> {
     where: { id: documentId },
     // Ablehnungsgrund mit zuruecknehmen: er steht dem Kunden auf der
     // Upload-Seite; er darf ein wieder offenes Dokument nicht weiter begleiten.
-    data: { reviewStatus: "offen", reviewNote: null },
+    data: { reviewStatus: "offen", reviewNote: null, nachforderungGrund: null },
   });
 
   await audit({
@@ -706,6 +711,53 @@ export async function reopenDocument(documentId: string): Promise<void> {
  */
 export async function acceptDocument(documentId: string): Promise<void> {
   await setDocumentReview(documentId, "akzeptiert");
+}
+
+/**
+ * "Behalten, aber nachfordern" (Fall Schmidt, 06.09.2026): Die Unterlage wird
+ * freigegeben und bleibt in der Akte, gilt aber nicht als Erfuellung ihrer
+ * Position – der Grund steht in jeder Nachforderung und in der Kundenansicht.
+ */
+export async function dokumentFreigebenUndNachfordern(documentId: string, grund: string): Promise<void> {
+  const text = grund.trim().slice(0, NACHFORDERUNG_GRUND_MAX);
+  if (!text) return;
+  await setDocumentReview(documentId, "akzeptiert");
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
+  const doc = await prisma.document.update({
+    where: { id: documentId },
+    data: { nachforderungGrund: text },
+    select: { caseId: true },
+  });
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "document.reviewed",
+    entityType: "document",
+    entityId: documentId,
+    metadata: { reviewStatus: "akzeptiert", nachforderung: true },
+  });
+  revalidatePath(`/cases/${doc.caseId}`, "layout");
+  revalidatePath("/review");
+}
+
+/** Die Bank erkennt die vorhandene Fassung doch an: Nachforderung aufheben. */
+export async function nachforderungAufheben(documentId: string): Promise<void> {
+  const { ctx } = await requireDocumentAccess(documentId, { schreibend: true });
+  const doc = await prisma.document.update({
+    where: { id: documentId },
+    data: { nachforderungGrund: null },
+    select: { caseId: true },
+  });
+  await audit({
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    action: "document.reviewed",
+    entityType: "document",
+    entityId: documentId,
+    metadata: { nachforderung: false },
+  });
+  revalidatePath(`/cases/${doc.caseId}`, "layout");
+  revalidatePath("/review");
 }
 
 /** Zu prüfende/befüllende Stammdaten-Spalten des Antragstellers. */

@@ -30,12 +30,13 @@ function pos(key: string, extra: Record<string, unknown> = {}) {
 function dok(
   documentType: string,
   reviewStatus: string,
-  extra: { reviewNote?: string | null; minute?: number } = {}
+  extra: { reviewNote?: string | null; minute?: number; nachforderungGrund?: string | null } = {}
 ) {
   return {
     documentType,
     reviewStatus,
     reviewNote: extra.reviewNote ?? null,
+    nachforderungGrund: extra.nachforderungGrund ?? null,
     createdAt: new Date(2026, 7, 8, 10, extra.minute ?? 0),
   };
 }
@@ -406,5 +407,28 @@ describe("Kundensicht auf den Unterlagenstand", () => {
     expect(f.positionen[0]).toMatchObject({ zustand: "angenommen", verlangt: 1, akzeptiert: 1 });
     expect(f.erledigt).toBe(1);
     expect(f.prozent).toBe(100);
+  });
+});
+
+describe("Kundensicht: behalten, aber nachgefordert", () => {
+  it("zeigt die Position als nachgefordert mit Grund statt als angenommen", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("wohnflaechenberechnung")],
+      dokumente: [dok("wohnflaechenberechnung", "akzeptiert", { nachforderungGrund: "Bitte eine Berechnung nach WoFlV nachreichen." })],
+    });
+    expect(f.positionen[0]!.zustand).toBe("nachgefordert");
+    expect(f.positionen[0]!.grund).toBe("Bitte eine Berechnung nach WoFlV nachreichen.");
+    expect(f.erledigt).toBe(0);
+  });
+
+  it("gilt als angenommen, sobald eine zweite, anerkannte Fassung freigegeben ist", () => {
+    const f = baueKundenfortschritt({
+      positionen: [pos("wohnflaechenberechnung")],
+      dokumente: [
+        dok("wohnflaechenberechnung", "akzeptiert", { nachforderungGrund: "Nicht bankkonform.", minute: 1 }),
+        dok("wohnflaechenberechnung", "akzeptiert", { minute: 2 }),
+      ],
+    });
+    expect(f.positionen[0]!.zustand).toBe("angenommen");
   });
 });

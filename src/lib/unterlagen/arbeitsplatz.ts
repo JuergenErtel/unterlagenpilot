@@ -33,6 +33,8 @@ export interface ArbeitsplatzDokument {
   aiErrorMessage: string | null;
   /** Fehlende Seiten laut Fusszeile, z. B. "Nur Seite 5 von 9 vorhanden" – sonst null. */
   seitenHinweis: string | null;
+  /** "Behalten, aber nachfordern": der Grund, sonst null. */
+  nachforderungGrund: string | null;
   /** ISO-Datum des Uploads - Client-Komponenten bekommen keine Date-Objekte. */
   hochgeladenAm: string;
   /**

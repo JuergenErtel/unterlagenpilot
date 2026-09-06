@@ -70,6 +70,7 @@ export default async function UnterlagenArbeitsplatzPage({
         aiErrorMessage: true,
         extractionStatus: true,
         missingPages: true,
+        nachforderungGrund: true,
         warnings: { where: { code: SEITEN_FEHLEN_CODE }, select: { message: true }, take: 1 },
         createdAt: true,
       },
@@ -101,6 +102,7 @@ export default async function UnterlagenArbeitsplatzPage({
     hochgeladenAm: d.createdAt.toISOString(),
     aiErrorMessage: d.aiErrorMessage ?? null,
     seitenHinweis: d.missingPages ? (d.warnings[0]?.message.split(" – ")[0] ?? "Seiten fehlen") : null,
+    nachforderungGrund: d.nachforderungGrund ?? null,
     hochgeladenAmText: `${UPLOAD_ZEIT.format(d.createdAt)} Uhr`,
   }));
 

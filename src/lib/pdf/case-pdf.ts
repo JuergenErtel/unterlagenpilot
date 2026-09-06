@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { nachforderungTitel } from "@/lib/documents/nachforderung";
 import { getBrokerInfo } from "@/lib/organization/broker-info";
 import { getCaseAggregate } from "@/lib/cases/service";
 import { AIService } from "@/lib/ai/service";
@@ -183,7 +184,7 @@ export async function buildHandoverData(
       .join(" · ") || undefined,
     enthalten,
     // Nur bankrelevante Positionen als Nachreichliste (keine Kunden-Wordings).
-    nachreichen: agg.missing.map((i) => i.name),
+    nachreichen: agg.missing.map((i) => nachforderungTitel(i)),
     haushalt: { ueberschuss: formatEUR(haushalt.ueberschuss), tragfaehig: haushalt.tragfaehig },
   };
 

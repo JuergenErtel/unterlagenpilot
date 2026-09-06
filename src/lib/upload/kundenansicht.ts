@@ -11,8 +11,12 @@ export interface KundenPosition {
   name: string;
   beschreibung: string;
   beispiel?: string;
-  zustand: "offen" | "eingegangen" | "teilweise" | "angenommen" | "abgelehnt";
-  /** Nur bei Ablehnung, und nur wenn der Vermittler einen Grund hinterlegt hat. */
+  zustand: "offen" | "eingegangen" | "teilweise" | "angenommen" | "abgelehnt" | "nachgefordert";
+  /**
+   * Bei Ablehnung (wenn der Vermittler einen Grund hinterlegt hat) und bei
+   * "nachgefordert": die Unterlage liegt vor, die Bank erkennt sie aber so
+   * nicht an – der Grund sagt, was anders sein soll.
+   */
   grund?: string;
   /**
    * Wie viele Dokumente diese Position insgesamt braucht (z. B. 2 bei einer
@@ -45,6 +49,8 @@ export interface KundenDokument {
   documentType: string | null;
   reviewStatus: string;
   reviewNote: string | null;
+  /** "Behalten, aber nachfordern": gesetzt = zaehlt nicht als angenommen. */
+  nachforderungGrund?: string | null;
   /**
    * Wann die Datei hochgeladen wurde. Noetig, weil je Position der JUENGSTE
    * Stand gilt: laedt der Kunde nach einer Ablehnung dieselbe Unterlage neu
@@ -97,7 +103,10 @@ export function baueKundenfortschritt(input: {
     // Dokument die Position faelschlich als komplett "angenommen" melden, obwohl
     // z. B. der zweite Antragsteller noch gar nichts eingereicht hat.
     const verlangt = Math.max(p.effectiveRequiredCount, 1);
-    const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert");
+    // Eine behaltene, aber nachgeforderte Unterlage ist fuer den Kunden nicht
+    // "angenommen" – er soll die anerkannte Fassung liefern.
+    const nachgefordert = passende.filter((d) => d.reviewStatus === "akzeptiert" && d.nachforderungGrund);
+    const angenommen = passende.filter((d) => d.reviewStatus === "akzeptiert" && !d.nachforderungGrund);
     // Bei Positionen je Antragsteller zaehlt jede Person nur ihr eigenes Soll:
     // zwei Ausweise desselben Antragstellers ergeben keine zwei erfuellten
     // Plaetze.
@@ -126,6 +135,10 @@ export function baueKundenfortschritt(input: {
     }
     if (akzeptiert > 0) {
       return basis(p, "teilweise", verlangt, akzeptiert);
+    }
+    if (nachgefordert.length > 0) {
+      const juengste = nachgefordert[nachgefordert.length - 1]!;
+      return { ...basis(p, "nachgefordert", verlangt, akzeptiert), grund: juengste.nachforderungGrund ?? undefined };
     }
     if (abgelehnt) {
       return { ...basis(p, "abgelehnt", verlangt, akzeptiert), grund: abgelehnt.reviewNote ?? undefined };

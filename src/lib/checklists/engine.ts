@@ -49,6 +49,12 @@ export interface ResolvedChecklistItem extends ChecklistItemDef {
     | "abgelehnt"
     | "nicht_erforderlich";
   matchedDocuments: number;
+  /**
+   * Gruende behaltener, aber nachgeforderter Unterlagen dieser Position
+   * ("nicht bankkonform ..."). Nachforderung, PDF und Fallseite nennen sie,
+   * damit der Kunde weiss, was an seiner Unterlage anders sein soll.
+   */
+  nachforderungGruende: string[];
   customerVisible: boolean;
   /** Tatsächlich verlangte Anzahl (bei perApplicant × Anzahl Antragsteller). */
   effectiveRequiredCount: number;
@@ -161,6 +167,8 @@ export interface ExistingDocument {
   readable?: boolean | null;
   /** Fusszeile verraet fehlende Seiten ("Seite 5 von 9") – zaehlt dann nicht als erfuellt. */
   missingPages?: boolean | null;
+  /** "Behalten, aber nachfordern": Grund gesetzt = zaehlt nicht als erfuellt. */
+  nachforderungGrund?: string | null;
   ageDays?: number | null; // Alter des Dokumentinhalts (z.B. Abrechnungsmonat)
   /** Zugeordneter Antragsteller (null = noch nicht zugeordnet). */
   applicantId?: string | null;
@@ -228,7 +236,9 @@ function evaluateMatches(
 ): { fulfilled: boolean; tooOld: boolean } {
   // Unlesbare Dokumente zählen nicht zur Erfüllung – und unvollständige auch
   // nicht (Fall Schmidt: ein Blatt "Seite 5 von 9" als Grundbuchauszug).
-  const readable = matches.filter((m) => m.readable !== false && m.missingPages !== true);
+  // Und eine behaltene, aber nachgeforderte Unterlage (nicht bankkonform)
+  // ebenso wenig – sie bleibt in der Akte, die Position bleibt offen.
+  const readable = matches.filter((m) => m.readable !== false && m.missingPages !== true && !m.nachforderungGrund);
   const fulfilled = readable.length >= required;
 
   // Aktualität nur anhand von Dokumenten mit BEKANNTEM Alter beurteilen.
@@ -317,6 +327,7 @@ function resolveStatus(
     ...def,
     status,
     matchedDocuments: matches.length,
+    nachforderungGruende: matches.map((m) => m.nachforderungGrund?.trim() ?? "").filter(Boolean),
     effectiveRequiredCount,
     offeneAntragsteller,
     // KO-/Risikobewertungen sind intern; reine Unterlagen-Checkliste ist für Kunde sichtbar.

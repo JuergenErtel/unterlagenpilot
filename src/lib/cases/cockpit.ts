@@ -281,6 +281,9 @@ function buildMissingGroups(
    * war nicht abzuleiten, dass es um Antragsteller 2 ging.
    */
   const grund = (m: (typeof aggMissing)[number], standard: string): string => {
+    // Behalten, aber nachgefordert: der Grund schlaegt den Standardsatz –
+    // "Pflichtunterlage fehlt" waere falsch, sie liegt ja vor.
+    if (m.nachforderungGruende?.length) return `Vorhandene Unterlage wird nicht anerkannt: ${m.nachforderungGruende.join(" ")}`;
     const zusatz = fehltFuerSatz(m.offeneAntragsteller ?? [], applicants);
     return zusatz ? `${standard} ${zusatz}` : standard;
   };
