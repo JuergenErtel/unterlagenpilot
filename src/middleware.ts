@@ -12,6 +12,7 @@ import { SITE_GATE_COOKIE, verifyGateToken } from "@/lib/security/site-gate";
  *  - `/upload/*`      Kunden-Upload-Links (Externe kennen das Gate-Passwort nicht)
  *  - `/selbstauskunft/*` Kunden-Selbstauskunft (gleicher Grund)
  *  - `/anfrage/*`     Oeffentliches Anfrageformular (Externe kennen das Gate-Passwort nicht)
+ *  - `/einreichen/*`  Einreichungslink des Backoffice (Externe ohne Konto, Geheimnis im Pfad)
  *  - `/datenschutz`, `/agb`, `/avv`, `/impressum` Oeffentliche Rechtsseiten. Die oeffentliche
  *    Kundenstrecke (`/anfrage`, `/selbstauskunft`) verlinkt neben dem
  *    Einwilligungs-Haekchen auf `/datenschutz` – landete der Klick hinter dem
@@ -29,6 +30,8 @@ const PUBLIC_PREFIXES = [
   "/upload",
   "/selbstauskunft",
   "/anfrage",
+  // Einreichungslink des Backoffice: Externe ohne Konto, Geheimnis im Pfad.
+  "/einreichen",
   "/datenschutz",
   "/agb",
   "/avv",

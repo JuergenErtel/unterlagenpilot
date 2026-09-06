@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireContext, roleAtLeast } from "@/lib/auth/context";
 import { istBackofficeAktiv } from "@/lib/backoffice/feature";
+import { deaktiviereEinreichungsLink, erzeugeEinreichungsLink } from "@/lib/backoffice/einreichung";
 import { requireBackofficeAuftrag, requireBackofficeManager } from "@/lib/backoffice/zugriff";
 import {
   erzeugeAuftrag,
@@ -527,4 +528,28 @@ export async function slaVorgabeAction(_prev: AktionsErgebnis, fd: FormData): Pr
 export async function backofficeSichtbar(): Promise<boolean> {
   const ctx = await requireContext();
   return Boolean(ctx.backofficeRolle) && (await istBackofficeAktiv(ctx.organizationId));
+}
+
+// ---------------------------------------------------------------------------
+// Einreichungslink (Auftraggeber ohne BaufiDesk-Konto)
+// ---------------------------------------------------------------------------
+
+export async function einreichungsLinkErzeugenAction(
+  _prev: { url?: string; error?: string },
+  fd: FormData
+): Promise<{ url?: string; error?: string }> {
+  const ctx = await requireBackofficeManager();
+  const auftraggeberId = text(fd, "auftraggeberId");
+  const r = await erzeugeEinreichungsLink({ auftraggeberId, backofficeOrganizationId: ctx.organizationId, userId: ctx.userId });
+  if (!r.ok) return { error: r.grund };
+  revalidatePath(`/backoffice/auftraggeber/${auftraggeberId}`);
+  return { url: r.wert.url };
+}
+
+export async function einreichungsLinkDeaktivierenAction(auftraggeberId: string): Promise<AktionsErgebnis> {
+  const ctx = await requireBackofficeManager();
+  const r = await deaktiviereEinreichungsLink({ auftraggeberId, backofficeOrganizationId: ctx.organizationId, userId: ctx.userId });
+  if (!r.ok) return { error: r.grund };
+  revalidatePath(`/backoffice/auftraggeber/${auftraggeberId}`);
+  return { ok: true };
 }

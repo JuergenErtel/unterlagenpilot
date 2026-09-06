@@ -12,6 +12,8 @@ import { berechneKontingent, vorperiode, type KontingentEreignisRoh } from "@/li
 import { periodeVon } from "@/lib/backoffice/sla";
 import { datumZeitText } from "@/lib/backoffice/anzeige";
 import { AuftragsListe } from "@/components/backoffice/auftrags-liste";
+import { EinreichungslinkBlock } from "@/components/backoffice/einreichungslink-block";
+import { ladeEinreichungsLinkStand } from "@/lib/backoffice/einreichung";
 import { AuftraggeberForm, KontaktDeaktivieren, KontaktForm, KontingentKorrekturForm, VerknuepfungForm } from "@/components/backoffice/auftraggeber-formulare";
 import { BACKOFFICE_ABRECHNUNGSMODELL_LABELS, type BackofficeAbrechnungsmodell } from "@/lib/domain/enums";
 
@@ -35,6 +37,7 @@ export default async function AuftraggeberDetailPage({ params }: { params: Promi
   if (!ag) notFound();
 
   const auftraege = await ladeAuftragZeilen({ auftraggeberId: ag.id, backofficeOrganizationId: ctx.organizationId });
+  const einreichungsLink = await ladeEinreichungsLinkStand(ag.id);
   const stand = berechneKontingent({
     periode,
     modell: ag.abrechnungsmodell as BackofficeAbrechnungsmodell,
@@ -136,6 +139,29 @@ export default async function AuftraggeberDetailPage({ params }: { params: Promi
               <CardContent className="space-y-3 text-sm">
                 <div>{ag.organization ? <>Verknüpft mit <span className="font-medium">{ag.organization.name}</span> (<span className="font-mono">{ag.organization.slug}</span>)</> : "Nicht verknüpft."}</div>
                 {manager && <VerknuepfungForm id={ag.id} aktuellerSlug={ag.organization?.slug ?? null} />}
+              </CardContent>
+            </Card>
+          )}
+
+          {manager && !intern && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Einreichungslink</CardTitle>
+                <CardDescription>
+                  Für Auftraggeber ohne BaufiDesk-Konto: Aufträge über einen geheimen Link einreichen. Der Link zeigt
+                  keine Aufträge und keine Ergebnisse.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EinreichungslinkBlock
+                  auftraggeberId={ag.id}
+                  stand={{
+                    aktiv: einreichungsLink.aktiv,
+                    seit: einreichungsLink.seit?.toISOString() ?? null,
+                    zuletztGenutzt: einreichungsLink.zuletztGenutzt?.toISOString() ?? null,
+                    einreichungen: einreichungsLink.einreichungen,
+                  }}
+                />
               </CardContent>
             </Card>
           )}

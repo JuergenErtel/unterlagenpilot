@@ -364,7 +364,7 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
             <div className="space-y-1.5">
               <Zeile k="Leistungen" v={auftrag.leistungen.map(leistungsLabel).join(", ") || "—"} />
               <Zeile k="Eingang" v={datumZeitText(auftrag.eingangAm)} />
-              <Zeile k="Quelle" v={auftrag.quelle === "portal" ? "Portal" : auftrag.quelle === "vertrieb_uebergabe" ? "Übergabe aus dem Vertrieb" : "Manuell"} />
+              <Zeile k="Quelle" v={auftrag.quelle === "portal" ? "Portal" : auftrag.quelle === "vertrieb_uebergabe" ? "Übergabe aus dem Vertrieb" : auftrag.quelle === "einreichung" ? "Einreichungslink" : "Manuell"} />
               {auftrag.referenzExtern && <Zeile k="Referenz" v={auftrag.referenzExtern} />}
               {kontakt?.email && <Zeile k="E-Mail" v={kontakt.email} />}
               {auftrag.hinweiseAuftraggeber && (
