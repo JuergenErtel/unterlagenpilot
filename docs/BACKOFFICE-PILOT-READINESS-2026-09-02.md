@@ -185,6 +185,30 @@ Keine. Alle Änderungen betreffen Autorisierung, Guards und Tests.
 6. **Tarifzähler** (Dokumente je Fall, KI-Läufe je Monat) zählen Backoffice-Akten mit. Fachlich
    gewollt (Ressourcenverbrauch), im Vertragstest als Ausnahme benannt.
 
+### Nachtrag 06.09.2026
+
+- **Cross-Org-Übergabe umgesetzt**: Der Auftrag ist die Zugriffsbrücke (`akteSichtbarWhere`,
+  `entscheideAktenzugriff` in `src/lib/auth/context.ts`). Fremdakten sind für das Backoffice nur in
+  der Unterlagenarbeit sichtbar: `requireCaseAccess` verweigert sie ohne `fremdakteErlaubt`, die
+  Allowlist steht in `tests/fremdakte-vertrag.test.ts`, Vertriebsseiten laden über
+  `eigeneAkteWhere`. Die Fallakte leitet für B zum Auftrag um, die Bereichsleiste zeigt nur
+  Auftrag und Unterlagen. Storage-Präfix und Pipeline laufen auf die Organisation der Akte
+  (drei Stellen prüften bisher gegen die Kontext-Organisation). Dokument- und KI-Zähler laufen
+  auf den Eigentümer der Akte, nicht auf das Backoffice. Übergabe-Karte mit Zielwahl; Statuskarte
+  verlinkt bei Partner-Backoffice ins Portal. DB-Test: `tests/backoffice-cross-org-db.test.ts`.
+- **Externer Einreichungslink umgesetzt**: reine Eingangstür `/einreichen/[token]` (vor dem
+  Site-Gate), Modell `BackofficeEinreichungsLink` (PROD-DDL 06.09. eingespielt), Manager-Block
+  auf der Auftraggeberseite, Honeypot + Rate-Limit, Quelle `einreichung`. Dateien laufen über
+  einen normalen Kunden-Upload-Link (72 h, 50 Dateien), kein zweiter Upload-Pfad. Kein Status,
+  kein Ergebnis, kein Versand. Tests: `tests/einreichung-db.test.ts`, `tests/einreichung-action.test.ts`.
+- **Vertragstest** prüft zusätzlich je exportierter Funktion, dass der erste Guard-Aufruf vor dem
+  ersten Datenbankzugriff steht (private Guard-Helfer werden erkannt; vier begründete Ausnahmen
+  ohne Akte). Keine echte Lücke gefunden.
+- **Zahlungsabwicklung bleibt außen vor** (Entscheidung 06.09.2026): Abrechnung = Kontingent-
+  Ereignisse + Abrechnungsstatus; die Rechnung entsteht außerhalb von BaufiDesk.
+- Verbleibend aus Abschnitt 12 damit nur noch: Lint nicht konfiguriert (4), Plattform-Admin ohne
+  Dokumentrechte (5, beabsichtigt), Tarifzähler inkl. Backoffice-Akten (6, beabsichtigt).
+
 ## 13. Pilotfreigabe
 
 Der Backoffice-Prozess läuft im synthetischen Durchlauf vollständig durch. Dokumentzugriffe sind

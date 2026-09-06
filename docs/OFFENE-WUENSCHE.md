@@ -79,6 +79,18 @@ eine EÜR). Ein Drittel der Dokumente mit einer Rückfrage zu belegen ist
 Reibung, die Jürgen wollen muss. Die dafür nötige Schlüsselwortliste liegt seit
 jeher ungenutzt in `document-types.ts`.
 
+## Fehler: Alle Dokumente als unleserlich eingestuft (Kunde Schmidt)
+
+**Aufgenommen:** 06.09.2026 · **Offen**
+
+Test mit Unterlagen-Upload beim Kunden Schmidt: **alle** Dokumente wurden als unleserlich
+eingestuft, sogar ein Objektfoto. Verdacht: Die Lesbarkeitsschwelle aus
+`src/lib/documents/textsubstanz.ts` (40 Zeichen, eingeführt 18.08.) trifft Bilddokumente ohne
+Text zu Recht – aber wenn auch textreiche PDFs betroffen sind, liefert die OCR nichts (Timeout,
+429, leere Antwort) und die Schwelle macht den Ausfall zur Einstufung. Zuerst prüfen: OCR-Log
+und `ocrText`-Länge der Schmidt-Dokumente in PROD, dann die Frage, ob reine Bilddokumente
+(Objektfoto, Grundriss) überhaupt durch die Textschwelle laufen sollten.
+
 ## Nachträge aus dem Katalogschnitt (16.08.2026)
 
 Beim Kürzen der Selbstauskunft gefunden, bewusst nicht mitgemacht:
