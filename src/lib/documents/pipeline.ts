@@ -338,8 +338,13 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
       });
       ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
     }
-  } catch {
-    // KI/OCR nicht verfügbar – ohne Klartext loggen.
+  } catch (e) {
+    // KI/OCR nicht verfuegbar. Fehlerart loggen (ohne Kundendaten und ohne
+    // Dokumenttext) - bis 06.09.2026 wurde hier alles geschluckt, und der 429
+    // des Falls Schmidt war in keinem Log und keinem Sentry zu finden.
+    console.warn(
+      `[pipeline] OCR/KI fuer Dokument ${documentId} fehlgeschlagen: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`
+    );
   }
 
   // Eine Datei ohne erkannten Text ist maschinell nicht lesbar. Das Merkmal

@@ -34,8 +34,10 @@ export const OCR_TIMEOUT_MS = 120_000; // OCR ganzer PDFs kann länger dauern
  * Minutenfenster (Requests/min, Tokens/min) – die Wartezeiten müssen also einen
  * Fensterwechsel überbrücken können, sonst läuft der Retry ins selbe Limit
  * (genau das ließ am 05.08. alle 19 Colell-Dokumente auf "fehler" laufen).
+ * Vierter Schritt seit 06.09. (Fall Schmidt): Ein Burst, den die Drossel
+ * (./drossel.ts) nicht ganz abfaengt, braucht ein volles Fenster Ruhe.
  */
-const RATE_LIMIT_BACKOFF_MS = [5_000, 20_000, 35_000];
+const RATE_LIMIT_BACKOFF_MS = [5_000, 20_000, 35_000, 60_000];
 /** Obergrenze für Retry-After des Anbieters, damit ein Ausreißer-Header den Lauf nicht blockiert. */
 const RATE_LIMIT_MAX_WAIT_MS = 60_000;
 

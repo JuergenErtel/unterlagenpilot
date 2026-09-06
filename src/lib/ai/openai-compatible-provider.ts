@@ -3,6 +3,7 @@ import { getEnv } from "@/lib/env";
 import { extractJson } from "./json-extract";
 import { buildSystemPrompt } from "./azure-provider";
 import { fetchWithRateLimitRetry, AI_TIMEOUT_MS } from "./http";
+import { kiDrossel } from "./drossel";
 
 /**
  * Baut den User-Inhalt: reiner Text, oder multimodal (Text + Bilder + Dokumente).
@@ -42,8 +43,8 @@ export class OpenAICompatibleProvider implements AIProvider {
     const env = getEnv();
     return Boolean(
       env.OPENAI_COMPATIBLE_BASE_URL &&
-        env.OPENAI_COMPATIBLE_API_KEY &&
-        env.OPENAI_COMPATIBLE_MODEL
+      env.OPENAI_COMPATIBLE_API_KEY &&
+      env.OPENAI_COMPATIBLE_MODEL,
     );
   }
 
@@ -51,7 +52,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     const env = getEnv();
     if (!this.isConfigured()) {
       throw new Error(
-        "OpenAICompatibleProvider ist nicht konfiguriert. OPENAI_COMPATIBLE_BASE_URL/API_KEY/MODEL setzen."
+        "OpenAICompatibleProvider ist nicht konfiguriert. OPENAI_COMPATIBLE_BASE_URL/API_KEY/MODEL setzen.",
       );
     }
 
@@ -60,29 +61,33 @@ export class OpenAICompatibleProvider implements AIProvider {
 
     // Mit 429-Backoff: Die Minuten-Limits des Anbieters (Requests/Tokens pro
     // Minute) sind bei der parallelen KI-Prüfung schnell erschöpft; ohne
-    // Wartezeit liefe jeder Retry ins selbe Fenster.
-    const res = await fetchWithRateLimitRetry(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.OPENAI_COMPATIBLE_API_KEY}`,
+    // Wartezeit liefe jeder Retry ins selbe Fenster. Und durch die Drossel:
+    // Ein Sammel-Upload feuert sonst 70 Anfragen in Sekunden ab (Fall Schmidt,
+    // 06.09.2026) - kein Backoff der Welt holt das aus dem 50/min-Fenster.
+    const res = await kiDrossel().mit(() =>
+      fetchWithRateLimitRetry(
+        url,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${env.OPENAI_COMPATIBLE_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: env.OPENAI_COMPATIBLE_MODEL,
+            messages: [
+              { role: "system", content: buildSystemPrompt(req) },
+              {
+                role: "user",
+                content: buildUserContent(req),
+              },
+            ],
+            temperature: 0,
+            response_format: { type: "json_object" },
+          }),
         },
-        body: JSON.stringify({
-          model: env.OPENAI_COMPATIBLE_MODEL,
-          messages: [
-            { role: "system", content: buildSystemPrompt(req) },
-            {
-              role: "user",
-              content: buildUserContent(req),
-            },
-          ],
-          temperature: 0,
-          response_format: { type: "json_object" },
-        }),
-      },
-      AI_TIMEOUT_MS
+        AI_TIMEOUT_MS,
+      ),
     );
 
     if (!res.ok) {
@@ -90,7 +95,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       // damit z.B. "document_url not supported" im Log sichtbar wird statt nur "HTTP 422".
       const body = await res.text().catch(() => "");
       throw new Error(
-        `EU-OpenAI-kompatibel HTTP ${res.status}${body ? `: ${body.slice(0, 600)}` : ""}`
+        `EU-OpenAI-kompatibel HTTP ${res.status}${body ? `: ${body.slice(0, 600)}` : ""}`,
       );
     }
     const data = (await res.json()) as {

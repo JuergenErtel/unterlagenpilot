@@ -1,6 +1,7 @@
 import type { OCRProvider, OcrInput, OcrResult } from "./types";
 import { getEnv } from "@/lib/env";
 import { fetchWithRateLimitRetry, OCR_TIMEOUT_MS } from "./http";
+import { kiDrossel } from "./drossel";
 
 /**
  * EU-/DSGVO-konforme OCR via Mistral OCR (mistral-ocr-latest).
@@ -26,7 +27,7 @@ export class MistralOCRProvider implements OCRProvider {
     const key = this.apiKey();
     if (!key) {
       throw new Error(
-        "MistralOCRProvider nicht konfiguriert: MISTRAL_API_KEY (oder OPENAI_COMPATIBLE_API_KEY) setzen."
+        "MistralOCRProvider nicht konfiguriert: MISTRAL_API_KEY (oder OPENAI_COMPATIBLE_API_KEY) setzen.",
       );
     }
     if (!input.buffer) {
@@ -39,17 +40,21 @@ export class MistralOCRProvider implements OCRProvider {
       ? { type: "image_url" as const, image_url: dataUri }
       : { type: "document_url" as const, document_url: dataUri };
 
-    const res = await fetchWithRateLimitRetry(
-      `${env.MISTRAL_API_BASE_URL.replace(/\/$/, "")}/ocr`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
+    // Dieselbe Drossel wie der Chat-Provider: OCR und Einstufung teilen sich
+    // das Minutenkontingent desselben Kontos.
+    const res = await kiDrossel().mit(() =>
+      fetchWithRateLimitRetry(
+        `${env.MISTRAL_API_BASE_URL.replace(/\/$/, "")}/ocr`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify({ model: env.MISTRAL_OCR_MODEL, document }),
         },
-        body: JSON.stringify({ model: env.MISTRAL_OCR_MODEL, document }),
-      },
-      OCR_TIMEOUT_MS
+        OCR_TIMEOUT_MS,
+      ),
     );
 
     if (!res.ok) {
