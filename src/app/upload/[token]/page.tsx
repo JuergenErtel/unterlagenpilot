@@ -151,7 +151,9 @@ export default async function PublicUploadPage({
           eingereicht={fortschritt.eingereicht}
           gesamt={fortschritt.gesamt}
           segmente={fortschritt.positionen.map((p) => ({
-            zustand: p.zustand,
+            // Fuer die Leiste ist "nachgefordert" wie "abgelehnt": der Kunde muss
+            // handeln, die Position ist fuer ihn wieder offen.
+            zustand: p.zustand === "nachgefordert" ? "abgelehnt" : p.zustand,
             name: p.name,
           }))}
         />

@@ -54,7 +54,7 @@ export interface ResolvedChecklistItem extends ChecklistItemDef {
    * ("nicht bankkonform ..."). Nachforderung, PDF und Fallseite nennen sie,
    * damit der Kunde weiss, was an seiner Unterlage anders sein soll.
    */
-  nachforderungGruende: string[];
+  nachforderungGruende?: string[];
   customerVisible: boolean;
   /** Tatsächlich verlangte Anzahl (bei perApplicant × Anzahl Antragsteller). */
   effectiveRequiredCount: number;
