@@ -5,8 +5,10 @@ import {
   akteSichtbarWhere,
   darfBackofficeAkteBearbeiten,
   darfBackofficeAkteSehen,
+  entscheideAktenzugriff,
   getCurrentContext,
   requireContext,
+  type AktenzugriffOptionen,
   type AppContext,
 } from "@/lib/auth/context";
 import type { AkteArt, CaseStatus } from "@/lib/domain/enums";
@@ -21,8 +23,11 @@ import type { AkteArt, CaseStatus } from "@/lib/domain/enums";
  *   3. Aktenart: Vertriebsakten sieht jeder Nutzer der Organisation,
  *      Backoffice-Akten nur, wer eine Backoffice-Rolle hat - Bearbeiter nur
  *      mit eigenem oder freiem Auftrag (akteSichtbarWhere / darfBackofficeAkteSehen),
- *   4. bei schreibendem Zugriff auf eine Backoffice-Akte: ein noch nicht
- *      abgeschlossener Auftrag.
+ *   3b. Fremdakte (Cross-Org): Akte einer anderen Organisation mit Auftrag der
+ *      eigenen Backoffice-Organisation - fuer Dokumente immer, fuer die ganze
+ *      Akte nur mit fremdakteErlaubt (Unterlagenarbeit),
+ *   4. bei schreibendem Zugriff auf eine Backoffice- oder Fremdakte: ein noch
+ *      nicht abgeschlossener Auftrag.
  *
  * Alle Verweigerungen antworten mit 404 (notFound), nie mit 403: Wer nicht
  * darf, erfaehrt nicht, dass es das Dokument gibt. Fehlversuche landen ohne
@@ -40,12 +45,12 @@ export interface DokumentZugriff {
 export interface AkteZugriff {
   ctx: AppContext;
   akte: { id: string; organizationId: string; akteArt: AkteArt; status: CaseStatus; caseNumber: string };
+  /** true, wenn die Akte einer anderen Organisation gehoert (Auftragsbruecke). */
+  fremd: boolean;
 }
 
-export interface ZugriffOptionen {
-  /** Mutation: Backoffice-Akten nur mit offenem Auftrag. */
-  schreibend?: boolean;
-}
+/** Optionen: schreibend, fremdakteErlaubt - definiert in context.ts, eine Quelle. */
+export type ZugriffOptionen = AktenzugriffOptionen;
 
 async function verweigert(ctx: AppContext | null, art: "dokument" | "akte", id: string, schreibend: boolean): Promise<never> {
   // Nur IDs und die Art des Versuchs - kein Name, kein Inhalt, kein Pfad.
@@ -76,8 +81,16 @@ export async function requireDocumentAccess(documentId: string, optionen: Zugrif
       })
     : null;
   if (!doc) return verweigert(ctx, "dokument", documentId, Boolean(optionen.schreibend));
-  if (optionen.schreibend && doc.case.akteArt === "backoffice" && !(await darfBackofficeAkteBearbeiten(ctx, doc.caseId))) {
-    return verweigert(ctx, "dokument", documentId, true);
+  if (optionen.schreibend) {
+    // Dokumente SIND die Unterlagenarbeit - deshalb fremdakteErlaubt: die
+    // Sichtbarkeit kam schon aus akteSichtbarWhere (Auftragsbruecke), hier
+    // geht es nur noch um "offener Auftrag" bei Backoffice- und Fremdakten.
+    const e = await entscheideAktenzugriff(
+      ctx,
+      { id: doc.caseId, organizationId: doc.case.organizationId, akteArt: doc.case.akteArt as AkteArt },
+      { schreibend: true, fremdakteErlaubt: true }
+    );
+    if (!e.erlaubt) return verweigert(ctx, "dokument", documentId, true);
   }
   return {
     ctx,
@@ -92,8 +105,9 @@ export async function requireDocumentAccess(documentId: string, optionen: Zugrif
 }
 
 /**
- * Wie requireCaseAccess, mit Schreibpruefung fuer Backoffice-Akten und
- * Audit des Fehlversuchs. Fuer Aktionen, die eine ganze Akte veraendern.
+ * Wie requireCaseAccess (dieselbe Regel: entscheideAktenzugriff), mit Audit
+ * des Fehlversuchs. Fuer Aktionen, die eine ganze Akte veraendern. Fremdakten
+ * nur mit fremdakteErlaubt.
  */
 export async function requireAkteAccess(caseId: string, optionen: ZugriffOptionen = {}): Promise<AkteZugriff> {
   const ctx = await requireContext();
@@ -104,12 +118,16 @@ export async function requireAkteAccess(caseId: string, optionen: ZugriffOptione
       })
     : null;
   if (!akte) return verweigert(ctx, "akte", caseId, Boolean(optionen.schreibend));
-  if (optionen.schreibend && akte.akteArt === "backoffice" && !(await darfBackofficeAkteBearbeiten(ctx, akte.id))) {
-    return verweigert(ctx, "akte", caseId, true);
-  }
+  const e = await entscheideAktenzugriff(
+    ctx,
+    { id: akte.id, organizationId: akte.organizationId, akteArt: akte.akteArt as AkteArt },
+    optionen
+  );
+  if (!e.erlaubt) return verweigert(ctx, "akte", caseId, Boolean(optionen.schreibend));
   return {
     ctx,
     akte: { id: akte.id, organizationId: akte.organizationId, akteArt: akte.akteArt as AkteArt, status: akte.status as CaseStatus, caseNumber: akte.caseNumber },
+    fremd: e.fremd,
   };
 }
 
@@ -131,6 +149,7 @@ export async function ladeAkteFuerRoute(caseId: string): Promise<RouteZugriff<Ak
     status: 200,
     ctx,
     akte: { id: akte.id, organizationId: akte.organizationId, akteArt: akte.akteArt as AkteArt, status: akte.status as CaseStatus, caseNumber: akte.caseNumber },
+    fremd: akte.organizationId !== ctx.organizationId,
   };
 }
 

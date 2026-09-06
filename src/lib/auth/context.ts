@@ -153,10 +153,103 @@ export async function requireOrganizationAccess(organizationId: string): Promise
   return ctx;
 }
 
+export interface AktenzugriffOptionen {
+  /** Mutation: Backoffice-Akten und Fremdakten nur mit offenem Auftrag. */
+  schreibend?: boolean;
+  /**
+   * Fremdakte zulassen: eine Akte einer anderen Organisation, an der ein
+   * Auftrag der eigenen Backoffice-Organisation haengt (Cross-Org-Uebergabe).
+   * Standard false - Vertriebsseiten (Erstgespraech, Verwaltung, Provision,
+   * Machbarkeit ...) bleiben dem Eigentuemer vorbehalten; nur die
+   * Unterlagenarbeit setzt das Opt-in. Allowlist: tests/fremdakte-vertrag.test.ts.
+   */
+  fremdakteErlaubt?: boolean;
+}
+
+/** Auftraege der eigenen Backoffice-Organisation; Bearbeiter nur freie oder eigene. */
+function auftragsFilterFuer(ctx: AppContext): Prisma.BackofficeAuftragWhereInput {
+  return {
+    backofficeOrganizationId: ctx.organizationId,
+    ...(ctx.backofficeRolle === "bearbeiter" ? { OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }] } : {}),
+  };
+}
+
 /**
- * Lädt einen Fall NUR, wenn er zur Organisation des Kontextes gehört.
- * Existiert er nicht oder gehört er einer anderen Organisation, antworten wir
- * identisch (404), um Existenz nicht preiszugeben.
+ * Prisma-Where fuer Akten der EIGENEN Organisation: Vertriebsakten immer,
+ * Backoffice-Akten nur mit Backoffice-Rolle (Bearbeiter: freier oder eigener
+ * Auftrag). Fuer Vertriebsseiten, die eine Fremdakte nie zeigen duerfen.
+ */
+export function eigeneAkteWhere(ctx: AppContext): Prisma.CaseWhereInput {
+  const backoffice: Prisma.CaseWhereInput[] = ctx.backofficeRolle
+    ? [{ akteArt: "backoffice", backofficeAuftraege: { some: auftragsFilterFuer(ctx) } }]
+    : [];
+  return { organizationId: ctx.organizationId, OR: [{ akteArt: "vertrieb" }, ...backoffice] };
+}
+
+/**
+ * Prisma-Where fuer "Akten, die dieser Kontext sehen darf": eigene Akten
+ * (eigeneAkteWhere) ODER die Auftragsbruecke - eine Akte einer anderen
+ * Organisation, an der ein Auftrag der eigenen Backoffice-Organisation haengt
+ * (Cross-Org-Uebergabe). Fuer Dokumente, Review-Center und den
+ * Unterlagen-Arbeitsplatz, also die Unterlagenarbeit. Wer eine Vertriebsseite
+ * baut, nimmt eigeneAkteWhere.
+ */
+export function akteSichtbarWhere(ctx: AppContext): Prisma.CaseWhereInput {
+  const bruecke: Prisma.CaseWhereInput[] = ctx.backofficeRolle
+    ? [{ backofficeAuftraege: { some: auftragsFilterFuer(ctx) } }]
+    : [];
+  return { OR: [eigeneAkteWhere(ctx), ...bruecke] };
+}
+
+/**
+ * Gibt es einen fuer den Kontext sichtbaren Auftrag seiner Backoffice-
+ * Organisation an dieser Akte? Gilt fuer eigene Backoffice-Akten und fuer
+ * Fremdakten gleichermassen. Die Regel selbst steht in
+ * src/lib/backoffice/sichtbarkeit.ts (darfAuftragSehen).
+ */
+export async function darfBackofficeAkteSehen(ctx: AppContext, caseId: string): Promise<boolean> {
+  if (!ctx.backofficeRolle) return false;
+  const auftrag = await prisma.backofficeAuftrag.findFirst({ where: { caseId, ...auftragsFilterFuer(ctx) }, select: { id: true } });
+  return auftrag != null;
+}
+
+/**
+ * Darf der Kontext an dieser Akte noch ARBEITEN? Ja, wenn ein sichtbarer
+ * Auftrag existiert, der nicht abgeschlossen, abgelehnt oder storniert ist.
+ * Lesen bleibt danach erlaubt (Verlauf, Ergebnis), Schreiben nicht.
+ */
+export async function darfBackofficeAkteBearbeiten(ctx: AppContext, caseId: string): Promise<boolean> {
+  if (!ctx.backofficeRolle) return false;
+  const auftrag = await prisma.backofficeAuftrag.findFirst({
+    where: { caseId, status: { notIn: [...BACKOFFICE_TERMINAL_STATUS] }, ...auftragsFilterFuer(ctx) },
+    select: { id: true },
+  });
+  return auftrag != null;
+}
+
+/**
+ * DIE Regel fuer den Zugriff auf eine Akte - requireCaseAccess und
+ * requireAkteAccess fragen hier. Eigene Vertriebsakte: immer. Eigene
+ * Backoffice-Akte: sichtbarer Auftrag, schreibend offener Auftrag. Fremdakte:
+ * nur mit Opt-in UND sichtbarem Auftrag, schreibend offener Auftrag.
+ */
+export async function entscheideAktenzugriff(
+  ctx: AppContext,
+  akte: { id: string; organizationId: string; akteArt: AkteArt },
+  optionen: AktenzugriffOptionen
+): Promise<{ erlaubt: true; fremd: boolean } | { erlaubt: false }> {
+  const fremd = akte.organizationId !== ctx.organizationId;
+  if (fremd && !optionen.fremdakteErlaubt) return { erlaubt: false };
+  const auftragsgebunden = fremd || akte.akteArt === "backoffice";
+  if (auftragsgebunden && !(await darfBackofficeAkteSehen(ctx, akte.id))) return { erlaubt: false };
+  if (auftragsgebunden && optionen.schreibend && !(await darfBackofficeAkteBearbeiten(ctx, akte.id))) return { erlaubt: false };
+  return { erlaubt: true, fremd };
+}
+
+/**
+ * Lädt einen Fall NUR, wenn der Kontext ihn sehen darf (entscheideAktenzugriff).
+ * Existiert er nicht oder ist er verwehrt, antworten wir identisch (404), um
+ * Existenz nicht preiszugeben.
  *
  * `status` gehört mit in die Auskunft: Fast jede schreibende Action muss danach
  * prüfen, ob der Fall gesperrt ist (`LOCKED_CASE_STATUSES`). Ohne ihn holte
@@ -165,103 +258,34 @@ export async function requireOrganizationAccess(organizationId: string): Promise
  */
 export async function requireCaseAccess(
   caseId: string,
-  optionen: { schreibend?: boolean } = {}
+  optionen: AktenzugriffOptionen = {}
 ): Promise<{
   ctx: AppContext;
   caseRow: { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt };
+  /** true, wenn die Akte einer anderen Organisation gehoert (Auftragsbruecke). */
+  fremd: boolean;
 }> {
   const ctx = await requireContext();
   const caseRow = await prisma.case.findUnique({
     where: { id: caseId },
     select: { id: true, organizationId: true, status: true, akteArt: true },
   });
-  if (!caseRow || caseRow.organizationId !== ctx.organizationId) {
+  const entscheidung = caseRow
+    ? await entscheideAktenzugriff(
+        ctx,
+        { id: caseRow.id, organizationId: caseRow.organizationId, akteArt: caseRow.akteArt as AkteArt },
+        optionen
+      )
+    : ({ erlaubt: false } as const);
+  if (!caseRow || !entscheidung.erlaubt) {
     const { notFound } = await import("next/navigation");
     notFound();
   }
-  // Backoffice-Akten gehoeren zwar der Organisation, sind aber kein
-  // Vertriebsfall: Ein Vermittler ohne Backoffice-Rolle sieht sie nicht, ein
-  // Bearbeiter nur, wenn ein Auftrag dazu ihm gehoert oder frei ist.
-  // Dieselbe Antwort wie bei "gibt es nicht" - 404, kein 403.
-  if (caseRow!.akteArt === "backoffice" && !(await darfBackofficeAkteSehen(ctx, caseRow!.id))) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
-  // Schreibend an einer Backoffice-Akte: nur mit offenem Auftrag. Eine
-  // abgeschlossene, abgelehnte oder stornierte Akte ist fertig.
-  if (optionen.schreibend && caseRow!.akteArt === "backoffice" && !(await darfBackofficeAkteBearbeiten(ctx, caseRow!.id))) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
-  return { ctx, caseRow: caseRow as { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt } };
-}
-
-/**
- * Darf der Kontext an dieser Backoffice-Akte noch ARBEITEN? Ja, wenn ein
- * sichtbarer Auftrag existiert, der nicht abgeschlossen, abgelehnt oder
- * storniert ist. Lesen bleibt danach erlaubt (Verlauf, Ergebnis), Schreiben
- * nicht.
- */
-export async function darfBackofficeAkteBearbeiten(ctx: AppContext, caseId: string): Promise<boolean> {
-  if (!ctx.backofficeRolle) return false;
-  const auftrag = await prisma.backofficeAuftrag.findFirst({
-    where: {
-      caseId,
-      backofficeOrganizationId: ctx.organizationId,
-      status: { notIn: [...BACKOFFICE_TERMINAL_STATUS] },
-      ...(ctx.backofficeRolle === "bearbeiter" ? { OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }] } : {}),
-    },
-    select: { id: true },
-  });
-  return auftrag != null;
-}
-
-/**
- * Prisma-Where fuer "Akten, die dieser Kontext sehen darf" - fuer Stellen,
- * die den Fall per Abfrage statt ueber requireCaseAccess laden (Seiten mit
- * findFirst, Dokument-Actions mit `case: {...}`). Dieselbe Regel wie
- * requireCaseAccess: eigene Organisation, Vertriebsakten immer, Backoffice-
- * Akten nur mit Backoffice-Rolle, fuer Bearbeiter nur mit eigenem oder freiem
- * Auftrag.
- */
-export function akteSichtbarWhere(ctx: AppContext): Prisma.CaseWhereInput {
-  const backoffice: Prisma.CaseWhereInput[] = ctx.backofficeRolle
-    ? [
-        {
-          akteArt: "backoffice",
-          ...(ctx.backofficeRolle === "bearbeiter"
-            ? {
-                backofficeAuftraege: {
-                  some: {
-                    backofficeOrganizationId: ctx.organizationId,
-                    OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }],
-                  },
-                },
-              }
-            : {}),
-        },
-      ]
-    : [];
-  return { organizationId: ctx.organizationId, OR: [{ akteArt: "vertrieb" }, ...backoffice] };
-}
-
-/**
- * Sichtbarkeit einer Backoffice-Akte fuer den Kontext. Die Regel selbst
- * steht in src/lib/backoffice/sichtbarkeit.ts (darfAuftragSehen); hier wird
- * nur der passende Auftrag gesucht.
- */
-export async function darfBackofficeAkteSehen(ctx: AppContext, caseId: string): Promise<boolean> {
-  if (!ctx.backofficeRolle) return false;
-  if (ctx.backofficeRolle !== "bearbeiter") return true;
-  const auftrag = await prisma.backofficeAuftrag.findFirst({
-    where: {
-      caseId,
-      backofficeOrganizationId: ctx.organizationId,
-      OR: [{ bearbeiterId: null }, { bearbeiterId: ctx.userId }],
-    },
-    select: { id: true },
-  });
-  return auftrag != null;
+  return {
+    ctx,
+    caseRow: caseRow as { id: string; organizationId: string; status: CaseStatus; akteArt: AkteArt },
+    fremd: (entscheidung as { erlaubt: true; fremd: boolean }).fremd,
+  };
 }
 
 export interface UploadTokenAccess {

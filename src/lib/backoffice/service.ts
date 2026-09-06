@@ -108,7 +108,7 @@ export async function erzeugeAuftrag(input: AuftragAnlage): Promise<ServiceErgeb
 
   const auftraggeber = await prisma.backofficeAuftraggeber.findFirst({
     where: { id: input.auftraggeberId, backofficeOrganizationId: input.backofficeOrganizationId, aktiv: true },
-    select: { id: true, slaTage: true, backofficeOrganization: { select: { backofficeSlaTage: true } } },
+    select: { id: true, organizationId: true, slaTage: true, backofficeOrganization: { select: { backofficeSlaTage: true } } },
   });
   if (!auftraggeber) return { ok: false, grund: "Auftraggeber nicht gefunden." };
 
@@ -122,9 +122,12 @@ export async function erzeugeAuftrag(input: AuftragAnlage): Promise<ServiceErgeb
 
   let caseId = input.caseId ?? null;
   if (caseId) {
-    // Interne Uebergabe: Die Akte muss der Backoffice-Organisation gehoeren.
+    // Interne Uebergabe: Akte der Backoffice-Organisation. Cross-Org: Akte der
+    // Organisation, die als Auftraggeber verknuepft ist. Sonst nichts - eine
+    // fremde Akte wird nicht dadurch erreichbar, dass man ihre ID kennt.
+    const erlaubteOrgs = [input.backofficeOrganizationId, auftraggeber.organizationId].filter((x): x is string => Boolean(x));
     const akte = await prisma.case.findFirst({
-      where: { id: caseId, organizationId: input.backofficeOrganizationId },
+      where: { id: caseId, organizationId: { in: erlaubteOrgs } },
       select: { id: true },
     });
     if (!akte) return { ok: false, grund: "Akte nicht gefunden." };
