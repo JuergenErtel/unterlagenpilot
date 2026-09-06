@@ -323,6 +323,9 @@ export const DOCUMENT_TYPES = [
   "ansichten",
   "skizze",
   "flurkarte_lageplan",
+  // Objektfotos (06.09.2026, Fall Schmidt): Fotos tragen keinen Text und
+  // wurden bis dahin als "unlesbar" gestempelt. Eingestuft per Bild-KI.
+  "objektfoto",
   "baubeschreibung",
   "baukostenaufstellung",
   "baugenehmigung",
@@ -357,6 +360,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   ansichten: "Ansichten / Schnitte",
   skizze: "Skizze",
   flurkarte_lageplan: "Flurkarte / Lageplan",
+  objektfoto: "Objektfoto",
   baubeschreibung: "Baubeschreibung",
   baukostenaufstellung: "Baukostenaufstellung",
   baugenehmigung: "Baugenehmigung",

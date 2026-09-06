@@ -38,10 +38,20 @@ export const MIN_TEXTSUBSTANZ = 40;
  */
 const BILDPLATZHALTER = /!\[[^\]]*\]\([^)]*\)/g;
 
-/** Zahl der Zeichen echten Textes – ohne Bildplatzhalter und Leerraum. */
+/**
+ * Zahl der BUCHSTABEN echten Textes – ohne Bildplatzhalter, Leerraum, Ziffern
+ * und Satzzeichen.
+ *
+ * Nur Buchstaben seit 06.09.2026 (Fall Schmidt): Fuer ein Wohnzimmerfoto
+ * lieferte die OCR "1\n2\n3 ... 100" – 192 Zeichen halluzinierte Zaehlung,
+ * kein Wort. Das uebersprang die Schwelle, und die Einstufung lief auf einem
+ * Bild ohne Text. Jedes echte Dokument, auch ein Kontoauszug voller Zahlen,
+ * traegt Buchstaben weit ueber der Schwelle.
+ */
 export function textSubstanz(text: string | null | undefined): number {
   if (!text) return 0;
-  return text.replace(BILDPLATZHALTER, "").replace(/\s+/g, "").length;
+  const ohnePlatzhalter = text.replace(BILDPLATZHALTER, "");
+  return (ohnePlatzhalter.match(/\p{L}/gu) ?? []).length;
 }
 
 /** Reicht der erkannte Text, um daraus einen Dokumenttyp abzuleiten? */

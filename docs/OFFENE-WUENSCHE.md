@@ -79,17 +79,29 @@ eine EÜR). Ein Drittel der Dokumente mit einer Rückfrage zu belegen ist
 Reibung, die Jürgen wollen muss. Die dafür nötige Schlüsselwortliste liegt seit
 jeher ungenutzt in `document-types.ts`.
 
-## Fehler: Alle Dokumente als unleserlich eingestuft (Kunde Schmidt)
+## ~~Fehler: Alle Dokumente als unleserlich eingestuft (Kunde Schmidt)~~
 
-**Aufgenommen:** 06.09.2026 · **Offen**
+**Aufgenommen:** 06.09.2026 · **Erledigt: 06.09.2026**
 
-Test mit Unterlagen-Upload beim Kunden Schmidt: **alle** Dokumente wurden als unleserlich
-eingestuft, sogar ein Objektfoto. Verdacht: Die Lesbarkeitsschwelle aus
-`src/lib/documents/textsubstanz.ts` (40 Zeichen, eingeführt 18.08.) trifft Bilddokumente ohne
-Text zu Recht – aber wenn auch textreiche PDFs betroffen sind, liefert die OCR nichts (Timeout,
-429, leere Antwort) und die Schwelle macht den Ausfall zur Einstufung. Zuerst prüfen: OCR-Log
-und `ocrText`-Länge der Schmidt-Dokumente in PROD, dann die Frage, ob reine Bilddokumente
-(Objektfoto, Grundriss) überhaupt durch die Textschwelle laufen sollten.
+Fall UP-2026-0041: 14 Dateien in 7 Sekunden hochgeladen. Es waren **zwei** Dinge:
+
+1. **9 Text-PDFs** (Grundbuch, Kontoauszüge, Bauakte) standen auf „KI-Fehler“. Vercel-Logs:
+   Mistral **HTTP 429 Rate limit exceeded**. Jede Datei löst OCR, Einstufung, Extraktion,
+   Aufteilungs- und Bündelungserkennung aus, rund 70 Anfragen gegen 50/min. Der Retry lief ins
+   selbe Minutenfenster, der Fehlerzweig der Upload-Pipeline schluckte alles ohne Log (in Sentry
+   nichts). **Jetzt:** Drossel je Instanz (`src/lib/ai/drossel.ts`, max. 4 gleichzeitig, 1,3 s
+   Abstand, per `AI_MAX_PARALLEL`/`AI_MIN_ABSTAND_MS` einstellbar), vierter 429-Backoff-Schritt
+   (60 s), Pipeline loggt die Fehlerart.
+2. **5 Bilder** (3 Hausfotos, Flurkarte, Grundriss) standen auf „unlesbar“, weil die OCR keinen
+   Text fand, wie am 18.08. gebaut. Für Fotos ist das falsch. **Jetzt:** ohne Textgrundlage
+   fragt die **Bild-KI** (`src/lib/documents/bildeinstufung.ts`, Typen nur objektfoto, grundriss,
+   ansichten, skizze, flurkarte_lageplan, sonst „sonstige“ = weiter unlesbar; Konfidenz ab 0,6).
+   Neuer Dokumenttyp `objektfoto` (Europace „Objektfotos“). Nebenfund: Für „Wohnzimmer.jpg“
+   halluzinierte die OCR „1 2 3 … 100“ und übersprang damit die Schwelle; `textSubstanz` zählt
+   jetzt nur Buchstaben.
+
+Nachziehen im Fall: „KI-Prüfung starten“ stuft die 9 Text-PDFs nach und schickt die 5 Bilder
+durch die Bild-KI.
 
 ## Nachträge aus dem Katalogschnitt (16.08.2026)
 

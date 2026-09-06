@@ -100,6 +100,7 @@ const ABSCHNITT_JE_TYP: Partial<Record<DocumentType, (typeof ABSCHNITT_REIHENFOL
   ansichten: "Objekt",
   skizze: "Objekt",
   flurkarte_lageplan: "Objekt",
+  objektfoto: "Objekt",
   baubeschreibung: "Objekt",
   baukostenaufstellung: "Objekt",
   baugenehmigung: "Objekt",

@@ -13,6 +13,23 @@ import { classificationKeywords, DOCUMENT_TYPE_SPECS } from "@/lib/documents/doc
 
 const KEYWORDS = classificationKeywords();
 
+/**
+ * Bild-Einstufung im Mock: aus dem Dateinamen, damit Tests und Demo ohne
+ * Bild-KI entscheiden koennen. Ohne Hinweis "sonstige" mit niedriger
+ * Konfidenz - so wie ein unlesbarer Textscan.
+ */
+function bildTypAusName(name: string): { documentType: string; confidence: number; beschreibung: string } {
+  const n = name.toLowerCase();
+  if (/grundriss/.test(n)) return { documentType: "grundriss", confidence: 0.9, beschreibung: "Grundrisszeichnung" };
+  if (/ansicht|schnitt/.test(n)) return { documentType: "ansichten", confidence: 0.85, beschreibung: "Ansichtszeichnung" };
+  if (/skizze|entwurf/.test(n)) return { documentType: "skizze", confidence: 0.8, beschreibung: "Skizze" };
+  if (/flur|lageplan|kataster/.test(n)) return { documentType: "flurkarte_lageplan", confidence: 0.85, beschreibung: "Flurkarte" };
+  if (/foto|haus|wohn|aussen|außen|innen|garten|fassade|\.(jpe?g|png|heic)$/.test(n)) {
+    return { documentType: "objektfoto", confidence: 0.85, beschreibung: "Foto des Objekts" };
+  }
+  return { documentType: "sonstige", confidence: 0.3, beschreibung: "Nicht erkennbar" };
+}
+
 function detectType(text: string): { type: DocumentType; confidence: number } {
   const lower = text.toLowerCase();
   let best: { type: DocumentType; hits: number } = { type: "sonstige", hits: 0 };
@@ -48,6 +65,8 @@ export class MockAIProvider implements AIProvider {
     switch (req.schemaName) {
       case "classification":
         return this.classify(text, req);
+      case "bildklassifikation":
+        return this.bildklassifikation(req);
       case "extraction":
         return this.extract(text, req);
       case "scanQuality":
@@ -132,6 +151,10 @@ export class MockAIProvider implements AIProvider {
       default:
         return {};
     }
+  }
+
+  private bildklassifikation(req: AICompletionRequest) {
+    return bildTypAusName(String(req.hints?.originalName ?? ""));
   }
 
   private classify(text: string, req: AICompletionRequest) {

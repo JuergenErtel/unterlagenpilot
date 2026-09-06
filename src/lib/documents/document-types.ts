@@ -257,6 +257,16 @@ export const DOCUMENT_TYPE_SPECS: Record<DocumentType, DocumentTypeSpec> = {
     warningCodes: ["OBJ_GRUNDSTUECK_FEHLT", ...QUALITY],
     platformRelevance: ALL,
   },
+  // Fotos tragen keinen Text: Die Schluesselwoerter greifen nur, wenn eine
+  // Beschriftung im Bild steht. Die eigentliche Einstufung macht die Bild-KI
+  // (src/lib/documents/bildeinstufung.ts).
+  objektfoto: {
+    type: "objektfoto",
+    keywords: ["objektfoto", "aussenansicht", "außenansicht", "innenansicht", "hausfoto"],
+    fields: [opt("ansicht", "Ansicht (außen/innen, Himmelsrichtung)"), opt("objektadresse", "Objektadresse")],
+    warningCodes: [...QUALITY],
+    platformRelevance: ALL,
+  },
   susa: {
     type: "susa",
     keywords: ["summen- und saldenliste", "susa", "konto", "soll", "haben", "saldo"],

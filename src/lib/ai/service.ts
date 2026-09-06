@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { AIProvider } from "./types";
+import type { AICompletionRequest, AIProvider } from "./types";
 import { getAIProvider } from "./factory";
 import {
+  bildklassifikationSchema,
   classificationSchema,
   extractionSchema,
   scanQualitySchema,
@@ -14,6 +15,7 @@ import {
   generatedMessageSchema,
   platformMappingSchema,
   type ClassificationResult,
+  type BildklassifikationResult,
   type ExtractionResult,
   type ScanQualityResult,
   type DuplicateResult,
@@ -61,7 +63,8 @@ export class AIService {
     system: string,
     user: string,
     hints?: Record<string, unknown>,
-    maxAttempts = 2
+    maxAttempts = 2,
+    medien?: Pick<AICompletionRequest, "images" | "documents">
   ): Promise<z.output<S>> {
     const jsonSchema = toJsonSchema(schemaName, schema);
     let lastError: unknown;
@@ -77,6 +80,7 @@ export class AIService {
           user: user + repair,
           jsonSchema,
           hints: { ...hints, attempt },
+          ...(medien ?? {}),
         });
         return schema.parse(raw);
       } catch (err) {
@@ -126,6 +130,40 @@ export class AIService {
         .filter(Boolean)
         .join("\n\n"),
       { fileText, ...metadata }
+    );
+  }
+
+  /**
+   * Einstufung einer Datei OHNE Textgrundlage anhand des Bildes selbst
+   * (06.09.2026, Fall Schmidt: Hausfotos, fotografierte Grundrisse und eine
+   * Flurkarte standen als "unlesbar" da). Bild als data-URI, PDF als
+   * abrufbare URL. Die Typenliste ist absichtlich klein (BILD_DOKUMENTTYPEN).
+   */
+  classifyImageDocument(
+    medien: { image?: { base64: string; mimeType: string }; documentUrl?: string },
+    metadata: { originalName?: string } = {}
+  ): Promise<BildklassifikationResult> {
+    const dateiname = metadata.originalName?.trim();
+    return this.run(
+      "bildklassifikation",
+      bildklassifikationSchema,
+      "Du ordnest Bilder aus deutschen Baufinanzierungsakten ein. Antworte nur als JSON.",
+      [
+        "Was zeigt diese Datei? Waehle genau einen Typ:",
+        "- objektfoto: Foto eines Hauses, einer Wohnung, eines Grundstuecks (aussen oder innen)",
+        "- grundriss: Grundrisszeichnung eines Geschosses",
+        "- ansichten: Ansichts- oder Schnittzeichnung eines Gebaeudes",
+        "- skizze: Handskizze oder Entwurf",
+        "- flurkarte_lageplan: Flurkarte, Liegenschaftskarte oder Lageplan",
+        "- sonstige: alles andere, auch ein unscharfer oder abgeschnittener Scan eines Textdokuments",
+        "Gib eine Konfidenz zwischen 0 und 1 und eine Beschreibung in einem kurzen Satz.",
+        dateiname ? `Dateiname (Hinweis, kein Beweis - das Bild entscheidet): ${dateiname}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      { originalName: dateiname, mimeType: medien.image?.mimeType },
+      2,
+      medien.image ? { images: [medien.image] } : medien.documentUrl ? { documents: [{ url: medien.documentUrl, name: dateiname }] } : {}
     );
   }
 

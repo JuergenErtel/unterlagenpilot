@@ -160,6 +160,7 @@ enum DocumentType {
   ansichten
   skizze
   flurkarte_lageplan
+  objektfoto
   baubeschreibung
   baukostenaufstellung
   baugenehmigung

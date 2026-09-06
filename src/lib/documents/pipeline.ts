@@ -10,6 +10,7 @@ import { validateUpload } from "@/lib/security/file-validation";
 import { normalizeUploadFile } from "@/lib/documents/heic";
 import { getVirusScanner } from "@/lib/security/virus-scan";
 import { hatTextgrundlage } from "./textsubstanz";
+import { stufeBildEin, type BildEinstufung } from "./bildeinstufung";
 import { matchApplicant } from "@/lib/documents/applicant-match";
 import { runReferenceExtraction, reconcileCase } from "@/lib/detektiv/service";
 import { erkenneAufteilung } from "@/lib/aufteilung/service";
@@ -318,6 +319,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   let ocrResult: Awaited<ReturnType<typeof ocr.extractText>> | null = null;
   let cls: Awaited<ReturnType<typeof ai.classifyDocument>> | null = null;
   let ext: Awaited<ReturnType<typeof ai.extractFields>> | null = null;
+  let bild: BildEinstufung | null = null;
   try {
     ocrResult = await ocr.extractText({
       storageKey: stored.storageKey,
@@ -337,6 +339,10 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         originalName,
       });
       ext = await ai.extractFields(cls.documentType, ocrResult.fullText);
+    } else {
+      // Ohne Text: vielleicht ein Foto, ein fotografierter Grundriss, eine
+      // Flurkarte. Die Bild-KI entscheidet - oder nicht (dann unlesbar).
+      bild = await stufeBildEin({ storageKey: stored.storageKey, mimeType: stored.mimeType, originalName, buffer }, ai);
     }
   } catch (e) {
     // KI/OCR nicht verfuegbar. Fehlerart loggen (ohne Kundendaten und ohne
@@ -351,7 +357,8 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   // haelt sie aus der Erfuellung von Checklistenpositionen heraus
   // (`evaluateMatches` zaehlt nur `readable !== false`) – auch dann, wenn ihr
   // spaeter doch ein Typ zugewiesen wuerde.
-  const lesbar = ocrResult ? hatTextgrundlage(ocrResult.fullText) : null;
+  // Eine klare Bild-Einstufung macht die Datei zaehlbar - sie IST das Dokument.
+  const lesbar = ocrResult ? hatTextgrundlage(ocrResult.fullText) || bild != null : null;
 
   // Antragsteller automatisch zuordnen, sofern der Vermittler nicht selbst
   // gewählt hat. Bei genau einem Antragsteller ist die Zuordnung trivial, bei
@@ -375,7 +382,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
   }
 
   const generatedName = generateFileName({
-    documentType: cls?.documentType ?? null,
+    documentType: cls?.documentType ?? bild?.documentType ?? null,
     applicantName: autoApplicantName ?? cls?.detectedApplicant ?? applicantName ?? null,
     propertyRef: cls?.detectedPropertyRef,
     period: cls?.period,
@@ -388,16 +395,17 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
       data: {
         generatedName,
         pageCount: ocrResult?.pageCount,
-        documentType: cls?.documentType ?? null,
+        documentType: cls?.documentType ?? bild?.documentType ?? null,
         detectedApplicant: cls?.detectedApplicant ?? null,
         ...(autoApplicantId ? { applicantId: autoApplicantId, applicantSource: "auto" } : {}),
         ocrStatus: ocrResult ? "fertig" : "fehler",
         // Ohne Textgrundlage ist die Einstufung nicht gescheitert, sondern
         // bewusst unterblieben: "fertig" ohne Typ. "fehler" wuerde zum
         // Wiederholen einladen, und ein zweiter Lauf faende genauso wenig Text.
-        classificationStatus: cls || lesbar === false ? "fertig" : "fehler",
-        extractionStatus: ext || lesbar === false ? "fertig" : "fehler",
-        confidence: cls?.confidence,
+        classificationStatus: cls || bild || lesbar === false ? "fertig" : "fehler",
+        // Aus einem Bild gibt es keine Felder zu ziehen: fertig, nicht Fehler.
+        extractionStatus: ext || bild || lesbar === false ? "fertig" : "fehler",
+        confidence: cls?.confidence ?? bild?.confidence,
         readable: lesbar,
         period: cls?.period ?? undefined,
         pages: ocrResult

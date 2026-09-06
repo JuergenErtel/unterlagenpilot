@@ -33,6 +33,7 @@ import { getStorage } from "@/lib/storage";
 import { mitFallnummer } from "@/lib/cases/fallnummer-vergabe";
 import { computeApplicantUpdate, type CurrentApplicant } from "@/lib/documents/apply-fields";
 import { hatTextgrundlage } from "@/lib/documents/textsubstanz";
+import { stufeBildEin } from "@/lib/documents/bildeinstufung";
 import { analysiereDokument } from "@/lib/documents/pipeline";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
@@ -301,13 +302,32 @@ async function processAiCheckInBackground(params: {
       // jeder Lauf von "KI-Pruefung starten" `readable: true` zurueckgesetzt
       // und das falsche Gruen neu erzeugt.
       if (!hatTextgrundlage(text)) {
+        // Ohne Text erst die Bild-KI fragen (Fotos, fotografierte Grundrisse,
+        // Flurkarten). Ein von Hand gesetzter Typ bleibt; die Bild-Einstufung
+        // fuellt nur ein leeres Feld. Bleibt sie stumm, gilt wie bisher: unlesbar.
+        let bild: Awaited<ReturnType<typeof stufeBildEin>> = null;
+        try {
+          bild = await stufeBildEin({ storageKey: doc.storageKey, mimeType: doc.mimeType, originalName: doc.originalName }, ai);
+        } catch (e) {
+          console.warn(
+            `[ki-pruefung] Bild-Einstufung fuer Dokument ${doc.id} fehlgeschlagen: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`
+          );
+        }
         await prisma.document.update({
           where: { id: doc.id },
-          data: {
-            readable: false,
-            classificationStatus: "fertig",
-            extractionStatus: "fertig",
-          },
+          data: bild
+            ? {
+                readable: true,
+                ...(doc.documentType ? {} : { documentType: bild.documentType }),
+                confidence: bild.confidence,
+                classificationStatus: "fertig",
+                extractionStatus: "fertig",
+              }
+            : {
+                readable: false,
+                classificationStatus: "fertig",
+                extractionStatus: "fertig",
+              },
         });
         return;
       }

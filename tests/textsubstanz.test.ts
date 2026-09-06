@@ -35,6 +35,16 @@ describe("textSubstanz", () => {
     expect(textSubstanz("  a\n\n b \t c  ")).toBe(3);
   });
 
+  it("zaehlt Ziffern und Satzzeichen nicht – die OCR halluziniert fuer Fotos Zaehlungen (Fall Schmidt)", () => {
+    // "Wohnzimmer.jpg" kam mit "1\n2\n3 ... 100" zurueck: 192 Zeichen, kein Wort.
+    const halluziniert = Array.from({ length: 100 }, (_, i) => String(i + 1)).join("\n");
+    expect(halluziniert.length).toBeGreaterThan(MIN_TEXTSUBSTANZ);
+    expect(textSubstanz(halluziniert)).toBe(0);
+    expect(hatTextgrundlage(halluziniert)).toBe(false);
+    // Ein Kontoauszug voller Zahlen traegt trotzdem Buchstaben ueber der Schwelle.
+    expect(textSubstanz("Kontoauszug Nr. 7 Buchungstag 01.05.2026 Lastschrift Stadtwerke 123,45 EUR Saldo 4.321,00")).toBeGreaterThan(MIN_TEXTSUBSTANZ);
+  });
+
   it("vertraegt null und Leerstring", () => {
     expect(textSubstanz(null)).toBe(0);
     expect(textSubstanz(undefined)).toBe(0);

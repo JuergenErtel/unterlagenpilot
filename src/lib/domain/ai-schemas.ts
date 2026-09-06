@@ -55,6 +55,24 @@ export const classificationSchema = z.object({
 });
 export type ClassificationResult = z.infer<typeof classificationSchema>;
 
+/**
+ * Bild-Einstufung (06.09.2026, Fall Schmidt): Fuer Dateien ohne Textgrundlage
+ * (Hausfotos, fotografierte Grundrisse, Flurkarten) schaut die Bild-KI auf
+ * das Bild selbst. Bewusst NUR objektbezogene Typen: Ein unlesbarer Scan eines
+ * Textdokuments (Ausweis, Bescheid) bleibt "sonstige" und damit unlesbar -
+ * sonst entstuende genau das falsche Gruen wieder, vor dem die Textschwelle
+ * schuetzt (Fall Topcic, 18.08.2026).
+ */
+export const BILD_DOKUMENTTYPEN = ["objektfoto", "grundriss", "ansichten", "skizze", "flurkarte_lageplan", "sonstige"] as const;
+export type BildDokumenttyp = (typeof BILD_DOKUMENTTYPEN)[number];
+export const bildklassifikationSchema = z.object({
+  documentType: z.enum(BILD_DOKUMENTTYPEN),
+  confidence,
+  /** Kurze Beschreibung dessen, was zu sehen ist (fuer den Dateinamen und die Durchsicht). */
+  beschreibung: z.string().nullable().optional(),
+});
+export type BildklassifikationResult = z.infer<typeof bildklassifikationSchema>;
+
 /** extractFields (generisch) */
 export const extractionSchema = z.object({
   documentType: z.enum(DOCUMENT_TYPES),
