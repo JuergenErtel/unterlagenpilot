@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SEITEN_FEHLEN_CODE } from "@/lib/documents/seitenzaehlung";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
@@ -68,6 +69,8 @@ export default async function UnterlagenArbeitsplatzPage({
         classificationStatus: true,
         aiErrorMessage: true,
         extractionStatus: true,
+        missingPages: true,
+        warnings: { where: { code: SEITEN_FEHLEN_CODE }, select: { message: true }, take: 1 },
         createdAt: true,
       },
     }),
@@ -97,6 +100,7 @@ export default async function UnterlagenArbeitsplatzPage({
     extractionStatus: d.extractionStatus,
     hochgeladenAm: d.createdAt.toISOString(),
     aiErrorMessage: d.aiErrorMessage ?? null,
+    seitenHinweis: d.missingPages ? (d.warnings[0]?.message.split(" – ")[0] ?? "Seiten fehlen") : null,
     hochgeladenAmText: `${UPLOAD_ZEIT.format(d.createdAt)} Uhr`,
   }));
 

@@ -424,6 +424,15 @@ function DurchsichtPanel({
       <div>
         <p className="text-base font-semibold">{frage}</p>
         <p className="mt-1 text-sm text-muted-foreground">{erklaerung}</p>
+        {d.seitenHinweis && (
+          // Fall Schmidt: ein Blatt "Seite 5 von 9" als Grundbuchauszug. Der Typ
+          // stimmt, das Dokument ist trotzdem unbrauchbar - die Position bleibt
+          // unvollstaendig, bis der ganze Auszug da ist.
+          <p className="mt-2 rounded-md border border-warning/50 bg-warning/10 px-2 py-1.5 text-sm">
+            <span className="font-semibold">{d.seitenHinweis}.</span> Die Unterlage ist unvollständig und erfüllt die
+            Anforderung nicht. Vollständiges Dokument nachfordern – Freigeben behält dieses Blatt in der Akte.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -701,6 +710,12 @@ function DokumentZeile({
 
 function DokumentStatusMarke({ d }: { d: ArbeitsplatzDokument }) {
   if (d.readable === false) return <Badge variant="warning">unlesbar</Badge>;
+  if (d.seitenHinweis)
+    return (
+      <Badge variant="warning" title={d.seitenHinweis}>
+        unvollständig
+      </Badge>
+    );
   if (d.classificationStatus === "fehler" || d.extractionStatus === "fehler")
     return (
       <Badge variant="warning" title={d.aiErrorMessage ?? undefined}>

@@ -80,6 +80,7 @@ export async function getCaseAggregate(caseId: string): Promise<CaseAggregate> {
     documentType: d.documentType,
     reviewStatus: d.reviewStatus,
     readable: d.readable,
+    missingPages: d.missingPages,
     ageDays: ageFromPeriod(d.period),
     applicantId: d.applicantId,
   }));

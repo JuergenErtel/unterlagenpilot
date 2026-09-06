@@ -159,6 +159,8 @@ export interface ExistingDocument {
   documentType: DocumentType | null;
   reviewStatus: string; // offen|akzeptiert|abgelehnt|ersetzt|duplikat
   readable?: boolean | null;
+  /** Fusszeile verraet fehlende Seiten ("Seite 5 von 9") – zaehlt dann nicht als erfuellt. */
+  missingPages?: boolean | null;
   ageDays?: number | null; // Alter des Dokumentinhalts (z.B. Abrechnungsmonat)
   /** Zugeordneter Antragsteller (null = noch nicht zugeordnet). */
   applicantId?: string | null;
@@ -224,8 +226,9 @@ function evaluateMatches(
   matches: ExistingDocument[],
   required: number
 ): { fulfilled: boolean; tooOld: boolean } {
-  // Unlesbare Dokumente zählen nicht zur Erfüllung.
-  const readable = matches.filter((m) => m.readable !== false);
+  // Unlesbare Dokumente zählen nicht zur Erfüllung – und unvollständige auch
+  // nicht (Fall Schmidt: ein Blatt "Seite 5 von 9" als Grundbuchauszug).
+  const readable = matches.filter((m) => m.readable !== false && m.missingPages !== true);
   const fulfilled = readable.length >= required;
 
   // Aktualität nur anhand von Dokumenten mit BEKANNTEM Alter beurteilen.

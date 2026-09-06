@@ -149,6 +149,28 @@ describe("Falsches Gruen: der KI-Prueflauf", () => {
     expect(daten.documentType).toBeUndefined();
   });
 
+  it("schreibt fehlende Seiten aus der Fusszeile ins Dokument", async () => {
+    // Fall Schmidt: ein Blatt "Seite 5 von 9" als kompletter Grundbuchauszug.
+    documentFindMany.mockResolvedValue([
+      {
+        id: "d3",
+        applicantId: null,
+        applicantSource: null,
+        documentType: null,
+        originalName: "grundbuch.pdf",
+        pages: [{ ocrText: "Grundbuch von Fischbach Blatt 471 Abteilung I Eigentuemer Berg-Weichert Ausdruck vom 21.08.2026 Seite 5 von 9" }],
+        extractedFields: [],
+      },
+    ]);
+    await runAiCheck("case-A");
+    await afterCallbacks[0]!();
+    const daten = documentUpdate.mock.calls[0]![0].data;
+    expect(daten.missingPages).toBe(true);
+    expect(daten.warnings.create).toContainEqual(
+      expect.objectContaining({ code: "SEITEN_FEHLEN", message: expect.stringContaining("Seite 5 von 9") })
+    );
+  });
+
   it("stuft ein Dokument mit Text weiterhin ein", async () => {
     documentFindMany.mockResolvedValue([
       {

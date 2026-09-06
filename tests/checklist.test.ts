@@ -46,6 +46,15 @@ describe("Checklisten-Logik", () => {
     expect(ausweis?.status).toBe("vorhanden");
   });
 
+  it("ein Dokument mit fehlenden Seiten erfuellt die Position nicht – sie bleibt unvollstaendig", () => {
+    // Fall Schmidt (06.09.2026): ein Blatt "Seite 5 von 9" als Grundbuchauszug.
+    const list = buildChecklistForCase(
+      { employmentType: "angestellter", financingType: "kauf" },
+      [{ documentType: "grundbuchauszug", reviewStatus: "akzeptiert", readable: true, missingPages: true }]
+    );
+    expect(list.find((i) => i.key === "grundbuchauszug")?.status).toBe("unvollstaendig");
+  });
+
   it("ein unlesbarer Alt-Upload blockiert nicht eine mit lesbaren Dokumenten erfüllte Position", () => {
     // Gehaltsabrechnungen: requiredCount 3. 3 lesbare + 1 unlesbarer -> vorhanden.
     const list = buildChecklistForCase(

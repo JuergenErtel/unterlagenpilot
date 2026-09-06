@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { erkenneFehlendeSeiten, seitenWarnung } from "@/lib/documents/seitenzaehlung";
 import { kiFehlerText } from "@/lib/ai/fehlertext";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
@@ -384,6 +385,10 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
     }
   }
 
+  // Fehlende Seiten aus der Fusszeile - unabhaengig von Typ und KI.
+  const seiten = ocrResult ? erkenneFehlendeSeiten(ocrResult.pages.map((p) => ({ ocrText: p.text }))) : null;
+  const seitenHinweis = seitenWarnung(seiten);
+
   const generatedName = generateFileName({
     documentType: cls?.documentType ?? bild?.documentType ?? null,
     applicantName: autoApplicantName ?? cls?.detectedApplicant ?? applicantName ?? null,
@@ -410,6 +415,7 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
         extractionStatus: ext || bild || lesbar === false ? "fertig" : "fehler",
         confidence: cls?.confidence ?? bild?.confidence,
         readable: lesbar,
+        missingPages: seiten ? seiten.fehlen : undefined,
         // Der Grund steht am Dokument, damit der Arbeitsplatz ihn zeigen kann
         // – und verschwindet, sobald ein Lauf gelingt.
         aiErrorMessage: fehler ? kiFehlerText(fehler) : null,
@@ -436,12 +442,16 @@ async function processOcrAndAi(input: OcrAndAiInput): Promise<void> {
               })),
             }
           : undefined,
-        warnings: ext
-          ? {
-              deleteMany: {},
-              create: ext.warnings.map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })),
-            }
-          : undefined,
+        warnings:
+          ext || seitenHinweis
+            ? {
+                deleteMany: {},
+                create: [
+                  ...(ext?.warnings ?? []).map((w) => ({ code: w.code, severity: w.severity, message: w.message, customerVisible: w.customerVisible })),
+                  ...(seitenHinweis ? [seitenHinweis] : []),
+                ],
+              }
+            : undefined,
       },
     });
   } catch (e) {

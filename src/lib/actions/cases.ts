@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { erkenneFehlendeSeiten, seitenWarnung } from "@/lib/documents/seitenzaehlung";
 import { generateFileName } from "@/lib/documents/filename";
 import { kiFehlerText } from "@/lib/ai/fehlertext";
 import { redirect } from "next/navigation";
@@ -369,6 +370,10 @@ async function processAiCheckInBackground(params: {
           applicants
         );
 
+        // Fehlende Seiten aus der Fusszeile ("Seite 5 von 9") - Fall Schmidt.
+        const seiten = erkenneFehlendeSeiten(doc.pages);
+        const seitenHinweis = seitenWarnung(seiten);
+
         const generatedName = generateFileName({
           documentType: cls.documentType,
           applicantName: personName(change?.applicantId ?? doc.applicantId) ?? cls.detectedApplicant ?? null,
@@ -389,6 +394,7 @@ async function processAiCheckInBackground(params: {
             classificationStatus: "fertig",
             extractionStatus: "fertig",
             readable: true,
+            missingPages: seiten ? seiten.fehlen : undefined,
             aiErrorMessage: null,
             extractedFields: {
               deleteMany: {},
@@ -404,12 +410,15 @@ async function processAiCheckInBackground(params: {
               // Auch Warnungen vor dem Neuschreiben leeren, sonst vervielfachen
               // sie sich bei jedem erneuten Lauf.
               deleteMany: {},
-              create: ext.warnings.map((w) => ({
-                code: w.code,
-                severity: w.severity,
-                message: w.message,
-                customerVisible: w.customerVisible,
-              })),
+              create: [
+                ...ext.warnings.map((w) => ({
+                  code: w.code,
+                  severity: w.severity,
+                  message: w.message,
+                  customerVisible: w.customerVisible,
+                })),
+                ...(seitenHinweis ? [seitenHinweis] : []),
+              ],
             },
           },
         });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SEITEN_FEHLEN_CODE } from "@/lib/documents/seitenzaehlung";
 import { Fragment } from "react";
 import { notFound, redirect } from "next/navigation";
 // Kopfzeit für die (jetzt parallelisierte) KI-Prüfung über alle Dokumente sowie
@@ -798,6 +799,11 @@ export default async function CaseCockpitPage({
                                     genau so aus einem Ausweis-Scan ein "Grundbuchauszug", und
                                     die Checkliste meldete Gruen fuer ein Dokument, das im Fall
                                     nicht lag. Der Weg heraus ist die Typ-Auswahl links. */}
+                                {d.missingPages && (
+                                  <Badge variant="warning">
+                                    unvollständig – {d.warnings.find((w) => w.code === SEITEN_FEHLEN_CODE)?.message.split(" – ")[0] ?? "Seiten fehlen"}
+                                  </Badge>
+                                )}
                                 {d.readable === false ? (
                                   <Badge variant="warning">
                                     Kein lesbarer Text – Typ links von Hand setzen oder in besserer Qualität erneut hochladen
