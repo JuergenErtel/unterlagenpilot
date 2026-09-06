@@ -35,7 +35,7 @@ export async function buendelZusammenfuegenAction(
   const caseId = String(formData.get("caseId") ?? "");
   const buendelId = String(formData.get("buendelId") ?? "");
   if (!caseId || !buendelId) return { grund: "Fall oder Bündel fehlt." };
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
   const buendel = await prisma.documentBuendel.findFirst({
     where: { id: buendelId, caseId },
@@ -45,7 +45,7 @@ export async function buendelZusammenfuegenAction(
 
   const ergebnis = await fuegeZusammen({
     caseId,
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     documentIds: buendel.seiten.map((s) => s.documentId),
     titel: buendel.titel,
     vermuteterTyp: (buendel.vermuteterTyp as DocumentType | null) ?? null,
@@ -73,7 +73,7 @@ export async function buendelVerwerfenAction(formData: FormData): Promise<void> 
   const caseId = String(formData.get("caseId") ?? "");
   const buendelId = String(formData.get("buendelId") ?? "");
   if (!caseId || !buendelId) return;
-  await requireCaseAccess(caseId, { schreibend: true });
+  await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
   await prisma.documentBuendel.deleteMany({ where: { id: buendelId, caseId } });
   revalidatePath(`/cases/${caseId}`);
 }
@@ -85,7 +85,7 @@ export async function buendelVerwerfenAction(formData: FormData): Promise<void> 
 export async function buendelErneutPruefenAction(formData: FormData): Promise<void> {
   const caseId = String(formData.get("caseId") ?? "");
   if (!caseId) return;
-  await requireCaseAccess(caseId, { schreibend: true });
+  await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
   // Die Sperre nur zuruecksetzen, wenn sie NICHT mehr frisch ist - sonst
   // wuerde dieser Klick einen echten, gerade laufenden Hintergrundlauf
   // aushebeln und einen zweiten, ueberlappenden Lauf starten. Haelt ein
@@ -124,7 +124,7 @@ export async function seitenZusammenfuegenAction(
   if (!caseId || documentIds.length < 2) {
     return { grund: "Es sind weniger als zwei Seiten ausgewählt." };
   }
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
   // Der Titel kommt aus dem erkannten Typ der ersten Seite; ohne Typ ein
   // neutraler Name, den der Vermittler danach ueber die Typ-Auswahl schaerft.
@@ -137,7 +137,7 @@ export async function seitenZusammenfuegenAction(
 
   const ergebnis = await fuegeZusammen({
     caseId,
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     documentIds,
     titel,
     vermuteterTyp: typ,
@@ -183,9 +183,9 @@ export async function buendelRueckgaengigAction(
   const caseId = String(formData.get("caseId") ?? "");
   const documentId = String(formData.get("documentId") ?? "");
   if (!caseId || !documentId) return { grund: "Fall oder Dokument fehlt." };
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
-  const ergebnis = await macheRueckgaengig(documentId, ctx.organizationId);
+  const ergebnis = await macheRueckgaengig(documentId, akte.organizationId);
   if (ergebnis.ok) {
     await audit({
       organizationId: ctx.organizationId,

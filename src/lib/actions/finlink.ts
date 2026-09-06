@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireContext, eigeneAkteWhere } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { FinLinkConnector } from "@/lib/platforms/connectors";
@@ -80,7 +80,7 @@ export async function refreshFromFinLink(
 ): Promise<FinLinkRefreshState> {
   const ctx = await requireContext();
   const caseRow = await prisma.case.findFirst({
-    where: { id: caseId, ...akteSichtbarWhere(ctx) },
+    where: { id: caseId, ...eigeneAkteWhere(ctx) },
     select: { id: true, finlinkId: true },
   });
   if (!caseRow) return { error: "Fall nicht gefunden." };

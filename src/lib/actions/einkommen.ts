@@ -39,7 +39,7 @@ export async function analyzeSelfEmployedAction(
   _prev: EinkommenState,
   formData: FormData
 ): Promise<EinkommenState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
 
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { matrix: null, docNotes: [], error: "Bitte mindestens eine Unterlage hochladen." };
@@ -52,7 +52,7 @@ export async function analyzeSelfEmployedAction(
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
       const result = await processUpload({
-        organizationId: ctx.organizationId,
+        organizationId: akte.organizationId,
         caseId,
         file: { name: file.name, type: file.type, size: file.size, buffer },
         uploadSource: "vermittler",
@@ -141,7 +141,7 @@ export async function analyzeSelfEmployedAction(
 }
 
 export async function analyzeStoredSelfEmployedDocs(caseId: string, documentIds: string[]): Promise<EinkommenState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   if (documentIds.length === 0) return { matrix: null, docNotes: [], error: "Keine Dokumente zur Analyse ausgewählt." };
 
   // Fall-Isolation direkt in der Query: requireCaseAccess hat den Fall bereits
@@ -207,10 +207,10 @@ export async function createEinkommensPdfAction(
   caseId: string,
   input: EinkommenPdfInput
 ): Promise<{ documentId?: string; error?: string }> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
 
   try {
-    const broker = await getBrokerInfo(ctx.organizationId);
+    const broker = await getBrokerInfo(akte.organizationId);
     const caseRow = await prisma.case.findUniqueOrThrow({
       where: { id: caseId },
       include: { applicants: { orderBy: { position: "asc" } } },
@@ -240,7 +240,7 @@ export async function createEinkommensPdfAction(
 
     const fileName = pdfFileName("Einkommensanalyse", caseRow.applicants);
     const stored = await getStorage().put({
-      organizationId: ctx.organizationId,
+      organizationId: akte.organizationId,
       caseId,
       originalName: fileName,
       mimeType: "application/pdf",
@@ -281,7 +281,7 @@ export type EinkommenUploadResult = { documentId?: string; error?: string };
 
 /** Kleine Selbständigen-Datei über die Server-Action (Feld "files", genau eine). */
 export async function einkommenUploadOne(caseId: string, formData: FormData): Promise<EinkommenUploadResult> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   const env = getEnv();
   const limit = await checkRateLimit(`einkommen-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
@@ -291,7 +291,7 @@ export async function einkommenUploadOne(caseId: string, formData: FormData): Pr
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const result = await processUpload({
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     caseId,
     file: { name: file.name, type: file.type, size: file.size, buffer },
     uploadSource: "vermittler",
@@ -317,7 +317,7 @@ export async function createSelfEmployedBankSummaryAction(
   caseId: string,
   input: SelfEmployedBankSummaryInput
 ): Promise<{ documentId?: string; error?: string }> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   try {
     const applicant = await prisma.applicant.findFirst({
       where: { caseId, position: input.applicantPosition },
@@ -363,7 +363,7 @@ export async function createSelfEmployedBankSummaryAction(
       ansatzJahr: input.einkommensansatzJahr,
     });
 
-    const broker = await getBrokerInfo(ctx.organizationId);
+    const broker = await getBrokerInfo(akte.organizationId);
     const caseRow = await prisma.case.findUniqueOrThrow({
       where: { id: caseId },
       include: { applicants: { orderBy: { position: "asc" } } },
@@ -389,7 +389,7 @@ export async function createSelfEmployedBankSummaryAction(
 
     const fileName = pdfFileName("Bankzusammenfassung_Selbststaendig", caseRow.applicants);
     const stored = await getStorage().put({
-      organizationId: ctx.organizationId,
+      organizationId: akte.organizationId,
       caseId,
       originalName: fileName,
       mimeType: "application/pdf",
@@ -433,11 +433,11 @@ export async function requestEinkommenUploadSlot(
   originalName: string,
   _mimeType: string
 ): Promise<{ uploadUrl: string; storageKey: string } | { error: string }> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   const env = getEnv();
   const limit = await checkRateLimit(`einkommen-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
-  const target = await getStorage().createSignedUploadUrl({ organizationId: ctx.organizationId, caseId, originalName });
+  const target = await getStorage().createSignedUploadUrl({ organizationId: akte.organizationId, caseId, originalName });
   if (!target) return { error: "Direkt-Upload nicht verfügbar." };
   return target;
 }
@@ -447,10 +447,10 @@ export async function processEinkommenStoredUpload(
   caseId: string,
   meta: { storageKey: string; originalName: string; mimeType: string; sizeBytes: number }
 ): Promise<EinkommenUploadResult> {
-  const { ctx } = await requireCaseAccess(caseId);
-  if (!isStorageKeyForCase(meta.storageKey, ctx.organizationId, caseId)) return { error: "Ungültiger Upload-Pfad." };
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
+  if (!isStorageKeyForCase(meta.storageKey, akte.organizationId, caseId)) return { error: "Ungültiger Upload-Pfad." };
   const result = await processStoredUpload({
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     caseId,
     storageKey: meta.storageKey,
     originalName: meta.originalName,

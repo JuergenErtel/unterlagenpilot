@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireContext, akteSichtbarWhere, type AppContext } from "@/lib/auth/context";
+import { requireContext, eigeneAkteWhere, type AppContext } from "@/lib/auth/context";
 import { BUNDESLAENDER } from "@/lib/machbarkeit/bundesland";
 
 /** Stellt sicher, dass der Fall zur Organisation des Nutzers gehoert. */
 async function pruefeFall(caseId: string, ctx: AppContext): Promise<boolean> {
   if (!caseId) return false;
   const fall = await prisma.case.findFirst({
-    where: { id: caseId, ...akteSichtbarWhere(ctx) },
+    where: { id: caseId, ...eigeneAkteWhere(ctx) },
     select: { id: true },
   });
   return fall != null;

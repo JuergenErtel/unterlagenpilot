@@ -15,7 +15,7 @@ export default async function EinkommenPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { ctx } = await requireCaseAccess(id);
+  const { ctx } = await requireCaseAccess(id, { fremdakteErlaubt: true });
 
   const caseRow = await prisma.case.findFirst({
     where: { id, ...akteSichtbarWhere(ctx) },

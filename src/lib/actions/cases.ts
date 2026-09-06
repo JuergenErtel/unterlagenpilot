@@ -109,7 +109,7 @@ export interface UploadLinkActionState {
  * verfügbar (zum Kopieren); in der DB liegt ausschließlich der Hash.
  */
 export async function createUploadLink(caseId: string, days = 14): Promise<string> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   const created = await createSecureUploadLink(
     caseId,
     new Date(Date.now() + days * 86400 * 1000),
@@ -135,7 +135,7 @@ export async function createUploadLinkAction(
   formData: FormData
 ): Promise<UploadLinkActionState> {
   try {
-    const { ctx } = await requireCaseAccess(caseId);
+    const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
     const days = Number(formData.get("days") ?? 14) || 14;
     const singleUse = formData.get("singleUse") === "on";
     const created = await createSecureUploadLink(
@@ -158,7 +158,7 @@ export async function regenerateUploadLinkAction(
   formData: FormData
 ): Promise<UploadLinkActionState> {
   try {
-    const { ctx } = await requireCaseAccess(caseId);
+    const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
     const days = Number(formData.get("days") ?? 14) || 14;
     const created = await regenerateUploadLink(
       caseId,
@@ -174,7 +174,7 @@ export async function regenerateUploadLinkAction(
 
 /** Deaktiviert einen einzelnen Upload-Link. */
 export async function deactivateUploadLinkAction(caseId: string, linkId: string): Promise<void> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   // caseId ist geprueft - der Link muss zu GENAU dieser Akte gehoeren.
   await deactivateUploadLink(linkId, { organizationId: ctx.organizationId, userId: ctx.userId, caseId });
   revalidatePath(`/cases/${caseId}`);
@@ -191,7 +191,7 @@ export async function deactivateUploadLinkAction(caseId: string, linkId: string)
  * `ki_pruefung_laeuft` plus Dokument-Status, die Seite pollt selbst.
  */
 export async function runAiCheck(caseId: string): Promise<void> {
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
   // Status-Guard: einen bereits exportierten/übertragenen/abgeschlossenen Fall
   // nicht durch eine erneute KI-Prüfung zurücksetzen.

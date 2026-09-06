@@ -26,7 +26,7 @@ vi.mock("@/lib/storage", async () => {
 import { einkommenUploadOne, processEinkommenStoredUpload, requestEinkommenUploadSlot } from "@/lib/actions/einkommen";
 import { casePathPrefix } from "@/lib/storage";
 
-const ctx = { ctx: { organizationId: "org-A", userId: "u1" }, caseRow: { id: "case-A" } };
+const ctx = { ctx: { organizationId: "org-A", userId: "u1" }, caseRow: { id: "case-A", organizationId: "org-A" }, fremd: false };
 function fd(file: File) { const f = new FormData(); f.append("files", file); return f; }
 const pdf = () => new File([new Uint8Array([1, 2, 3])], "bwa.pdf", { type: "application/pdf" });
 

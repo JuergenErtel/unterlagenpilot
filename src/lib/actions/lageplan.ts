@@ -43,7 +43,7 @@ export async function generateLageplanAction(
   _prev: LageplanState,
   formData: FormData
 ): Promise<LageplanState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   const address = String(formData.get("address") ?? "").trim();
   if (!address) return { ...emptyState(""), error: "Bitte eine Objektadresse eingeben." };
 
@@ -105,9 +105,9 @@ export async function saveLageplanPdfAction(
   caseId: string,
   input: LageplanPdfInput
 ): Promise<{ documentId?: string; error?: string }> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   try {
-    const broker = await getBrokerInfo(ctx.organizationId);
+    const broker = await getBrokerInfo(akte.organizationId);
     const caseRow = await prisma.case.findUniqueOrThrow({
       where: { id: caseId },
       include: { applicants: { orderBy: { position: "asc" } } },
@@ -127,7 +127,7 @@ export async function saveLageplanPdfAction(
     });
     const fileName = pdfFileName("Lageplan", caseRow.applicants);
     const stored = await getStorage().put({
-      organizationId: ctx.organizationId,
+      organizationId: akte.organizationId,
       caseId,
       originalName: fileName,
       mimeType: "application/pdf",

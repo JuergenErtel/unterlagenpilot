@@ -35,7 +35,7 @@ vi.mock("@/lib/organization/broker-info", () => ({ getBrokerInfo: vi.fn(async ()
 import { createSelfEmployedBankSummaryAction } from "@/lib/actions/einkommen";
 
 beforeEach(() => {
-  requireCaseAccess.mockReset().mockResolvedValue({ ctx: { organizationId: "org-A", userId: "u1" } });
+  requireCaseAccess.mockReset().mockResolvedValue({ ctx: { organizationId: "org-A", userId: "u1" }, caseRow: { id: "case-A", organizationId: "org-A" }, fremd: false });
   applicantFindFirst.mockReset().mockResolvedValue({ id: "app-1", vorname: "Angelina", nachname: "Sadykow" });
   selfEmpUpsert.mockReset().mockResolvedValue({});
   caseFindUniqueOrThrow.mockReset().mockResolvedValue({ caseNumber: "2026-0007", applicants: [{ id: "app-1", vorname: "Angelina", nachname: "Sadykow", position: 1 }] });

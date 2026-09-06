@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, UserRound, UserPlus, Trash2 } from "lucide-react";
-import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireContext, eigeneAkteWhere } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { editApplicant, addApplicant, removeApplicant } from "@/lib/actions/case-edit";
 import { MAX_APPLICANTS } from "@/lib/domain/enums";
@@ -34,7 +34,7 @@ export default async function CaseEditPage({
   const ctx = await requireContext();
 
   const caseRecord = await prisma.case.findFirst({
-    where: { id, ...akteSichtbarWhere(ctx) },
+    where: { id, ...eigeneAkteWhere(ctx) },
     include: { applicants: { orderBy: { position: "asc" } } },
   });
 

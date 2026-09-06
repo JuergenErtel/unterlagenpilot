@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LageplanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireCaseAccess(id);
+  await requireCaseAccess(id, { fremdakteErlaubt: true });
   const property = await prisma.property.findUnique({ where: { caseId: id } });
   const initialAddress = [property?.street, [property?.zip, property?.city].filter(Boolean).join(" ")]
     .filter(Boolean)

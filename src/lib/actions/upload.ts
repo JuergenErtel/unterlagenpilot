@@ -144,7 +144,7 @@ export async function finishCustomerUpload(token: string, uploaded: number): Pro
  * ("1" | "2" | "none"). Revalidierung erfolgt gesammelt über `finishBrokerUpload`.
  */
 export async function brokerUploadOne(caseId: string, formData: FormData): Promise<UploadState> {
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
   const env = getEnv();
   const limit = await checkRateLimit(
@@ -187,7 +187,7 @@ export async function brokerUploadOne(caseId: string, formData: FormData): Promi
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const result = await processUpload({
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     caseId,
     file: { name: file.name, type: file.type, size: file.size, buffer },
     uploadSource: "vermittler",
@@ -201,7 +201,7 @@ export async function brokerUploadOne(caseId: string, formData: FormData): Promi
 
 /** Schliesst einen Vermittler-Sammel-Upload ab (einmalige Revalidierung). */
 export async function finishBrokerUpload(caseId: string): Promise<void> {
-  await requireCaseAccess(caseId);
+  await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   revalidatePath(`/cases/${caseId}`);
 }
 
@@ -216,12 +216,12 @@ export async function requestBrokerUploadSlot(
   originalName: string,
   _mimeType: string
 ): Promise<UploadSlot> {
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
   const env = getEnv();
   const limit = await checkRateLimit(`broker-upload:${caseId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
 
-  const target = await getStorage().createSignedUploadUrl({ organizationId: ctx.organizationId, caseId, originalName });
+  const target = await getStorage().createSignedUploadUrl({ organizationId: akte.organizationId, caseId, originalName });
   if (!target) return { error: "Direkt-Upload nicht verfügbar." };
   return target;
 }
@@ -232,10 +232,10 @@ export async function processBrokerStoredUpload(
   applicantPosition: string,
   meta: StoredUploadMeta
 ): Promise<UploadState> {
-  const { ctx } = await requireCaseAccess(caseId, { schreibend: true });
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { schreibend: true, fremdakteErlaubt: true });
 
-  // Tenant-Isolation: der storageKey MUSS im eigenen Org-/Fall-Pfad liegen.
-  if (!isStorageKeyForCase(meta.storageKey, ctx.organizationId, caseId)) {
+  // Tenant-Isolation: der storageKey MUSS im Pfad der Akten-Organisation liegen (bei einer Fremdakte NICHT die Organisation des Kontexts).
+  if (!isStorageKeyForCase(meta.storageKey, akte.organizationId, caseId)) {
     return { uploaded: 0, rejected: [{ name: meta.originalName, reason: "Ungültiger Upload-Pfad." }] };
   }
 
@@ -253,7 +253,7 @@ export async function processBrokerStoredUpload(
   }
 
   const result = await processStoredUpload({
-    organizationId: ctx.organizationId,
+    organizationId: akte.organizationId,
     caseId,
     storageKey: meta.storageKey,
     originalName: meta.originalName,

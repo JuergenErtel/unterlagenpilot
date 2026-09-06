@@ -143,6 +143,16 @@ export async function portalFeedbackAction(_prev: AktionsErgebnis, fd: FormData)
 // Upload durch den Auftraggeber - dieselbe Pipeline wie der Vermittler-Upload
 // ---------------------------------------------------------------------------
 
+/**
+ * Organisation der Akte - Eigentuemer des Storage-Pfads und der Pipeline-
+ * Zaehler. Bei einer Vertriebsakte des Auftraggebers (Cross-Org-Uebergabe)
+ * ist das dessen Organisation, nicht das Backoffice.
+ */
+async function aktenOrganisation(caseId: string): Promise<string> {
+  const akte = await prisma.case.findUniqueOrThrow({ where: { id: caseId }, select: { organizationId: true } });
+  return akte.organizationId;
+}
+
 export async function portalUploadOne(auftragId: string, formData: FormData): Promise<UploadState> {
   const { ctx, auftrag } = await requirePortalAuftrag(auftragId);
   if (BACKOFFICE_TERMINAL_STATUS.has(auftrag.status as BackofficeStatus)) {
@@ -158,7 +168,7 @@ export async function portalUploadOne(auftragId: string, formData: FormData): Pr
   const { applicantId, applicantName } = await antragstellerAus(auftrag.caseId, String(formData.get("applicantPosition") ?? "none"));
   const buffer = Buffer.from(await file.arrayBuffer());
   const result = await processUpload({
-    organizationId: auftrag.backofficeOrganizationId,
+    organizationId: await aktenOrganisation(auftrag.caseId),
     caseId: auftrag.caseId,
     file: { name: file.name, type: file.type, size: file.size, buffer },
     uploadSource: "vermittler",
@@ -192,7 +202,7 @@ export async function portalRequestUploadSlot(auftragId: string, originalName: s
   const limit = await checkRateLimit(`portal-upload:${auftragId}:${ctx.userId}`, env.UPLOAD_RATE_MAX, env.UPLOAD_RATE_WINDOW_SEC);
   if (!limit.ok) return { error: `Zu viele Uploads. Bitte in ${limit.retryAfterSec}s erneut versuchen.` };
   const target = await getStorage().createSignedUploadUrl({
-    organizationId: auftrag.backofficeOrganizationId,
+    organizationId: await aktenOrganisation(auftrag.caseId),
     caseId: auftrag.caseId,
     originalName,
   });
@@ -202,12 +212,13 @@ export async function portalRequestUploadSlot(auftragId: string, originalName: s
 
 export async function portalProcessStoredUpload(auftragId: string, applicantPosition: string, meta: StoredUploadMeta): Promise<UploadState> {
   const { ctx, auftrag } = await requirePortalAuftrag(auftragId);
-  if (!isStorageKeyForCase(meta.storageKey, auftrag.backofficeOrganizationId, auftrag.caseId)) {
+  const aktenOrg = await aktenOrganisation(auftrag.caseId);
+  if (!isStorageKeyForCase(meta.storageKey, aktenOrg, auftrag.caseId)) {
     return { uploaded: 0, rejected: [{ name: meta.originalName, reason: "Ungültiger Upload-Pfad." }] };
   }
   const { applicantId, applicantName } = await antragstellerAus(auftrag.caseId, applicantPosition);
   const result = await processStoredUpload({
-    organizationId: auftrag.backofficeOrganizationId,
+    organizationId: aktenOrg,
     caseId: auftrag.caseId,
     storageKey: meta.storageKey,
     originalName: meta.originalName,

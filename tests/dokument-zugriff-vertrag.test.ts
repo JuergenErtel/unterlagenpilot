@@ -35,6 +35,7 @@ const ERLAUBTE_GUARDS = [
   "requireAkteAccess",
   "requireCaseAccess",
   "akteSichtbarWhere",
+  "eigeneAkteWhere",
   "ladeAkteFuerRoute",
   "ladeDokumentFuerRoute",
   "requirePortalAuftrag",

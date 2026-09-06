@@ -27,7 +27,7 @@ export async function analyzeFloorplanAction(
   _prev: WohnflaecheState,
   formData: FormData
 ): Promise<WohnflaecheState> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
 
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { rooms: [], error: "Bitte mindestens einen Grundriss hochladen." };
@@ -43,7 +43,7 @@ export async function analyzeFloorplanAction(
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
       const result = await processUpload({
-        organizationId: ctx.organizationId,
+        organizationId: akte.organizationId,
         caseId,
         file: { name: file.name, type: file.type, size: file.size, buffer },
         uploadSource: "vermittler",
@@ -127,7 +127,7 @@ export async function analyzeFloorplanAction(
 }
 
 export async function saveWohnflaecheAction(caseId: string, rooms: WoflvRoom[]): Promise<{ id: string }> {
-  const { ctx } = await requireCaseAccess(caseId);
+  const { ctx, caseRow: akte } = await requireCaseAccess(caseId, { fremdakteErlaubt: true });
   const result = computeWoflv(rooms);
   const row = await prisma.wohnflaechenBerechnung.create({
     data: {
@@ -142,11 +142,11 @@ export async function saveWohnflaecheAction(caseId: string, rooms: WoflvRoom[]):
   });
 
   // Spec §7: PDF als Falldokument ablegen.
-  const built = await buildWohnflaecheData(caseId, ctx.organizationId);
+  const built = await buildWohnflaecheData(caseId, akte.organizationId);
   if (built) {
     const buffer = await renderWohnflaeche(built.data);
     const stored = await getStorage().put({
-      organizationId: ctx.organizationId,
+      organizationId: akte.organizationId,
       caseId,
       originalName: built.fileName,
       mimeType: "application/pdf",

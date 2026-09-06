@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Inbox } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireContext, akteSichtbarWhere } from "@/lib/auth/context";
+import { requireContext, eigeneAkteWhere } from "@/lib/auth/context";
 import { generateMessage } from "@/lib/actions/cases";
 import { isEmailConfigured } from "@/lib/email/resend";
 import { PageHeader } from "@/components/ui/page-header";
@@ -35,7 +35,7 @@ export default async function CaseMessagesPage({
   const ctx = await requireContext();
 
   const caseRecord = await prisma.case.findFirstOrThrow({
-    where: { id, ...akteSichtbarWhere(ctx) },
+    where: { id, ...eigeneAkteWhere(ctx) },
     include: { applicants: { orderBy: { position: "asc" } } },
   });
   const messages = await prisma.generatedMessage.findMany({
