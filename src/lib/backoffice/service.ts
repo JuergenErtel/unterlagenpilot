@@ -81,6 +81,8 @@ export interface AuftragAnlage {
   /** Vorhandene Akte (interne Uebergabe). Fehlt sie, entsteht eine Backoffice-Akte. */
   caseId?: string | null;
   antragsteller?: { vorname?: string | null; nachname?: string | null; email?: string | null; phone?: string | null };
+  /** Zweiter Antragsteller (Einreichungslink); nur angelegt, wenn ein Name da ist. */
+  antragsteller2?: { vorname?: string | null; nachname?: string | null } | null;
   aktenbezeichnung?: string | null;
   auftragsart: string;
   leistungen?: readonly string[];
@@ -90,7 +92,8 @@ export interface AuftragAnlage {
   hinweiseAuftraggeber?: string | null;
   financingType?: FinancingType | null;
   employmentType?: EmploymentType | null;
-  quelle: "manuell" | "portal" | "vertrieb_uebergabe";
+  /** manuell | portal | vertrieb_uebergabe | einreichung (oeffentlicher Einreichungslink) */
+  quelle: "manuell" | "portal" | "vertrieb_uebergabe" | "einreichung";
   erstelltVonId: string | null;
   jetzt?: Date;
 }
@@ -170,6 +173,15 @@ export async function erzeugeAuftrag(input: AuftragAnlage): Promise<ServiceErgeb
                   email: input.antragsteller?.email?.trim() || null,
                   phone: input.antragsteller?.phone?.trim() || null,
                 },
+                ...(input.antragsteller2 && (input.antragsteller2.vorname?.trim() || input.antragsteller2.nachname?.trim())
+                  ? [
+                      {
+                        position: 2,
+                        vorname: input.antragsteller2.vorname?.trim() || null,
+                        nachname: input.antragsteller2.nachname?.trim() || null,
+                      },
+                    ]
+                  : []),
               ],
             },
             financingRequest: { create: {} },
@@ -210,9 +222,17 @@ export async function erzeugeAuftrag(input: AuftragAnlage): Promise<ServiceErgeb
     userId: input.erstelltVonId,
     art: "angelegt",
     nachStatus: "neu_eingegangen",
-    text: `Auftrag ${erzeugt.auftragsnummer} eingegangen`,
+    text:
+      input.quelle === "einreichung"
+        ? `Auftrag ${erzeugt.auftragsnummer} über Einreichungslink eingegangen`
+        : `Auftrag ${erzeugt.auftragsnummer} eingegangen`,
     sichtbarFuerAuftraggeber: true,
-    audit: input.quelle === "vertrieb_uebergabe" ? "backoffice.vertrieb_uebergabe" : "backoffice.auftrag_erstellt",
+    audit:
+      input.quelle === "vertrieb_uebergabe"
+        ? "backoffice.vertrieb_uebergabe"
+        : input.quelle === "einreichung"
+          ? "backoffice.einreichung"
+          : "backoffice.auftrag_erstellt",
     auditMeta: { auftragsnummer: erzeugt.auftragsnummer, auftragsart: art.key, quelle: input.quelle },
   });
   return { ok: true, wert: erzeugt };

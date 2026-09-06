@@ -2044,6 +2044,7 @@ model BackofficeAuftraggeber {
   kontakte             BackofficeAuftraggeberKontakt[]
   auftraege            BackofficeAuftrag[]
   kontingentEreignisse BackofficeKontingentEreignis[]
+  einreichungsLinks    BackofficeEinreichungsLink[]
 
   @@unique([backofficeOrganizationId, organizationId])
   @@index([backofficeOrganizationId])
@@ -2072,6 +2073,26 @@ model BackofficeAuftraggeberKontakt {
   @@index([auftraggeberId])
   @@index([userId])
   @@map("backoffice_auftraggeber_kontakte")
+}
+
+/// Geheimer Einreichungslink eines Auftraggebers ohne BaufiDesk-Konto:
+/// Auftraege entstehen ueber ein oeffentliches Formular (/einreichen/[token]);
+/// Rueckfragen und Ergebnis laufen persoenlich ueber das Backoffice. Genau ein
+/// aktiver Link je Auftraggeber; Erneuern deaktiviert den alten. Token nur
+/// gehasht - der Klartext ist einmal beim Erzeugen sichtbar.
+model BackofficeEinreichungsLink {
+  id             String                 @id @default(cuid())
+  auftraggeberId String
+  auftraggeber   BackofficeAuftraggeber @relation(fields: [auftraggeberId], references: [id], onDelete: Cascade)
+  tokenHash      String                 @unique
+  aktiv          Boolean                @default(true)
+  erstelltVonId  String?
+  zuletztGenutzt DateTime?
+  einreichungen  Int                    @default(0)
+  createdAt      DateTime               @default(now())
+
+  @@index([auftraggeberId, aktiv])
+  @@map("backoffice_einreichungs_links")
 }
 
 /**

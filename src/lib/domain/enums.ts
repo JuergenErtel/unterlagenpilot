@@ -643,6 +643,8 @@ export const AUDIT_ACTIONS = [
   "backoffice.dokument_hochgeladen",
   "backoffice.ergebnis_abgerufen",
   "backoffice.vertrieb_uebergabe",
+  "backoffice.einreichungslink_geaendert",
+  "backoffice.einreichung",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
