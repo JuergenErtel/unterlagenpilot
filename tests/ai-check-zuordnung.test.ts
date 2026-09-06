@@ -98,6 +98,8 @@ const gespeichertesDoc = {
   applicantId: null as string | null,
   applicantSource: null as string | null,
   documentType: "personalausweis",
+  originalName: "IMG_4711.pdf",
+  period: null as string | null,
   // Echter Ausweistext, kein Stichwort: Seit dem 18.08.2026 stuft der
   // Prueflauf Dokumente ohne Textgrundlage gar nicht mehr ein (siehe
   // textsubstanz.ts). Ein Zwei-Wort-Fixture liefe an dieser Regel auf und
@@ -112,11 +114,11 @@ const gespeichertesDoc = {
 };
 
 /** Führt den kompletten Prüflauf inkl. Hintergrundarbeit aus. */
-async function pruefungLaufenLassen(): Promise<{ applicantId?: string; applicantSource?: string }> {
+async function pruefungLaufenLassen(): Promise<{ applicantId?: string; applicantSource?: string; generatedName?: string }> {
   await runAiCheck("case-A");
   await afterCallbacks[0]!();
   const call = documentUpdate.mock.calls[0]![0] as {
-    data: { applicantId?: string; applicantSource?: string };
+    data: { applicantId?: string; applicantSource?: string; generatedName?: string };
   };
   return call.data;
 }
@@ -148,5 +150,22 @@ describe("KI-Prüflauf: Naht zur Zuordnung", () => {
     const data = await pruefungLaufenLassen();
     expect(data.applicantId).toBeUndefined();
     expect(data.applicantSource).toBeUndefined();
+  });
+
+  // Fall Schmidt, 06.09.2026: Nach dem fallweiten Lauf hiessen 14 erkannte
+  // Dokumente weiter "Sonstige_Unterlagen_Philipp_Schmidt.pdf" - nur die
+  // Upload-Kette vergab den sprechenden Namen, der Prueflauf nicht.
+  it("vergibt den sprechenden Dateinamen aus Typ und zugeordneter Person", async () => {
+    documentFindMany.mockResolvedValue([{ ...gespeichertesDoc }]);
+    const data = await pruefungLaufenLassen();
+    expect(data.generatedName).toBe("Personalausweis_Thomas_Colell.pdf");
+  });
+
+  it("nimmt fuer den Dateinamen die von Hand zugeordnete Person, nicht die erkannte", async () => {
+    documentFindMany.mockResolvedValue([
+      { ...gespeichertesDoc, applicantId: "a1", applicantSource: "manuell" },
+    ]);
+    const data = await pruefungLaufenLassen();
+    expect(data.generatedName).toBe("Personalausweis_Laura_Colell.pdf");
   });
 });

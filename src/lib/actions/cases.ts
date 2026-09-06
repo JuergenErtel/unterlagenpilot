@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { generateFileName } from "@/lib/documents/filename";
 import { kiFehlerText } from "@/lib/ai/fehlertext";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -39,7 +40,7 @@ import { analysiereDokument } from "@/lib/documents/pipeline";
 import { computeObjectUpdate, isObjectDocumentType } from "@/lib/documents/apply-object-fields";
 import { planRematch } from "@/lib/documents/applicant-match";
 import { isAiCheckRunning } from "@/lib/cases/ai-check-status";
-import { LOCKED_CASE_STATUSES } from "@/lib/domain/enums";
+import { LOCKED_CASE_STATUSES, type DocumentType as DomainDocumentType } from "@/lib/domain/enums";
 import type {
   CaseStatus,
   EmploymentType,
@@ -292,6 +293,14 @@ async function processAiCheckInBackground(params: {
     // Hauptursache, dass die KI-Prüfung bei mehreren Dokumenten über das
     // Function-Timeout lief und mit "Etwas ist schiefgelaufen" abbrach.
     // Jedes Dokument ist ein eigener DB-Datensatz -> keine Schreibkonflikte.
+    // Fuer den sprechenden Dateinamen: Name der zugeordneten Person. Bis
+    // 06.09.2026 vergab nur die Upload-Kette den Namen - nach dem fallweiten
+    // Lauf hiessen 14 erkannte Schmidt-Dokumente weiter "Sonstige_Unterlagen".
+    const personName = (applicantId: string | null | undefined): string | null => {
+      const a = applicants.find((x) => x.id === applicantId);
+      return a ? [a.vorname, a.nachname].filter(Boolean).join(" ") || null : null;
+    };
+
     await mapLimit(docs, AI_CHECK_CONCURRENCY, async (doc) => {
       const text = doc.pages.map((p) => p.ocrText ?? "").join("\n");
 
@@ -320,6 +329,11 @@ async function processAiCheckInBackground(params: {
             ? {
                 readable: true,
                 ...(doc.documentType ? {} : { documentType: bild.documentType }),
+                generatedName: generateFileName({
+                  documentType: (doc.documentType ?? bild.documentType) as DomainDocumentType,
+                  applicantName: personName(doc.applicantId),
+                  originalName: doc.originalName,
+                }),
                 confidence: bild.confidence,
                 classificationStatus: "fertig",
                 extractionStatus: "fertig",
@@ -355,10 +369,20 @@ async function processAiCheckInBackground(params: {
           applicants
         );
 
+        const generatedName = generateFileName({
+          documentType: cls.documentType,
+          applicantName: personName(change?.applicantId ?? doc.applicantId) ?? cls.detectedApplicant ?? null,
+          propertyRef: cls.detectedPropertyRef,
+          period: cls.period,
+          originalName: doc.originalName,
+        });
+
         await prisma.document.update({
           where: { id: doc.id },
           data: {
             documentType: cls.documentType,
+            generatedName,
+            period: cls.period ?? undefined,
             detectedApplicant: cls.detectedApplicant ?? null,
             ...(change ? { applicantId: change.applicantId, applicantSource: "auto" } : {}),
             confidence: cls.confidence,
