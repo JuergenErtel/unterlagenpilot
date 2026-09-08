@@ -87,7 +87,7 @@ export default async function BankPage({
         title={bank.name}
         subtitle={
           bank.kriterien.length === 0
-            ? "Für diese Bank liegt kein Europace-Kriteriencheck vor – nur die Produktübersicht aus dem Europace-Wiki."
+            ? "Für diesen Anbieter liegt kein Europace-Kriteriencheck vor – nur Angaben aus dem Europace-Wiki."
             : `${ausschluesse} harte Ausschlüsse · ${vorbehalte} unter Vorbehalt · Abzug vom ${datum(bank.importiertAm)}`
         }
       />

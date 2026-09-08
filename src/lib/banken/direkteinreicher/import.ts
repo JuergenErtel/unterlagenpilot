@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
-import { parseDirekteinreicher } from "./parsen";
-import { bankNameAusTitel, ordneZu } from "./zuordnen";
+import { parseDirekteinreicher, istLeererArtikel } from "./parsen";
+import { bankNameAusTitel, ordneZu, istNeueBank } from "./zuordnen";
+import { neueBankId } from "../produktuebersicht/import";
 
 /**
  * Import der Direkteinreicherinformationen aus dem Europace-Wiki.
@@ -25,6 +26,7 @@ export interface RohAbzug {
 
 export interface ImportBericht {
   bankenGeschrieben: number;
+  bankenNeuAngelegt: number;
   personenGeschrieben: number;
   /** Artikel, deren Titel kein Direkteinreicher-Artikel ist (werden uebersprungen). */
   keinDirekteinreicherArtikel: string[];
@@ -32,6 +34,10 @@ export interface ImportBericht {
   ohneZuordnung: string[];
   /** Zugeordnete Artikel, in denen der Parser keine Person fand (Anschrift/Hinweise trotzdem gespeichert). */
   ohnePersonen: string[];
+  /** Zendesk-Platzhalter "Es gibt keine aktuellen Einträge" oder leer – nichts zu speichern. */
+  leereArtikel: string[];
+  /** Zuordnungen ueber die Ortsworte statt den ganzen Namen – von Hand pruefen. */
+  unscharf: string[];
 }
 
 export async function importiereDirekteinreicher(
@@ -41,10 +47,13 @@ export async function importiereDirekteinreicher(
 ): Promise<ImportBericht> {
   const bericht: ImportBericht = {
     bankenGeschrieben: 0,
+    bankenNeuAngelegt: 0,
     personenGeschrieben: 0,
     keinDirekteinreicherArtikel: [],
     ohneZuordnung: [],
     ohnePersonen: [],
+    leereArtikel: [],
+    unscharf: [],
   };
 
   const banken = await prisma.bank.findMany({ select: { id: true, name: true } });
@@ -55,9 +64,27 @@ export async function importiereDirekteinreicher(
       bericht.keinDirekteinreicherArtikel.push(roh.titel);
       continue;
     }
-    const bank = ordneZu(name, banken);
-    if (!bank) {
+    let zu = ordneZu(name, banken);
+    if (!zu && istNeueBank(name)) {
+      // Anbieter ohne Kriteriencheck – von Hand freigegeben (zuordnung.json).
+      const neu = await prisma.bank.upsert({
+        where: { bankId: neueBankId(name) },
+        create: { bankId: neueBankId(name), name, zuletztGesehenAm: jetzt },
+        update: {},
+        select: { id: true, name: true },
+      });
+      banken.push(neu);
+      bericht.bankenNeuAngelegt++;
+      zu = { bank: neu, art: "hand" };
+    }
+    if (!zu) {
       bericht.ohneZuordnung.push(name);
+      continue;
+    }
+    const bank = zu.bank;
+    if (zu.art === "unscharf") bericht.unscharf.push(`${name} -> ${bank.name}`);
+    if (istLeererArtikel(roh.body ?? "")) {
+      bericht.leereArtikel.push(name);
       continue;
     }
 

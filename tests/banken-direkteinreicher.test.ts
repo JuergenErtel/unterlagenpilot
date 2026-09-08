@@ -6,7 +6,7 @@ import {
   klartext,
   feldAusBeschriftung,
 } from "@/lib/banken/direkteinreicher/parsen";
-import { bankNameAusTitel, vergleichsname, ordneZu } from "@/lib/banken/direkteinreicher/zuordnen";
+import { bankNameAusTitel, vergleichsname, ordneZu, gruppe } from "@/lib/banken/direkteinreicher/zuordnen";
 
 const ULM = readFileSync("tests/fixtures/direkteinreicher-spk-ulm.html", "utf8");
 
@@ -94,9 +94,35 @@ describe("Artikel der Bank zuordnen", () => {
   });
 
   it("trifft exakt, nicht per Teilstring", () => {
-    expect(ordneZu("Sparkasse Ulm", banken)?.id).toBe("1");
-    expect(ordneZu("Volksbank Ulm-Biberach eG", banken)?.id).toBe("3");
+    expect(ordneZu("Sparkasse Ulm", banken)).toEqual({ bank: banken[0], art: "exakt" });
+    expect(ordneZu("Volksbank Ulm-Biberach eG", banken)?.bank.id).toBe("3");
     expect(ordneZu("Ulm", banken)).toBeNull();
     expect(ordneZu("Sparkasse Ulmer Land", banken)).toBeNull();
+  });
+
+  it("versteht Titel ohne Trennstrich und die Genossenschaftsfamilie", () => {
+    expect(bankNameAusTitel("Volksbank im Münsterland eG Direkteinreicherinformationen")).toBe("Volksbank im Münsterland eG");
+    expect(vergleichsname("Volksbank Raiffeisenbank Dachau eG")).toBe("vr dachau");
+    expect(vergleichsname("VR-Bank Dachau")).toBe("vr dachau");
+    expect(vergleichsname("Raiffeisen-Volksbank eG, Aurich")).toBe("vr");
+    expect(vergleichsname("Raiffeisenbank Chamer Land eG, Cham")).toBe("raiffeisenbank chamer land");
+    expect(vergleichsname("Sparda-Bank Nürnberg")).toBe("sparda nuernberg");
+  });
+
+  it("ordnet unscharf nur innerhalb der Institutsgruppe und nur eindeutig zu – und sagt es", () => {
+    const b = [
+      { id: "1", name: "KSK Halle-Wiedenbrück" },
+      { id: "2", name: "VR Bank Dreieich-Offenbach eG" },
+      { id: "3", name: "Spk Offenbach" },
+      { id: "4", name: "Spk Rhein-Lippe" },
+      { id: "5", name: "VoBa Rhein-Lippe" },
+    ];
+    expect(ordneZu("Kreissparkasse Wiedenbrück", b)).toEqual({ bank: b[0], art: "unscharf" });
+    // "Offenbach" allein: die Sparkasse passt exakt, die VR Bank ist eine andere Gruppe
+    expect(ordneZu("Sparkasse Offenbach", b)).toEqual({ bank: b[2], art: "exakt" });
+    expect(ordneZu("Volksbank Offenbach eG", b)).toEqual({ bank: b[1], art: "unscharf" });
+    expect(gruppe(vergleichsname("Stadt- und Kreissparkasse Darmstadt"))).toBe("spk");
+    expect(gruppe(vergleichsname("Allianz"))).toBe("sonstige");
+    expect(ordneZu("Allianz Lebensversicherung", b)).toBeNull();
   });
 });

@@ -4,6 +4,9 @@
  */
 export function normalisiere(s: string): string {
   return s
+    // Zerlegte Umlaute ("u" + Trema) zu einem Zeichen – aus Europace kommen
+    // beide Schreibweisen, und nur die zusammengesetzte trifft /ü/.
+    .normalize("NFC")
     .toLowerCase()
     .replace(/ä/g, "ae")
     .replace(/ö/g, "oe")

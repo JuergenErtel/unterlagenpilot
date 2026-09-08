@@ -6,6 +6,11 @@ describe("Namenssuche", () => {
     expect(normalisiere("München")).toBe("muenchen");
   });
 
+  it("behandelt zerlegte Umlaute (u + Trema) wie zusammengesetzte", () => {
+    expect(normalisiere("Fu\u0308rth")).toBe("fuerth");
+    expect(passtZurSuche("VR Bank im su\u0308dlichen Franken", "südlichen")).toBe(true);
+  });
+
   it("findet Umlautorte ueber die ae-Schreibweise", () => {
     expect(passtZurSuche("Sparkasse München", "muenchen")).toBe(true);
     expect(passtZurSuche("Sparkasse München", "münchen")).toBe(true);

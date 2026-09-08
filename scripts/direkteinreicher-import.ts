@@ -20,9 +20,12 @@ async function main() {
   await prisma.$disconnect();
 
   console.log(`Banken geschrieben  : ${b.bankenGeschrieben}`);
+  console.log(`  davon neu angelegt: ${b.bankenNeuAngelegt}`);
   console.log(`Personen geschrieben: ${b.personenGeschrieben}`);
   if (b.keinDirekteinreicherArtikel.length)
     console.log(`Uebersprungen (kein Direkteinreicher-Artikel): ${b.keinDirekteinreicherArtikel.length}`);
+  if (b.leereArtikel.length) console.log(`Leere Artikel (uebersprungen): ${b.leereArtikel.length}`);
+  if (b.unscharf.length) console.log(`UNSCHARF ZUGEORDNET (${b.unscharf.length}):\n  ${b.unscharf.join("\n  ")}`);
   if (b.ohnePersonen.length) console.log(`OHNE PERSONEN (${b.ohnePersonen.length}): ${b.ohnePersonen.join(" | ")}`);
   if (b.ohneZuordnung.length) console.log(`OHNE ZUORDNUNG (${b.ohneZuordnung.length}): ${b.ohneZuordnung.join(" | ")}`);
 }
