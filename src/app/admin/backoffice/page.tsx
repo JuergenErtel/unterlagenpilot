@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * und bekommt denselben schlichten Rahmen.
  */
 export default async function BackofficeSteuerungPage() {
-  await requirePlatformAdmin();
+  await requirePlatformAdmin("/admin/backoffice");
 
   const organisationen = await prisma.organization.findMany({
     orderBy: { name: "asc" },

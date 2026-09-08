@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const notFound = vi.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
-vi.mock("next/navigation", () => ({ notFound, redirect: vi.fn() }));
+const redirect = vi.fn((url: string) => {
+  throw new Error("NEXT_REDIRECT:" + url);
+});
+vi.mock("next/navigation", () => ({ notFound, redirect }));
 
 let aktuellerNutzer: { id: string; platformAdmin: boolean; isDemo?: boolean } | null = null;
 
@@ -52,10 +55,19 @@ describe("Plattform-Freigabe: Zugriff", () => {
     expect(notFound).toHaveBeenCalled();
   });
 
-  it("antwortet ohne Anmeldung ebenfalls mit 404", async () => {
+  it("schickt ohne Anmeldung zur Anmeldeseite – mit Rueckweg zur Freigabe", async () => {
+    // Der Betreiber tippt den Link aus der Mail auf dem Handy an, ohne dort
+    // angemeldet zu sein. Ein 404 liesse ihn glauben, die Seite sei kaputt.
     aktuellerNutzer = null;
     const { requirePlatformAdmin } = await import("@/lib/auth/platform-admin");
-    await expect(requirePlatformAdmin()).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(requirePlatformAdmin()).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Fadmin%2Fanmeldungen");
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("nimmt den Rueckweg der aufrufenden Seite mit", async () => {
+    aktuellerNutzer = null;
+    const { requirePlatformAdmin } = await import("@/lib/auth/platform-admin");
+    await expect(requirePlatformAdmin("/admin/backoffice")).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Fadmin%2Fbackoffice");
   });
 
   it("antwortet auch im Demo-Kontext mit 404 – selbst wenn der zufaellige Demo-Nutzer platformAdmin ist", async () => {
