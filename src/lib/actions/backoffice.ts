@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireContext, roleAtLeast } from "@/lib/auth/context";
 import { istBackofficeAktiv } from "@/lib/backoffice/feature";
-import { deaktiviereEinreichungsLink, erzeugeEinreichungsLink } from "@/lib/backoffice/einreichung";
+import { deaktiviereEinreichungsLink, erzeugeEinreichungsLink, sendeEinreichungsLink } from "@/lib/backoffice/einreichung";
 import { requireBackofficeAuftrag, requireBackofficeManager } from "@/lib/backoffice/zugriff";
 import {
   erzeugeAuftrag,
@@ -544,6 +544,54 @@ export async function einreichungsLinkErzeugenAction(
   if (!r.ok) return { error: r.grund };
   revalidatePath(`/backoffice/auftraggeber/${auftraggeberId}`);
   return { url: r.wert.url };
+}
+
+export interface EinreichungsLinkVersandStand {
+  url?: string;
+  gesendetAn?: string;
+  versandFehler?: string;
+  error?: string;
+}
+
+const EMAIL_MUSTER = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Erzeugt einen neuen Einreichungslink und schickt ihn an die gewaehlte
+ * Adresse. Freie Adresse erlaubt: Der Auftraggeber hat nicht immer schon
+ * einen Kontakt mit E-Mail angelegt, und der Manager soll dafuer nicht erst
+ * die Stammdaten pflegen muessen.
+ */
+export async function einreichungsLinkSendenAction(
+  _prev: EinreichungsLinkVersandStand,
+  fd: FormData
+): Promise<EinreichungsLinkVersandStand> {
+  const ctx = await requireBackofficeManager();
+  const auftraggeberId = text(fd, "auftraggeberId");
+  const empfaengerEmail = text(fd, "empfaengerEmail").toLowerCase();
+  const empfaengerName = optional(fd, "empfaengerName");
+  const notiz = optional(fd, "notiz");
+  if (!EMAIL_MUSTER.test(empfaengerEmail) || empfaengerEmail.length > 254) {
+    return { error: "Bitte eine gültige E-Mail-Adresse angeben." };
+  }
+  if (notiz && notiz.length > 1000) return { error: "Die Notiz ist zu lang (max. 1000 Zeichen)." };
+
+  const r = await sendeEinreichungsLink({
+    auftraggeberId,
+    backofficeOrganizationId: ctx.organizationId,
+    backofficeName: ctx.organizationName,
+    userId: ctx.userId,
+    absenderName: ctx.userName,
+    empfaengerEmail,
+    empfaengerName,
+    notiz,
+  });
+  if (!r.ok) return { error: r.grund };
+  revalidatePath(`/backoffice/auftraggeber/${auftraggeberId}`);
+  return {
+    url: r.wert.url,
+    gesendetAn: r.wert.gesendetAn,
+    ...(r.wert.versandFehler ? { versandFehler: r.wert.versandFehler } : {}),
+  };
 }
 
 export async function einreichungsLinkDeaktivierenAction(auftraggeberId: string): Promise<AktionsErgebnis> {

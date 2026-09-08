@@ -47,6 +47,20 @@ export default async function AuftraggeberDetailPage({ params }: { params: Promi
   });
   const intern = ag.abrechnungsmodell === "intern";
 
+  // Wer den Einreichungslink bekommen kann: aktive Kontakte mit Adresse
+  // (eigene oder die des verknuepften Nutzers), dazu die Firmenadresse.
+  const gesehen = new Set<string>();
+  const einreichungsEmpfaenger: Array<{ name: string; email: string }> = [];
+  for (const k of ag.kontakte) {
+    const email = (k.email ?? k.user?.email ?? "").toLowerCase();
+    if (!k.aktiv || !email || gesehen.has(email)) continue;
+    gesehen.add(email);
+    einreichungsEmpfaenger.push({ name: k.name, email });
+  }
+  if (ag.email && !gesehen.has(ag.email.toLowerCase())) {
+    einreichungsEmpfaenger.push({ name: ag.name, email: ag.email.toLowerCase() });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -155,6 +169,7 @@ export default async function AuftraggeberDetailPage({ params }: { params: Promi
               <CardContent>
                 <EinreichungslinkBlock
                   auftraggeberId={ag.id}
+                  empfaenger={einreichungsEmpfaenger}
                   stand={{
                     aktiv: einreichungsLink.aktiv,
                     seit: einreichungsLink.seit?.toISOString() ?? null,

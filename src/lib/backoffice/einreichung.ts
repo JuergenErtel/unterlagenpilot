@@ -3,6 +3,8 @@ import { audit } from "@/lib/audit";
 import { getEnv } from "@/lib/env";
 import { createLinkToken, hashToken } from "@/lib/security/upload-token";
 import { createSecureUploadLink } from "@/lib/security/upload-link";
+import { isEmailConfigured, sendEmail } from "@/lib/email/resend";
+import { baueEinreichungsLinkMail } from "./einreichung-mail";
 import { istBackofficeAktiv } from "./feature";
 import { erzeugeAuftrag, type ServiceErgebnis } from "./service";
 
@@ -52,6 +54,79 @@ export async function erzeugeEinreichungsLink(input: {
     metadata: { aktion: "erzeugt" },
   });
   return { ok: true, wert: { url: buildEinreichungUrl(token) } };
+}
+
+/**
+ * Erzeugt einen neuen Einreichungslink UND schickt ihn per Mail an den
+ * Auftraggeber. Der Manager loest das ausdruecklich aus – kein Automatismus.
+ *
+ * Warum neu erzeugen statt den bestehenden schicken: Der Klartext liegt
+ * nirgends, nur sein Hash. Ein Versand ist deshalb immer ein Erneuern; der
+ * alte Link wird ungueltig, und der Aufrufer sagt das in der Oberflaeche.
+ *
+ * Scheitert der Versand, bleibt der neue Link trotzdem gueltig und kommt im
+ * Ergebnis zurueck – dann gibt der Manager ihn eben von Hand weiter, statt
+ * dass Link und Fehlermeldung beide verloren gehen.
+ */
+export async function sendeEinreichungsLink(input: {
+  auftraggeberId: string;
+  backofficeOrganizationId: string;
+  backofficeName: string;
+  userId: string | null;
+  absenderName: string;
+  empfaengerEmail: string;
+  empfaengerName: string | null;
+  notiz: string | null;
+}): Promise<ServiceErgebnis<{ url: string; gesendetAn: string; versandFehler: string | null }>> {
+  if (!isEmailConfigured()) {
+    return { ok: false, grund: "Der E-Mail-Versand ist nicht eingerichtet. Link erzeugen und von Hand weitergeben." };
+  }
+  const ag = await prisma.backofficeAuftraggeber.findFirst({
+    where: { id: input.auftraggeberId, backofficeOrganizationId: input.backofficeOrganizationId, aktiv: true, abrechnungsmodell: { not: "intern" } },
+    select: { id: true, name: true },
+  });
+  if (!ag) return { ok: false, grund: "Für diesen Auftraggeber gibt es keinen Einreichungslink." };
+
+  const erzeugt = await erzeugeEinreichungsLink(input);
+  if (!erzeugt.ok) return erzeugt;
+  const url = erzeugt.wert.url;
+
+  const absender = input.userId
+    ? await prisma.user.findUnique({ where: { id: input.userId }, select: { email: true } })
+    : null;
+  const mail = baueEinreichungsLinkMail({
+    url,
+    backofficeName: input.backofficeName,
+    absenderName: input.absenderName,
+    auftraggeberName: ag.name,
+    empfaengerName: input.empfaengerName,
+    notiz: input.notiz,
+  });
+
+  let versandFehler: string | null = null;
+  try {
+    // Der Auftraggeber ist ein Vermittler, kein Antragsteller: Klasse "intern".
+    await sendEmail({
+      to: input.empfaengerEmail,
+      subject: mail.subject,
+      text: mail.text,
+      empfaenger: "intern",
+      absenderName: input.backofficeName,
+      ...(absender?.email ? { replyTo: absender.email } : {}),
+    });
+  } catch (e) {
+    versandFehler = e instanceof Error ? e.message : "Versand fehlgeschlagen.";
+  }
+
+  await audit({
+    organizationId: input.backofficeOrganizationId,
+    userId: input.userId,
+    action: "backoffice.einreichungslink_versendet",
+    entityType: "backoffice_auftraggeber",
+    entityId: ag.id,
+    metadata: { empfaenger: input.empfaengerEmail, erfolg: versandFehler == null },
+  });
+  return { ok: true, wert: { url, gesendetAn: input.empfaengerEmail, versandFehler } };
 }
 
 export async function deaktiviereEinreichungsLink(input: {
