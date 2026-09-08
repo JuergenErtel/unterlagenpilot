@@ -11,6 +11,7 @@ import { fehlendeAngaben } from "@/lib/cases/kreditpruefung";
 import { ladeAnnahmen } from "@/lib/machbarkeit/annahmen";
 import { LeadBoard } from "@/components/pipeline/lead-board";
 import { SyncStatus } from "@/components/pipeline/sync-status";
+import { finlinkGehoertZu } from "@/lib/platforms/finlink/client";
 import { LEAD_SOURCE_LABELS, type LeadSource, type CaseStatus } from "@/lib/domain/enums";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -308,10 +309,20 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
     }),
   }));
 
-  const syncState = await prisma.leadSyncState.findUnique({
-    where: { organizationId_quelle: { organizationId, quelle: "finlink" } },
-    select: { lastRunAt: true, lastCreated: true, lastError: true },
-  });
+  /*
+   * Die Abgleich-Zeile nur dort, wo es einen FinLink-Zugang gibt.
+   *
+   * Der Schluessel gehoert genau EINER Organisation. Jede andere las bisher
+   * dauerhaft "Noch nie abgeglichen" - eine Statusmeldung ueber eine
+   * Verbindung, die sie gar nicht hat, samt Knopf, der nichts tun kann.
+   */
+  const finlinkVerfuegbar = finlinkGehoertZu(organizationId);
+  const syncState = finlinkVerfuegbar
+    ? await prisma.leadSyncState.findUnique({
+        where: { organizationId_quelle: { organizationId, quelle: "finlink" } },
+        select: { lastRunAt: true, lastCreated: true, lastError: true, aktiv: true },
+      })
+    : null;
   const syncMinuten = syncState?.lastRunAt
     ? Math.max(0, Math.round((jetzt.getTime() - syncState.lastRunAt.getTime()) / 60000))
     : null;
@@ -389,13 +400,16 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
           ton="text-ai"
           hinweis="Schätzung: 8 Minuten je KI-ausgewertetem Dokument."
         />
-        <div className="ml-auto self-center">
-          <SyncStatus
-            zuletzt={zuletzt}
-            angelegt={syncState?.lastCreated ?? 0}
-            fehler={syncState?.lastError ?? null}
-          />
-        </div>
+        {finlinkVerfuegbar && (
+          <div className="ml-auto self-center">
+            <SyncStatus
+              zuletzt={zuletzt}
+              angelegt={syncState?.lastCreated ?? 0}
+              fehler={syncState?.lastError ?? null}
+              aktiv={syncState?.aktiv ?? true}
+            />
+          </div>
+        )}
       </div>
 
       <LeadBoard

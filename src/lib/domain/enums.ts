@@ -625,6 +625,10 @@ export const AUDIT_ACTIONS = [
   // Gehoert ins Log, weil diese Angaben auf jedem erzeugten Papier stehen -
   // wer sie aendert, aendert rueckwirkend nichts, aber alles Kuenftige.
   "organization.updated",
+  // Der Nutzer hat den automatischen Lead-Abgleich an- oder abgeschaltet.
+  // Gehoert ins Log, weil danach unter Umstaenden tagelang keine neuen Faelle
+  // mehr entstehen - ohne Eintrag saehe das aus wie ein stiller Ausfall.
+  "leadimport.geschaltet",
   // BaufiDesk Backoffice: jeder Statuswechsel, jede Zuweisung und jede
   // Freigabe eines Auftrags. Metadaten tragen nur Schluessel (Auftrags-
   // nummer, Status, Rollen) - nie Notizen oder Rueckfragetexte.

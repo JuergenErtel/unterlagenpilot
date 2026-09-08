@@ -59,7 +59,7 @@ function rohLead(id: string, createdAt: string, extra: Record<string, unknown> =
 
 beforeEach(() => {
   Object.values(h).forEach((m) => m.mockReset());
-  h.stateFindUnique.mockResolvedValue({ id: "s1", syncedUntil: marke });
+  h.stateFindUnique.mockResolvedValue({ id: "s1", syncedUntil: marke, aktiv: true });
   h.stateUpsert.mockResolvedValue({});
   h.caseUpdate.mockResolvedValue({});
   h.createCaseFromCanonical.mockResolvedValue({ caseId: "c1", caseNumber: "UP-1", deduped: false });
@@ -94,6 +94,25 @@ describe("syncFinLinkLeads", () => {
     await syncFinLinkLeads(ctx);
     const arg = h.stateUpsert.mock.calls[0]![0] as { update: { syncedUntil: Date } };
     expect(arg.update.syncedUntil.toISOString()).toBe("2026-08-07T11:00:00.000Z");
+  });
+
+  it("laeuft nicht, wenn der Nutzer den Abgleich abgestellt hat", async () => {
+    h.stateFindUnique.mockResolvedValue({ id: "s1", syncedUntil: marke, aktiv: false });
+    const r = await syncFinLinkLeads(ctx);
+    expect(r.status).toBe("pausiert");
+    expect(r.angelegt).toBe(0);
+    expect(h.fetchLeadsPage).not.toHaveBeenCalled();
+    // Kein lastRunAt-Vermerk: Sonst laese das Dashboard "zuletzt abgeglichen
+    // vor N Minuten" und der abgestellte Import saehe aus wie ein laufender.
+    expect(h.stateUpsert).not.toHaveBeenCalled();
+  });
+
+  it("laeuft weiter, solange keine Zeile existiert (Standard: an)", async () => {
+    h.stateFindUnique.mockResolvedValue(null);
+    const r = await syncFinLinkLeads(ctx);
+    // Erstlauf setzt nur den Stichtag - aber er laeuft, statt zu pausieren.
+    expect(r.status).toBe("ok");
+    expect(h.stateUpsert).toHaveBeenCalled();
   });
 
   it("meldet 'nicht konfiguriert', wenn kein Client da ist", async () => {

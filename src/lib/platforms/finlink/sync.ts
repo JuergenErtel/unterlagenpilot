@@ -21,7 +21,7 @@ const QUELLE = "finlink";
 const MAX_PRO_LAUF = 200;
 
 export interface SyncErgebnis {
-  status: "ok" | "nicht_konfiguriert" | "fehler";
+  status: "ok" | "nicht_konfiguriert" | "fehler" | "pausiert";
   angelegt: number;
   /** IDs übersprungener Leads. */
   uebersprungen: string[];
@@ -32,9 +32,22 @@ export async function syncFinLinkLeads(
   ctx: { organizationId: string; userId: string },
   deps?: { client?: FinLinkClient | null; jetzt?: Date }
 ): Promise<SyncErgebnis> {
-  const client = deps?.client === undefined ? getFinLinkClient(ctx.organizationId) : deps.client;
   const jetzt = deps?.jetzt ?? new Date();
   const schluessel = { organizationId_quelle: { organizationId: ctx.organizationId, quelle: QUELLE } };
+  const state = await prisma.leadSyncState.findUnique({ where: schluessel });
+
+  /*
+   * Der Schalter des Nutzers steht VOR allem anderen.
+   *
+   * Absichtlich ohne Vermerk in lastRunAt: Wer abgeschaltet hat, soll auf dem
+   * Dashboard "Abgleich ist aus" lesen und nicht "zuletzt abgeglichen vor
+   * 3 Minuten" - das laese sich als laufender Import missverstehen.
+   */
+  if (state?.aktiv === false) {
+    return { status: "pausiert", angelegt: 0, uebersprungen: [] };
+  }
+
+  const client = deps?.client === undefined ? getFinLinkClient(ctx.organizationId) : deps.client;
 
   if (!client) {
     /*
@@ -55,8 +68,6 @@ export async function syncFinLinkLeads(
     }
     return { status: "nicht_konfiguriert", angelegt: 0, uebersprungen: [], fehler: luecke ?? undefined };
   }
-
-  const state = await prisma.leadSyncState.findUnique({ where: schluessel });
 
   // Erster Lauf: nur Stichtag setzen. Sonst käme der gesamte Bestand herein.
   if (!state) {

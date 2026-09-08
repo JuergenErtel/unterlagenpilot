@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { connectionStatuses } from "@/lib/platforms/connectors";
+import { finlinkGehoertZu } from "@/lib/platforms/finlink/client";
+import { prisma } from "@/lib/db";
+import { FinlinkAbgleichSchalter } from "@/components/finlink/abgleich-schalter";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -72,6 +75,17 @@ export default async function ConnectionsPage() {
   const ctx = await requireContext();
   const statuses = await connectionStatuses(ctx.organizationId);
   const byPlatform = new Map(statuses.map((s) => [s.platform, s]));
+
+  // Der FinLink-Zugang gehoert genau einer Organisation; nur dort ist ein
+  // Schalter fuer den automatischen Abgleich mehr als eine Attrappe.
+  const finlinkVerfuegbar = finlinkGehoertZu(ctx.organizationId);
+  const finlinkSync = finlinkVerfuegbar
+    ? await prisma.leadSyncState.findUnique({
+        where: { organizationId_quelle: { organizationId: ctx.organizationId, quelle: "finlink" } },
+        select: { aktiv: true, pausiertAm: true },
+      })
+    : null;
+  const finlinkAktiv = finlinkSync?.aktiv ?? true;
 
   return (
     <div className="space-y-8">
@@ -168,6 +182,20 @@ export default async function ConnectionsPage() {
                     <p className="text-muted-foreground">{meta.prepared}</p>
                   </div>
                 </div>
+
+                {key === "finlink" && finlinkVerfuegbar && (
+                  <>
+                    <Separator />
+                    <FinlinkAbgleichSchalter
+                      aktiv={finlinkAktiv}
+                      pausiertSeit={
+                        finlinkSync?.pausiertAm
+                          ? finlinkSync.pausiertAm.toLocaleDateString("de-DE")
+                          : null
+                      }
+                    />
+                  </>
+                )}
 
                 <Separator />
 

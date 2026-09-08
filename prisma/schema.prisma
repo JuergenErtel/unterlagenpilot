@@ -1644,6 +1644,16 @@ model LeadSyncState {
   lastRunAt      DateTime?
   lastCreated    Int          @default(0)
   lastError      String?
+  /**
+   * Schalter fuer den automatischen Abgleich (Cron alle 15 Minuten und
+   * "Jetzt abgleichen"). Bis 08.09.2026 liess sich der Zufluss nur ueber
+   * Umgebungsvariablen stoppen - fuer den Nutzer also gar nicht. Steht er
+   * auf false, laeuft der Abgleich nicht; der bewusste Einzelimport ueber
+   * /cases/import bleibt davon unberuehrt.
+   */
+  aktiv          Boolean      @default(true)
+  /// Wann zuletzt abgeschaltet wurde; nur fuer die Anzeige.
+  pausiertAm     DateTime?
   updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, quelle])
