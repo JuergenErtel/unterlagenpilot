@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { finlinkGehoertZu } from "@/lib/platforms/finlink/client";
 import { PLATFORM_LABELS, type Platform } from "@/lib/domain/enums";
 
 /**
@@ -88,8 +89,9 @@ export async function getSystemStatus(organizationId: string): Promise<SystemSta
   });
   const isConfigured = (p: Platform) => {
     // FinLink: Pull-Import läuft live über die Partner-API, sobald der API-Key
-    // gesetzt ist – das DB-Flag stammt noch aus der Stub-Zeit.
-    if (p === "finlink" && process.env.FINLINK_API_KEY) return true;
+    // gesetzt ist – das DB-Flag stammt noch aus der Stub-Zeit. Der Zugang
+    // gehört aber genau EINER Organisation (FINLINK_ORGANIZATION_ID).
+    if (p === "finlink" && process.env.FINLINK_API_KEY) return finlinkGehoertZu(organizationId);
     return connections.find((c) => c.platform === p)?.configured ?? false;
   };
 

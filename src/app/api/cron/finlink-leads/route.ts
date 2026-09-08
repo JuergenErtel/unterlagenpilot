@@ -23,7 +23,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const orgs = await prisma.organization.findMany({ select: { id: true } });
+  // Nur die Organisation, der der FinLink-Zugang gehoert. Bis 08.09.2026 lief
+  // der Abgleich fuer JEDE Organisation mit demselben Schluessel – die Leads
+  // des Betreibers waeren als Faelle bei fremden Vermittlern gelandet.
+  const eigentuemer = process.env.FINLINK_ORGANIZATION_ID;
+  const orgs = eigentuemer
+    ? await prisma.organization.findMany({ where: { id: eigentuemer }, select: { id: true } })
+    : [];
   let angelegt = 0;
   let fehler = 0;
 

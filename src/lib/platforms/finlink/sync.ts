@@ -32,7 +32,7 @@ export async function syncFinLinkLeads(
   ctx: { organizationId: string; userId: string },
   deps?: { client?: FinLinkClient | null; jetzt?: Date }
 ): Promise<SyncErgebnis> {
-  const client = deps?.client === undefined ? getFinLinkClient() : deps.client;
+  const client = deps?.client === undefined ? getFinLinkClient(ctx.organizationId) : deps.client;
   const jetzt = deps?.jetzt ?? new Date();
   const schluessel = { organizationId_quelle: { organizationId: ctx.organizationId, quelle: QUELLE } };
 
@@ -45,7 +45,7 @@ export async function syncFinLinkLeads(
      * Dashboard aus wie ein normaler Lauf ohne neue Leads — und niemand
      * bemerkte tagelang, dass gar nichts mehr ankommt.
      */
-    const luecke = finlinkKonfigurationsLuecke();
+    const luecke = finlinkKonfigurationsLuecke(ctx.organizationId);
     if (luecke) {
       await prisma.leadSyncState.upsert({
         where: schluessel,

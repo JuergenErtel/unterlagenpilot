@@ -11,7 +11,8 @@ import { FinLinkLeadList, type LeadRowData } from "@/components/finlink/finlink-
 
 export default async function FinLinkImportPage() {
   const ctx = await requireContext();
-  const client = getFinLinkClient();
+  // Nur die Organisation, der der FinLink-Zugang gehoert, sieht die Leadliste.
+  const client = getFinLinkClient(ctx.organizationId);
 
   let leads: LeadRowData[] | null = null;
   let loadError = false;

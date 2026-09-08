@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { finlinkKonfigurationsLuecke, HttpFinLinkClient, getFinLinkClient } from "@/lib/platforms/finlink/client";
 
 /**
@@ -118,14 +118,33 @@ describe("FinLink-Import: nur die eigenen Kunden", () => {
   });
 });
 
+const ORG = "org-betreiber";
+
 describe("finlinkKonfigurationsLuecke", () => {
+  beforeEach(() => {
+    vi.stubEnv("FINLINK_ORGANIZATION_ID", ORG);
+  });
+
   it("meldet die halbe Konfiguration – Schlüssel da, Kennung fehlt", async () => {
     // Ohne diese Meldung pausierte der Import STUMM: Der Abgleich meldete
     // „ok, 0 neue Leads", und auf dem Dashboard stand ganz normal „zuletzt
     // abgeglichen vor N Minuten".
     vi.stubEnv("FINLINK_API_KEY", "k");
     vi.stubEnv("FINLINK_ADVISOR_ID", "");
-    expect(finlinkKonfigurationsLuecke()).toContain("FINLINK_ADVISOR_ID");
+    expect(finlinkKonfigurationsLuecke(ORG)).toContain("FINLINK_ADVISOR_ID");
+  });
+
+  it("meldet einen Zugang ohne Organisation – sonst pausiert der Import stumm", () => {
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
+    vi.stubEnv("FINLINK_ORGANIZATION_ID", "");
+    expect(finlinkKonfigurationsLuecke(ORG)).toContain("FINLINK_ORGANIZATION_ID");
+  });
+
+  it("schweigt fuer eine fremde Organisation – die hat kein FinLink, das ist kein Fehler", () => {
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", "");
+    expect(finlinkKonfigurationsLuecke("org-fremd")).toBeNull();
   });
 
   it("schweigt, wenn FinLink gar nicht eingerichtet ist", () => {
@@ -133,29 +152,48 @@ describe("finlinkKonfigurationsLuecke", () => {
     // rote Zeile auf dem Dashboard.
     vi.stubEnv("FINLINK_API_KEY", "");
     vi.stubEnv("FINLINK_ADVISOR_ID", "");
-    expect(finlinkKonfigurationsLuecke()).toBeNull();
+    expect(finlinkKonfigurationsLuecke(ORG)).toBeNull();
   });
 
   it("schweigt bei vollständiger Konfiguration", () => {
     vi.stubEnv("FINLINK_API_KEY", "k");
     vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
-    expect(finlinkKonfigurationsLuecke()).toBeNull();
+    expect(finlinkKonfigurationsLuecke(ORG)).toBeNull();
   });
 });
 
 describe("getFinLinkClient", () => {
+  beforeEach(() => {
+    vi.stubEnv("FINLINK_ORGANIZATION_ID", ORG);
+  });
+
+  it("verweigert den Dienst fuer jede andere Organisation", async () => {
+    // 08.09.2026: Der erste fremde Vermittler sah nach seiner Freischaltung
+    // die komplette Leadliste des Betreibers. Der Zugang ist EIN Berater.
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
+    expect(getFinLinkClient("org-fremd")).toBeNull();
+  });
+
+  it("verweigert den Dienst fuer ALLE, wenn der Zugang keiner Organisation zugeordnet ist", async () => {
+    vi.stubEnv("FINLINK_API_KEY", "k");
+    vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
+    vi.stubEnv("FINLINK_ORGANIZATION_ID", "");
+    expect(getFinLinkClient(ORG)).toBeNull();
+  });
+
   it("verweigert den Dienst, wenn die Berater-Kennung fehlt", async () => {
     // Fail closed: Ohne Kennung lieber GAR NICHT importieren als ungefiltert.
     // Der umgekehrte Weg hätte genau den Fehler wiederhergestellt, den dieser
     // Filter behebt.
     vi.stubEnv("FINLINK_API_KEY", "k");
     vi.stubEnv("FINLINK_ADVISOR_ID", "");
-    expect(getFinLinkClient()).toBeNull();
+    expect(getFinLinkClient(ORG)).toBeNull();
   });
 
   it("liefert einen Client, wenn Schlüssel und Kennung da sind", async () => {
     vi.stubEnv("FINLINK_API_KEY", "k");
     vi.stubEnv("FINLINK_ADVISOR_ID", ICH);
-    expect(getFinLinkClient()).not.toBeNull();
+    expect(getFinLinkClient(ORG)).not.toBeNull();
   });
 });

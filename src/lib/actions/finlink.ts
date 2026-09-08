@@ -86,8 +86,8 @@ export async function refreshFromFinLink(
   if (!caseRow) return { error: "Fall nicht gefunden." };
   if (!caseRow.finlinkId) return { error: "Dieser Fall ist nicht mit FinLink verknüpft." };
 
-  const client = getFinLinkClient();
-  if (!client) return { error: "FinLink ist nicht konfiguriert (FINLINK_API_KEY fehlt)." };
+  const client = getFinLinkClient(ctx.organizationId);
+  if (!client) return { error: "FinLink ist für diese Organisation nicht eingerichtet." };
 
   try {
     const dto = await client.fetchVorgang(caseRow.finlinkId);

@@ -135,10 +135,11 @@ describe("HttpFinLinkClient.fetchVorgang", () => {
     const prevAdvisor = process.env.FINLINK_ADVISOR_ID;
     process.env.FINLINK_API_KEY = "k";
     process.env.FINLINK_ADVISOR_ID = BERATER;
+    process.env.FINLINK_ORGANIZATION_ID = "org-1";
     delete process.env.FINLINK_BASE_URL;
     try {
       const fetchMock = mockFetch(200, apiSingleLeadBody("FL-9"));
-      const client = getFinLinkClient(fetchMock);
+      const client = getFinLinkClient("org-1", fetchMock);
       expect(client).not.toBeNull();
       await client!.fetchVorgang("FL-9");
       expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.finlink.de/partner-api/leads/FL-9");
@@ -335,7 +336,7 @@ describe("FinLinkConnector.importCaseById", () => {
     const connector = new FinLinkConnector();
     const res = await connector.importCaseById(UUID_1, ctx, { client: null });
     expect(res.ok).toBe(false);
-    expect(res.message).toMatch(/nicht (verbunden|konfiguriert)/i);
+    expect(res.message).toMatch(/nicht (verbunden|konfiguriert|eingerichtet)/i);
   });
 
   it("meldet eine klare Fehlermeldung bei unbekanntem Vorgang (404)", async () => {

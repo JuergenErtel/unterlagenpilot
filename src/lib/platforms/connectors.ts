@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { caseToCanonical } from "./case-loader";
 import { buildPlatformMapping } from "./mapping";
-import { getFinLinkClient, type FinLinkClient, FinLinkNotFoundError, FinLinkAuthError } from "./finlink/client";
+import { getFinLinkClient, finlinkGehoertZu, type FinLinkClient, FinLinkNotFoundError, FinLinkAuthError } from "./finlink/client";
 import { finlinkToCanonical } from "./finlink/mapping";
 import { createCaseFromCanonical } from "./case-writer";
 import { leiteQuelleAb } from "./finlink/source";
@@ -184,9 +184,9 @@ export class FinLinkConnector extends BaseConnector {
     ctx: { organizationId: string; userId: string },
     deps?: { client?: FinLinkClient | null }
   ): Promise<ImportResult> {
-    const client = deps && "client" in deps ? deps.client : getFinLinkClient();
+    const client = deps && "client" in deps ? deps.client : getFinLinkClient(ctx.organizationId);
     if (!client) {
-      return { ok: false, importedCaseIds: [], message: "FinLink ist nicht verbunden. Bitte FINLINK_BASE_URL/FINLINK_API_KEY setzen." };
+      return { ok: false, importedCaseIds: [], message: "FinLink ist für diese Organisation nicht eingerichtet." };
     }
 
     let leadId = externalId;

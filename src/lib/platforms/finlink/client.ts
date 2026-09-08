@@ -277,16 +277,42 @@ const DEFAULT_BASE_URL = "https://api.finlink.de/partner-api";
  * bewusst gar nicht (lokale Entwicklung, andere Organisationen) — beides ist
  * kein Grund für eine rote Zeile.
  */
-export function finlinkKonfigurationsLuecke(): string | null {
+/**
+ * Gehoert der FinLink-Zugang aus der Umgebung DIESER Organisation?
+ *
+ * Der Schluessel ist ein einziger, globaler Wert – er ist der Zugang EINES
+ * Beraters. Bis 08.09.2026 bekam ihn jede Organisation: Der erste fremde
+ * Vermittler sah nach seiner Freischaltung auf /cases/import die komplette
+ * Leadliste des Betreibers, und der Cron haette dessen Leads als Faelle in
+ * die fremde Organisation importiert. FINLINK_ORGANIZATION_ID bindet den
+ * Zugang an genau eine Organisation; fehlt sie, bekommt NIEMAND den Client.
+ */
+export function finlinkGehoertZu(organizationId: string): boolean {
+  const eigentuemer = process.env.FINLINK_ORGANIZATION_ID;
+  return Boolean(eigentuemer) && eigentuemer === organizationId;
+}
+
+export function finlinkKonfigurationsLuecke(organizationId: string): string | null {
   if (!process.env.FINLINK_API_KEY) return null;
+  if (!process.env.FINLINK_ORGANIZATION_ID) {
+    // Kann keiner Organisation zugeordnet werden – dann muss es der Betreiber
+    // ueberall sehen, sonst pausiert der Import stumm.
+    return "FINLINK_ORGANIZATION_ID fehlt – der Lead-Abgleich pausiert, bis der FinLink-Zugang einer Organisation zugeordnet ist.";
+  }
+  if (!finlinkGehoertZu(organizationId)) return null;
   if (process.env.FINLINK_ADVISOR_ID) return null;
   return "FINLINK_ADVISOR_ID fehlt – der Lead-Abgleich pausiert, damit keine Leads anderer Berater importiert werden.";
 }
 
-export function getFinLinkClient(fetchImpl: FetchLike = fetch): FinLinkClient | null {
+export function getFinLinkClient(organizationId: string, fetchImpl: FetchLike = fetch): FinLinkClient | null {
   const apiKey = process.env.FINLINK_API_KEY;
   const advisorId = process.env.FINLINK_ADVISOR_ID;
   if (!apiKey) return null;
+  if (!process.env.FINLINK_ORGANIZATION_ID) {
+    console.warn("[finlink] FINLINK_ORGANIZATION_ID fehlt – der Zugang bleibt fuer alle Organisationen aus.");
+    return null;
+  }
+  if (!finlinkGehoertZu(organizationId)) return null;
   if (!advisorId) {
     console.warn("[finlink] FINLINK_ADVISOR_ID fehlt – Import bleibt aus, um keine fremden Leads zu holen.");
     return null;
