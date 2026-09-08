@@ -29,7 +29,7 @@ export interface SystemStatus {
  * Nachforderung an einen Kunden.
  */
 function mailversandStatus(
-  stufe: "kunden" | "nur_intern" | "aus",
+  stufe: "kunden" | "vermittler" | "nur_intern" | "aus",
   platformAdminEmail: string | undefined
 ): SystemStatusItem {
   if (stufe === "kunden") {
@@ -49,7 +49,7 @@ function mailversandStatus(
       hint: "Es geht keine Mail hinaus – auch keine internen. sendEmail() wirft einen Fehler.",
     };
   }
-  // "nur_intern": ohne Betreiberadresse verhält sich diese Stufe fail-closed
+  // "vermittler" und "nur_intern": ohne Betreiberadresse verhält sich die Stufe fail-closed
   // wie "aus" (siehe src/lib/email/resend.ts) – das muss die Anzeige zeigen,
   // sonst wirkt die Stufe hier faelschlich funktionsfaehig.
   if (!platformAdminEmail) {
@@ -58,7 +58,16 @@ function mailversandStatus(
       label: "Mailversand",
       value: "Nur an mich (aber PLATFORM_ADMIN_EMAIL fehlt → faktisch aus)",
       mode: "off",
-      hint: "MAILVERSAND=nur_intern ohne PLATFORM_ADMIN_EMAIL sendet nichts, auch keine internen Mails.",
+      hint: `MAILVERSAND=${stufe} ohne PLATFORM_ADMIN_EMAIL sendet nichts, auch keine internen Mails.`,
+    };
+  }
+  if (stufe === "vermittler") {
+    return {
+      key: "mailversand",
+      label: "Mailversand",
+      value: `An Vermittler und Kollegen; Kundenmails zu mir (→ ${platformAdminEmail})`,
+      mode: "warn",
+      hint: "Pilotstufe: Mails an Vermittler, Kollegen und Registrierende gehen echt hinaus. Jede an einen Antragsteller adressierte Mail geht an die Betreiberadresse statt an die echte Person.",
     };
   }
   return {

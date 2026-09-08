@@ -54,6 +54,17 @@ describe("Systemstatus: Mailversand-Stufe", () => {
     expect(item?.value).toMatch(/Kunden/);
   });
 
+  it("zeigt 'vermittler' als Pilotstufe mit Betreiberadresse fuer Kundenmails", async () => {
+    env.MAILVERSAND = "vermittler";
+    const { getSystemStatus } = await import("@/lib/system/status");
+    const status = await getSystemStatus("org-1");
+    const item = mailItem(status.items);
+    expect(item?.mode).toBe("warn");
+    expect(item?.value).toMatch(/Vermittler/);
+    expect(item?.value).toContain("betreiber@baufidesk.de");
+    expect(status.pilot).toBe(true);
+  });
+
   it("zeigt 'nur_intern' deutlich sichtbar (Achtung) mit Betreiberadresse", async () => {
     env.MAILVERSAND = "nur_intern";
     const { getSystemStatus } = await import("@/lib/system/status");

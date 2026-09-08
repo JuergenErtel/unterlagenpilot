@@ -30,6 +30,13 @@ describe("MAILVERSAND", () => {
     expect(getEnv().MAILVERSAND).toBe("nur_intern");
   });
 
+  it("nimmt 'vermittler' an, wenn ausdruecklich gesetzt", async () => {
+    vi.stubEnv("MAILVERSAND", "vermittler");
+    vi.resetModules();
+    const { getEnv } = await import("@/lib/env");
+    expect(getEnv().MAILVERSAND).toBe("vermittler");
+  });
+
   it("nimmt 'kunden' an, wenn ausdruecklich gesetzt", async () => {
     vi.stubEnv("MAILVERSAND", "kunden");
     const getEnv = await frischesEnv();

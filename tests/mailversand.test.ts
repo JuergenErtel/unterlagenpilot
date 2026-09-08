@@ -109,6 +109,35 @@ describe("Mailversand-Stufe 'nur_intern' (Testbetrieb)", () => {
   });
 });
 
+describe("Mailversand-Stufe 'vermittler' (Pilot: Vermittler echt, Kunden umgeleitet)", () => {
+  beforeEach(() => {
+    env.MAILVERSAND = "vermittler";
+  });
+
+  it("schickt eine interne Mail (Vermittler, Auftraggeber) an die adressierte Person", async () => {
+    const { sendEmail } = await import("@/lib/email/resend");
+    await sendEmail({ ...kundenmail, to: "makler@fremd.de", empfaenger: "intern" });
+    const gesendet = letzterAufruf();
+    expect(gesendet.to).toBe("makler@fremd.de");
+    expect(gesendet.subject).not.toContain("Testbetrieb");
+  });
+
+  it("leitet eine Kundenmail weiterhin auf die Betreiberadresse um", async () => {
+    const { sendEmail } = await import("@/lib/email/resend");
+    await sendEmail(kundenmail);
+    const gesendet = letzterAufruf();
+    expect(gesendet.to).toBe("betreiber@baufidesk.de");
+    expect(gesendet.subject).toContain("kunde@example.de");
+  });
+
+  it("bleibt ohne PLATFORM_ADMIN_EMAIL fuer Kundenmails fail-closed", async () => {
+    delete env.PLATFORM_ADMIN_EMAIL;
+    const { sendEmail } = await import("@/lib/email/resend");
+    await expect(sendEmail(kundenmail)).rejects.toThrow(/ausgeschaltet/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("Mailversand-Stufe 'aus'", () => {
   it("verschickt nichts und wirft einen erkennbaren Fehler", async () => {
     env.MAILVERSAND = "aus";

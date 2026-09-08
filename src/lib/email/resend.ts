@@ -77,7 +77,13 @@ export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> 
   // ein unbekannter/fehlender Wert. So bleibt die sichere Vorgabe verlaesslich,
   // selbst wenn getEnv() (z.B. in einem Test) nicht ueber das Zod-Schema mit
   // seinem eigenen Fallback gelaufen ist.
-  if (env.MAILVERSAND !== "kunden") {
+  //
+  // "vermittler" ist die Zwischenstufe: Nur die Klasse "intern" (Vermittler,
+  // Kollegen, Registrierende, Betreiber) geht echt hinaus. Ein Antragsteller
+  // bleibt umgeleitet – genau die Person, die eine Testmail nie sehen darf.
+  const echtRaus =
+    env.MAILVERSAND === "kunden" || (env.MAILVERSAND === "vermittler" && input.empfaenger === "intern");
+  if (!echtRaus) {
     // Ohne Betreiberadresse gibt es keinen sicheren Umleitungsort - dann
     // verhaelt sich diese Stufe wie "aus" (fail-closed), statt ungeprueft an
     // die echte Adresse zu senden.

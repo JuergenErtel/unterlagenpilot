@@ -80,6 +80,11 @@ const envSchema = z.object({
   // BaufiDesk sind alle Kunden echt – eine Testmail an einen Antragsteller
   // ist nicht zurueckholbar.
   //   "kunden"     = Normalbetrieb, Mail geht an die adressierte Person.
+  //   "vermittler" = Mails an Vermittler/Kollegen/Betreiber (Klasse "intern")
+  //                  gehen echt hinaus; Mails an Antragsteller (Klasse "kunde")
+  //                  weiter an PLATFORM_ADMIN_EMAIL. Fuer die Pilotphase, in
+  //                  der Auftraggeber schon angeschrieben werden, Kunden aber
+  //                  noch nicht (seit 08.09.2026).
   //   "nur_intern" = Testbetrieb, ALLES (auch Kundenmails) geht an
   //                  PLATFORM_ADMIN_EMAIL statt an die echte Adresse.
   //   "aus"        = Nichts verlaesst das System, auch keine internen Mails.
@@ -89,8 +94,8 @@ const envSchema = z.object({
   // KUNDENVERSAND) faellt bewusst auf die sichere Vorgabe zurueck, statt die
   // App mit einem Konfigurationsfehler lahmzulegen.
   MAILVERSAND: z.preprocess(
-    (v) => (v === "kunden" || v === "nur_intern" || v === "aus" ? v : "nur_intern"),
-    z.enum(["kunden", "nur_intern", "aus"])
+    (v) => (v === "kunden" || v === "vermittler" || v === "nur_intern" || v === "aus" ? v : "nur_intern"),
+    z.enum(["kunden", "vermittler", "nur_intern", "aus"])
   ),
   // Empfaenger der Benachrichtigung "neue Anmeldung wartet". Ohne den Wert
   // unterbleibt nur diese Mail – die Antraege stehen trotzdem in /admin/anmeldungen.
