@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AnsichtUmschalter, type DashboardAnsicht } from "@/components/dashboard/ansicht-umschalter";
 import { BoardAnsicht } from "@/components/dashboard/board-ansicht";
 import { ArbeitsAnsicht } from "@/components/dashboard/arbeits-ansicht";
+import { ErsterFall } from "@/components/dashboard/erster-fall";
+import { nurVertrieb } from "@/lib/cases/aktenart";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +37,17 @@ export default async function DashboardPage({
   // vertippter Parameter darf keine leere Seite erzeugen.
   const aktiv: DashboardAnsicht = ansicht === "tabelle" ? "tabelle" : "board";
 
-  const [status, demoCase] = await Promise.all([
+  const [status, demoCase, faelle] = await Promise.all([
     getSystemStatus(ctx.organizationId),
     prisma.case.findFirst({
       where: { organizationId: ctx.organizationId, caseNumber: "UP-2026-0001" },
       select: { id: true },
     }),
+    prisma.case.count({ where: { organizationId: ctx.organizationId, ...nurVertrieb } }),
   ]);
+  // Noch kein Fall: Statt sechs leerer Spalten der Einstieg. Der Umschalter
+  // entfaellt, weil beide Sichten dasselbe zeigen wuerden – nichts.
+  const keineFaelle = faelle === 0;
 
   return (
     <div className="space-y-4">
@@ -66,8 +72,12 @@ export default async function DashboardPage({
             {/* Hierarchie: Ansichtswechsel links als stiller Umschalter, dann
                 die sekundaere und zuletzt die EINE Hauptaktion. Der Demo-Fall
                 ist ein Textlink - er gehoert nicht in die Knopfreihe. */}
-            <AnsichtUmschalter aktiv={aktiv} />
-            <span className="hidden h-6 w-px bg-border sm:inline-block" aria-hidden />
+            {!keineFaelle && (
+              <>
+                <AnsichtUmschalter aktiv={aktiv} />
+                <span className="hidden h-6 w-px bg-border sm:inline-block" aria-hidden />
+              </>
+            )}
             {demoCase && (
               <Link href={`/cases/${demoCase.id}`} className="inline-flex items-center gap-1.5 px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
                 <PlayCircle className="h-3.5 w-3.5" aria-hidden />Demo-Fall
@@ -85,7 +95,9 @@ export default async function DashboardPage({
         }
       />
 
-      {aktiv === "board" ? (
+      {keineFaelle ? (
+        <ErsterFall demoCaseId={demoCase?.id ?? null} />
+      ) : aktiv === "board" ? (
         <BoardAnsicht organizationId={ctx.organizationId} />
       ) : (
         <ArbeitsAnsicht organizationId={ctx.organizationId} demoCaseId={demoCase?.id ?? null} />

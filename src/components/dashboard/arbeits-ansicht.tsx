@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Plus, PlayCircle, ListTodo } from "lucide-react";
+import { ListTodo } from "lucide-react";
 import { getDashboardData } from "@/lib/cases/dashboard";
 import { prisma } from "@/lib/db";
 import { nurVertrieb } from "@/lib/cases/aktenart";
 import { Button } from "@/components/ui/button";
 import { Kennzahlenband } from "@/components/dashboard/kennzahlenband";
+import { ErsterFall } from "@/components/dashboard/erster-fall";
 import { Pipeline } from "@/components/case/pipeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -48,29 +49,7 @@ export async function ArbeitsAnsicht({
         hier wieder einbaut, hat sie zum zweiten Mal.
       */}
       {keineFaelle ? (
-        <Card>
-          <CardContent className="space-y-4 p-8">
-            <div className="text-center">
-              <p className="text-base font-semibold">Willkommen bei BaufiDesk.</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                In drei Schritten ist Ihr erster Fall bankfertig.
-              </p>
-            </div>
-            <ol className="mx-auto grid max-w-lg gap-3 text-sm">
-              <OnboardingStep n={1} title="Fall anlegen" text="Name und Finanzierungsart genügen – alles Weitere ergänzt die KI aus den Unterlagen." />
-              <OnboardingStep n={2} title="Upload-Link an den Kunden senden" text="Im Fall unter „Sicherer Upload-Link“. Der Kunde lädt ohne Login hoch." />
-              <OnboardingStep n={3} title="Prüfen und exportieren" text="KI-Prüfung starten, Vorschläge bestätigen, Paket für die Bank erzeugen." />
-            </ol>
-            <div className="flex justify-center gap-2 pt-1">
-              <Button asChild><Link href="/cases/new"><Plus />Ersten Fall anlegen</Link></Button>
-              {demoCaseId && (
-                <Button asChild variant="outline">
-                  <Link href={`/cases/${demoCaseId}`}><PlayCircle />Demo-Fall ansehen</Link>
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <ErsterFall demoCaseId={demoCaseId} />
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2 text-sm">
@@ -138,19 +117,5 @@ export async function ArbeitsAnsicht({
         ]}
       />
     </>
-  );
-}
-
-function OnboardingStep({ n, title, text }: { n: number; title: string; text: string }) {
-  return (
-    <li className="flex gap-3">
-      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-        {n}
-      </span>
-      <span>
-        <span className="font-medium">{title}</span>
-        <span className="block text-muted-foreground">{text}</span>
-      </span>
-    </li>
   );
 }
