@@ -50,8 +50,24 @@ export interface ProduktMerkmal {
   wert: string;
 }
 
+export interface Ansprechpartner {
+  name: string;
+  funktion: string;
+  telefon: string;
+  email: string;
+}
+
 export interface BankDetail {
   name: string;
+  /**
+   * Direkteinreicherinformationen aus dem Europace-Wiki: wen man bei der Bank
+   * anruft. Leer, solange kein Artikel importiert wurde – dann zeigt die Seite
+   * den Block nicht.
+   */
+  ansprechpartner: Ansprechpartner[];
+  anschrift: string | null;
+  direkteinreicherHinweis: string | null;
+  direkteinreicherStandAm: Date | null;
   /** Wann WIR den Abzug geholt haben – nicht zu verwechseln mit standAm. */
   importiertAm: Date | null;
   kriterien: Array<{
@@ -77,12 +93,22 @@ export async function ladeBank(bankId: string): Promise<BankDetail | null> {
     include: {
       kriterien: { orderBy: { kriterium: "asc" } },
       produktMerkmale: { orderBy: [{ abschnitt: "asc" }, { unterabschnitt: "asc" }, { bezeichnung: "asc" }] },
+      ansprechpartner: { orderBy: { reihenfolge: "asc" } },
     },
   });
   if (!bank) return null;
 
   return {
     name: bank.name,
+    ansprechpartner: bank.ansprechpartner.map((p) => ({
+      name: p.name,
+      funktion: p.funktion,
+      telefon: p.telefon,
+      email: p.email,
+    })),
+    anschrift: bank.anschrift,
+    direkteinreicherHinweis: bank.direkteinreicherHinweis,
+    direkteinreicherStandAm: bank.direkteinreicherStandAm,
     importiertAm: bank.kriterien[0]?.importiertAm ?? null,
     kriterien: bank.kriterien.map((k) => ({
       kriterium: k.kriterium,

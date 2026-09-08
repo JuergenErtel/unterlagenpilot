@@ -1892,8 +1892,16 @@ model Bank {
   name             String
   zuletztGesehenAm DateTime
 
+  /// Aus dem Wiki-Artikel "<Bank> - Direkteinreicherinformationen": Anschrift
+  /// des Vermittlerservice, Klartext ausserhalb der Ansprechpartner-Tabelle,
+  /// Stand laut Europace. Null, solange kein solcher Artikel importiert wurde.
+  anschrift               String?
+  direkteinreicherHinweis String?
+  direkteinreicherStandAm DateTime?
+
   kriterien       BankKriterium[]
   produktMerkmale BankProduktMerkmal[]
+  ansprechpartner BankAnsprechpartner[]
 
   @@index([name])
   @@map("banken")
@@ -1961,6 +1969,31 @@ model BankProduktMerkmal {
   @@unique([bankRefId, abschnitt, unterabschnitt, bezeichnung])
   @@index([bezeichnung])
   @@map("bank_produkt_merkmale")
+}
+
+/// Ansprechpartner einer Bank fuer Direkteinreicher, aus dem Europace-Wiki
+/// ("<Bank> - Direkteinreicherinformationen"). Der Import ersetzt die Liste
+/// einer Bank komplett – wer aus dem Artikel verschwindet, verschwindet auch hier.
+model BankAnsprechpartner {
+  id        String @id @default(cuid())
+  bankRefId String
+  bank      Bank   @relation(fields: [bankRefId], references: [id], onDelete: Cascade)
+
+  /// Reihenfolge wie im Artikel – die erste Person ist meist die Hauptansprechperson.
+  reihenfolge Int
+  name        String
+  funktion    String @default("")
+  telefon     String @default("")
+  email       String @default("")
+
+  /// Zendesk-Artikel, aus dem die Zeile stammt.
+  artikelId    String
+  /// Wann Europace den Artikel zuletzt geaendert hat.
+  standAm      DateTime?
+  importiertAm DateTime
+
+  @@index([bankRefId])
+  @@map("bank_ansprechpartner")
 }
 
 /// Ein Abruf der Unterlagenanforderungen fuer GENAU EINE Bank.

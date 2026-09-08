@@ -83,7 +83,16 @@ describe("Banknamen aufloesen", () => {
     // "Sparkasse" ist ein eigenes Wort in "Sparkasse KölnBonn", steckt aber
     // auch in "Stadtsparkasse München". Das ganze Wort gewinnt.
     const r = loeseBank("Sparkasse", alle);
-    expect(r.banken.map((b) => b.bankId)).toEqual(["SPK_KOELN", "SPK_MS"]);
+    // Seit 08.09.2026 zaehlt "Spk" als dasselbe Wort wie "Sparkasse".
+    expect(r.banken.map((b) => b.bankId)).toEqual(["SPK_KOELN", "SPK_MS", "SPK_IN"]);
+  });
+
+  it("nimmt die Kurzform des Bestands als exakten Treffer", () => {
+    // Europace fuehrt 203 Sparkassen als "Spk" und 93 Volksbanken als "VoBa".
+    expect(loeseBank("Sparkasse Ingolstadt", alle).banken.map((b) => b.bankId)).toEqual(["SPK_IN"]);
+    const r = loeseBank("Volksbank Thüringen Mitte", alle);
+    expect(r.banken.map((b) => b.bankId)).toEqual(["VB_TH"]);
+    expect(r.hinweis).toBeNull();
   });
 
   it("faellt auf den Teilstring zurueck, wenn kein ganzes Wort passt", () => {
@@ -93,8 +102,8 @@ describe("Banknamen aufloesen", () => {
 
   it("mehrere Treffer grenzen ein und sagen es", () => {
     const r = loeseBank("Sparkasse", alle);
-    expect(r.banken).toHaveLength(2);
-    expect(r.hinweis).toContain("2 Banken");
+    expect(r.banken).toHaveLength(3);
+    expect(r.hinweis).toContain("3 Banken");
   });
 
   it("meldet eine unbekannte Bank als unbekannt und schlaegt etwas vor", () => {

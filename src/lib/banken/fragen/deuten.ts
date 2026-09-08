@@ -1,5 +1,5 @@
 import { alleKriterien } from "../kategorien";
-import { normalisiere, passtZurSuche } from "../suche";
+import { normalisiere, kanonisch, passtZurSuche } from "../suche";
 
 /** Mehr als drei Kriterien beantworten keine Frage mehr, sie verwaessern sie. */
 export const MAX_KRITERIEN = 3;
@@ -66,9 +66,9 @@ function blank(s: string): string {
 
 /** Kommt der Name als eigenes Wort im Banknamen vor (nicht mitten drin)? */
 function alsWort(name: string, gesucht: string): boolean {
-  const n = normalisiere(gesucht).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const n = kanonisch(gesucht).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   if (!n) return false;
-  return new RegExp(`(^|[^a-z0-9])${n}([^a-z0-9]|$)`).test(normalisiere(name));
+  return new RegExp(`(^|[^a-z0-9])${n}([^a-z0-9]|$)`).test(kanonisch(name));
 }
 
 /**
@@ -90,9 +90,11 @@ export function loeseBank(gesucht: string | null, alle: BankName[]): BankAufloes
   const name = (gesucht ?? "").trim();
   if (!name) return { banken: [], unbekannt: false, hinweis: null };
 
-  const gesuchtNorm = normalisiere(name);
+  // Vergleichsform mit angeglichenen Kurzformen: "Sparkasse Westmuensterland"
+  // IST die "Spk Westmuensterland" – exakt, nicht bloss aehnlich.
+  const gesuchtNorm = kanonisch(name);
   const stufen = [
-    (b: BankName) => normalisiere(b.name) === gesuchtNorm,
+    (b: BankName) => kanonisch(b.name) === gesuchtNorm,
     (b: BankName) => alsWort(b.name, name),
     (b: BankName) => passtZurSuche(b.name, name),
   ];

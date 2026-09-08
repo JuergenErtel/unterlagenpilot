@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { ladeBank } from "@/lib/banken/abfrage";
 import { statusAnzeige } from "@/lib/banken/status";
@@ -91,6 +91,66 @@ export default async function BankPage({
             : `${ausschluesse} harte Ausschlüsse · ${vorbehalte} unter Vorbehalt · Abzug vom ${datum(bank.importiertAm)}`
         }
       />
+
+      {(bank.ansprechpartner.length > 0 || bank.anschrift || bank.direkteinreicherHinweis) && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Ansprechpartner für Vermittler</h2>
+          <p className="text-sm text-muted-foreground">
+            Direkteinreicherinformationen aus dem Europace-Wiki. Stand{" "}
+            {datum(bank.direkteinreicherStandAm)}.
+          </p>
+          {bank.ansprechpartner.length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {bank.ansprechpartner.map((p, i) => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <p className="text-sm font-medium">{p.name || p.funktion || "Ansprechpartner"}</p>
+                    {p.name && p.funktion && (
+                      <p className="text-sm text-muted-foreground">{p.funktion}</p>
+                    )}
+                    <div className="mt-2 space-y-1 text-sm">
+                      {p.telefon && (
+                        <p className="flex items-start gap-2">
+                          <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <a href={`tel:${p.telefon.replace(/[^+\d]/g, "")}`} className="whitespace-pre-line underline-offset-2 hover:underline">
+                            {p.telefon}
+                          </a>
+                        </p>
+                      )}
+                      {p.email && (
+                        <p className="flex items-start gap-2">
+                          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <a href={`mailto:${p.email.split(/\s+/)[0]}`} className="break-all whitespace-pre-line underline-offset-2 hover:underline">
+                            {p.email}
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          {(bank.anschrift || bank.direkteinreicherHinweis) && (
+            <Card>
+              <CardContent className="grid gap-4 pt-6 text-sm sm:grid-cols-2">
+                {bank.anschrift && (
+                  <div>
+                    <p className="font-medium">Anschrift</p>
+                    <p className="mt-1 whitespace-pre-line text-muted-foreground">{bank.anschrift}</p>
+                  </div>
+                )}
+                {bank.direkteinreicherHinweis && (
+                  <div>
+                    <p className="font-medium">Hinweise</p>
+                    <p className="mt-1 whitespace-pre-line text-muted-foreground">{bank.direkteinreicherHinweis}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
 
       {KATEGORIE_REIHENFOLGE.map((kat) => {
         const zeilen = sichtbar.filter((k) => k.kategorie === kat);
