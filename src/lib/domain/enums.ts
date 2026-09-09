@@ -654,6 +654,13 @@ export const AUDIT_ACTIONS = [
   "backoffice.einreichungslink_geaendert",
   "backoffice.einreichungslink_versendet",
   "backoffice.einreichung",
+  // Geraetetoken fuer den Apple-Kurzbefehl: erzeugt, widerrufen, benutzt. Es
+  // ist ein zweiter Weg in dieselben Akten, der an keinem Bildschirm sichtbar
+  // wird - ohne diese Eintraege liesse sich hinterher nicht sagen, welches
+  // Geraet wann etwas hochgeladen hat.
+  "geraete_token.created",
+  "geraete_token.revoked",
+  "geraete_token.upload",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

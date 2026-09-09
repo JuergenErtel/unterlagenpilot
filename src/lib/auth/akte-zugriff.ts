@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import {
   akteSichtbarWhere,
+  eigeneAkteWhere,
   darfBackofficeAkteBearbeiten,
   darfBackofficeAkteSehen,
   entscheideAktenzugriff,
@@ -153,6 +154,63 @@ export async function ladeAkteFuerRoute(caseId: string): Promise<RouteZugriff<Ak
   };
 }
 
+/**
+ * Aktenzugriff fuer den Geraete-Eingang (Apple-Kurzbefehl).
+ *
+ * Zwei Unterschiede zu ladeAkteFuerRoute, beide beabsichtigt:
+ *  - der Kontext kommt aus dem Geraetetoken, nicht aus der Session (ein
+ *    Kurzbefehl hat kein Cookie),
+ *  - gesucht wird nur in den EIGENEN Akten der Organisation (eigeneAkteWhere
+ *    statt akteSichtbarWhere). Wer per Auftragsbruecke an einer Fremdakte
+ *    arbeitet, tut das im Browser; blind aus dem Teilen-Menue in eine fremde
+ *    Organisation zu laden, waere kein Komfort, sondern ein Risiko.
+ *
+ * Die Regel selbst bleibt dieselbe: entscheideAktenzugriff entscheidet, und
+ * eine Verweigerung antwortet mit 404, nie mit 403.
+ */
+export async function ladeAkteFuerGeraet(
+  ctx: AppContext,
+  caseId: string,
+  optionen: ZugriffOptionen = {}
+): Promise<RouteZugriff<AkteZugriff>> {
+  const akte = caseId
+    ? await prisma.case.findFirst({
+        where: { id: caseId, ...eigeneAkteWhere(ctx) },
+        select: { id: true, organizationId: true, akteArt: true, status: true, caseNumber: true },
+      })
+    : null;
+  const e = akte
+    ? await entscheideAktenzugriff(
+        ctx,
+        { id: akte.id, organizationId: akte.organizationId, akteArt: akte.akteArt as AkteArt },
+        optionen
+      )
+    : ({ erlaubt: false } as const);
+  if (!akte || !e.erlaubt) {
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "access.denied",
+      entityType: "akte",
+      entityId: caseId,
+      metadata: { schreibend: Boolean(optionen.schreibend), weg: "geraet" },
+    }).catch(() => undefined);
+    return { status: 404 };
+  }
+  return {
+    status: 200,
+    ctx,
+    akte: {
+      id: akte.id,
+      organizationId: akte.organizationId,
+      akteArt: akte.akteArt as AkteArt,
+      status: akte.status as CaseStatus,
+      caseNumber: akte.caseNumber,
+    },
+    fremd: false,
+  };
+}
+
 /** Dokumentzugriff fuer Route Handler: Statuscode statt notFound(). */
 export async function ladeDokumentFuerRoute(documentId: string): Promise<RouteZugriff<DokumentZugriff>> {
   const ctx = await getCurrentContext();
@@ -173,4 +231,4 @@ export async function ladeDokumentFuerRoute(documentId: string): Promise<RouteZu
 }
 
 // Re-Export, damit Aufrufer eine einzige Importquelle haben.
-export { akteSichtbarWhere, darfBackofficeAkteSehen, darfBackofficeAkteBearbeiten };
+export { akteSichtbarWhere, eigeneAkteWhere, darfBackofficeAkteSehen, darfBackofficeAkteBearbeiten };

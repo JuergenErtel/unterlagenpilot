@@ -17,8 +17,14 @@ describe("isPublicPath – was vor dem Site-Gate liegt", () => {
     expect(isPublicPath("/registrieren/bestaetigen/token")).toBe(true);
   });
 
+  it("laesst den Geraete-Eingang durch – er traegt sein Geheimnis im Header", () => {
+    expect(isPublicPath("/api/eingang/faelle")).toBe(true);
+    expect(isPublicPath("/api/eingang/upload")).toBe(true);
+  });
+
   it("verwechselt Praefixe nicht mit Teilstrings", () => {
     expect(isPublicPath("/uploads-intern")).toBe(false);
     expect(isPublicPath("/agbx")).toBe(false);
+    expect(isPublicPath("/api/eingangs-tor")).toBe(false);
   });
 });

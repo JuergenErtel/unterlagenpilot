@@ -464,6 +464,7 @@ model User {
   auditLogs         AuditLog[]
   caseNotes         CaseNote[]
   authTokens        AuthToken[]
+  geraeteTokens     GeraeteToken[]
   erledigteAufgaben AufgabeErledigt[]
 
   backofficeBearbeitet BackofficeAuftrag[]             @relation("BackofficeBearbeiter")
@@ -1314,6 +1315,28 @@ model UploadLink {
 
   @@index([caseId])
   @@map("upload_links")
+}
+
+/// Persoenliches Geraetetoken fuer den Apple-Kurzbefehl "An BaufiDesk teilen".
+/// Es ersetzt KEINE Anmeldung, sondern haengt an genau einem Nutzer und damit
+/// an dessen Organisation – ein Token oeffnet nie mehr als dessen eigene Akten.
+/// Wie beim Kunden-Upload-Link liegt nur der HMAC-Hash in der Datenbank; das
+/// Klartext-Token sieht der Nutzer genau einmal beim Erzeugen.
+model GeraeteToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  /// Frei waehlbarer Name, damit beim Widerruf klar ist, welches Geraet gemeint ist.
+  bezeichnung String
+  active      Boolean   @default(true)
+  /// Wann zuletzt etwas mit diesem Token hochgeladen wurde – die einzige
+  /// Handhabe, ein vergessenes Geraet zu erkennen.
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@map("geraete_tokens")
 }
 
 // ============================ PLATTFORM-INTEGRATION ============================

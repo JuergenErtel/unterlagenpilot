@@ -13,6 +13,9 @@ import { connectionStatuses } from "@/lib/platforms/connectors";
 import { finlinkGehoertZu } from "@/lib/platforms/finlink/client";
 import { prisma } from "@/lib/db";
 import { FinlinkAbgleichSchalter } from "@/components/finlink/abgleich-schalter";
+import { KurzbefehlKarte } from "@/components/geraete/kurzbefehl-karte";
+import { getEnv } from "@/lib/env";
+import { listGeraeteTokens } from "@/lib/security/geraete-token";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -86,6 +89,14 @@ export default async function ConnectionsPage() {
       })
     : null;
   const finlinkAktiv = finlinkSync?.aktiv ?? true;
+
+  // Geraete des ANGEMELDETEN Nutzers, nicht der Organisation: Ein Geraetetoken
+  // haengt an einer Person, und niemand soll die Handys der Kollegen trennen.
+  const geraete = (await listGeraeteTokens(ctx.userId)).map((g) => ({
+    id: g.id,
+    bezeichnung: g.bezeichnung,
+    zuletztBenutzt: g.lastUsedAt ? g.lastUsedAt.toLocaleDateString("de-DE") : null,
+  }));
 
   return (
     <div className="space-y-8">
@@ -300,6 +311,8 @@ export default async function ConnectionsPage() {
           </CardFooter>
         </Card>
       </div>
+
+      <KurzbefehlKarte geraete={geraete} basisUrl={getEnv().APP_BASE_URL.replace(/\/$/, "")} />
 
       {/* DSGVO / EU-Hinweis + Browser-Assist */}
       <Card className="bg-muted/40">
