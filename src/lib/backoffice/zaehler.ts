@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import type { AppContext } from "@/lib/auth/context";
 import { sichtbarkeitsFilter } from "./sichtbarkeit";
 import { LEERE_ZAEHLER, type BackofficeZaehler } from "./bereich";
+import { zaehleEingang } from "@/lib/eingang/service";
 
 /**
  * Zaehler der Backoffice-Navigation - sechs kleine Zaehlabfragen, keine
@@ -11,7 +12,9 @@ import { LEERE_ZAEHLER, type BackofficeZaehler } from "./bereich";
  * Seite selbst.
  */
 export async function ladeBackofficeZaehler(ctx: AppContext): Promise<BackofficeZaehler> {
-  if (!ctx.backofficeRolle) return LEERE_ZAEHLER;
+  // Vor dem Ausstieg: Der Posteingang haengt nicht an einer Backoffice-Rolle.
+  const posteingang = await zaehleEingang(ctx.organizationId);
+  if (!ctx.backofficeRolle) return { ...LEERE_ZAEHLER, posteingang };
   const sicht = sichtbarkeitsFilter(ctx);
   const aktiv = { ...sicht, pausiertSeit: null };
   const [jetzt, qc, uebergabe, fehlend, rueckfragen, dokumente] = await Promise.all([
@@ -38,6 +41,7 @@ export async function ladeBackofficeZaehler(ctx: AppContext): Promise<Backoffice
     }),
   ]);
   return {
+    posteingang,
     jetztBearbeiten: jetzt,
     qualitaetskontrolle: qc,
     uebergabe,

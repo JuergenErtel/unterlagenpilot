@@ -39,9 +39,10 @@ export default async function AppLayout({
   // Rolle + Flag; Portal, wenn seine Organisation als Auftraggeber verknuepft
   // ist). Ohne zweiten Bereich sieht die Oberflaeche aus wie bisher.
   const bereiche = await ladeBereiche(ctx);
-  // Zaehler nur, wenn das Backoffice ueberhaupt sichtbar ist - sonst kostet
-  // die Leiste den Vertrieb keine einzige Abfrage.
-  const zaehler = bereiche.backoffice ? await ladeBackofficeZaehler(ctx) : LEERE_ZAEHLER;
+  // Der Posteingang zaehlt fuer JEDEN Nutzer - ohne Zahl in der Leiste bliebe
+  // eine vom Handy geteilte Datei unbemerkt liegen. Ohne Backoffice-Rolle
+  // steigt der Lader nach genau einer Zaehlabfrage wieder aus.
+  const zaehler = await ladeBackofficeZaehler(ctx);
 
   return (
     <AppShell

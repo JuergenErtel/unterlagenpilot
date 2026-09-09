@@ -433,6 +433,8 @@ model Organization {
   auftraggeberZugaenge   BackofficeAuftraggeber[] @relation("AuftraggeberOrganisation")
   backofficeAuftraege    BackofficeAuftrag[]
 
+  eingangDateien Eingangsdatei[]
+
   @@map("organizations")
 }
 
@@ -465,6 +467,7 @@ model User {
   caseNotes         CaseNote[]
   authTokens        AuthToken[]
   geraeteTokens     GeraeteToken[]
+  eingangDateien    Eingangsdatei[]
   erledigteAufgaben AufgabeErledigt[]
 
   backofficeBearbeitet BackofficeAuftrag[]             @relation("BackofficeBearbeiter")
@@ -1011,18 +1014,18 @@ model Document {
   issuer             String? // Aussteller
 
   // Qualitaet / Duplikat
-  readable      Boolean?
+  readable           Boolean?
   /// Grund des letzten KI-Fehlers in Alltagssprache (keine Kundendaten),
   /// null sobald ein Lauf gelingt. Seit 06.09.2026 – bis dahin sagte die
   /// Oberflaeche nur "KI-Fehler", und das Nachpruefen endete beim selben Satz.
-  aiErrorMessage String?
+  aiErrorMessage     String?
   /// "Behalten, aber nachfordern": Grund, warum die Bank diese freigegebene
   /// Unterlage nicht anerkennt. Gesetzt = zaehlt nicht als Erfuellung, die
   /// Position bleibt in der Nachforderung. Seit 06.09.2026 (Fall Schmidt).
   nachforderungGrund String?
-  missingPages  Boolean?
-  isDuplicate   Boolean  @default(false)
-  duplicateOfId String?
+  missingPages       Boolean?
+  isDuplicate        Boolean  @default(false)
+  duplicateOfId      String?
 
   // Plattform- / Bankzuordnung
   platformRelevance  Platform[]
@@ -1337,6 +1340,33 @@ model GeraeteToken {
 
   @@index([userId])
   @@map("geraete_tokens")
+}
+
+/// Datei im Posteingang: angekommen, aber noch keinem Fall zugeordnet.
+///
+/// Bewusst KEIN Document: Ein Dokument gehoert immer zu einer Akte, hier ist
+/// die Akte gerade das Unbekannte. Beim Zuordnen laeuft die Datei durch die
+/// normale Upload-Pipeline in den Fall, und diese Zeile verschwindet samt
+/// ihrer Zwischenablage im Speicher.
+model Eingangsdatei {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Wer sie geschickt hat. Optional, damit das Loeschen eines Kontos die
+  /// wartende Datei nicht mitreisst.
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storageKey     String
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  /// Woher sie kam ("kurzbefehl"). Klartext statt Enum: Kommt ein zweiter Weg
+  /// dazu (Mailpostfach), soll das keine Schemaaenderung kosten.
+  quelle         String       @default("kurzbefehl")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("eingang_dateien")
 }
 
 // ============================ PLATTFORM-INTEGRATION ============================

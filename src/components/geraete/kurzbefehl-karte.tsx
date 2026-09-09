@@ -54,10 +54,9 @@ export function KurzbefehlKarte({
               <CardTitle>Dokumente vom iPhone teilen</CardTitle>
             </div>
             <CardDescription className="max-w-2xl">
-              Bekommst du Unterlagen per WhatsApp oder Mail aufs Handy? Mit einem
-              Kurzbefehl landen sie mit drei Fingertipps im richtigen Fall –
-              inklusive Virenprüfung, KI-Einstufung und Zuordnung zum
-              Antragsteller, genau wie beim Upload im Browser.
+              Bekommst du Unterlagen per WhatsApp oder Mail aufs Handy? Teile sie
+              mit zwei Fingertipps an BaufiDesk – sie warten dann im Posteingang,
+              und du ordnest sie am Bildschirm mit einem Klick dem Fall zu.
             </CardDescription>
           </div>
           <Badge variant={geraete.length > 0 ? "success" : "neutral"} className="shrink-0">
@@ -165,41 +164,48 @@ export function KurzbefehlKarte({
 }
 
 /**
- * Einrichtung in der iPhone-App „Kurzbefehle". Bewusst als ausgeschriebene
- * Schrittfolge und nicht als Download: Ein importierter Kurzbefehl aus fremder
- * Hand verlangt „Nicht vertrauenswuerdige Kurzbefehle erlauben" – ausgerechnet
- * die Einstellung, die man fuer einen Schluessel dieser Art nicht anfassen will.
+ * Einrichtung in der iPhone-App „Kurzbefehle".
+ *
+ * Bewusst als ausgeschriebene Schrittfolge und nicht als Download: Ein
+ * importierter Kurzbefehl aus fremder Hand verlangt „Nicht vertrauenswuerdige
+ * Kurzbefehle erlauben" - ausgerechnet die Einstellung, die man fuer einen
+ * Schluessel dieser Art nicht anfassen will.
+ *
+ * Die erste Fassung liess den Kurzbefehl die Fallliste holen, das JSON
+ * auspacken und den Fall am Handy auswaehlen: sechs Aktionen, an denen Juergen
+ * haengen blieb. Jetzt schickt er nur die Datei - die Frage "zu welchem Fall?"
+ * beantwortet der Posteingang am Bildschirm, wo die Akte ohnehin offen ist.
  */
 function Anleitung({ basisUrl }: { basisUrl: string }) {
+  const ziel = `${basisUrl}/api/eingang/posteingang`;
   const schritte: { titel: string; text: string; kopieren?: string }[] = [
     {
-      titel: "Kurzbefehl anlegen",
-      text: 'App „Kurzbefehle" öffnen → Plus oben rechts → unten „Details" (Infotaste) → „Im Teilen-Menü anzeigen" einschalten. Als Namen „An BaufiDesk" eintragen.',
+      titel: "Kurzbefehle öffnen",
+      text: 'Die App „Kurzbefehle" ist auf jedem iPhone vorinstalliert – notfalls per Spotlight suchen (auf dem Startbildschirm nach unten wischen, „Kurzbefehle" tippen). Dann oben rechts auf das Plus.',
     },
     {
-      titel: "Fallliste holen",
-      text: 'Aktion „Inhalte von URL laden" hinzufügen. URL einsetzen, dann unter „Weitere anzeigen": Methode GET, Header hinzufügen mit Schlüssel „Authorization" und deinem Schlüssel als Wert.',
-      kopieren: `${basisUrl}/api/eingang/faelle`,
+      titel: "Die eine Aktion hinzufügen",
+      text: 'Ins Suchfeld „URL" tippen und „Inhalte von URL laden" wählen. In das URL-Feld die Adresse unten einsetzen.',
+      kopieren: ziel,
     },
     {
-      titel: "Fall auswählen",
-      text: 'Aktion „Wert holen" (Schlüssel: faelle) → Aktion „Aus Liste auswählen". Damit erscheint beim Teilen die Liste deiner offenen Fälle.',
+      titel: "Aufklappen und drei Felder setzen",
+      text: 'Auf den Pfeil „Weitere anzeigen" tippen. Methode auf POST stellen. Bei „Header" ein Feld hinzufügen: Schlüssel „Authorization", Wert = dein Schlüssel von oben. Bei „Anfragetext" auf „Formular" stellen, ein Feld hinzufügen: Schlüssel „datei", und als Wert die Variable „Kurzbefehleingabe" wählen.',
     },
     {
-      titel: "Datei senden",
-      text: 'Zweite Aktion „Inhalte von URL laden": Methode POST, Anfragetext „Formular", Header „Authorization" wie oben. Zwei Felder: „caseId" mit dem Wert „id" aus der Auswahl, und „datei" mit der Kurzbefehleingabe (die geteilte Datei).',
-      kopieren: `${basisUrl}/api/eingang/upload`,
+      titel: "Ins Teilen-Menü legen",
+      text: 'Unten auf die Infotaste (ⓘ) tippen → „Im Teilen-Menü anzeigen" einschalten. Oben den Namen auf „An BaufiDesk" ändern, dann „Fertig".',
     },
     {
-      titel: "Fertig",
-      text: 'In WhatsApp lange auf ein Dokument tippen → Teilen → „An BaufiDesk" → Fall antippen. Die Datei läuft danach durch dieselbe Prüfung wie jeder andere Upload.',
+      titel: "Benutzen",
+      text: 'In WhatsApp lange auf ein Dokument tippen → Teilen → „An BaufiDesk". Die Datei landet im Posteingang von BaufiDesk; dort ordnest du sie mit einem Klick dem Fall zu.',
     },
   ];
 
   return (
     <div className="space-y-3">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Einrichtung auf dem iPhone – einmalig, etwa fünf Minuten
+        Einrichtung auf dem iPhone – einmalig, etwa drei Minuten
       </div>
       <ol className="space-y-3">
         {schritte.map((s, i) => (

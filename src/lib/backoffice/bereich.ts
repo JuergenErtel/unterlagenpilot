@@ -42,10 +42,16 @@ export function verfuegbareBereiche(b: Bereiche): Bereich[] {
 }
 
 /**
- * Zaehler fuer die Backoffice-Navigation. Nur Aufgaben, die eine Handlung
- * verlangen - eine Null wird nicht angezeigt.
+ * Zaehler fuer die Navigation. Nur Aufgaben, die eine Handlung verlangen -
+ * eine Null wird nicht angezeigt.
+ *
+ * Der Name traegt "Backoffice", weil bis auf den Posteingang alles hier aus
+ * dem Backoffice stammt. `posteingang` gilt fuer JEDEN Nutzer: Er zaehlt
+ * Dateien, die vom Handy kamen und noch keinem Fall gehoeren - ohne Zahl in
+ * der Leiste bliebe der Posteingang unbemerkt.
  */
 export interface BackofficeZaehler {
+  posteingang: number;
   jetztBearbeiten: number;
   qualitaetskontrolle: number;
   uebergabe: number;
@@ -55,6 +61,7 @@ export interface BackofficeZaehler {
 }
 
 export const LEERE_ZAEHLER: BackofficeZaehler = {
+  posteingang: 0,
   jetztBearbeiten: 0,
   qualitaetskontrolle: 0,
   uebergabe: 0,

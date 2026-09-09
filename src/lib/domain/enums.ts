@@ -661,6 +661,12 @@ export const AUDIT_ACTIONS = [
   "geraete_token.created",
   "geraete_token.revoked",
   "geraete_token.upload",
+  // Posteingang: Datei angekommen, einem Fall zugeordnet oder weggeworfen.
+  // Zwischen Ankunft und Zuordnung gehoert eine Datei niemandem – ohne diese
+  // Eintraege waere spaeter nicht mehr feststellbar, wo sie herkam.
+  "eingang.angenommen",
+  "eingang.zugeordnet",
+  "eingang.verworfen",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

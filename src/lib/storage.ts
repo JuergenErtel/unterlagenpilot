@@ -69,6 +69,30 @@ export function objectPath(organizationId: string, caseId: string, originalName:
 }
 
 /**
+ * Pfad-Segment fuer den Posteingang einer Organisation - Dateien, die
+ * angekommen sind, bevor feststeht, zu welchem Fall sie gehoeren.
+ *
+ * Es steht an der Stelle der Fall-Id, kann aber mit keinem Fall kollidieren:
+ * Fall-Ids sind cuids und beginnen nie mit einem Unterstrich. Der
+ * Mandantenteil des Pfades bleibt derselbe wie sonst - die Trennung zwischen
+ * Organisationen haengt an ihm, nicht am Fall.
+ *
+ * Die Ablage ist eine Zwischenstation: Beim Zuordnen wird die Datei unter dem
+ * richtigen Fall neu abgelegt und dieses Objekt geloescht.
+ */
+export const EINGANG_SEGMENT = "_eingang";
+
+export function eingangPathPrefix(organizationId: string): string {
+  return casePathPrefix(organizationId, EINGANG_SEGMENT);
+}
+
+/** Gegenstueck zu isStorageKeyForCase fuer den Posteingang. */
+export function isStorageKeyForEingang(storageKey: string, organizationId: string): boolean {
+  if (storageKey.includes("..") || storageKey.includes("//")) return false;
+  return storageKey.startsWith(eingangPathPrefix(organizationId));
+}
+
+/**
  * Prüft, ob ein (vom Client zurückgereichter) storageKey wirklich zum eigenen
  * Mandanten-/Fall-Pfad gehört – verhindert das Registrieren fremder Objekte
  * (Tenant-Isolation beim Direkt-Upload).
