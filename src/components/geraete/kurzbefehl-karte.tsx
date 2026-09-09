@@ -189,8 +189,16 @@ function Anleitung({ basisUrl }: { basisUrl: string }) {
       kopieren: ziel,
     },
     {
-      titel: "Aufklappen und drei Felder setzen",
-      text: 'Auf den Pfeil „Weitere anzeigen" tippen. Methode auf POST stellen. Bei „Header" ein Feld hinzufügen: Schlüssel „Authorization", Wert = dein Schlüssel von oben. Bei „Anfragetext" auf „Formular" stellen, ein Feld hinzufügen: Schlüssel „datei", und als Wert die Variable „Kurzbefehleingabe" wählen.',
+      titel: "Methode auf POST",
+      text: 'Auf den Pfeil rechts neben der URL tippen, damit die Einstellungen aufklappen. Bei „Methode" POST wählen.',
+    },
+    {
+      titel: "Schlüssel in den Header – nicht in den Haupttext",
+      text: 'Unter „Header" auf „neue Überschrift hinzufügen" tippen. So nennt Apple das Hinzufügen einer Kopfzeile – gemeint ist keine Überschrift, sondern genau dieses Feld. Links „Authorization" eintragen, rechts deinen Schlüssel (bd_…) einsetzen.',
+    },
+    {
+      titel: "Haupttext auf Formular, Feld „datei“",
+      text: 'Bei „Haupttext anfordern" von JSON auf „Formular" umstellen. Dann „neues Feld hinzufügen": links „datei" eintragen, rechts auf den Wert tippen und die Variable „Kurzbefehleingabe" wählen. Steht dort noch ein anderes Feld (etwa dein Schlüssel), mit dem roten Minus entfernen – der gehört in den Header, nicht hierher.',
     },
     {
       titel: "Ins Teilen-Menü legen",
@@ -205,7 +213,7 @@ function Anleitung({ basisUrl }: { basisUrl: string }) {
   return (
     <div className="space-y-3">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Einrichtung auf dem iPhone – einmalig, etwa drei Minuten
+        Einrichtung auf dem iPhone – einmalig, etwa fünf Minuten
       </div>
       <ol className="space-y-3">
         {schritte.map((s, i) => (
