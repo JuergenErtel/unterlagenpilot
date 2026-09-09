@@ -96,7 +96,7 @@ export const NAV_GROUPS: NavGruppe[] = [
     items: [
       { href: "/checklists", label: "Checklisten", icon: ListChecks },
       { href: "/document-types", label: "Dokumenttypen", icon: FileStack },
-      { href: "/connections", label: "Plattform-Verbindungen", icon: Plug },
+      { href: "/connections", label: "Verbindungen & Geräte", icon: Plug },
       { href: "/organization", label: "Organisation & Team", icon: Building2 },
       { href: "/audit", label: "Audit-Log", icon: ShieldCheck },
       { href: "/plans", label: "Tarife", icon: BadgeEuro },

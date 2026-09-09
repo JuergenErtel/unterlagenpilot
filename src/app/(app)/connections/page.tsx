@@ -102,9 +102,11 @@ export default async function ConnectionsPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Einrichtung"
-        title="Plattform-Verbindungen"
-        subtitle="Verbinde deine Plattformen oder nutze den sicheren manuellen Export. Beides führt zu einer einreichungsfertigen Akte."
+        title="Verbindungen & Geräte"
+        subtitle="Dein iPhone, deine Plattformen und der sichere manuelle Export – alle Wege, auf denen Unterlagen und Fälle in die Akte kommen."
       />
+
+      <KurzbefehlKarte geraete={geraete} basisUrl={getEnv().APP_BASE_URL.replace(/\/$/, "")} />
 
       {/* Empfohlener Startpunkt: FinLink */}
       <Card className="border-ai/30 bg-ai/5">
@@ -311,8 +313,6 @@ export default async function ConnectionsPage() {
           </CardFooter>
         </Card>
       </div>
-
-      <KurzbefehlKarte geraete={geraete} basisUrl={getEnv().APP_BASE_URL.replace(/\/$/, "")} />
 
       {/* DSGVO / EU-Hinweis + Browser-Assist */}
       <Card className="bg-muted/40">
