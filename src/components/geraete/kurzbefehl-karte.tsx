@@ -205,8 +205,8 @@ function Anleitung({ basisUrl }: { basisUrl: string }) {
       text: 'Unten auf die Infotaste (ⓘ) tippen → „Im Teilen-Menü anzeigen" einschalten. Oben den Namen auf „An BaufiDesk" ändern, dann „Fertig".',
     },
     {
-      titel: "Benutzen",
-      text: 'In WhatsApp lange auf ein Dokument tippen → Teilen → „An BaufiDesk". Die Datei landet im Posteingang von BaufiDesk; dort ordnest du sie mit einem Klick dem Fall zu.',
+      titel: "Benutzen – auch mehrere auf einmal",
+      text: 'In WhatsApp lange auf ein Dokument tippen → Teilen → „An BaufiDesk". Du kannst vorher mehrere Bilder markieren; sie kommen zusammen an. Der Kurzbefehl meldet dir die Anzahl („3 Dateien liegen im Posteingang") – stimmt sie nicht mit deiner Markierung überein, teile den Rest noch einmal. Zuordnen tust du am Bildschirm im Posteingang.',
     },
   ];
 
