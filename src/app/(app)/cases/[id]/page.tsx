@@ -30,7 +30,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { FallBereich, Werkzeugreihe } from "@/components/case/fall-bereich";
+import { TabsContent } from "@/components/ui/tabs";
+import { FallReiter } from "@/components/case/fall-reiter";
+import { Werkzeugreihe } from "@/components/case/fall-bereich";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { Pruefleiste, type PruefSegment } from "@/components/ui/pruefleiste";
@@ -683,21 +685,38 @@ export default async function CaseCockpitPage({
           Seitenspalte. Die alte Aufteilung verlangte vom Berater zu wissen, OB
           etwas ein Reiter oder ein Werkzeug ist, bevor er es suchen konnte.
           Jetzt ist die Frage: Womit arbeite ich gerade? */}
-      <div className="space-y-3">
-        <FallBereich
-          id="dokumente"
-          titel="Dokumente"
-          icon={FolderArchive}
-          beschreibung="Was fehlt, was da ist, hochladen, prüfen lassen"
-          marke={
-            cockpit.counts.docsMissing > 0
-              ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
-              : cockpit.counts.pruefbereit > 0
-                ? { text: `${cockpit.counts.pruefbereit} zu prüfen`, ton: "aktion" as const }
-                : { text: "vollständig", ton: "ruhe" as const }
-          }
-          offen={offenerBereich === "dokumente"}
-        >
+      <FallReiter
+        tabParam={offenerBereich}
+        reiter={[
+          {
+            wert: "dokumente",
+            titel: "Dokumente",
+            icon: FolderArchive,
+            marke:
+              cockpit.counts.docsMissing > 0
+                ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
+                : cockpit.counts.pruefbereit > 0
+                  ? { text: `${cockpit.counts.pruefbereit} zu prüfen`, ton: "aktion" as const }
+                  : { text: "vollständig", ton: "ruhe" as const },
+          },
+          {
+            wert: "beratung",
+            titel: "Beratung",
+            icon: UserRound,
+            marke:
+              erstgespraechOffen > 0
+                ? { text: `${erstgespraechOffen} offen`, ton: "aktion" as const }
+                : null,
+          },
+          {
+            wert: "einreichung",
+            titel: "Einreichung",
+            icon: Banknote,
+            marke: { text: `${cockpit.score} % reif`, ton: "ruhe" as const },
+          },
+        ]}
+      >
+        <TabsContent value="dokumente" className="space-y-4">
               <div className="space-y-4">
                 {/* Erst die gefundenen Lücken sichten, dann nachfordern –
                     sonst geht eine Nachforderung raus, der die Hälfte fehlt. */}
@@ -1012,20 +1031,9 @@ export default async function CaseCockpitPage({
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
             <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
           </Werkzeugreihe>
-        </FallBereich>
+        </TabsContent>
 
-        <FallBereich
-          id="beratung"
-          titel="Beratung"
-          icon={UserRound}
-          beschreibung="Kunde, Objekt, Zahlen – und was daraus folgt"
-          marke={
-            erstgespraechOffen > 0
-              ? { text: `Erstgespräch: ${erstgespraechOffen} offen`, ton: "aktion" as const }
-              : null
-          }
-          offen={offenerBereich === "beratung"}
-        >
+        <TabsContent value="beratung" className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-base">Objekt & Finanzierung</CardTitle></CardHeader>
@@ -1141,16 +1149,9 @@ export default async function CaseCockpitPage({
             )}
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
           </Werkzeugreihe>
-        </FallBereich>
+        </TabsContent>
 
-        <FallBereich
-          id="einreichung"
-          titel="Einreichung"
-          icon={Banknote}
-          beschreibung="Papiere erzeugen, Fristen halten, zur Bank geben"
-          marke={{ text: `Reifegrad ${cockpit.score} %`, ton: "ruhe" as const }}
-          offen={offenerBereich === "einreichung"}
-        >
+        <TabsContent value="einreichung" className="space-y-4">
           {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
               rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
               unveraendert). Rein lesend, Aussensicht. */}
@@ -1192,8 +1193,8 @@ export default async function CaseCockpitPage({
               </div>
             )}
           </Werkzeugreihe>
-        </FallBereich>
-      </div>
+        </TabsContent>
+      </FallReiter>
 
       {/* Gehoert in keinen der drei Bereiche: Der Schreibblock begleitet die
           ganze Arbeit, und das Archivieren beendet sie. */}
