@@ -192,7 +192,7 @@ function Hero() {
             href="#sortierer"
             className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/92"
           >
-            Ohne Anmeldung verstehen: der Sortierer
+            So fängt es an: der Sortierer
           </a>
           <a
             href={mailto("Gespräch zu BaufiDesk")}
@@ -280,12 +280,16 @@ function Sortierer() {
           führen direkt hinein – herunterladen und wieder hochladen entfällt.
         </p>
 
+        {/* Bewusst KEIN "ausprobieren" und kein Selbstbedienungszugang: Ueber
+            die Landingpage gibt es keine Testmoeglichkeit. Wer den Sortierer
+            sehen will, bekommt ihn im Gespraech gezeigt - alles andere waere
+            ein Versprechen, das die Seite nicht einloest. */}
         <div className="mt-8 flex flex-wrap gap-3">
           <a
-            href={mailto("Unterlagensortierer ausprobieren")}
+            href={mailto("Unterlagensortierer – Vorführung")}
             className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/92"
           >
-            Sortierer ausprobieren
+            Vorführung vereinbaren
           </a>
           <a
             href="#zwei-wege"
