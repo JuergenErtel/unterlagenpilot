@@ -39,10 +39,18 @@ export interface ReiterDefinition {
   marke: ReiterMarke | null;
 }
 
+/**
+ * Die Marke traegt Farbe - aber nur auf hellem Grund.
+ *
+ * Auf dem aktiven Reiter (Tinte) waere Ocker auf Dunkelblau unleserlich,
+ * deshalb schaltet `[[data-state=active]_&]` dort auf die Vordergrundfarbe der
+ * Flaeche um. Die Farbe sagt "was ansteht"; auf dem aktiven Reiter sagt das
+ * ohnehin schon der Inhalt darunter.
+ */
 const MARKE_FARBE: Record<ReiterMarke["ton"], string> = {
-  aktion: "text-ai",
-  warnung: "text-[hsl(var(--warning))]",
-  ruhe: "text-muted-foreground",
+  aktion: "text-ai [[data-state=active]_&]:text-primary-foreground/80",
+  warnung: "text-[hsl(var(--warning))] [[data-state=active]_&]:text-primary-foreground/80",
+  ruhe: "text-muted-foreground [[data-state=active]_&]:text-primary-foreground/70",
 };
 
 export function FallReiter({
@@ -76,25 +84,41 @@ export function FallReiter({
 
   return (
     <Tabs value={wert} onValueChange={setWert}>
-      {/* Gleich breite Flaechen: Die drei sind gleichrangig, und eine breitere
-          Flaeche laese den Bereich wichtiger aussehen als die anderen. */}
-      <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1">
+      {/* Drei echte Schaltflaechen statt der grauen Pille, die die
+          Reiterkomponente von Haus aus mitbringt.
+          
+          Juergen: "man uebersieht die total." Zu Recht - kleine Schrift auf
+          hellgrauem Grund, in einer Seite voller hellgrauer Flaechen. Die
+          Umschaltung ist aber das Bedienelement, um das sich die halbe
+          Fallakte dreht.
+          
+          Der aktive Reiter traegt deshalb Tinte, nicht eine Schattierung von
+          Grau: Auf einen Blick sichtbar, welcher der drei gerade gilt. Die
+          beiden anderen liegen zurueckgenommen in der Ablage-Flaeche. */}
+      <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0">
         {reiter.map((r) => (
-            <TabsTrigger
-              key={r.wert}
-              value={r.wert}
-              className="flex h-auto flex-col items-center gap-0.5 px-2 py-2.5 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:px-4 sm:py-3"
-            >
-              <span className="flex items-center gap-2">
-                {r.icon}
-                <span className="text-sm font-semibold">{r.titel}</span>
+          <TabsTrigger
+            key={r.wert}
+            value={r.wert}
+            className={cn(
+              "flex h-auto flex-col items-center justify-center gap-0.5 rounded-lg border px-3 py-3",
+              "border-border/80 bg-[hsl(var(--surface-sunken))] text-muted-foreground",
+              "transition-colors hover:border-foreground/25 hover:text-foreground",
+              "data-[state=active]:border-primary data-[state=active]:bg-primary",
+              "data-[state=active]:text-primary-foreground data-[state=active]:shadow-md",
+              "sm:flex-row sm:gap-2.5 sm:px-4 sm:py-3.5"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              {r.icon}
+              <span className="text-[0.9375rem] font-semibold">{r.titel}</span>
+            </span>
+            {r.marke && (
+              <span className={cn("text-xs font-medium", MARKE_FARBE[r.marke.ton])}>
+                {r.marke.text}
               </span>
-              {r.marke && (
-                <span className={cn("text-xs font-medium", MARKE_FARBE[r.marke.ton])}>
-                  {r.marke.text}
-                </span>
-              )}
-            </TabsTrigger>
+            )}
+          </TabsTrigger>
         ))}
       </TabsList>
       {children}
