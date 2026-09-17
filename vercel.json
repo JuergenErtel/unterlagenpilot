@@ -1,11 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["fra1"],
+  "regions": [
+    "fra1"
+  ],
   "buildCommand": "prisma generate && next build",
   "crons": [
-    { "path": "/api/cron/reminders", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/retention", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/finlink-leads", "schedule": "*/15 * * * *" }
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/finlink-leads",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/mail-eingang",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }

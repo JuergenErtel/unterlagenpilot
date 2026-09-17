@@ -12,6 +12,9 @@ import { getCaseCockpit } from "@/lib/cases/cockpit";
 import { berechneReife } from "@/lib/erstgespraech/reife";
 import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { listUploadLinks } from "@/lib/security/upload-link";
+import { listGeraeteTokens } from "@/lib/security/geraete-token";
+import { zaehleEingang } from "@/lib/eingang/service";
+import { mailEingangAdresse } from "@/lib/eingang/mail-adresse";
 import { runAiCheck, acceptDocument } from "@/lib/actions/cases";
 import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
@@ -61,7 +64,7 @@ import { istBuendelKandidat, zuKandidat } from "@/lib/buendelung/kandidaten";
 import { FindingsPanel, type FindingView } from "@/components/case/findings-panel";
 import { BankAnforderungen } from "@/components/case/bank-anforderungen";
 import { DangerZone } from "@/components/case/danger-zone";
-import { BrokerUploadForm } from "@/components/case/broker-upload-form";
+import { DokumenteWege } from "@/components/case/dokumente-wege";
 import { AiCheckRunning } from "@/components/case/ai-check-running";
 import { DocumentsProcessing } from "@/components/case/documents-processing";
 import { isAiCheckRunning, isAnyAiCheckRunning, withAiCheckStaleOverride } from "@/lib/cases/ai-check-status";
@@ -228,10 +231,15 @@ export default async function CaseCockpitPage({
   // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
   // "geprueft" von "steht so im Exposé", die offenen Anfragen sind das, was
   // beim Kunden gerade wirklich aussteht.
-  const [wohnflaecheFreigegeben, offeneAnfragen] = await Promise.all([
-    prisma.wohnflaechenBerechnung.count({ where: { caseId: id, released: true } }),
-    prisma.missingDocumentRequest.count({ where: { caseId: id, resolved: false } }),
-  ]);
+  const [wohnflaecheFreigegeben, offeneAnfragen, verbundeneGeraete, wartendImPosteingang] =
+    await Promise.all([
+      prisma.wohnflaechenBerechnung.count({ where: { caseId: id, released: true } }),
+      prisma.missingDocumentRequest.count({ where: { caseId: id, resolved: false } }),
+      // Beides fuer die Karte "Dokumente hochladen": Sie zeigt die WhatsApp-
+      // und Mail-Wege im richtigen Zustand - einrichten oder benutzen.
+      listGeraeteTokens(ctx.userId),
+      zaehleEingang(ctx.organizationId),
+    ]);
 
   // Unterlagen-Detektiv: offene und unsichere Befunde plus die bereits
   // verworfenen (eingeklappt sichtbar, damit eine Fehlentscheidung
@@ -695,10 +703,18 @@ export default async function CaseCockpitPage({
                     <CardTitle className="text-base">Dokumente hochladen</CardTitle>
                     <p className="text-xs text-muted-foreground">
                       Beliebige Unterlagen selbst einwerfen – Klassifizierung, Umbenennung und Zuordnung laufen automatisch.
+                      Liegen sie auf dem Handy oder im Postfach, führen die Wege darunter zum Ziel.
                     </p>
                   </CardHeader>
                   <CardContent>
-                    <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={applicantOptions} />
+                    <DokumenteWege
+                      caseId={id}
+                      maxMb={maxUploadMb()}
+                      applicants={applicantOptions}
+                      geraetVerbunden={verbundeneGeraete.length > 0}
+                      wartendImPosteingang={wartendImPosteingang}
+                      mailAdresse={mailEingangAdresse()}
+                    />
                   </CardContent>
                 </Card>
                 {processingCount > 0 && <DocumentsProcessing count={processingCount} />}

@@ -54,6 +54,7 @@ export default async function EingangPage() {
       minute: "2-digit",
     }),
     von: d.von,
+    quelle: d.quelle,
   }));
 
   return (
@@ -61,7 +62,7 @@ export default async function EingangPage() {
       <PageHeader
         eyebrow="Arbeit"
         title="Posteingang"
-        subtitle="Was du vom Handy geteilt hast, wartet hier – bis du sagst, zu welchem Fall es gehört."
+        subtitle="Was du vom Handy geteilt oder per Mail weitergeleitet hast, wartet hier – bis du sagst, zu welchem Fall es gehört."
       />
 
       {anzeige.length === 0 ? (
@@ -72,15 +73,16 @@ export default async function EingangPage() {
               <span className="font-medium">Nichts wartet.</span>
             </div>
             <p className="max-w-2xl">
-              Hier landen Dateien, die du per Kurzbefehl vom iPhone teilst – etwa
-              Unterlagen, die dir jemand über WhatsApp geschickt hat. Du ordnest
-              sie dann mit einem Klick dem richtigen Fall zu; ab da laufen sie
-              durch dieselbe Prüfung wie jeder andere Upload.
+              Hier landen Unterlagen, die dir der Kunde woanders geschickt hat:
+              per Kurzbefehl vom iPhone geteilt (etwa aus WhatsApp) oder als
+              Mail an die BaufiDesk-Adresse weitergeleitet. Du ordnest sie dann
+              mit einem Klick dem richtigen Fall zu; ab da laufen sie durch
+              dieselbe Prüfung wie jeder andere Upload.
             </p>
             <Button variant="outline" asChild>
               <Link href="/connections">
                 <Smartphone className="mr-2 h-4 w-4" aria-hidden />
-                Kurzbefehl einrichten
+                Wege einrichten
               </Link>
             </Button>
           </CardContent>

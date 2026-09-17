@@ -105,6 +105,21 @@ const envSchema = z.object({
   // schlicht "keine Benachrichtigung".
   PLATFORM_ADMIN_EMAIL: z.string().email().optional().or(z.literal("")),
 
+  // Mail-Eingang: ein Postfach, in das der Vermittler Kundenmails
+  // WEITERLEITET. Die Anhaenge landen im Posteingang (/eingang), zugeordnet
+  // wird am Bildschirm. Ohne Benutzer UND Passwort ist der Weg ausgeschaltet
+  // und die Oberflaeche sagt das auch - statt eine Adresse anzubieten, an die
+  // man dann vergeblich schickt.
+  //
+  // Die Adresse ist getrennt vom IMAP-Benutzernamen, weil Postfaecher bei
+  // Strato "juergen@baufidesk.de" heissen koennen, waehrend die angezeigte
+  // Adresse ein Alias ist.
+  EINGANG_MAIL_ADRESSE: z.string().email().optional().or(z.literal("")),
+  EINGANG_IMAP_HOST: z.string().default("imap.strato.de"),
+  EINGANG_IMAP_PORT: z.coerce.number().int().min(1).max(65535).default(993),
+  EINGANG_IMAP_USER: z.string().optional(),
+  EINGANG_IMAP_PASSWORD: z.string().optional(),
+
   // Wiedervorlage-Digest (Cron). Ohne CRON_SECRET läuft der Cron nicht.
   CRON_SECRET: z.string().optional(),
   REMINDER_AFTER_DAYS: z.coerce.number().int().min(1).max(90).default(5),

@@ -13,6 +13,8 @@ export interface EingangAnzeige {
   groesse: string;
   angekommen: string;
   von: string | null;
+  /** Woher sie kam: "kurzbefehl" (Handy) oder "mail" (weitergeleitet). */
+  quelle: string;
 }
 
 export interface FallAuswahl {
@@ -60,7 +62,7 @@ function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[]
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{datei.originalName}</div>
           <div className="text-xs text-muted-foreground">
-            {datei.groesse} · {datei.angekommen}
+            {datei.groesse} · {datei.angekommen} · {herkunft(datei.quelle)}
             {datei.von ? ` · von ${datei.von}` : ""}
           </div>
         </div>
@@ -123,4 +125,17 @@ function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[]
       {fehler && <p className="mt-2 text-xs text-destructive">{fehler}</p>}
     </div>
   );
+}
+
+/**
+ * Woher die Datei kam, in Alltagssprache.
+ *
+ * Steht direkt neben Zeit und Groesse, weil es die Zuordnung leitet: Was per
+ * Mail kam, gehoert meist zu dem Fall, ueber den man gerade korrespondiert -
+ * was vom Handy kam, zu dem, den man gerade am Telefon hatte.
+ */
+function herkunft(quelle: string): string {
+  if (quelle === "mail") return "per E-Mail";
+  if (quelle === "kurzbefehl") return "vom Handy";
+  return quelle;
 }

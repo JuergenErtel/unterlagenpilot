@@ -14,6 +14,8 @@ import { finlinkGehoertZu } from "@/lib/platforms/finlink/client";
 import { prisma } from "@/lib/db";
 import { FinlinkAbgleichSchalter } from "@/components/finlink/abgleich-schalter";
 import { KurzbefehlKarte } from "@/components/geraete/kurzbefehl-karte";
+import { MailEingangKarte } from "@/components/eingang/mail-eingang-karte";
+import { mailEingangAdresse } from "@/lib/eingang/mail-adresse";
 import { getEnv } from "@/lib/env";
 import { listGeraeteTokens } from "@/lib/security/geraete-token";
 import { PageHeader } from "@/components/ui/page-header";
@@ -98,6 +100,17 @@ export default async function ConnectionsPage() {
     zuletztBenutzt: g.lastUsedAt ? g.lastUsedAt.toLocaleDateString("de-DE") : null,
   }));
 
+  // Mail-Eingang: die freigeschalteten Zweitadressen DIESES Nutzers plus seine
+  // Anmeldeadresse, die ohne Zutun gilt.
+  const [mailAbsender, konto] = await Promise.all([
+    prisma.eingangAbsender.findMany({
+      where: { userId: ctx.userId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true },
+    }),
+    prisma.user.findUnique({ where: { id: ctx.userId }, select: { email: true } }),
+  ]);
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -107,6 +120,12 @@ export default async function ConnectionsPage() {
       />
 
       <KurzbefehlKarte geraete={geraete} basisUrl={getEnv().APP_BASE_URL.replace(/\/$/, "")} />
+
+      <MailEingangKarte
+        adresse={mailEingangAdresse()}
+        anmeldeAdresse={konto?.email ?? ""}
+        absender={mailAbsender}
+      />
 
       {/* Empfohlener Startpunkt: FinLink */}
       <Card className="border-ai/30 bg-ai/5">

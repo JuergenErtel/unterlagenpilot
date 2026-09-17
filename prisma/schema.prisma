@@ -434,6 +434,7 @@ model Organization {
   backofficeAuftraege    BackofficeAuftrag[]
 
   eingangDateien Eingangsdatei[]
+  eingangAbsender EingangAbsender[]
 
   @@map("organizations")
 }
@@ -468,6 +469,7 @@ model User {
   authTokens        AuthToken[]
   geraeteTokens     GeraeteToken[]
   eingangDateien    Eingangsdatei[]
+  eingangAbsender   EingangAbsender[]
   erledigteAufgaben AufgabeErledigt[]
 
   backofficeBearbeitet BackofficeAuftrag[]             @relation("BackofficeBearbeiter")
@@ -1367,6 +1369,29 @@ model Eingangsdatei {
 
   @@index([organizationId, createdAt])
   @@map("eingang_dateien")
+}
+
+/// Absenderadressen, von denen der Mail-Eingang Unterlagen annimmt.
+///
+/// Der Mail-Eingang hat EIN Postfach fuer alle Organisationen. Die Frage
+/// "wessen Posteingang?" beantwortet allein die Absenderadresse - deshalb
+/// nimmt er nur an, was hier (oder als Login-Adresse eines aktiven Kontos)
+/// steht. Ohne diese Liste koennte jeder Fremde Dateien in den Posteingang
+/// eines Vermittlers legen.
+model EingangAbsender {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Wem die Adresse gehoert - unter diesem Namen steht die Datei spaeter im
+  /// Posteingang.
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Immer kleingeschrieben gespeichert; der Vergleich laeuft exakt.
+  email          String       @unique
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@map("eingang_absender")
 }
 
 // ============================ PLATTFORM-INTEGRATION ============================

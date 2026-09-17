@@ -667,6 +667,11 @@ export const AUDIT_ACTIONS = [
   "eingang.angenommen",
   "eingang.zugeordnet",
   "eingang.verworfen",
+  // Mail-Eingang: welche Absenderadresse darf in wessen Posteingang liefern.
+  // Die Freischaltung ist die einzige Schranke davor (siehe eingang/absender.ts) -
+  // wer sie setzt oder loest, gehoert deshalb ins Protokoll.
+  "eingang.absender.freigeschaltet",
+  "eingang.absender.entfernt",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
