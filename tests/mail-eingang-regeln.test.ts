@@ -5,6 +5,7 @@ import {
   anhangName,
   MAX_ANHAENGE_JE_MAIL,
   istAnAdressiert,
+  waehleKandidaten,
 } from "@/lib/eingang/mail-regeln";
 
 /**
@@ -115,5 +116,40 @@ describe("istAnAdressiert", () => {
 
   it("lässt sich nicht von einem Präfix täuschen", () => {
     expect(istAnAdressiert(["nicht-unterlagen@baufidesk.de"], ZIEL)).toBe(false);
+  });
+});
+
+describe("waehleKandidaten", () => {
+  const ZIEL = "unterlagen@baufidesk.de";
+  const n = (uid: number, empfaenger: string[], gelesen = false) => ({ uid, gelesen, empfaenger });
+
+  it("nimmt die ungelesene Mail an unsere Adresse", () => {
+    const r = waehleKandidaten([n(1, [ZIEL])], ZIEL, 25);
+    expect(r.uids).toEqual([1]);
+    expect(r.fremd).toBe(0);
+  });
+
+  it("lässt fremde Post des Sammelpostfachs unberührt und zählt sie nur", () => {
+    const r = waehleKandidaten([n(1, ["webmaster@baufidesk.de"]), n(2, [ZIEL])], ZIEL, 25);
+    expect(r.uids).toEqual([2]);
+    expect(r.fremd).toBe(1);
+  });
+
+  it("überspringt bereits Gelesenes, ohne es als fremd zu zählen", () => {
+    const r = waehleKandidaten([n(1, [ZIEL], true)], ZIEL, 25);
+    expect(r.uids).toEqual([]);
+    expect(r.fremd).toBe(0);
+  });
+
+  it("deckelt die Zahl je Lauf und nimmt die ältesten zuerst", () => {
+    // Aelteste zuerst: Was liegen bleibt, ist beim naechsten Lauf dran -
+    // sonst verhungert die aelteste Mail dauerhaft.
+    const viele = [5, 3, 1, 4, 2].map((uid) => n(uid, [ZIEL]));
+    expect(waehleKandidaten(viele, ZIEL, 3).uids).toEqual([1, 2, 3]);
+  });
+
+  it("erkennt die Zustellung über X-Envelope-To, wenn To etwas anderes sagt", () => {
+    const r = waehleKandidaten([n(1, ["verteiler@example.com", ZIEL])], ZIEL, 25);
+    expect(r.uids).toEqual([1]);
   });
 });

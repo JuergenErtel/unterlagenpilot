@@ -8,6 +8,9 @@ import {
   brauchbareAnhaenge,
   anhangName,
   istAnAdressiert,
+  waehleKandidaten,
+  SICHTFENSTER,
+  type Kandidat,
 } from "@/lib/eingang/mail-regeln";
 import { istMailEingangEingerichtet } from "@/lib/eingang/mail-adresse";
 
@@ -91,33 +94,43 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
   try {
     lock = await client.getMailboxLock("INBOX");
 
-    // Serverseitig auf unsere Adresse einschraenken, nicht erst nach dem
-    // Holen. Das ist keine Sparmassnahme, sondern der Kern:
+    // NICHT suchen, sondern sichten. Teuer gelernt am 17.09.2026:
+    // Strato beantwortet jede IMAP-SEARCH mit einer leeren Liste - auch
+    // `SEARCH ALL`, waehrend `FETCH 1:*` dieselbe Nachricht anstandslos
+    // liefert. Eine serverseitige Suche haette den Eingang fuer immer
+    // verstummen lassen, ohne je einen Fehler zu melden.
     //
-    // Die Eingangsadresse liegt als ALIAS auf einem vorhandenen
-    // Sammelpostfach. Wuerden wir "alles Ungelesene" holen, laegen bei jedem
-    // Lauf die 25 aeltesten ungelesenen Mails des Postfachs vor uns - und
-    // unsere kaeme, sobald dort ein paar Dutzend fremde Mails liegen, NIE an
-    // die Reihe. Ein Filter erst nach dem Holen wuerde den Eingang also still
-    // verhungern lassen.
-    //
-    // Zwei Suchen, weil ein Alias die Zieladresse nicht immer in "To"
-    // hinterlaesst: Manche Zustellwege tragen sie nur in "Delivered-To" ein.
-    // Was der Server bei der zweiten Suche nicht kann, faellt weg - die erste
-    // deckt den Normalfall (von Hand weitergeleitet) ab.
-    const uids = new Set<number>();
-    for (const kriterium of [
-      { seen: false, to: adresse },
-      { seen: false, header: { "delivered-to": adresse } },
-    ]) {
-      try {
-        for (const uid of (await client.search(kriterium)) || []) uids.add(uid);
-      } catch {
-        // Ein Server, der dieses Suchkriterium nicht beherrscht, darf den
-        // Lauf nicht abbrechen.
+    // Deshalb: die neuesten Nachrichten mit Kennzeichen und Umschlag holen
+    // (billig, und `envelope`/`headers` lesen per PEEK - nichts wird dabei
+    // als gelesen markiert), danach bei uns entscheiden.
+    const box = await client.mailboxOpen("INBOX");
+    const gesamt = box.exists ?? 0;
+    const kandidaten: Kandidat[] = [];
+    if (gesamt > 0) {
+      const von = Math.max(1, gesamt - SICHTFENSTER + 1);
+      for await (const m of client.fetch(
+        `${von}:*`,
+        // X-Envelope-To traegt bei Strato die Adresse, an die tatsaechlich
+        // zugestellt wurde - bei einem Alias sagt "To" das nicht immer.
+        { uid: true, flags: true, envelope: true, headers: ["x-envelope-to", "delivered-to", "x-original-to"] }
+      )) {
+        const ausUmschlag = [
+          ...(m.envelope?.to ?? []),
+          ...(m.envelope?.cc ?? []),
+          ...(m.envelope?.bcc ?? []),
+        ]
+          .map((a) => a.address)
+          .filter((a): a is string => Boolean(a));
+        kandidaten.push({
+          uid: m.uid,
+          gelesen: m.flags?.has("\\Seen") ?? false,
+          empfaenger: [...ausUmschlag, m.headers?.toString() ?? ""],
+        });
       }
     }
-    const zuHolen = [...uids].sort((a, b) => a - b).slice(0, MAX_MAILS_JE_LAUF);
+    const auswahl = waehleKandidaten(kandidaten, adresse, MAX_MAILS_JE_LAUF);
+    fremd = auswahl.fremd;
+    const zuHolen = auswahl.uids;
 
     for (const uid of zuHolen) {
       // Solange dieser Merker steht, bleibt die Mail unberuehrt - kein \Seen.
@@ -128,10 +141,9 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
 
         const mail = await simpleParser(nachricht.source);
 
-        // Zweiter Riegel hinter der Suche: Ein Server, der "TO" grosszuegig
-        // auslegt (Teilzeichenkette statt ganzer Adresse), wuerde uns sonst
-        // fremde Post des Sammelpostfachs unterschieben - und wir wuerden sie
-        // als gelesen markieren.
+        // Zweiter Riegel: Beim Sichten lag nur der Umschlag vor. Jetzt liegt
+        // die ganze Mail da - wer hier nicht noch einmal prueft, markiert im
+        // Zweifel fremde Post des Sammelpostfachs als gelesen.
         const empfaenger = [
           ...adressfelder(mail.to),
           ...adressfelder(mail.cc),

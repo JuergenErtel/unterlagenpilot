@@ -128,3 +128,51 @@ export function istAnAdressiert(empfaenger: string[], adresse: string): boolean 
     return treffer.includes(ziel);
   });
 }
+
+/** Eine Nachricht im Postfach, so weit wir sie beim Sichten kennen. */
+export interface Kandidat {
+  uid: number;
+  gelesen: boolean;
+  /** Alles, was nach Empfaenger aussieht: To, Cc, Bcc, X-Envelope-To, … */
+  empfaenger: string[];
+}
+
+/**
+ * Wie viele Nachrichten vom Ende des Postfachs wir ueberhaupt sichten.
+ *
+ * Unsere Post ist immer die neueste - fremde Altbestaende im Sammelpostfach
+ * duerfen den Blick nicht verstellen. Ohne Fenster muesste jeder Lauf das
+ * ganze Postfach durchgehen.
+ */
+export const SICHTFENSTER = 300;
+
+/**
+ * Welche Nachrichten dieser Lauf bearbeitet.
+ *
+ * Diese Auswahl passiert BEI UNS, nicht auf dem Server. Grund, und das ist
+ * teuer gelernt: Strato beantwortet jede IMAP-SEARCH mit einer leeren Liste -
+ * auch `SEARCH ALL`, waehrend `FETCH 1:*` dieselbe Nachricht anstandslos
+ * liefert. Eine serverseitige Suche haette den Eingang fuer immer verstummen
+ * lassen, ohne je einen Fehler zu melden: Der Lauf haette jedes Mal "0 Mails"
+ * gemeldet und alles haette gesund ausgesehen.
+ *
+ * Wer das hier je auf SEARCH zurueckbaut, muss es gegen das ECHTE Postfach
+ * gegenpruefen, nicht gegen einen Testserver.
+ */
+export function waehleKandidaten(
+  nachrichten: Kandidat[],
+  adresse: string,
+  hoechstens: number
+): { uids: number[]; fremd: number } {
+  const uids: number[] = [];
+  let fremd = 0;
+  for (const n of nachrichten) {
+    if (n.gelesen) continue;
+    if (!istAnAdressiert(n.empfaenger, adresse)) {
+      fremd += 1;
+      continue;
+    }
+    uids.push(n.uid);
+  }
+  return { uids: uids.sort((a, b) => a - b).slice(0, hoechstens), fremd };
+}
