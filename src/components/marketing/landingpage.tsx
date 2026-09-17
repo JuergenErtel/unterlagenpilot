@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Beispielakte } from "@/components/marketing/beispielakte";
+import { SortiererBeispiel } from "@/components/marketing/sortierer-beispiel";
 import { ANBIETER } from "@/lib/legal/anbieter";
 import { PLAN_DEFINITIONS, monatspreisText } from "@/lib/saas/plans";
 
@@ -237,65 +238,59 @@ function Hero() {
  * Arbeit macht. Der Sortierer ist eine andere Achse - ein Werkzeug, kein
  * Betriebsmodell. Zusammengelegt wuerde beides unscharf.
  */
+/**
+ * Der Unterlagensortierer - der Einstieg.
+ *
+ * Er steht direkt hinter dem Hero und VOR den zwei Wegen, weil er die
+ * niedrigste Huerde im ganzen Produkt ist: kein Kunde, keine Akte, kein
+ * Vertrag.
+ *
+ * Gezeigt statt beschrieben: Die drei Schritte standen hier zuerst als drei
+ * nummerierte Karten - dieselbe Bauform, die jede zweite Produktseite hat und
+ * die nichts beweist. Die Visualisierung IST die Abfolge, also sind die Karten
+ * weg. Wer sehen will, was das Werkzeug tut, sieht es.
+ *
+ * Und bewusst KEIN Testzugang und kein Vorfuehrungstermin (Juergens Vorgabe):
+ * Das Bild ueberzeugt oder es ueberzeugt nicht. Ein Zwischenschritt waere nur
+ * eine Huerde mehr vor derselben Entscheidung.
+ */
 function Sortierer() {
-  const schritte = [
-    {
-      titel: "Hineinwerfen",
-      text: "Dreißig Fotos vom Kunden, durcheinander, quer fotografiert. Kein Formular, keine Kundenanlage.",
-    },
-    {
-      titel: "Sortieren lassen",
-      text: "BaufiDesk erkennt jede Seite und findet, was zusammengehört. Vier Fotos eines Kaufvertrags werden ein PDF mit vier Seiten – auf A4 gerade gerückt.",
-    },
-    {
-      titel: "Zurückbekommen",
-      text: "Als benannte PDFs zum Herunterladen. Wo die Maschine unsicher ist, fragt sie vorher – eine Frage nach der anderen.",
-    },
-  ];
-
   return (
     <section id="sortierer" className="scroll-mt-8 border-t bg-[hsl(var(--surface-sunken))]">
       <div className="mx-auto max-w-6xl px-6 py-20">
-        <p className="text-sm font-medium text-ai">Der Einstieg</p>
-        <h2 className="display mt-3 max-w-2xl text-[1.875rem] leading-tight sm:text-[2.25rem]">
-          Der Unterlagensortierer: aus einem Stapel Fotos werden geordnete PDFs.
-        </h2>
-        <p className="mt-5 max-w-2xl text-[1.0625rem] leading-relaxed text-muted-foreground">
-          Das kleinste Stück BaufiDesk – und das, an dem sich der Rest messen lassen muss.
-          Ohne Kunde, ohne Akte, ohne CRM. Wer nur das braucht, nutzt nur das.
-        </p>
+        <div className="max-w-2xl">
+          <p className="text-sm font-medium text-ai">Der Einstieg</p>
+          <h2 className="display mt-3 text-[1.875rem] leading-tight sm:text-[2.25rem]">
+            Der Kunde schickt dreißig Fotos. Sie bekommen vier Dokumente zurück.
+          </h2>
+          <p className="mt-5 text-[1.0625rem] leading-relaxed text-muted-foreground">
+            Der Unterlagensortierer ist das kleinste Stück BaufiDesk – ohne Kunde, ohne Akte,
+            ohne CRM. Unterlagen hineinwerfen, geordnete PDFs herausholen. Wer nur das
+            braucht, nutzt nur das.
+          </p>
+        </div>
 
-        <ol className="mt-10 grid gap-4 sm:grid-cols-3">
-          {schritte.map((s, i) => (
-            <li key={s.titel} className="rounded-lg border bg-card p-5">
-              <span className="font-mono text-xs text-ai tabular">{String(i + 1).padStart(2, "0")}</span>
-              <h3 className="mt-2 text-base font-medium">{s.titel}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
-            </li>
-          ))}
-        </ol>
+        <div className="mt-10">
+          <SortiererBeispiel />
+        </div>
 
-        <p className="mt-8 max-w-2xl text-sm text-muted-foreground">
-          Die Unterlagen kommen per WhatsApp aufs Handy oder per Mail ins Postfach? Beide Wege
-          führen direkt hinein – herunterladen und wieder hochladen entfällt.
-        </p>
+        <div className="mt-8 grid gap-x-10 gap-y-4 md:grid-cols-2">
+          <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+            Die Unterlagen kommen per WhatsApp aufs Handy oder per Mail ins Postfach? Beide
+            Wege führen direkt hinein – herunterladen und wieder hochladen entfällt.
+          </p>
+          <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+            Was sortiert ist, kann bleiben, wo es ist – oder in eine Akte wandern, wenn aus
+            der Anfrage doch eine Finanzierung wird.
+          </p>
+        </div>
 
-        {/* Bewusst KEIN "ausprobieren" und kein Selbstbedienungszugang: Ueber
-            die Landingpage gibt es keine Testmoeglichkeit. Wer den Sortierer
-            sehen will, bekommt ihn im Gespraech gezeigt - alles andere waere
-            ein Versprechen, das die Seite nicht einloest. */}
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-8">
           <a
-            href={mailto("Unterlagensortierer – Vorführung")}
+            href={mailto("Zugang zu BaufiDesk")}
             className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/92"
           >
-            Vorführung vereinbaren
-          </a>
-          <a
-            href="#zwei-wege"
-            className="inline-flex h-11 items-center rounded-md border border-input bg-card px-6 text-sm font-medium hover:border-foreground/25"
-          >
-            Und was kommt danach?
+            Zugang anfragen
           </a>
         </div>
       </div>
