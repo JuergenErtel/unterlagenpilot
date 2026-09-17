@@ -19,8 +19,27 @@ import { TrichterIcon } from "@/components/ui/trichter-icon";
  * tragen nur die erkannten Seitenzahlen und die Rückfrage diese Farbe.
  */
 
-/** Wie der Stapel hereinkommt: Dateinamen, die nichts verraten. */
-const HEREIN = ["IMG_4471", "IMG_4472", "IMG_4473", "IMG_4474", "IMG_4489", "Scan_02"];
+/**
+ * Wie der Stapel hereinkommt: Dateinamen, die nichts verraten.
+ *
+ * Bewusst zehn Kacheln und nicht sechs - bei sechs sah die linke Spalte halb
+ * leer aus und das Wort "Stapel" wurde von der Abbildung widerlegt.
+ */
+const HEREIN = [
+  "IMG_4471",
+  "IMG_4472",
+  "IMG_4473",
+  "IMG_4474",
+  "IMG_4489",
+  "Scan_02",
+  "IMG_4501",
+  "IMG_4502",
+  "FOTO_08",
+  "IMG_4519",
+];
+
+/** Neigung je Kachel - ungleich, damit kein Muster entsteht. */
+const NEIGUNG = [-2.5, 1.5, -1, 2, -1.5, 0.5, 2.5, -2, 1, -0.5];
 
 /** Was herauskommt. `seiten` ist das, was die Maschine zusammengelegt hat. */
 const HERAUS: Array<{ name: string; seiten: number }> = [
@@ -31,7 +50,7 @@ const HERAUS: Array<{ name: string; seiten: number }> = [
 ];
 
 export function SortiererBeispiel() {
-  const hereinGesamt = 27;
+  const hereinGesamt = 30;
   const seitenGesamt = HERAUS.reduce((s, d) => s + d.seiten, 0);
 
   return (
@@ -58,9 +77,21 @@ export function SortiererBeispiel() {
                 // Leichte, ungleiche Neigung: Ein sauber ausgerichtetes Raster
                 // waere schon sortiert - und damit eine Luege ueber den Zustand,
                 // in dem solche Stapel wirklich ankommen.
-                style={{ transform: `rotate(${[-2.5, 1.5, -1, 2, -1.5, 0.5][i]}deg)` }}
-                className="flex h-[4.5rem] w-[3.25rem] flex-col justify-end rounded-[3px] border bg-[hsl(var(--surface-sunken))] p-1"
+                style={{ transform: `rotate(${NEIGUNG[i]}deg)` }}
+                className="flex h-[4.5rem] w-[3.25rem] flex-col gap-1 rounded-[3px] border bg-card p-1 shadow-sm"
               >
+                {/* Die fotografierte Seite: angedeutet, nicht ausgemalt. Ohne
+                    sie lesen sich die Kacheln als leere Kaestchen statt als
+                    Aufnahmen von Papier. */}
+                <div
+                  aria-hidden
+                  className="flex-1 rounded-[2px] bg-[hsl(var(--surface-sunken))] p-1"
+                >
+                  <div className="h-[2px] w-3/4 rounded-full bg-border" />
+                  <div className="mt-[3px] h-[2px] w-full rounded-full bg-border" />
+                  <div className="mt-[3px] h-[2px] w-5/6 rounded-full bg-border" />
+                  <div className="mt-[3px] h-[2px] w-2/3 rounded-full bg-border" />
+                </div>
                 <span className="truncate font-mono text-[0.5rem] leading-tight text-muted-foreground">
                   {name}
                 </span>
