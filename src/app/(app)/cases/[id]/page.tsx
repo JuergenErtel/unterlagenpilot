@@ -30,8 +30,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { TabsContent } from "@/components/ui/tabs";
-import { FallReiter } from "@/components/case/fall-reiter";
 import { Werkzeugreihe } from "@/components/case/fall-bereich";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
@@ -681,42 +679,15 @@ export default async function CaseCockpitPage({
         <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
       </Card>
 
-      {/* Drei Bereiche statt vier Reitern plus vierzehn Werkzeugen in einer
-          Seitenspalte. Die alte Aufteilung verlangte vom Berater zu wissen, OB
-          etwas ein Reiter oder ein Werkzeug ist, bevor er es suchen konnte.
-          Jetzt ist die Frage: Womit arbeite ich gerade? */}
-      <FallReiter
-        tabParam={offenerBereich}
-        reiter={[
-          {
-            wert: "dokumente",
-            titel: "Dokumente",
-            icon: <FolderArchive className="h-4 w-4 shrink-0" aria-hidden />,
-            marke:
-              cockpit.counts.docsMissing > 0
-                ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
-                : cockpit.counts.pruefbereit > 0
-                  ? { text: `${cockpit.counts.pruefbereit} zu prüfen`, ton: "aktion" as const }
-                  : { text: "vollständig", ton: "ruhe" as const },
-          },
-          {
-            wert: "beratung",
-            titel: "Beratung",
-            icon: <UserRound className="h-4 w-4 shrink-0" aria-hidden />,
-            marke:
-              erstgespraechOffen > 0
-                ? { text: `${erstgespraechOffen} offen`, ton: "aktion" as const }
-                : null,
-          },
-          {
-            wert: "einreichung",
-            titel: "Einreichung",
-            icon: <Banknote className="h-4 w-4 shrink-0" aria-hidden />,
-            marke: { text: `${cockpit.score} % reif`, ton: "ruhe" as const },
-          },
-        ]}
-      >
-        <TabsContent value="dokumente" className="space-y-4">
+      {/* Welcher Bereich zu sehen ist, entscheidet die Leiste ueber der Seite
+          (case-nav.tsx) ueber `?tab=`. Bewusst KEINE zweite Reiterreihe hier:
+          Das waere dieselbe Leiste zweimal untereinander.
+
+          Serverseitig gerendert und nicht per Klappmechanik im Browser: So
+          findet ein Anker wie #broker-upload sein Ziel, und ein Bereich laesst
+          sich verlinken. */}
+      {offenerBereich === "dokumente" && (
+        <div className="space-y-4">
               <div className="space-y-4">
                 {/* Erst die gefundenen Lücken sichten, dann nachfordern –
                     sonst geht eine Nachforderung raus, der die Hälfte fehlt. */}
@@ -1031,9 +1002,11 @@ export default async function CaseCockpitPage({
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
             <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
           </Werkzeugreihe>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="beratung" className="space-y-4">
+      {offenerBereich === "beratung" && (
+        <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-base">Objekt & Finanzierung</CardTitle></CardHeader>
@@ -1149,9 +1122,11 @@ export default async function CaseCockpitPage({
             )}
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
           </Werkzeugreihe>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="einreichung" className="space-y-4">
+      {offenerBereich === "einreichung" && (
+        <div className="space-y-4">
           {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
               rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
               unveraendert). Rein lesend, Aussensicht. */}
@@ -1193,8 +1168,8 @@ export default async function CaseCockpitPage({
               </div>
             )}
           </Werkzeugreihe>
-        </TabsContent>
-      </FallReiter>
+        </div>
+      )}
 
       {/* Gehoert in keinen der drei Bereiche: Der Schreibblock begleitet die
           ganze Arbeit, und das Archivieren beendet sie. */}

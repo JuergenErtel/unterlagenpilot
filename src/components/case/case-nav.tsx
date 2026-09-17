@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  FolderOpen,
+  FolderArchive,
+  UserRound,
+  Banknote,
   LayoutPanelLeft,
-  PhoneCall,
   Send,
   Calculator,
   Scale,
@@ -25,30 +26,52 @@ export interface FallBereich {
 export type CaseNavVariante = "vertrieb" | "backoffice" | "fremd";
 
 /**
- * Die Arbeitsbereiche eines Falls als feste Leiste ueber JEDER Fall-Unterseite.
+ * Die drei Bereiche eines Falls als feste Leiste ueber JEDER Unterseite.
  *
- * Bis zum 01.09.2026 fuehrte von einer Unterseite nur "Zur Fallakte" zurueck,
- * und von der Fallakte aus lagen die Bereiche in zugeklappten Werkzeugkisten
- * oder drei Klicks tief in einem Reiter (der Unterlagen-Arbeitsplatz hinter
- * Dokumente -> Oeffnen). Wer nicht wusste, wo etwas liegt, musste suchen. Die
- * Leiste macht die Bereiche zu Registerreitern der Akte: immer sichtbar,
- * immer ein Klick.
+ * Bis zum 17.09.2026 standen hier ACHT Eintraege (Fallakte, Unterlagen,
+ * Erstgespraech, Nachrichten, Haushalt, Machbarkeit, Verwaltung, Einreichung)
+ * - und in der Fallakte darunter noch einmal dieselben Ziele als Werkzeuge.
+ * Dieselbe Sache auf zwei Wegen, in zwei verschiedenen Ordnungen.
  *
- * Werkzeuge, die man selten braucht (Wohnflaeche, Lageplan, Zusammenfassung,
- * Kundendaten), bleiben in der Fallakte - die Leiste soll tragen, nicht
- * alles auflisten.
+ * Jetzt gilt EINE Einteilung, oben wie unten: Dokumente, Beratung,
+ * Einreichung. Die Leiste ist damit zugleich die Umschaltung der Fallakte -
+ * eine zweite Reiterreihe auf der Seite waere dieselbe Leiste zweimal.
+ *
+ * Der Bereich steht in der Adresse (`?tab=`) und nicht in einem Zustand im
+ * Browser: So laesst sich ein Bereich verlinken, und der Zurueck-Knopf tut,
+ * was er soll.
  */
+export type FallBereichKey = "dokumente" | "beratung" | "einreichung";
+
+/**
+ * Zu welchem Bereich eine Unterseite gehoert.
+ *
+ * Ohne diese Zuordnung stuende der Berater auf /haushalt vor einer Leiste, die
+ * nichts markiert - er waere "irgendwo im Fall", ohne zu wissen, wo. Wer eine
+ * neue Unterseite baut, traegt sie hier ein.
+ */
+export const UNTERSEITE_BEREICH: Record<string, FallBereichKey> = {
+  unterlagen: "dokumente",
+  messages: "dokumente",
+  erstgespraech: "beratung",
+  edit: "beratung",
+  haushalt: "beratung",
+  machbarkeit: "beratung",
+  wohnflaeche: "beratung",
+  "einkommen-selbststaendig": "beratung",
+  lageplan: "beratung",
+  export: "einreichung",
+  summary: "einreichung",
+  verwaltung: "einreichung",
+  einreichung: "einreichung",
+};
+
 export function fallBereiche(caseId: string): FallBereich[] {
   const base = `/cases/${caseId}`;
   return [
-    { href: base, label: "Fallakte", icon: FolderOpen },
-    { href: `${base}/unterlagen`, label: "Unterlagen", icon: LayoutPanelLeft },
-    { href: `${base}/erstgespraech`, label: "Erstgespräch", icon: PhoneCall },
-    { href: `${base}/messages`, label: "Nachrichten", icon: Send },
-    { href: `${base}/haushalt`, label: "Haushalt", icon: Calculator },
-    { href: `${base}/machbarkeit`, label: "Machbarkeit", icon: Scale },
-    { href: `${base}/verwaltung`, label: "Verwaltung", icon: ClipboardList },
-    { href: `${base}/export`, label: "Einreichung", icon: FileText },
+    { href: `${base}?tab=dokumente`, label: "Dokumente", icon: FolderArchive },
+    { href: `${base}?tab=beratung`, label: "Beratung", icon: UserRound },
+    { href: `${base}?tab=einreichung`, label: "Einreichung", icon: Banknote },
   ];
 }
 
@@ -86,21 +109,37 @@ export function fremdBereiche(caseId: string, auftragId: string): FallBereich[] 
 }
 
 /**
- * Welcher Bereich aktiv ist. Die Fallakte selbst nur bei exaktem Pfad -
- * sonst leuchtete sie auf jeder Unterseite mit. Unterseiten ohne eigenen
- * Reiter (z. B. /wohnflaeche) markieren nichts: Die Leiste behauptet dann
- * nicht, man stuende woanders.
+ * Welcher der drei Bereiche gerade gilt.
  *
- * `bereiche` ist die Liste, in der gesucht wird - ohne Angabe die des
- * Vertriebsfalls.
+ * Auf der Fallakte entscheidet `?tab=`, auf einer Unterseite ihre Zuordnung
+ * (UNTERSEITE_BEREICH). Eine unbekannte Unterseite faellt auf "dokumente" -
+ * lieber eine Markierung, die ungefaehr stimmt, als eine Leiste, die
+ * behauptet, man stuende nirgends.
+ */
+export function aktiverFallBereich(
+  pathname: string,
+  caseId: string,
+  tab?: string | null
+): FallBereichKey {
+  const base = `/cases/${caseId}`;
+  if (pathname === base) {
+    return tab === "beratung" || tab === "einreichung" ? tab : "dokumente";
+  }
+  const rest = pathname.startsWith(base + "/") ? pathname.slice(base.length + 1).split("/")[0]! : "";
+  return UNTERSEITE_BEREICH[rest] ?? "dokumente";
+}
+
+/**
+ * Aktiver Eintrag der Backoffice- und Fremdakten-Leisten, die weiterhin nach
+ * Unterseiten gegliedert sind: Ein Backoffice-Auftrag hat keine Leadphase und
+ * keine Beratung, die Vertriebseinteilung passt dort nicht.
  */
 export function aktiverBereich(
   pathname: string,
   caseId: string,
-  bereiche: FallBereich[] = fallBereiche(caseId)
+  bereiche: FallBereich[]
 ): string | null {
   const base = `/cases/${caseId}`;
-  if (pathname === base) return base;
   const treffer = bereiche.find(
     (b) => b.href !== base && (pathname === b.href || pathname.startsWith(b.href + "/"))
   );
@@ -124,7 +163,10 @@ export function CaseNav({
       : variante === "backoffice" && auftragId
         ? backofficeBereiche(caseId, auftragId)
         : fallBereiche(caseId);
-  const aktiv = aktiverBereich(pathname, caseId, bereiche);
+  const tab = useSearchParams().get("tab");
+  const istVertrieb = variante === "vertrieb";
+  const aktiverSchluessel = istVertrieb ? aktiverFallBereich(pathname, caseId, tab) : null;
+  const aktiv = istVertrieb ? null : aktiverBereich(pathname, caseId, bereiche);
   return (
     <nav
       aria-label="Bereiche des Falls"
@@ -132,7 +174,10 @@ export function CaseNav({
     >
       <ul className="flex min-w-max gap-1">
         {bereiche.map((b) => {
-          const istAktiv = aktiv === b.href;
+          // Im Vertrieb entscheidet der Bereichsschluessel, sonst der Pfad.
+          const istAktiv = istVertrieb
+            ? b.href.endsWith(`tab=${aktiverSchluessel}`)
+            : aktiv === b.href;
           return (
             <li key={b.href}>
               <Link
