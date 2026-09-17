@@ -691,7 +691,7 @@ export default async function CaseCockpitPage({
           {
             wert: "dokumente",
             titel: "Dokumente",
-            icon: FolderArchive,
+            icon: <FolderArchive className="h-4 w-4 shrink-0" aria-hidden />,
             marke:
               cockpit.counts.docsMissing > 0
                 ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
@@ -702,7 +702,7 @@ export default async function CaseCockpitPage({
           {
             wert: "beratung",
             titel: "Beratung",
-            icon: UserRound,
+            icon: <UserRound className="h-4 w-4 shrink-0" aria-hidden />,
             marke:
               erstgespraechOffen > 0
                 ? { text: `${erstgespraechOffen} offen`, ton: "aktion" as const }
@@ -711,7 +711,7 @@ export default async function CaseCockpitPage({
           {
             wert: "einreichung",
             titel: "Einreichung",
-            icon: Banknote,
+            icon: <Banknote className="h-4 w-4 shrink-0" aria-hidden />,
             marke: { text: `${cockpit.score} % reif`, ton: "ruhe" as const },
           },
         ]}

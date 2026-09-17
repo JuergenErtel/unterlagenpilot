@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +25,16 @@ export interface ReiterMarke {
 export interface ReiterDefinition {
   wert: string;
   titel: string;
-  icon: LucideIcon;
+  /**
+   * Das FERTIGE Symbol, nicht die Komponente.
+   *
+   * Teuer gelernt am 17.09.2026: Diese Datei ist eine Client-Komponente, die
+   * Fallakte ist eine Server-Komponente. Eine Komponente ist eine Funktion,
+   * und Funktionen lassen sich ueber diese Grenze nicht uebergeben - die
+   * Fallakte antwortete mit "Etwas ist schiefgelaufen", ohne dass Typpruefung
+   * oder Build etwas gemerkt haetten. Ein fertig gerendertes Element geht.
+   */
+  icon: React.ReactNode;
   /** Was hier ansteht. Null, wenn nichts - dann bleibt die Zeile leer. */
   marke: ReiterMarke | null;
 }
@@ -71,16 +79,14 @@ export function FallReiter({
       {/* Gleich breite Flaechen: Die drei sind gleichrangig, und eine breitere
           Flaeche laese den Bereich wichtiger aussehen als die anderen. */}
       <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1">
-        {reiter.map((r) => {
-          const Icon = r.icon;
-          return (
+        {reiter.map((r) => (
             <TabsTrigger
               key={r.wert}
               value={r.wert}
               className="flex h-auto flex-col items-center gap-0.5 px-2 py-2.5 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:px-4 sm:py-3"
             >
               <span className="flex items-center gap-2">
-                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                {r.icon}
                 <span className="text-sm font-semibold">{r.titel}</span>
               </span>
               {r.marke && (
@@ -89,8 +95,7 @@ export function FallReiter({
                 </span>
               )}
             </TabsTrigger>
-          );
-        })}
+        ))}
       </TabsList>
       {children}
     </Tabs>
