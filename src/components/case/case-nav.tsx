@@ -165,6 +165,18 @@ export function CaseNav({
         : fallBereiche(caseId);
   const tab = useSearchParams().get("tab");
   const istVertrieb = variante === "vertrieb";
+
+  // Auf der Fallakte selbst blendet sich die Leiste aus.
+  //
+  // Dort steht die Umschaltung direkt unter dem Kreislauf, wo ihre Wirkung
+  // sichtbar wird. Stuenden hier oben dieselben drei Namen, gaebe es zwei
+  // Bedienelemente fuer dieselbe Sache - und eines davon weit weg von dem,
+  // was es aendert. Genau das war der Fehler vom 17.09.2026.
+  //
+  // Auf den Unterseiten bleibt sie: Dort ist sie keine Umschaltung, sondern
+  // der Weg zurueck in den richtigen Bereich - und sagt zugleich, in welchem
+  // man gerade steht.
+  if (istVertrieb && pathname === `/cases/${caseId}`) return null;
   const aktiverSchluessel = istVertrieb ? aktiverFallBereich(pathname, caseId, tab) : null;
   const aktiv = istVertrieb ? null : aktiverBereich(pathname, caseId, bereiche);
   return (
