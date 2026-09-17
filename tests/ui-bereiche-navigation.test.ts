@@ -1,6 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { BACKOFFICE_GRUPPEN, PORTAL_GRUPPEN, navGruppenFuer, zeigeUmschalter, navGruppen } from "@/components/sidebar-nav";
-import { bereichAusPfad, verfuegbareBereiche, LEERE_ZAEHLER, type BackofficeZaehler } from "@/lib/backoffice/bereich";
+import { BACKOFFICE_GRUPPEN, PORTAL_GRUPPEN, SORTIERER_GRUPPEN, navGruppenFuer, zeigeUmschalter, navGruppen } from "@/components/sidebar-nav";
+import {
+  bereichAusPfad,
+  verfuegbareBereiche,
+  ersterBereich,
+  sichtbarerBereich,
+  LEERE_ZAEHLER,
+  type Bereiche,
+  type BackofficeZaehler,
+} from "@/lib/backoffice/bereich";
+
+/** Kurzschreibweise: nur die genannten Bereiche sind an. */
+function b(teil: Partial<Bereiche>): Bereiche {
+  return { vertrieb: false, sortierer: false, backoffice: false, portal: false, ...teil };
+}
 
 /**
  * Navigation und Bereichsumschalter als reine Regeln: Wer nur einen Bereich
@@ -9,21 +22,74 @@ import { bereichAusPfad, verfuegbareBereiche, LEERE_ZAEHLER, type BackofficeZaeh
  */
 describe("Bereichsumschalter", () => {
   it("erscheint nicht fuer Nutzer mit genau einem Bereich", () => {
-    expect(zeigeUmschalter({ vertrieb: true, backoffice: false, portal: false })).toBe(false);
-    expect(zeigeUmschalter({ vertrieb: true, backoffice: true, portal: false })).toBe(true);
-    expect(zeigeUmschalter({ vertrieb: true, backoffice: true, portal: true })).toBe(true);
+    expect(zeigeUmschalter(b({ vertrieb: true }))).toBe(false);
+    expect(zeigeUmschalter(b({ sortierer: true }))).toBe(false);
+    expect(zeigeUmschalter(b({ vertrieb: true, backoffice: true }))).toBe(true);
+    expect(zeigeUmschalter(b({ vertrieb: true, sortierer: true }))).toBe(true);
   });
 
   it("leitet den Bereich aus dem Pfad ab, faellt sonst auf den Vertrieb zurueck", () => {
     expect(bereichAusPfad("/backoffice")).toBe("backoffice");
     expect(bereichAusPfad("/backoffice/auftraege/x")).toBe("backoffice");
     expect(bereichAusPfad("/portal/rueckfragen")).toBe("portal");
+    expect(bereichAusPfad("/sortierer")).toBe("sortierer");
+    expect(bereichAusPfad("/sortierer/abc")).toBe("sortierer");
     expect(bereichAusPfad("/backoffice-irgendwas")).toBe("vertrieb");
     expect(bereichAusPfad("/cases/1")).toBe("vertrieb");
   });
 
   it("listet nur sichtbare Bereiche in fester Reihenfolge", () => {
-    expect(verfuegbareBereiche({ vertrieb: true, backoffice: false, portal: true })).toEqual(["vertrieb", "portal"]);
+    expect(verfuegbareBereiche(b({ vertrieb: true, portal: true }))).toEqual(["vertrieb", "portal"]);
+    expect(verfuegbareBereiche(b({ vertrieb: true, sortierer: true, backoffice: true }))).toEqual([
+      "vertrieb",
+      "sortierer",
+      "backoffice",
+    ]);
+  });
+});
+
+/**
+ * Bis zum 17.09.2026 war der Vertrieb fuer jeden da und diente als sicherer
+ * Rueckfall. Wer BaufiDesk nur als Unterlagensortierer nutzt, hat ihn nicht -
+ * und landete mit der alten Regel auf einer Seite, die ihm 404 antwortet.
+ */
+describe("Nutzer ohne Vertrieb", () => {
+  const nurSortierer = b({ sortierer: true });
+
+  it("faellt auf den Sortierer zurueck, nicht auf den Vertrieb", () => {
+    expect(ersterBereich(nurSortierer)).toBe("sortierer");
+    expect(sichtbarerBereich("/cases/1", nurSortierer)).toBe("sortierer");
+    expect(sichtbarerBereich("/heute", nurSortierer)).toBe("sortierer");
+  });
+
+  it("bleibt im Sortierer, wenn der Pfad dorthin zeigt", () => {
+    expect(sichtbarerBereich("/sortierer/abc", nurSortierer)).toBe("sortierer");
+  });
+
+  it("aendert nichts fuer den gewoehnlichen Vertriebsnutzer", () => {
+    const normal = b({ vertrieb: true, sortierer: true });
+    expect(ersterBereich(normal)).toBe("vertrieb");
+    expect(sichtbarerBereich("/cases/1", normal)).toBe("vertrieb");
+    expect(sichtbarerBereich("/sortierer", normal)).toBe("sortierer");
+  });
+
+  it("antwortet auch fuer ein Konto ganz ohne Bereich, statt zu schleifen", () => {
+    expect(ersterBereich(b({}))).toBe("vertrieb");
+  });
+});
+
+describe("Sortierer-Navigation", () => {
+  it("ist ein Werkzeug, kein Arbeitsbereich - eine Gruppe, wenige Eintraege", () => {
+    expect(SORTIERER_GRUPPEN).toHaveLength(1);
+    const hrefs = SORTIERER_GRUPPEN.flatMap((g) => g.items).map((i) => i.href);
+    expect(hrefs).toContain("/sortierer");
+    // Keine Fallakte, keine Pipeline: Wer nur sortiert, sieht kein CRM.
+    expect(hrefs.some((h) => h.startsWith("/cases") || h.startsWith("/pipeline"))).toBe(false);
+  });
+
+  it("liefert die Sortierer-Leiste fuer den Bereich sortierer", () => {
+    expect(navGruppenFuer("sortierer", true)).toBe(SORTIERER_GRUPPEN);
+    expect(navGruppenFuer("sortierer", true).flatMap((g) => g.items).some((i) => i.href.startsWith("/admin"))).toBe(false);
   });
 });
 

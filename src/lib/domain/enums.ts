@@ -672,13 +672,23 @@ export const AUDIT_ACTIONS = [
   // wer sie setzt oder loest, gehoert deshalb ins Protokoll.
   "eingang.absender.freigeschaltet",
   "eingang.absender.entfernt",
+  // Unterlagensortierer: Stapel angelegt, ausgeliefert, weggeraeumt. Ein
+  // Stapel traegt Kundendokumente ohne Fall - ohne diese Eintraege liesse
+  // sich hinterher nicht sagen, wer wann wessen Unterlagen sortiert hat.
+  "sortierer.stapel_angelegt",
+  "sortierer.stapel_geloescht",
+  "sortierer.ausgeliefert",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ============================ BACKOFFICE ============================
 
-/** Aktenart: Vertriebsfall oder Backoffice-Akte (synchron zu enum AkteArt). */
-export const AKTE_ARTEN = ["vertrieb", "backoffice"] as const;
+/**
+ * Aktenart: Vertriebsfall, Backoffice-Akte oder Sortierstapel (synchron zu
+ * enum AkteArt). Ein Sortierstapel traegt nur Dokumente - kein Antragsteller,
+ * keine Leadphase, kein Objekt.
+ */
+export const AKTE_ARTEN = ["vertrieb", "backoffice", "sortierung"] as const;
 export type AkteArt = (typeof AKTE_ARTEN)[number];
 
 export const BACKOFFICE_ROLLEN = ["manager", "bearbeiter", "pruefer"] as const;
@@ -785,6 +795,14 @@ export type BackofficeKontingentArt = (typeof BACKOFFICE_KONTINGENT_ARTEN)[numbe
 
 /** Schluessel des Feature Flags, das BaufiDesk Backoffice je Organisation freischaltet. */
 export const BACKOFFICE_FEATURE_KEY = "backoffice";
+/**
+ * Feature Flag "vertrieb". Anders als das Backoffice-Flag ist die Vorgabe
+ * EINGESCHALTET: Der Vertrieb war bis zum 17.09.2026 fuer jeden da. Wer
+ * BaufiDesk nur als Unterlagensortierer nutzt, bekommt den Eintrag mit
+ * enabled=false - dann verschwindet das CRM vollstaendig aus seiner
+ * Oberflaeche.
+ */
+export const VERTRIEB_FEATURE_KEY = "vertrieb";
 
 /** Zustaende eines Registrierungsantrags. */
 export const SIGNUP_STATUSES = ["neu", "bestaetigt", "freigegeben", "abgelehnt"] as const;

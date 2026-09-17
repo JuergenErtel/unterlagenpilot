@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getCurrentContext, requireContext, type AppContext } from "@/lib/auth/context";
 import type { BackofficeRolle, UserRole } from "@/lib/domain/enums";
-import { hatPortalZugang, istBackofficeAktiv } from "./feature";
+import { hatPortalZugang, istBackofficeAktiv, istVertriebAktiv } from "./feature";
 import { darfAuftragSehen, darfPortalAuftragSehen, istAuftraggeberAdmin, sichtbarkeitsFilter } from "./sichtbarkeit";
 import type { Bereiche } from "./bereich";
 
@@ -196,9 +196,10 @@ export { bereichAusPfad } from "./bereich";
 
 /** Welche Produkte dieser Nutzer sieht. Vertrieb hat jeder Organisationsnutzer. */
 export async function ladeBereiche(ctx: AppContext): Promise<Bereiche> {
-  const [flag, portal] = await Promise.all([
+  const [flag, portal, vertrieb] = await Promise.all([
     ctx.backofficeRolle ? istBackofficeAktiv(ctx.organizationId) : Promise.resolve(false),
     hatPortalZugang(ctx.organizationId),
+    istVertriebAktiv(ctx.organizationId),
   ]);
   let portalSichtbar = portal;
   if (portal && !istAuftraggeberAdmin(ctx.role as UserRole)) {
@@ -207,7 +208,17 @@ export async function ladeBereiche(ctx: AppContext): Promise<Bereiche> {
     });
     portalSichtbar = n > 0;
   }
-  return { vertrieb: true, backoffice: Boolean(ctx.backofficeRolle) && flag, portal: portalSichtbar };
+  // Der Sortierer ist fuer JEDEN da - auch fuer den CRM-Nutzer, der nur mal
+  // schnell einen Stapel ordnen will. Er braucht deshalb keinen Schalter.
+  //
+  // Der Vertrieb dagegen hat seit dem 17.09.2026 einen: Wer BaufiDesk nur als
+  // Sortierer nutzt, soll das CRM gar nicht erst sehen. Vorgabe bleibt "an".
+  return {
+    vertrieb,
+    sortierer: true,
+    backoffice: Boolean(ctx.backofficeRolle) && flag,
+    portal: portalSichtbar,
+  };
 }
 
 /** Fuer Seiten, die nur den Kontext brauchen, aber nie umleiten sollen. */

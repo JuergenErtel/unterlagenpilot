@@ -133,6 +133,11 @@ export default async function CaseCockpitPage({
   });
   if (!caseRow) notFound();
 
+  // Ein Sortierstapel ist keine Akte im Vertriebssinn: kein Antragsteller,
+  // keine Leadphase, keine Roadmap. Er hat seine eigene Oberflaeche, und die
+  // Fallakte wuerde an ihm in ein Dutzend leerer Abschnitte laufen.
+  if (caseRow.akteArt === "sortierung") redirect(`/sortierer/${id}`);
+
   // Eine Backoffice-Akte hat keine Fallakte im Vertriebssinn (keine Leadphase,
   // keine Roadmap zum Abschluss): Ihr Kopf ist der Auftrag. Eine Fremdakte
   // (Cross-Org) zeigt diesem Kontext ihre Vertriebsdaten nicht. Beide: zum

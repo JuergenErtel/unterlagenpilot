@@ -16,3 +16,13 @@ import type { AkteArt } from "@/lib/domain/enums";
 export const nurVertrieb = { akteArt: "vertrieb" as AkteArt } as const;
 
 export const nurBackoffice = { akteArt: "backoffice" as AkteArt } as const;
+
+/**
+ * Sortierstapel des Unterlagensortierers.
+ *
+ * Sie sind der dritte Grund, warum `nurVertrieb` an jeder org-weiten
+ * Fallabfrage stehen muss: Wer zehn Stapel sortiert hat, haette sonst zehn
+ * zusaetzliche "Faelle" in Liste, Kennzahl, Tagesliste und Pipeline - alle
+ * ohne Antragsteller, ohne Phase, ohne Sinn.
+ */
+export const nurSortierung = { akteArt: "sortierung" as AkteArt } as const;

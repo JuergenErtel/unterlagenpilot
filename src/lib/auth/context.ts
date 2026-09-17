@@ -176,14 +176,30 @@ function auftragsFilterFuer(ctx: AppContext): Prisma.BackofficeAuftragWhereInput
 
 /**
  * Prisma-Where fuer Akten der EIGENEN Organisation: Vertriebsakten immer,
- * Backoffice-Akten nur mit Backoffice-Rolle (Bearbeiter: freier oder eigener
- * Auftrag). Fuer Vertriebsseiten, die eine Fremdakte nie zeigen duerfen.
+ * Sortierstapel immer, Backoffice-Akten nur mit Backoffice-Rolle (Bearbeiter:
+ * freier oder eigener Auftrag). Fuer Vertriebsseiten, die eine Fremdakte nie
+ * zeigen duerfen.
+ *
+ * Sortierstapel stehen hier, weil sie durch dieselbe Upload-Pipeline und
+ * dieselben Dokumentrouten laufen wie ein Fall - ohne diesen Eintrag koennte
+ * der Nutzer in seinen eigenen Stapel nichts hochladen. Sie sind wie Faelle
+ * organisationsweit sichtbar, nicht persoenlich: Alles andere in diesem
+ * Produkt ist es auch, und eine zweite Sichtbarkeitsregel waere die Art von
+ * Sonderfall, die spaeter jemand uebersieht.
+ *
+ * ACHTUNG: Wer eine VERTRIEBSSEITE baut, darf sich nicht darauf verlassen,
+ * dass hier nur Faelle herauskommen. Die Fallakte weist Sortierstapel
+ * ausdruecklich ab (siehe cases/[id]/page.tsx) - ein Stapel hat weder
+ * Leadphase noch Antragsteller noch Roadmap.
  */
 export function eigeneAkteWhere(ctx: AppContext): Prisma.CaseWhereInput {
   const backoffice: Prisma.CaseWhereInput[] = ctx.backofficeRolle
     ? [{ akteArt: "backoffice", backofficeAuftraege: { some: auftragsFilterFuer(ctx) } }]
     : [];
-  return { organizationId: ctx.organizationId, OR: [{ akteArt: "vertrieb" }, ...backoffice] };
+  return {
+    organizationId: ctx.organizationId,
+    OR: [{ akteArt: "vertrieb" }, { akteArt: "sortierung" }, ...backoffice],
+  };
 }
 
 /**

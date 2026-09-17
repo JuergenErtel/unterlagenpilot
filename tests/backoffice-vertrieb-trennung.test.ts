@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { BACKOFFICE_STATUS, AKTE_ARTEN, BACKOFFICE_ROLLEN } from "@/lib/domain/enums";
 
@@ -49,6 +49,29 @@ describe("Vertriebsabfragen tragen den Vertriebsfilter", () => {
 // ---------------------------------------------------------------------------
 
 const SQL_PFAD = "sql/2026-09-02-backoffice.sql";
+
+/**
+ * Alle AkteArt-Werte, die je gegen PROD angelegt wurden - aus dem
+ * urspruenglichen CREATE TYPE plus jedem spaeteren ALTER TYPE ... ADD VALUE,
+ * in der Reihenfolge der Skripte.
+ *
+ * Der Vergleich mit AKTE_ARTEN ist die einzige Stelle, die verhindert, dass
+ * der Code einen Enum-Wert kennt, den die Datenbank nie bekommen hat - das
+ * faellt sonst erst beim ersten Schreibversuch in PROD auf.
+ */
+function akteArtWerteAusAllenSkripten(): string[] {
+  const dateien = readdirSync(resolve(WURZEL, "sql")).filter((f) => f.endsWith(".sql")).sort();
+  const werte: string[] = [];
+  for (const datei of dateien) {
+    const inhalt = lies(`sql/${datei}`);
+    const erstellt = inhalt.match(/CREATE TYPE "AkteArt" AS ENUM \(([^)]*)\)/)?.[1];
+    if (erstellt) werte.push(...[...erstellt.matchAll(/'([^']+)'/g)].map((m) => m[1]!));
+    for (const m of inhalt.matchAll(/ALTER TYPE "AkteArt" ADD VALUE(?: IF NOT EXISTS)? '([^']+)'/g)) {
+      if (!werte.includes(m[1]!)) werte.push(m[1]!);
+    }
+  }
+  return werte;
+}
 
 /** Skript ohne Kommentarzeilen - der Kopf sagt selbst "kein DROP". */
 function sqlOhneKommentare(): string {
@@ -109,8 +132,13 @@ describe("SQL-Skript 2026-09-02-backoffice.sql", () => {
     const werte = [...status.matchAll(/'([^']+)'/g)].map((m) => m[1]);
     expect(werte).toEqual([...BACKOFFICE_STATUS]);
 
-    const akte = sql.match(/CREATE TYPE "AkteArt" AS ENUM \(([^)]*)\)/)?.[1] ?? "";
-    expect([...akte.matchAll(/'([^']+)'/g)].map((m) => m[1])).toEqual([...AKTE_ARTEN]);
+    // AkteArt waechst mit: Das Skript vom 02.09. legte den Typ mit zwei
+    // Werten an, "sortierung" kam am 17.09. per ALTER TYPE dazu. Geprueft
+    // wird deshalb nicht dieses eine Skript gegen den Code, sondern ALLE
+    // Skripte zusammen - sonst kennt der Code einen Wert, den die
+    // Produktivdatenbank nie bekommen hat.
+    const angelegt = [...akteArtWerteAusAllenSkripten()];
+    expect(angelegt).toEqual([...AKTE_ARTEN]);
 
     const rollen = sql.match(/CREATE TYPE "BackofficeRolle" AS ENUM \(([^)]*)\)/)?.[1] ?? "";
     expect([...rollen.matchAll(/'([^']+)'/g)].map((m) => m[1])).toEqual([...BACKOFFICE_ROLLEN]);

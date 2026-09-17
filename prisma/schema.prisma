@@ -318,6 +318,11 @@ enum AiJobType {
 enum AkteArt {
   vertrieb
   backoffice
+  /// Sortierstapel des Unterlagensortierers: Dokumente ohne Fall, die nur
+  /// geordnet und zurueckgegeben werden. Traegt keine Antragsteller, keine
+  /// Leadphase, kein Objekt - und darf in keiner Vertriebsliste, Kennzahl
+  /// oder Tagesliste auftauchen (Filter `nurVertrieb`).
+  sortierung
 }
 
 /// Stellung eines Nutzers im Backoffice seiner Organisation. Bewusst ein

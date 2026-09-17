@@ -36,12 +36,13 @@ import {
   Gauge,
   type LucideIcon,
 } from "lucide-react";
+import { TrichterIcon } from "@/components/ui/trichter-icon";
 import { cn } from "@/lib/utils";
 import {
   BEREICH_LABELS,
   BEREICH_START,
   LEERE_ZAEHLER,
-  bereichAusPfad,
+  sichtbarerBereich,
   verfuegbareBereiche,
   type BackofficeZaehler,
   type Bereich,
@@ -124,6 +125,24 @@ export const PLATTFORM_GRUPPE: NavGruppe = {
  * Konfiguration). Sichtbar nur mit Backoffice-Rolle UND Feature Flag - die
  * Regel steht in ladeBereiche (src/lib/backoffice/zugriff.ts).
  */
+/**
+ * Der Unterlagensortierer hat bewusst EINEN Eintrag.
+ *
+ * Er ist ein Werkzeug, kein Arbeitsbereich mit Unterabteilungen: hineinwerfen,
+ * sortieren lassen, herausholen. Eine Navigation mit Gruppen wuerde eine Tiefe
+ * vortaeuschen, die es nicht gibt - und fuer den Nutzer, der NUR den Sortierer
+ * hat, waere sie das Erste, was er sieht.
+ */
+export const SORTIERER_GRUPPEN: NavGruppe[] = [
+  {
+    label: "Sortieren",
+    items: [
+      { href: "/sortierer", label: "Meine Stapel", icon: TrichterIcon as unknown as LucideIcon },
+      { href: "/eingang", label: "Posteingang", icon: Inbox, zaehler: "posteingang" },
+    ],
+  },
+];
+
 export const BACKOFFICE_GRUPPEN: NavGruppe[] = [
   {
     label: "Übersicht",
@@ -197,6 +216,7 @@ export function navGruppen(platformAdmin: boolean): NavGruppe[] {
  * Betreiber zu Hause. Backoffice und Portal bleiben frei davon.
  */
 export function navGruppenFuer(bereich: Bereich, platformAdmin: boolean): NavGruppe[] {
+  if (bereich === "sortierer") return SORTIERER_GRUPPEN;
   if (bereich === "backoffice") return BACKOFFICE_GRUPPEN;
   if (bereich === "portal") return PORTAL_GRUPPEN;
   return navGruppen(platformAdmin);
@@ -211,10 +231,13 @@ function istAktiv(pathname: string, href: string): boolean {
   return pathname === href || (!NUR_EXAKT.has(href) && pathname.startsWith(href + "/"));
 }
 
-const NUR_VERTRIEB: Bereiche = { vertrieb: true, backoffice: false, portal: false };
+const NUR_VERTRIEB: Bereiche = { vertrieb: true, sortierer: false, backoffice: false, portal: false };
 
 const BEREICH_ICON: Record<Bereich, LucideIcon> = {
   vertrieb: KanbanSquare,
+  // Der Trichter ist selbst gezeichnet (siehe trichter-icon.tsx) und traegt
+  // dieselbe Schnittstelle wie ein Lucide-Symbol - className, sonst nichts.
+  sortierer: TrichterIcon as unknown as LucideIcon,
   backoffice: ClipboardCheck,
   portal: Handshake,
 };
@@ -238,8 +261,10 @@ export function SidebarNav({
   // Wer einen Backoffice-Link oeffnet, steht im Backoffice - auch wenn er
   // zuletzt im Vertrieb war. Ein Bereich, den der Nutzer nicht hat, faellt
   // auf den Vertrieb zurueck (die Seite selbst antwortet dann mit 404).
-  const rohBereich = bereichAusPfad(pathname);
-  const bereich: Bereich = bereiche[rohBereich] ? rohBereich : "vertrieb";
+  // Eine Regel fuer Navigation und Kopfzeile; faellt auf den ERSTEN Bereich
+  // zurueck, den dieser Nutzer hat - nicht mehr fest auf den Vertrieb. Wer
+  // BaufiDesk nur als Sortierer nutzt, hat keinen.
+  const bereich: Bereich = sichtbarerBereich(pathname, bereiche);
   const gruppen = navGruppenFuer(bereich, platformAdmin);
   const umschalter = verfuegbareBereiche(bereiche);
 

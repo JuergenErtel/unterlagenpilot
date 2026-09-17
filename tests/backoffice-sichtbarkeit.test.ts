@@ -270,7 +270,10 @@ describe("Backoffice-Enums und Labels", () => {
     }
   });
 
-  it("kennt genau die zwei Aktenarten", () => {
-    expect([...AKTE_ARTEN]).toEqual(["vertrieb", "backoffice"]);
+  it("kennt genau die drei Aktenarten", () => {
+    // Die Reihenfolge ist die des Prisma-Enums und damit die des
+    // Datenbank-Typs - "sortierung" kam am 17.09.2026 per ALTER TYPE hinten
+    // dazu (Unterlagensortierer).
+    expect([...AKTE_ARTEN]).toEqual(["vertrieb", "backoffice", "sortierung"]);
   });
 });

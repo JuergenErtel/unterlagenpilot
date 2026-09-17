@@ -1,0 +1,14 @@
+-- Unterlagensortierer: dritte Aktenart.
+--
+-- Ein Sortierstapel ist eine Akte, die nur Dokumente traegt - keine
+-- Antragsteller, keine Leadphase, kein Objekt. Er erbt damit Speicher,
+-- Upload-Pipeline, Buendelung und ZIP-Export unveraendert, und der bestehende
+-- Filter `nurVertrieb` haelt ihn aus jeder Vertriebsliste heraus.
+--
+-- ACHTUNG: Das Skript laeuft in EINER Transaktion (scripts/sql-ausfuehren.ts).
+-- Ein mit ALTER TYPE ... ADD VALUE angelegter Enum-Wert darf in derselben
+-- Transaktion noch nicht BENUTZT werden. Deshalb steht hier ausschliesslich
+-- das Anlegen - kein UPDATE, kein INSERT, kein DEFAULT auf den neuen Wert.
+--
+-- Keine Semikolons in Kommentarzeilen: Der Zerleger schneidet auch dort.
+ALTER TYPE "AkteArt" ADD VALUE IF NOT EXISTS 'sortierung';
