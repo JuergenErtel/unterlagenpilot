@@ -11,10 +11,46 @@ des Kaufvertrags — sie kommen als **ein** PDF mit vier Seiten zurück.
 
 ## Warum das ein eigenes Produktgebiet ist
 
-Der Sortierer steht bewusst **neben** der Fallakte, nicht darin: Er soll
-funktionieren, wenn der Berater nur schnell etwas ordnen will — bevor klar ist,
-ob daraus überhaupt ein Fall wird. Jede Pflicht zur Kundenanlage würde genau
-den Fall zerstören, für den er da ist.
+Der Sortierer ist eine **eigenständige Nutzungsart**, kein Zusatz zur Fallakte.
+Er richtet sich an zwei Gruppen, und beide erklären den Zuschnitt:
+
+1. **Wer BaufiDesk gar nicht als CRM nutzt.** Für diesen Nutzer IST der
+   Sortierer das Produkt. Er darf nie eine Fallakte, eine Pipeline oder eine
+   Tagesliste zu sehen bekommen, um an sein Werkzeug zu kommen.
+2. **Wer es sonst als CRM nutzt, aber in diesem einen Fall nicht.** Schnell
+   einen Stapel ordnen, ohne dass daraus ein Vorgang wird.
+
+Jede Pflicht zur Kundenanlage würde genau den Fall zerstören, für den er da ist.
+
+### Folge: „Vertrieb immer" fällt
+
+`ladeBereiche()` gibt heute `vertrieb: true` fest verdrahtet zurück, und
+`bereichAusPfad()` fällt bei einem unbekannten Bereich auf den Vertrieb
+zurück. Für einen Nutzer, der nur den Sortierer hat, ist beides falsch — er
+landete auf einer Seite, die es für ihn nicht gibt.
+
+- `vertrieb` wird abhängig von einem Organisationsschalter (`vertriebAktiv`,
+  Vorgabe `true`) — wie `istBackofficeAktiv` es schon vormacht.
+- `sortierer` ist für **jeden** sichtbar: Auch der CRM-Nutzer will ihn
+  gelegentlich.
+- Der Rückfall geht auf den **ersten verfügbaren** Bereich, nicht auf den
+  Vertrieb. Ein Nutzer ohne Vertrieb startet auf `/sortierer`.
+
+### Optisch eine eigene Nutzungsart
+
+- **Zeichen: ein Trichter.** Lucide 0.468 kennt kein `Funnel` (`Filter` ist
+  zwar dieselbe Form, liest sich in einer Oberfläche aber als „Liste filtern").
+  Deshalb ein eigener `TrichterIcon` als kleines Inline-SVG — es ist das
+  Produktzeichen und soll genau stimmen, statt an einem Abhängigkeitssprung
+  zu hängen.
+- **Eigener Akzent:** Türkis (`--ai`), die Farbe, die im Haus für Maschinen-
+  arbeit steht. Der Sortierer IST das KI-Werkzeug — Vertrieb und Backoffice
+  behalten Tinte.
+- **Die Startseite ist der Trichter selbst**, keine Tabelle: eine große
+  Ablagefläche in der Mitte, darunter die laufenden Stapel. Wer hier ankommt,
+  will etwas hineinwerfen.
+- **Auf der Landingpage** kommt ein dritter Weg neben „KI-Assistent" und
+  „Backoffice" dazu.
 
 ## Entscheidungen
 
@@ -112,6 +148,9 @@ muss möglich sein, ohne alles neu zu sortieren.
 |---|---|
 | `AkteArt.sortierung` + `nurSortierung` | DDL gegen PROD, Filter, Vertragstest |
 | Bereich „Sortierer" in `bereich.ts` + Navigation | klein, Muster vorhanden |
+| `Organization.vertriebAktiv` + Rückfall auf den ersten Bereich | DDL, `ladeBereiche`, `bereichAusPfad` |
+| `TrichterIcon` (Inline-SVG) + Türkis-Akzent | klein |
+| Dritter Weg auf der Landingpage | klein |
 | `/sortierer` (Liste) und `/sortierer/[id]` (Trichter, Fragen, Ergebnis) | neu |
 | `lib/sortierer/fragen.ts` — welche Frage als nächste | neu, rein, testbar |
 | Zuordnung Stapel → Fall | nutzt vorhandene Bausteine |
@@ -132,6 +171,12 @@ muss möglich sein, ohne alles neu zu sortieren.
 einmal sind mehr, als sie bisher gesehen hat; die KI-Drossel (4 parallel,
 1,3 s Abstand) greift, aber die Laufzeit steigt. Erste Messung mit einem echten
 30-Bilder-Stapel, bevor das Fenster fest verdrahtet wird.
+
+**Ein Nutzer ohne Vertrieb ist ein neuer Zustand der ganzen Oberfläche.**
+Kopfzeile, Umschalter, Startseite, Weiterleitungen nach dem Login und jedes
+`redirect("/dashboard")` gehen heute davon aus, dass es den Vertrieb gibt.
+Vor dem Deploy mit einem Testkonto ohne Vertrieb durchklicken — nicht nur
+lesen.
 
 **„Sortierung" ist ein vierter Zustand in einem Typsystem, das an neun Stellen
 nicht erzwingt, dass man ihn mitzieht** (vgl. Erfahrung beim Dokumenttyp
