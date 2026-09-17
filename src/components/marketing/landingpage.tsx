@@ -135,6 +135,7 @@ export function Landingpage() {
     <div className="bg-canvas text-foreground">
       <Kopfzeile />
       <Hero />
+      <Sortierer />
       <ZweiWege />
       <Vergleich />
       <SoArbeitetDieKi />
@@ -150,6 +151,9 @@ function Kopfzeile() {
     <header className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-5">
       <Logo className="h-8 w-auto" />
       <nav className="flex items-center gap-5 text-sm">
+        <a href="#sortierer" className="hidden text-muted-foreground hover:text-foreground sm:inline">
+          Sortierer
+        </a>
         <a href="#zwei-wege" className="hidden text-muted-foreground hover:text-foreground sm:inline">
           Zwei Wege
         </a>
@@ -185,10 +189,10 @@ function Hero() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <a
-            href="#zwei-wege"
+            href="#sortierer"
             className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/92"
           >
-            Die zwei Wege ansehen
+            Ohne Anmeldung verstehen: der Sortierer
           </a>
           <a
             href={mailto("Gespräch zu BaufiDesk")}
@@ -216,6 +220,80 @@ function Hero() {
         <p className="mt-4 text-center text-xs text-primary-foreground/70 lg:absolute lg:-bottom-8 lg:left-0 lg:right-0">
           Beispielakte, wie sie im Programm aussieht
         </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Der Unterlagensortierer - der Einstieg.
+ *
+ * Er steht direkt hinter dem Hero und VOR den zwei Wegen, weil er die
+ * niedrigste Huerde im ganzen Produkt ist: kein Kunde, keine Akte, kein
+ * Vertrag. Wer BaufiDesk ausprobiert, tut es hier - und versteht in drei
+ * Saetzen, was die Maschine kann, bevor er ueber Betriebsmodelle nachdenkt.
+ *
+ * Bewusst keine dritte Spalte in "Zwei Wege": Das dort ist die Frage, WER die
+ * Arbeit macht. Der Sortierer ist eine andere Achse - ein Werkzeug, kein
+ * Betriebsmodell. Zusammengelegt wuerde beides unscharf.
+ */
+function Sortierer() {
+  const schritte = [
+    {
+      titel: "Hineinwerfen",
+      text: "Dreißig Fotos vom Kunden, durcheinander, quer fotografiert. Kein Formular, keine Kundenanlage.",
+    },
+    {
+      titel: "Sortieren lassen",
+      text: "BaufiDesk erkennt jede Seite und findet, was zusammengehört. Vier Fotos eines Kaufvertrags werden ein PDF mit vier Seiten – auf A4 gerade gerückt.",
+    },
+    {
+      titel: "Zurückbekommen",
+      text: "Als benannte PDFs zum Herunterladen. Wo die Maschine unsicher ist, fragt sie vorher – eine Frage nach der anderen.",
+    },
+  ];
+
+  return (
+    <section id="sortierer" className="scroll-mt-8 border-t bg-[hsl(var(--surface-sunken))]">
+      <div className="mx-auto max-w-6xl px-6 py-20">
+        <p className="text-sm font-medium text-ai">Der Einstieg</p>
+        <h2 className="display mt-3 max-w-2xl text-[1.875rem] leading-tight sm:text-[2.25rem]">
+          Der Unterlagensortierer: aus einem Stapel Fotos werden geordnete PDFs.
+        </h2>
+        <p className="mt-5 max-w-2xl text-[1.0625rem] leading-relaxed text-muted-foreground">
+          Das kleinste Stück BaufiDesk – und das, an dem sich der Rest messen lassen muss.
+          Ohne Kunde, ohne Akte, ohne CRM. Wer nur das braucht, nutzt nur das.
+        </p>
+
+        <ol className="mt-10 grid gap-4 sm:grid-cols-3">
+          {schritte.map((s, i) => (
+            <li key={s.titel} className="rounded-lg border bg-card p-5">
+              <span className="font-mono text-xs text-ai tabular">{String(i + 1).padStart(2, "0")}</span>
+              <h3 className="mt-2 text-base font-medium">{s.titel}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="mt-8 max-w-2xl text-sm text-muted-foreground">
+          Die Unterlagen kommen per WhatsApp aufs Handy oder per Mail ins Postfach? Beide Wege
+          führen direkt hinein – herunterladen und wieder hochladen entfällt.
+        </p>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a
+            href={mailto("Unterlagensortierer ausprobieren")}
+            className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/92"
+          >
+            Sortierer ausprobieren
+          </a>
+          <a
+            href="#zwei-wege"
+            className="inline-flex h-11 items-center rounded-md border border-input bg-card px-6 text-sm font-medium hover:border-foreground/25"
+          >
+            Und was kommt danach?
+          </a>
+        </div>
       </div>
     </section>
   );

@@ -3,6 +3,9 @@ import { Inbox, Smartphone } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireContext, eigeneAkteWhere } from "@/lib/auth/context";
 import { listeEingang } from "@/lib/eingang/service";
+import { listeStapel } from "@/lib/sortierer/service";
+import { nurSortierung } from "@/lib/cases/aktenart";
+import { ladeBereiche } from "@/lib/backoffice/zugriff";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,11 +21,15 @@ export const maxDuration = 300;
 export default async function EingangPage() {
   const ctx = await requireContext();
 
-  const [dateien, faelle] = await Promise.all([
+  const [dateien, faelle, stapel, bereiche] = await Promise.all([
     listeEingang(ctx.organizationId),
     prisma.case.findMany({
       where: {
         ...eigeneAkteWhere(ctx),
+        // Sortierstapel stehen in einer EIGENEN Gruppe (siehe unten). Ohne
+        // diesen Ausschluss stuenden sie unbeschriftet zwischen den Faellen -
+        // seit sie durch eigeneAkteWhere kommen, waere das still passiert.
+        NOT: { ...nurSortierung },
         status: { notIn: ["abgeschlossen", "archiviert"] },
       },
       orderBy: { updatedAt: "desc" },
@@ -33,6 +40,8 @@ export default async function EingangPage() {
         applicants: { orderBy: { position: "asc" }, take: 1, select: { vorname: true, nachname: true } },
       },
     }),
+    listeStapel(ctx.organizationId),
+    ladeBereiche(ctx),
   ]);
 
   const auswahl = faelle.map((f) => {
@@ -40,6 +49,7 @@ export default async function EingangPage() {
     const name = [a?.vorname, a?.nachname].filter(Boolean).join(" ");
     return { id: f.id, bezeichnung: name ? `${f.caseNumber} · ${name}` : f.caseNumber };
   });
+  const stapelAuswahl = stapel.map((s) => ({ id: s.id, bezeichnung: `${s.nummer} · ${s.name}` }));
 
   const anzeige = dateien.map((d) => ({
     id: d.id,
@@ -89,7 +99,10 @@ export default async function EingangPage() {
         </Card>
       ) : (
         <>
-          {auswahl.length === 0 && (
+          {/* Der Hinweis gilt nur noch, wenn es WIRKLICH kein Ziel gibt.
+              Solange ein neuer Sortierstapel moeglich ist, gibt es immer eines -
+              und fuer den Sortierer-Nutzer ohne Faelle ist genau das der Weg. */}
+          {auswahl.length === 0 && stapelAuswahl.length === 0 && !bereiche.sortierer && (
             <Card className="border-warning/40 bg-warning/5">
               <CardContent className="p-4 text-sm">
                 Es gibt noch keinen offenen Fall, dem du etwas zuordnen könntest.
@@ -97,7 +110,12 @@ export default async function EingangPage() {
               </CardContent>
             </Card>
           )}
-          <PosteingangListe dateien={anzeige} faelle={auswahl} />
+          <PosteingangListe
+            dateien={anzeige}
+            faelle={auswahl}
+            stapel={stapelAuswahl}
+            neuerStapelMoeglich={bereiche.sortierer}
+          />
         </>
       )}
     </div>

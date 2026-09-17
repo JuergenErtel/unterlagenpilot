@@ -3,7 +3,12 @@
 import { useState, useTransition } from "react";
 import { FileText, Image as BildIcon, Loader2, Trash2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ordneEingangZuAction, verwirfEingangAction } from "@/lib/actions/eingang";
+import { useRouter } from "next/navigation";
+import {
+  ordneEingangZuAction,
+  ordneEingangInNeuenStapelAction,
+  verwirfEingangAction,
+} from "@/lib/actions/eingang";
 
 export interface EingangAnzeige {
   id: string;
@@ -32,20 +37,46 @@ export interface FallAuswahl {
 export function PosteingangListe({
   dateien,
   faelle,
+  stapel,
+  neuerStapelMoeglich,
 }: {
   dateien: EingangAnzeige[];
   faelle: FallAuswahl[];
+  /** Offene Sortierstapel - eigene Gruppe, damit sie nicht wie Faelle aussehen. */
+  stapel: FallAuswahl[];
+  /** Darf der Nutzer einen frischen Stapel anlegen? (Sortierer-Bereich) */
+  neuerStapelMoeglich: boolean;
 }) {
   return (
     <div className="space-y-2">
       {dateien.map((d) => (
-        <Zeile key={d.id} datei={d} faelle={faelle} />
+        <Zeile
+          key={d.id}
+          datei={d}
+          faelle={faelle}
+          stapel={stapel}
+          neuerStapelMoeglich={neuerStapelMoeglich}
+        />
       ))}
     </div>
   );
 }
 
-function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[] }) {
+/** Kennung fuer "neuer Sortierstapel" - kein echtes Ziel, sondern ein Auftrag. */
+const NEUER_STAPEL = "__neuer_stapel__";
+
+function Zeile({
+  datei,
+  faelle,
+  stapel,
+  neuerStapelMoeglich,
+}: {
+  datei: EingangAnzeige;
+  faelle: FallAuswahl[];
+  stapel: FallAuswahl[];
+  neuerStapelMoeglich: boolean;
+}) {
+  const router = useRouter();
   const [caseId, setCaseId] = useState("");
   const [fehler, setFehler] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -80,12 +111,29 @@ function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[]
             setFehler(null);
           }}
         >
-          <option value="">Fall auswählen …</option>
-          {faelle.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.bezeichnung}
-            </option>
-          ))}
+          <option value="">Wohin damit? …</option>
+          {/* Getrennte Gruppen, nicht eine Liste: Ein Fall und ein
+              Sortierstapel sind grundverschiedene Ziele. Untereinander
+              stuenden sie nur als Nummern da, und der Nutzer greift daneben. */}
+          {neuerStapelMoeglich && (
+            <optgroup label="Sortieren">
+              <option value={NEUER_STAPEL}>＋ In einen neuen Sortierstapel</option>
+              {stapel.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.bezeichnung}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {faelle.length > 0 && (
+            <optgroup label="Fälle">
+              {faelle.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.bezeichnung}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
 
         <Button
@@ -93,6 +141,18 @@ function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[]
           disabled={pending || !caseId}
           onClick={() =>
             startTransition(async () => {
+              if (caseId === NEUER_STAPEL) {
+                const r = await ordneEingangInNeuenStapelAction(datei.id);
+                if (!r.ok) {
+                  setFehler(r.grund ?? "Das hat nicht geklappt.");
+                  return;
+                }
+                // Direkt in den frischen Stapel: Wer "neuer Stapel" waehlt,
+                // will dort weiterarbeiten - ihn danach im Posteingang stehen
+                // zu lassen, waere ein Klick ins Nichts.
+                if (r.stapelId) router.push(`/sortierer/${r.stapelId}`);
+                return;
+              }
               const r = await ordneEingangZuAction(datei.id, caseId);
               if (!r.ok) setFehler(r.grund ?? "Das hat nicht geklappt.");
             })
@@ -103,7 +163,7 @@ function Zeile({ datei, faelle }: { datei: EingangAnzeige; faelle: FallAuswahl[]
           ) : (
             <ArrowRight className="mr-1.5 h-3.5 w-3.5" aria-hidden />
           )}
-          In die Akte
+          Übernehmen
         </Button>
 
         <Button

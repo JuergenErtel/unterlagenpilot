@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { CaseNav } from "@/components/case/case-nav";
 import { BackofficeAktenLeiste } from "@/components/case/backoffice-akten-leiste";
 import { getCurrentContext } from "@/lib/auth/context";
@@ -54,6 +55,16 @@ export default async function CaseLayout({
         },
       })
     : null;
+
+  // Ein Sortierstapel ist keine Fallakte. Er kommt seit dem 17.09.2026 durch
+  // eigeneAkteWhere (sonst koennte niemand in den eigenen Stapel hochladen),
+  // und damit wuerden ALLE Unterseiten der Fallakte fuer ihn rendern -
+  // Stammdaten, Nachrichten, Einkommen, Unterlagen-Arbeitsplatz. Der Nutzer
+  // saehe ein Dutzend leerer Abschnitte und haelt das Produkt fuer kaputt.
+  //
+  // Hier im Layout abgefangen und nicht in jeder Unterseite einzeln: Es gibt
+  // sechs davon, und die siebte vergisst jemand.
+  if (akte?.akteArt === "sortierung") redirect(`/sortierer/${id}`);
 
   const fremd = ctx != null && akte != null && akte.organizationId !== ctx.organizationId;
   const auftrag = akte?.backofficeAuftraege[0] ?? null;

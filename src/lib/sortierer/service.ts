@@ -121,7 +121,11 @@ export function stapelName(typen: Array<DocumentType | null>, anzahl: number): s
   }
   const erstes = DOCUMENT_TYPE_LABELS[erkannt[0]!] ?? "Unterlage";
   const weitere = erkannt.length - 1;
-  return weitere === 0 ? erstes : `${erstes} + ${weitere} ${weitere === 1 ? "weitere" : "weitere"}`;
+  if (weitere === 0) return erstes;
+  // "1 weiteres" (Dokument), ab zwei "weitere" - der Fehler faellt sonst
+  // genau dem Nutzer auf, der zwei verschiedene Unterlagen hineinwirft, also
+  // beim zweiten Versuch.
+  return `${erstes} + ${weitere} ${weitere === 1 ? "weiteres" : "weitere"}`;
 }
 
 /** Tage bis zur automatischen Loeschung, nie negativ. */

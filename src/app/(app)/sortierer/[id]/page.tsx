@@ -7,6 +7,9 @@ import { ladeBereiche } from "@/lib/backoffice/zugriff";
 import { nurSortierung, nurVertrieb } from "@/lib/cases/aktenart";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { countProcessingDocuments } from "@/lib/documents/processing";
+import { zaehleEingang } from "@/lib/eingang/service";
+import { listGeraeteTokens } from "@/lib/security/geraete-token";
+import { mailEingangAdresse } from "@/lib/eingang/mail-adresse";
 import { naechsteFrage, offeneFragen, type SortierDokument, type SortierBuendel } from "@/lib/sortierer/fragen";
 import { stapelName, verbleibendeTage, STAPEL_LEBENSDAUER_TAGE } from "@/lib/sortierer/service";
 import type { DocumentType } from "@/lib/domain/enums";
@@ -15,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { StapelFragen } from "@/components/sortierer/stapel-fragen";
 import { StapelErgebnis } from "@/components/sortierer/stapel-ergebnis";
 import { BrokerUploadForm } from "@/components/case/broker-upload-form";
+import { AndereWege } from "@/components/eingang/andere-wege";
 import { DocumentsProcessing } from "@/components/case/documents-processing";
 
 export const dynamic = "force-dynamic";
@@ -112,6 +116,11 @@ export default async function StapelPage({ params }: { params: Promise<{ id: str
   const sortiertLaeuft = laeuftNoch > 0 || stapel.buendelStatus === "laeuft";
   const tageUebrig = verbleibendeTage(stapel.createdAt);
 
+  const [geraete, wartend] = await Promise.all([
+    listGeraeteTokens(ctx.userId),
+    zaehleEingang(ctx.organizationId),
+  ]);
+
   // Fuer "einem Fall zuordnen": nur eigene Vertriebsakten, die noch offen sind.
   const faelle = await prisma.case.findMany({
     where: {
@@ -178,6 +187,12 @@ export default async function StapelPage({ params }: { params: Promise<{ id: str
               Namenserkennung unantastbar. */}
           <BrokerUploadForm caseId={id} maxMb={maxUploadMb()} applicants={[]} />
         </div>
+        <AndereWege
+          geraetVerbunden={geraete.length > 0}
+          wartendImPosteingang={wartend}
+          mailAdresse={mailEingangAdresse()}
+          titel="Oder liegen sie auf dem Handy?"
+        />
         <p className="t-hilfe flex items-center gap-1.5 text-xs">
           <Clock className="h-3.5 w-3.5" aria-hidden />
           Stapel werden nach {STAPEL_LEBENSDAUER_TAGE} Tagen automatisch gelöscht – samt Dateien.

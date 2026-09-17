@@ -4,6 +4,10 @@ import { FileStack, Clock, ArrowRight } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { ladeBereiche } from "@/lib/backoffice/zugriff";
 import { listeStapel, STAPEL_LEBENSDAUER_TAGE } from "@/lib/sortierer/service";
+import { zaehleEingang } from "@/lib/eingang/service";
+import { listGeraeteTokens } from "@/lib/security/geraete-token";
+import { mailEingangAdresse } from "@/lib/eingang/mail-adresse";
+import { AndereWege } from "@/components/eingang/andere-wege";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { PageHeader } from "@/components/ui/page-header";
 import { TrichterIcon } from "@/components/ui/trichter-icon";
@@ -27,7 +31,11 @@ export default async function SortiererPage() {
   const bereiche = await ladeBereiche(ctx);
   if (!bereiche.sortierer) notFound();
 
-  const stapel = await listeStapel(ctx.organizationId);
+  const [stapel, geraete, wartend] = await Promise.all([
+    listeStapel(ctx.organizationId),
+    listGeraeteTokens(ctx.userId),
+    zaehleEingang(ctx.organizationId),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -39,21 +47,62 @@ export default async function SortiererPage() {
 
       <TrichterAblage maxMb={maxUploadMb()} />
 
+      {/* Der Trichter nimmt Dateien vom Rechner. Die Unterlagen liegen aber
+          meist woanders - auf dem Handy in WhatsApp oder im Postfach. Wer
+          diese Wege hier nicht findet, laedt herunter und wieder hoch. */}
+      <AndereWege
+        geraetVerbunden={geraete.length > 0}
+        wartendImPosteingang={wartend}
+        mailAdresse={mailEingangAdresse()}
+        titel="Oder liegen sie auf dem Handy?"
+      />
+
       <section>
         <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 className="eyebrow">Deine Stapel</h2>
+          <h2 className="eyebrow">{stapel.length === 0 ? "Erste Schritte" : "Deine Stapel"}</h2>
           {stapel.length > 0 && (
             <span className="font-mono text-xs text-muted-foreground tabular">{stapel.length}</span>
           )}
         </div>
 
         {stapel.length === 0 ? (
-          <div className="flaeche-ablage flex items-center gap-3 rounded-md p-4 text-sm text-muted-foreground">
-            <TrichterIcon className="h-5 w-5 shrink-0" />
-            <span>
-              Noch kein Stapel. Sobald du Unterlagen hineinwirfst, stehen sie hier – und
-              bleiben {STAPEL_LEBENSDAUER_TAGE} Tage, bevor sie automatisch verschwinden.
-            </span>
+          /* Der erste Bildschirm entscheidet, ob jemand das Werkzeug versteht.
+             Deshalb hier nicht nur "noch nichts da", sondern die drei Schritte -
+             und zwar erst, solange es NICHTS zu sehen gibt. Ab dem ersten
+             Stapel waere die Erklaerung nur noch im Weg. */
+          <div className="flaeche-ablage space-y-4 rounded-md p-5">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <TrichterIcon className="h-5 w-5 shrink-0 text-ai" />
+              So läuft es
+            </div>
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  t: "Hineinwerfen",
+                  b: "Fotos, Scans, PDFs – durcheinander. Kein Kunde, keine Akte.",
+                },
+                {
+                  t: "Sortieren lassen",
+                  b: "BaufiDesk findet, was zusammengehört. Vier Fotos eines Vertrags werden ein PDF mit vier Seiten.",
+                },
+                {
+                  t: "Zurückbekommen",
+                  b: "Als ZIP herunterladen – oder einem Fall zuordnen, wenn du einen hast.",
+                },
+              ].map((s, i) => (
+                <li key={s.t}>
+                  <span className="font-mono text-xs text-ai tabular">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div className="mt-1 text-sm font-medium">{s.t}</div>
+                  <p className="t-hilfe mt-0.5 text-xs">{s.b}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="t-hilfe text-xs">
+              Wo die Erkennung unsicher ist, fragt BaufiDesk vorher – eine Frage nach der
+              anderen. Stapel verschwinden nach {STAPEL_LEBENSDAUER_TAGE} Tagen von selbst.
+            </p>
           </div>
         ) : (
           <ul className="space-y-2">
