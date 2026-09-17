@@ -30,8 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CaseTabs } from "@/components/case/case-tabs";
+import { FallBereich, Werkzeugreihe } from "@/components/case/fall-bereich";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { Pruefleiste, type PruefSegment } from "@/components/ui/pruefleiste";
@@ -99,6 +98,21 @@ export default async function CaseCockpitPage({
 }) {
   const { id } = await params;
   const { tab } = await searchParams;
+  // Welcher Bereich aufgeklappt ankommt.
+  //
+  // Die alten Reiter-Adressen muessen weiter funktionieren: Der
+  // Unterlagen-Arbeitsplatz verlinkt auf `?tab=dokumente#broker-upload`, die
+  // Roadmap ebenso. Ein toter Link waere hier besonders teuer - er fuehrt auf
+  // eine Seite, die aussieht, als fehle das Formular.
+  const offenerBereich =
+    ({
+      fehlt: "dokumente",
+      dokumente: "dokumente",
+      plausibilitaet: "dokumente",
+      uebersicht: "beratung",
+      beratung: "beratung",
+      einreichung: "einreichung",
+    } as Record<string, string>)[tab ?? ""] ?? "dokumente";
   const ctx = await requireContext();
 
   const caseRow = await prisma.case.findFirst({
@@ -650,24 +664,40 @@ export default async function CaseCockpitPage({
       })()}
 
       {/* Hauptbereich: Roadmap + Tabs | Sidebar */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {/* Der Weg steht ab lg im Fallbild oben; hier bleibt er fuer schmale
-              Bildschirme als Liste. */}
-          <Card className="lg:hidden">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Weg zur Einreichung</CardTitle></CardHeader>
-            <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
-          </Card>
+      {/* Fuehrung zuerst, Nachschlagen danach.
 
-          <CaseTabs defaultValue="fehlt" tabParam={tab}>
-            <TabsList className="flex-wrap">
-              <TabsTrigger value="fehlt">Was fehlt noch? ({cockpit.counts.docsMissing})</TabsTrigger>
-              <TabsTrigger value="dokumente">Dokumente ({documents.length})</TabsTrigger>
-              <TabsTrigger value="plausibilitaet">Plausibilität ({cockpit.counts.warnings})</TabsTrigger>
-              <TabsTrigger value="uebersicht">Übersicht</TabsTrigger>
-            </TabsList>
+          Die Prioritaetsleiter zeigt per Bauart genau EINEN naechsten Schritt
+          (siehe cockpit.ts). Sie steht deshalb ueber den drei Bereichen und
+          nicht in einem davon: Wer gefuehrt arbeiten will, soll nichts
+          aufklappen muessen. */}
+      <NextBestAction actions={cockpit.nextActions} />
 
-            <TabsContent value="fehlt">
+      {/* Der Weg steht ab lg im Fallbild oben; hier bleibt er fuer schmale
+          Bildschirme als Liste. */}
+      <Card className="lg:hidden">
+        <CardHeader className="pb-2"><CardTitle className="text-base">Weg zur Einreichung</CardTitle></CardHeader>
+        <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
+      </Card>
+
+      {/* Drei Bereiche statt vier Reitern plus vierzehn Werkzeugen in einer
+          Seitenspalte. Die alte Aufteilung verlangte vom Berater zu wissen, OB
+          etwas ein Reiter oder ein Werkzeug ist, bevor er es suchen konnte.
+          Jetzt ist die Frage: Womit arbeite ich gerade? */}
+      <div className="space-y-3">
+        <FallBereich
+          id="dokumente"
+          titel="Dokumente"
+          icon={FolderArchive}
+          beschreibung="Was fehlt, was da ist, hochladen, prüfen lassen"
+          marke={
+            cockpit.counts.docsMissing > 0
+              ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
+              : cockpit.counts.pruefbereit > 0
+                ? { text: `${cockpit.counts.pruefbereit} zu prüfen`, ton: "aktion" as const }
+                : { text: "vollständig", ton: "ruhe" as const }
+          }
+          offen={offenerBereich === "dokumente"}
+        >
               <div className="space-y-4">
                 {/* Erst die gefundenen Lücken sichten, dann nachfordern –
                     sonst geht eine Nachforderung raus, der die Hälfte fehlt. */}
@@ -683,9 +713,7 @@ export default async function CaseCockpitPage({
                 </Card>
                 <Card><CardContent className="pt-6"><MissingDocumentsPanel groups={cockpit.missingGroups} nachforderungHref={`/cases/${id}/messages`} /></CardContent></Card>
               </div>
-            </TabsContent>
 
-            <TabsContent value="dokumente">
               <div className="space-y-4">
                 {/* Der Weg zum Arbeitsplatz gehoert VOR die Tabelle: Wer hier
                     ankommt, will meist pruefen und zuordnen - und das kann die
@@ -914,30 +942,90 @@ export default async function CaseCockpitPage({
                   </CardContent>
                 </Card>
               </div>
-            </TabsContent>
 
-            <TabsContent value="plausibilitaet">
-              <Card>
-                <CardContent className="space-y-2 pt-6">
-                  {plausibility.length === 0 && <p className="text-sm text-muted-foreground">Keine Auffälligkeiten erkannt.</p>}
-                  {plausibility.map((p) => (
-                    <div key={p.id} className={`flex items-start justify-between gap-4 rounded-lg border p-3 ${TONE[p.status === "kritisch" ? "blocker" : p.status === "warnung" ? "review" : "ready"].border}`}>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <SeverityBadge severity={p.status as Severity} />
-                          <span className="text-sm font-medium">{p.category}</span>
+          {/* Die KI-Prüfung ist die eine Aktion, die sichtbar bleiben muss –
+              sie ist der Motor des Falls. Alles andere (13 gleich graue
+              Knöpfe) steht eingeklappt unter "Werkzeuge": Eine Seitenspalte
+              mit 16 Aktionsflächen führt nicht mehr, sie bietet nur an. */}
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">KI-Prüfung</CardTitle></CardHeader>
+            <CardContent className="grid gap-2">
+              {aiCheckLocked ? (
+                <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                  Die KI-Prüfung ist gesperrt, weil der Fall bereits{" "}
+                  {CASE_STATUS_LABELS[caseRow.status as CaseStatus].toLowerCase()} ist.
+                </div>
+              ) : aiCheckRunning ? (
+                <AiCheckRunning done={aiCheckDone} total={documents.length} />
+              ) : (
+                <form action={runAiCheck.bind(null, id)}>
+                  <SubmitButton variant="ai" className="w-full justify-start" pendingLabel="KI-Prüfung wird gestartet …">
+                    <ScanSearch />KI-Prüfung starten
+                  </SubmitButton>
+                </form>
+              )}
+              {caseRow.finlinkId && <FinLinkRefreshButton caseId={id} />}
+            </CardContent>
+          </Card>
+
+          <Card id="upload-link" className="scroll-mt-24">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Link2 className="h-4 w-4" /> Sicherer Upload-Link
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UploadLinkManager caseId={id} links={uploadLinkRows} />
+            </CardContent>
+          </Card>
+
+          <BankAnforderungen caseId={id} abgleich={cockpit.anforderungsAbgleich} />
+
+          {/* Plausibilitaet gehoert zu den Dokumenten und nicht in einen
+              eigenen Reiter: Sie entsteht AUS ihnen und wird beim Sichten
+              gelesen, nicht als eigene Taetigkeit aufgesucht. */}
+          <div>
+            <h3 className="eyebrow mb-2">Plausibilität ({cockpit.counts.warnings})</h3>
+                <Card>
+                  <CardContent className="space-y-2 pt-6">
+                    {plausibility.length === 0 && <p className="text-sm text-muted-foreground">Keine Auffälligkeiten erkannt.</p>}
+                    {plausibility.map((p) => (
+                      <div key={p.id} className={`flex items-start justify-between gap-4 rounded-lg border p-3 ${TONE[p.status === "kritisch" ? "blocker" : p.status === "warnung" ? "review" : "ready"].border}`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <SeverityBadge severity={p.status as Severity} />
+                            <span className="text-sm font-medium">{p.category}</span>
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">{p.explanation}</p>
+                          {p.recommendedAction && <p className="mt-1 text-xs text-foreground">Empfehlung: {p.recommendedAction}</p>}
                         </div>
-                        <p className="mt-1 text-sm text-muted-foreground">{p.explanation}</p>
-                        {p.recommendedAction && <p className="mt-1 text-xs text-foreground">Empfehlung: {p.recommendedAction}</p>}
+                        <Badge variant="neutral">nur intern</Badge>
                       </div>
-                      <Badge variant="neutral">nur intern</Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                    ))}
+                  </CardContent>
+                </Card>
+          </div>
 
-            <TabsContent value="uebersicht">
+          <Werkzeugreihe>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/unterlagen`}><LayoutPanelLeft />Unterlagen-Arbeitsplatz</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
+          </Werkzeugreihe>
+        </FallBereich>
+
+        <FallBereich
+          id="beratung"
+          titel="Beratung"
+          icon={UserRound}
+          beschreibung="Kunde, Objekt, Zahlen – und was daraus folgt"
+          marke={
+            erstgespraechOffen > 0
+              ? { text: `Erstgespräch: ${erstgespraechOffen} offen`, ton: "aktion" as const }
+              : null
+          }
+          offen={offenerBereich === "beratung"}
+        >
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-base">Objekt & Finanzierung</CardTitle></CardHeader>
@@ -1009,44 +1097,13 @@ export default async function CaseCockpitPage({
                   </CardContent>
                 </Card>
               </div>
-            </TabsContent>
-          </CaseTabs>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
-          <NextBestAction actions={cockpit.nextActions} />
-          {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
-              rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
-              unveraendert). Rein lesend, Aussensicht. */}
-          <BackofficeStatusKarte
-            caseId={id}
-            organizationId={ctx.organizationId}
-            istBackofficeNutzer={ctx.backofficeRolle != null}
-          />
-          {/* Erst ab der Einreichungsphase: Vorher gibt es keine Bank und keine
-              Konditionen, und eine leere Karte im Kopf der Seitenspalte
-              verdraengt nur, was gerade wirklich dran ist. */}
-          {["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(caseRow.leadPhase) && (
-            <KreditpruefungKarte caseId={id} stand={kreditpruefungStand} />
-          )}
-          <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
-          <Card id="upload-link" className="scroll-mt-24">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Link2 className="h-4 w-4" /> Sicherer Upload-Link
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <UploadLinkManager caseId={id} links={uploadLinkRows} />
-            </CardContent>
-          </Card>
           <SelfDisclosureManager
             caseId={id}
             status={selbstauskunftStand.label}
             aktiverLinkId={aktiverSelbstauskunftLink}
           />
-          <BankAnforderungen caseId={id} abgleich={cockpit.anforderungsAbgleich} />
+
           {uebernahme && (
             <SelfDisclosureInbox
               caseId={id}
@@ -1063,110 +1120,85 @@ export default async function CaseCockpitPage({
               submittedAt={uebernahme.submittedAt.toLocaleDateString("de-DE")}
             />
           )}
-          {/* Die KI-Prüfung ist die eine Aktion, die sichtbar bleiben muss –
-              sie ist der Motor des Falls. Alles andere (13 gleich graue
-              Knöpfe) steht eingeklappt unter "Werkzeuge": Eine Seitenspalte
-              mit 16 Aktionsflächen führt nicht mehr, sie bietet nur an. */}
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">KI-Prüfung</CardTitle></CardHeader>
-            <CardContent className="grid gap-2">
-              {aiCheckLocked ? (
-                <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                  Die KI-Prüfung ist gesperrt, weil der Fall bereits{" "}
-                  {CASE_STATUS_LABELS[caseRow.status as CaseStatus].toLowerCase()} ist.
-                </div>
-              ) : aiCheckRunning ? (
-                <AiCheckRunning done={aiCheckDone} total={documents.length} />
-              ) : (
-                <form action={runAiCheck.bind(null, id)}>
-                  <SubmitButton variant="ai" className="w-full justify-start" pendingLabel="KI-Prüfung wird gestartet …">
-                    <ScanSearch />KI-Prüfung starten
-                  </SubmitButton>
-                </form>
-              )}
-              {caseRow.finlinkId && <FinLinkRefreshButton caseId={id} />}
-            </CardContent>
-          </Card>
 
-          <div className="flaeche-ablage">
-            <CardContent className="p-0">
-              {/* Beide Gruppen zugeklappt: Wer ein Werkzeug sucht, findet es
-                  in einem Klick – wer geführt arbeitet, wird nicht von 13
-                  gleichrangigen Knöpfen angesprochen. */}
-              <details className="group border-b">
-                <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-3.5 text-base font-semibold">
-                  Werkzeuge
-                  <span className="text-xs font-normal text-muted-foreground group-open:hidden">aufklappen</span>
-                </summary>
-                <div className="grid gap-2 px-6 pb-4">
-                  {/*
-                    * Dauer-Einstieg in die Erstgespraechs-Maske. Die Fallreise
-                    * zeigt den Weg nur, solange Angaben FEHLEN – steht alles, gab
-                    * es keinen Knopf mehr, um eine Angabe zu korrigieren oder das
-                    * Gespraech noch einmal durchzugehen. Ein Werkzeug, das
-                    * verschwindet, sobald es sauber ist, laesst sich nicht pflegen.
-                    */}
-                  <Button asChild variant="outline" className="w-full justify-start">
-                    <Link href={`/cases/${id}/erstgespraech`}>
-                      <PhoneCall />
-                      Erstgespräch führen
-                      {erstgespraechOffen > 0 && (
-                        <span className="ml-auto text-xs text-muted-foreground">{erstgespraechOffen} offen</span>
-                      )}
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/review?case=${id}`}><ScanSearch />Review-Center öffnen</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/machbarkeit`}><Scale />Machbarkeit</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
-                </div>
-              </details>
+          <Werkzeugreihe>
+            <Button asChild variant="outline" className="w-full justify-start">
+              <Link href={`/cases/${id}/erstgespraech`}>
+                <PhoneCall />
+                Erstgespräch führen
+                {erstgespraechOffen > 0 && (
+                  <span className="ml-auto text-xs text-muted-foreground">{erstgespraechOffen} offen</span>
+                )}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/edit`}><UserRound />Kundendaten bearbeiten</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/haushalt`}><Calculator />Haushaltsrechnung</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/machbarkeit`}><Scale />Machbarkeit</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><Ruler />Wohnflächenberechnung</Link></Button>
+            {/* Selbständigen-Werkzeug nur zeigen, wenn es zum Fall passt. */}
+            {istSelbststaendig && (
+              <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
+            )}
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
+          </Werkzeugreihe>
+        </FallBereich>
 
-              <details className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-3.5 text-base font-semibold">
-                  Dokumente erzeugen
-                  <span className="text-xs font-normal text-muted-foreground group-open:hidden">aufklappen</span>
-                </summary>
-                <div className="grid gap-2 px-6 pb-4">
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/wohnflaeche`}><Ruler />Wohnflächenberechnung</Link></Button>
-                  {/* Selbständigen-Werkzeug nur zeigen, wenn es zum Fall passt. */}
-                  {istSelbststaendig && (
-                    <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/einkommen-selbststaendig`}><TrendingUp />Selbständigen-Einkommen (PDF)</Link></Button>
-                  )}
-                  <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
-                  {/*
-                    Finanzierungszertifikat – das Blatt, das der Kaufinteressent
-                    dem Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen
-                    gibt es keins (wie im Vorbild bei FinLink): Der Knopf bleibt
-                    gesperrt und sagt, was fehlt, statt ein Papier mit Lücken
-                    auszugeben, das der Kunde aus der Hand gibt.
-                  */}
-                  {zertifikatFehlt.length === 0 ? (
-                    <Button asChild variant="outline" className="w-full justify-start">
-                      <a href={`/api/cases/${id}/pdf?type=zertifikat`}><BadgeCheck />Finanzierungszertifikat</a>
-                    </Button>
-                  ) : (
-                    <div>
-                      <Button variant="outline" className="w-full justify-start" disabled>
-                        <BadgeCheck />Finanzierungszertifikat
-                      </Button>
-                      <p className="mt-1 px-1 text-xs text-muted-foreground">
-                        Dafür fehlt noch: {zertifikatFehlt.join(", ")}.
-                      </p>
-                    </div>
-                  )}
-                  <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
-                </div>
-              </details>
-            </CardContent>
-          </div>
-          <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />
-        </div>
+        <FallBereich
+          id="einreichung"
+          titel="Einreichung"
+          icon={Banknote}
+          beschreibung="Papiere erzeugen, Fristen halten, zur Bank geben"
+          marke={{ text: `Reifegrad ${cockpit.score} %`, ton: "ruhe" as const }}
+          offen={offenerBereich === "einreichung"}
+        >
+          {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
+              rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
+              unveraendert). Rein lesend, Aussensicht. */}
+          <BackofficeStatusKarte
+            caseId={id}
+            organizationId={ctx.organizationId}
+            istBackofficeNutzer={ctx.backofficeRolle != null}
+          />
+
+          {/* Erst ab der Einreichungsphase: Vorher gibt es keine Bank und keine
+              Konditionen, und eine leere Karte im Kopf der Seitenspalte
+              verdraengt nur, was gerade wirklich dran ist. */}
+          {["kreditpruefung_eingereicht", "zusage", "abgeschlossen"].includes(caseRow.leadPhase) && (
+            <KreditpruefungKarte caseId={id} stand={kreditpruefungStand} />
+          )}
+
+          <Werkzeugreihe>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
+            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
+            {/*
+              Finanzierungszertifikat – das Blatt, das der Kaufinteressent dem
+              Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen gibt es
+              keins: Der Knopf bleibt gesperrt und sagt, was fehlt, statt ein
+              Papier mit Lücken auszugeben, das der Kunde aus der Hand gibt.
+            */}
+            {zertifikatFehlt.length === 0 ? (
+              <Button asChild variant="outline" className="w-full justify-start">
+                <a href={`/api/cases/${id}/pdf?type=zertifikat`}><BadgeCheck />Finanzierungszertifikat</a>
+              </Button>
+            ) : (
+              <div>
+                <Button variant="outline" className="w-full justify-start" disabled>
+                  <BadgeCheck />Finanzierungszertifikat
+                </Button>
+                <p className="mt-1 px-1 text-xs text-muted-foreground">
+                  Dafür fehlt noch: {zertifikatFehlt.join(", ")}.
+                </p>
+              </div>
+            )}
+          </Werkzeugreihe>
+        </FallBereich>
       </div>
+
+      {/* Gehoert in keinen der drei Bereiche: Der Schreibblock begleitet die
+          ganze Arbeit, und das Archivieren beendet sie. */}
+      <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
+      <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />
     </div>
   );
 }
