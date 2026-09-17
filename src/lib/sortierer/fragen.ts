@@ -24,6 +24,15 @@ export interface SortierDokument {
   vorschlagId: string | null;
   /** false = kein lesbarer Text. Ein Typ ohne Text ist geraten. */
   readable: boolean | null;
+  /**
+   * Hat der Berater ueber diese Seite bereits entschieden?
+   *
+   * Ohne dieses Feld fragt der Sortierer eine Seite, die der Nutzer gerade
+   * als "eigenes Dokument" bestaetigt hat, in der naechsten Runde erneut -
+   * sie hat ja immer noch keinen erkannten Typ. Eine Frage, die trotz Antwort
+   * wiederkommt, ist das Ende des Vertrauens in das Werkzeug.
+   */
+  entschieden: boolean;
 }
 
 export interface SortierBuendel {
@@ -73,6 +82,7 @@ function offen(d: SortierDokument): boolean {
  */
 function brauchtEntscheidung(d: SortierDokument): boolean {
   if (!offen(d)) return false;
+  if (d.entschieden) return false;
   // Seiten eines noch offenen Buendelvorschlags werden ueber das Buendel
   // gefragt, nicht einzeln - sonst stellt der Sortierer dieselbe Frage zweimal.
   if (d.vorschlagId) return false;

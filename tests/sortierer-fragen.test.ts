@@ -18,6 +18,7 @@ const doc = (o: Partial<SortierDokument> & { id: string }): SortierDokument => (
   zusammengefuegtInId: null,
   vorschlagId: null,
   readable: true,
+  entschieden: false,
   ...o,
 });
 
@@ -73,6 +74,12 @@ describe("naechsteFrage", () => {
       []
     );
     expect(frage).toMatchObject({ art: "seite", documentId: "x" });
+  });
+
+  it("fragt eine bereits entschiedene Seite NICHT erneut", () => {
+    // Der Berater hat "eigenes Dokument" geantwortet. Die Seite hat immer
+    // noch keinen erkannten Typ - trotzdem ist sie erledigt.
+    expect(naechsteFrage([doc({ id: "x", entschieden: true })], [])).toBeNull();
   });
 
   it("laesst Seiten in Ruhe, die schon in einem Buendel aufgegangen sind", () => {

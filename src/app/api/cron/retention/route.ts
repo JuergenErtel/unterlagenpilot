@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getStorage } from "@/lib/storage";
+import { nurSortierung } from "@/lib/cases/aktenart";
+import { STAPEL_LEBENSDAUER_TAGE } from "@/lib/sortierer/service";
 import { getEnv } from "@/lib/env";
 import { purgeCase } from "@/lib/cases/purge";
 import { timingSafeEqualStrings } from "@/lib/security/timing-safe";
@@ -109,9 +112,44 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Sortierstapel: nach 14 Tagen weg, samt Dateien.
+  //
+  // Sie haengen NICHT an Organization.retentionDays: Ein Stapel traegt
+  // Gehaltsabrechnungen und Ausweise, ohne dass ein Fall dahintersteht - also
+  // die heikelsten Daten ohne den Zweck, der sie rechtfertigt. Diese Frist
+  // ist deshalb fest und nicht abschaltbar, anders als die Fallaufbewahrung.
+  // ---------------------------------------------------------------------
+  const stapelGrenze = new Date(now.getTime() - STAPEL_LEBENSDAUER_TAGE * 86_400_000);
+  const alteStapel = await prisma.case.findMany({
+    where: { ...nurSortierung, createdAt: { lt: stapelGrenze } },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+    select: { id: true, caseNumber: true, documents: { select: { storageKey: true } } },
+  });
+
+  let stapelGeloescht = 0;
+  if (!dryRun) {
+    const speicher = getStorage();
+    for (const st of alteStapel) {
+      try {
+        // Erst die Bytes, dann die Zeile: Bleibt eine Datei im Speicher
+        // haengen, kostet das Platz. Bliebe die Zeile stehen, zeigte der
+        // Sortierer einen Stapel, dessen Dateien es nicht mehr gibt.
+        for (const d of st.documents) await speicher.remove(d.storageKey).catch(() => {});
+        await prisma.case.delete({ where: { id: st.id } });
+        stapelGeloescht += 1;
+      } catch (e) {
+        console.error(`[cron/retention] Sortierstapel ${st.caseNumber} konnte nicht geloescht werden:`, e);
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     dryRun,
+    stapelKandidaten: alteStapel.length,
+    stapelGeloescht,
     candidates: candidates.length,
     expired: expired.length,
     deleted,
