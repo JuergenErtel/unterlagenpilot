@@ -31,6 +31,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Werkzeugreihe } from "@/components/case/fall-bereich";
+import { TabsContent } from "@/components/ui/tabs";
+import { FallReiter } from "@/components/case/fall-reiter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CaseStatusBadge, SeverityBadge } from "@/components/status-badge";
 import { Pruefleiste, type PruefSegment } from "@/components/ui/pruefleiste";
@@ -663,15 +665,6 @@ export default async function CaseCockpitPage({
         );
       })()}
 
-      {/* Hauptbereich: Roadmap + Tabs | Sidebar */}
-      {/* Fuehrung zuerst, Nachschlagen danach.
-
-          Die Prioritaetsleiter zeigt per Bauart genau EINEN naechsten Schritt
-          (siehe cockpit.ts). Sie steht deshalb ueber den drei Bereichen und
-          nicht in einem davon: Wer gefuehrt arbeiten will, soll nichts
-          aufklappen muessen. */}
-      <NextBestAction actions={cockpit.nextActions} />
-
       {/* Der Weg steht ab lg im Fallbild oben; hier bleibt er fuer schmale
           Bildschirme als Liste. */}
       <Card className="lg:hidden">
@@ -679,15 +672,43 @@ export default async function CaseCockpitPage({
         <CardContent><CaseRoadmap steps={cockpit.roadmap} /></CardContent>
       </Card>
 
-      {/* Welcher Bereich zu sehen ist, entscheidet die Leiste ueber der Seite
-          (case-nav.tsx) ueber `?tab=`. Bewusst KEINE zweite Reiterreihe hier:
-          Das waere dieselbe Leiste zweimal untereinander.
-
-          Serverseitig gerendert und nicht per Klappmechanik im Browser: So
-          findet ein Anker wie #broker-upload sein Ziel, und ein Bereich laesst
-          sich verlinken. */}
-      {offenerBereich === "dokumente" && (
-        <div className="space-y-4">
+      {/* Die Umschaltung steht DIREKT ueber dem, was sie umschaltet.
+          
+          Sie stand zwischenzeitlich in der Leiste ganz oben - man waehlte dort
+          und weit darunter aenderte sich etwas. Zwischen Knopf und Wirkung
+          darf nichts liegen, sonst merkt man den Zusammenhang nicht. */}
+      <FallReiter
+        tabParam={offenerBereich}
+        reiter={[
+          {
+            wert: "dokumente",
+            titel: "Dokumente",
+            icon: <FolderArchive className="h-4 w-4 shrink-0" aria-hidden />,
+            marke:
+              cockpit.counts.docsMissing > 0
+                ? { text: `${cockpit.counts.docsMissing} fehlen`, ton: "warnung" as const }
+                : cockpit.counts.pruefbereit > 0
+                  ? { text: `${cockpit.counts.pruefbereit} zu prüfen`, ton: "aktion" as const }
+                  : { text: "vollständig", ton: "ruhe" as const },
+          },
+          {
+            wert: "beratung",
+            titel: "Beratung",
+            icon: <UserRound className="h-4 w-4 shrink-0" aria-hidden />,
+            marke:
+              erstgespraechOffen > 0
+                ? { text: `${erstgespraechOffen} offen`, ton: "aktion" as const }
+                : null,
+          },
+          {
+            wert: "einreichung",
+            titel: "Einreichung",
+            icon: <Banknote className="h-4 w-4 shrink-0" aria-hidden />,
+            marke: { text: `${cockpit.score} % reif`, ton: "ruhe" as const },
+          },
+        ]}
+      >
+        <TabsContent value="dokumente" className="space-y-4">
               <div className="space-y-4">
                 {/* Erst die gefundenen Lücken sichten, dann nachfordern –
                     sonst geht eine Nachforderung raus, der die Hälfte fehlt. */}
@@ -1002,11 +1023,9 @@ export default async function CaseCockpitPage({
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/messages`}><Send />Nachforderung erzeugen</Link></Button>
             <Button asChild variant="outline" className="w-full justify-start"><a href={`/api/cases/${id}/zip`}><FolderArchive />Alle Dokumente als ZIP</a></Button>
           </Werkzeugreihe>
-        </div>
-      )}
+        </TabsContent>
 
-      {offenerBereich === "beratung" && (
-        <div className="space-y-4">
+        <TabsContent value="beratung" className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-base">Objekt & Finanzierung</CardTitle></CardHeader>
@@ -1122,11 +1141,9 @@ export default async function CaseCockpitPage({
             )}
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/lageplan`}><MapPin />Lageplan erzeugen</Link></Button>
           </Werkzeugreihe>
-        </div>
-      )}
+        </TabsContent>
 
-      {offenerBereich === "einreichung" && (
-        <div className="space-y-4">
+        <TabsContent value="einreichung" className="space-y-4">
           {/* Nur wenn zu dieser Akte ein Backoffice-Auftrag existiert - sonst
               rendert die Karte nichts (Vertriebsfall ohne Backoffice bleibt
               unveraendert). Rein lesend, Aussensicht. */}
@@ -1168,8 +1185,14 @@ export default async function CaseCockpitPage({
               </div>
             )}
           </Werkzeugreihe>
-        </div>
-      )}
+        </TabsContent>
+
+      </FallReiter>
+
+      {/* Die volle Liste der offenen Punkte steht UNTER dem Inhalt: Der
+          naechste Schritt haengt bereits im Kreislauf oben; hier ist sie die
+          Nachlese, nicht die Fuehrung. */}
+      <NextBestAction actions={cockpit.nextActions} />
 
       {/* Gehoert in keinen der drei Bereiche: Der Schreibblock begleitet die
           ganze Arbeit, und das Archivieren beendet sie. */}
