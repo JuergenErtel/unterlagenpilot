@@ -103,3 +103,28 @@ export function anhangName(
   const nummer = index === 0 ? "" : `-${index + 1}`;
   return `mail_${stempel}${nummer}.${endung}`;
 }
+
+/**
+ * Ist diese Mail an UNSERE Eingangsadresse gerichtet?
+ *
+ * Der Grund, warum es diese Pruefung gibt: Bei Strato liegt die
+ * Eingangsadresse als ALIAS auf einem vorhandenen Sammelpostfach
+ * (webmaster@[Alle Domains]). In demselben Postfach liegt also auch Post, die
+ * uns nichts angeht - und die duerfen wir nicht einmal anfassen. Wuerde der
+ * Abruf sie lesen und als gelesen markieren, verloere der Nutzer die
+ * Ungelesen-Markierung seiner echten Post, ohne je zu erfahren, warum.
+ *
+ * Verglichen wird auf ganze Adressen, nicht auf Teilzeichenketten: Sonst
+ * gelten "nicht-unterlagen@baufidesk.de" und jede Erwaehnung im Anzeigenamen
+ * als Treffer.
+ */
+export function istAnAdressiert(empfaenger: string[], adresse: string): boolean {
+  const ziel = adresse.trim().toLowerCase();
+  if (!ziel) return false;
+  return empfaenger.some((e) => {
+    const roh = (e ?? "").toLowerCase();
+    // Ein Feld kann mehrere Empfaenger tragen; jede Adresse einzeln pruefen.
+    const treffer: string[] = roh.match(/[^\s<>,;"]+@[^\s<>,;"]+/g) ?? [];
+    return treffer.includes(ziel);
+  });
+}

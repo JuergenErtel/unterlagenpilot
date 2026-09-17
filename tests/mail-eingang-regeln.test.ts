@@ -4,6 +4,7 @@ import {
   brauchbareAnhaenge,
   anhangName,
   MAX_ANHAENGE_JE_MAIL,
+  istAnAdressiert,
 } from "@/lib/eingang/mail-regeln";
 
 /**
@@ -87,5 +88,32 @@ describe("anhangName", () => {
 
   it("haengt eine Endung an, wenn der Name keine hat", () => {
     expect(anhangName("Scan", "application/pdf", 0)).toBe("Scan.pdf");
+  });
+});
+
+describe("istAnAdressiert", () => {
+  const ZIEL = "unterlagen@baufidesk.de";
+
+  it("erkennt die Adresse im Empfängerfeld", () => {
+    expect(istAnAdressiert(["Unterlagen <Unterlagen@BaufiDesk.de>"], ZIEL)).toBe(true);
+  });
+
+  it("erkennt sie neben anderen Empfängern", () => {
+    expect(istAnAdressiert(["kunde@example.com", "unterlagen@baufidesk.de"], ZIEL)).toBe(true);
+  });
+
+  it("weist eine Mail ab, die an eine andere Adresse desselben Postfachs ging", () => {
+    // Der entscheidende Fall: Der Alias liegt auf dem Sammelpostfach
+    // webmaster@. Post an webmaster@ geht uns nichts an - wir duerfen sie
+    // nicht einmal als gelesen markieren.
+    expect(istAnAdressiert(["webmaster@baufidesk.de"], ZIEL)).toBe(false);
+  });
+
+  it("weist eine Mail ohne Empfängerangabe ab", () => {
+    expect(istAnAdressiert([], ZIEL)).toBe(false);
+  });
+
+  it("lässt sich nicht von einem Präfix täuschen", () => {
+    expect(istAnAdressiert(["nicht-unterlagen@baufidesk.de"], ZIEL)).toBe(false);
   });
 });

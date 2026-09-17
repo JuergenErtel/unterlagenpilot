@@ -3,7 +3,12 @@ import { simpleParser } from "mailparser";
 import { getEnv } from "@/lib/env";
 import { nimmDateiAn } from "@/lib/eingang/service";
 import { findeAbsender } from "@/lib/eingang/absender";
-import { absenderAdresse, brauchbareAnhaenge, anhangName } from "@/lib/eingang/mail-regeln";
+import {
+  absenderAdresse,
+  brauchbareAnhaenge,
+  anhangName,
+  istAnAdressiert,
+} from "@/lib/eingang/mail-regeln";
 import { istMailEingangEingerichtet } from "@/lib/eingang/mail-adresse";
 
 /**
@@ -29,6 +34,11 @@ export interface MailAbrufErgebnis {
   angenommen: number;
   /** Mails, deren Absender nicht freigeschaltet ist. */
   abgewiesen: number;
+  /**
+   * Mails im selben Postfach, die NICHT an unsere Adresse gingen. Sie werden
+   * nicht gelesen und nicht angefasst - die Zahl steht nur im Lauf-Bericht.
+   */
+  fremd: number;
   meldung?: string;
 }
 
@@ -42,7 +52,7 @@ const MAX_MAILS_JE_LAUF = 25;
 export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
   const env = getEnv();
   if (!istMailEingangEingerichtet()) {
-    return { status: "nicht_eingerichtet", gesehen: 0, angenommen: 0, abgewiesen: 0 };
+    return { status: "nicht_eingerichtet", gesehen: 0, angenommen: 0, abgewiesen: 0, fremd: 0 };
   }
 
   const client = new ImapFlow({
@@ -58,6 +68,8 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
   let gesehen = 0;
   let angenommen = 0;
   let abgewiesen = 0;
+  let fremd = 0;
+  const adresse = env.EINGANG_MAIL_ADRESSE as string;
 
   try {
     await client.connect();
@@ -67,6 +79,7 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
       gesehen: 0,
       angenommen: 0,
       abgewiesen: 0,
+      fremd: 0,
       meldung: `Postfach nicht erreichbar: ${(e as Error).message}`,
     };
   }
@@ -78,18 +91,62 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
   try {
     lock = await client.getMailboxLock("INBOX");
 
-    const ungelesen = await client.search({ seen: false });
-    const zuHolen = (ungelesen || []).slice(0, MAX_MAILS_JE_LAUF);
+    // Serverseitig auf unsere Adresse einschraenken, nicht erst nach dem
+    // Holen. Das ist keine Sparmassnahme, sondern der Kern:
+    //
+    // Die Eingangsadresse liegt als ALIAS auf einem vorhandenen
+    // Sammelpostfach. Wuerden wir "alles Ungelesene" holen, laegen bei jedem
+    // Lauf die 25 aeltesten ungelesenen Mails des Postfachs vor uns - und
+    // unsere kaeme, sobald dort ein paar Dutzend fremde Mails liegen, NIE an
+    // die Reihe. Ein Filter erst nach dem Holen wuerde den Eingang also still
+    // verhungern lassen.
+    //
+    // Zwei Suchen, weil ein Alias die Zieladresse nicht immer in "To"
+    // hinterlaesst: Manche Zustellwege tragen sie nur in "Delivered-To" ein.
+    // Was der Server bei der zweiten Suche nicht kann, faellt weg - die erste
+    // deckt den Normalfall (von Hand weitergeleitet) ab.
+    const uids = new Set<number>();
+    for (const kriterium of [
+      { seen: false, to: adresse },
+      { seen: false, header: { "delivered-to": adresse } },
+    ]) {
+      try {
+        for (const uid of (await client.search(kriterium)) || []) uids.add(uid);
+      } catch {
+        // Ein Server, der dieses Suchkriterium nicht beherrscht, darf den
+        // Lauf nicht abbrechen.
+      }
+    }
+    const zuHolen = [...uids].sort((a, b) => a - b).slice(0, MAX_MAILS_JE_LAUF);
 
     for (const uid of zuHolen) {
-      gesehen += 1;
+      // Solange dieser Merker steht, bleibt die Mail unberuehrt - kein \Seen.
+      let ueberspringen = false;
       try {
         const nachricht = await client.fetchOne(String(uid), { source: true }, { uid: true });
         if (!nachricht || !nachricht.source) continue;
 
         const mail = await simpleParser(nachricht.source);
-        const adresse = absenderAdresse(mail.from?.text);
-        const absender = adresse ? await findeAbsender(adresse) : null;
+
+        // Zweiter Riegel hinter der Suche: Ein Server, der "TO" grosszuegig
+        // auslegt (Teilzeichenkette statt ganzer Adresse), wuerde uns sonst
+        // fremde Post des Sammelpostfachs unterschieben - und wir wuerden sie
+        // als gelesen markieren.
+        const empfaenger = [
+          ...adressfelder(mail.to),
+          ...adressfelder(mail.cc),
+          ...adressfelder(mail.bcc),
+          mail.headers?.get("delivered-to")?.toString(),
+          mail.headers?.get("x-original-to")?.toString(),
+        ].filter((x): x is string => Boolean(x));
+        if (!istAnAdressiert(empfaenger, adresse)) {
+          fremd += 1;
+          ueberspringen = true;
+          continue;
+        }
+
+        const von = absenderAdresse(mail.from?.text);
+        const absender = von ? await findeAbsender(von) : null;
 
         if (!absender) {
           abgewiesen += 1;
@@ -99,7 +156,7 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
           // Absender wiederzuerkennen, der nur nicht freigeschaltet ist.
           console.warn(
             `[mail-eingang] Mail von einem nicht freigeschalteten Absender (Domain: ${
-              adresse?.split("@")[1] ?? "unbekannt"
+              von?.split("@")[1] ?? "unbekannt"
             }) - nicht angenommen.`
           );
           continue;
@@ -128,25 +185,46 @@ export async function holeMailEingang(): Promise<MailAbrufErgebnis> {
         // bei jedem Durchgang an derselben Mail auf.
         console.error(`[mail-eingang] Mail ${uid} konnte nicht verarbeitet werden:`, e);
       } finally {
-        // \Seen IST die Idempotenz: Die naechste Suche findet sie nicht mehr.
-        // Deshalb im finally - auch eine gescheiterte Mail darf nur einmal
-        // scheitern. Geloescht wird nichts: Im Postfach bleibt nachlesbar,
-        // was hereinkam.
-        await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }).catch(() => {});
+        // Fremde Post bleibt ungelesen liegen, als haetten wir nie
+        // hineingesehen. Alles andere waere ein Schaden, den der Nutzer erst
+        // merkt, wenn seine Ungelesen-Markierungen verschwunden sind.
+        if (!ueberspringen) {
+          gesehen += 1;
+          // \Seen IST die Idempotenz: Die naechste Suche findet sie nicht
+          // mehr. Deshalb im finally - auch eine gescheiterte Mail darf nur
+          // einmal scheitern. Geloescht wird nichts: Im Postfach bleibt
+          // nachlesbar, was hereinkam.
+          await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }).catch(() => {});
+        }
       }
     }
 
-    return { status: "ok", gesehen, angenommen, abgewiesen };
+    return { status: "ok", gesehen, angenommen, abgewiesen, fremd };
   } catch (e) {
     return {
       status: "fehler",
       gesehen,
       angenommen,
       abgewiesen,
+      fremd,
       meldung: (e as Error).message,
     };
   } finally {
     lock?.release();
     await client.logout().catch(() => {});
   }
+}
+
+/**
+ * Die Textform eines Adressfeldes. mailparser liefert `to`/`cc`/`bcc` mal als
+ * ein Objekt, mal als Liste (bei mehreren Kopfzeilen desselben Namens) - wer
+ * nur das Objekt annimmt, verliert genau die Mail, die ueber zwei Wege
+ * zugestellt wurde.
+ */
+function adressfelder(feld: unknown): string[] {
+  if (!feld) return [];
+  const liste = Array.isArray(feld) ? feld : [feld];
+  return liste
+    .map((f) => (f as { text?: string })?.text)
+    .filter((t): t is string => Boolean(t));
 }
