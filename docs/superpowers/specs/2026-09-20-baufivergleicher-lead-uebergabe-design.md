@@ -133,9 +133,10 @@ verzögert den Alarm nur.
 - `lib/lead-store/notifications.ts`: Verzweigung oben im Sender. Für Art
   `baufidesk` nicht `buildEmail`/Resend, sondern Rumpf bauen, signieren,
   POSTen. HTTP 2xx → `delivered` (keine Zwischenstufe `accepted`, es gibt
-  keinen Zustellbericht abzufragen). Der Resend-Statusabruf im Cron muss
-  diese Art überspringen – er würde sonst eine Mail-ID suchen, die es nicht
-  gibt.
+  keinen Zustellbericht abzufragen). Der Resend-Statusabruf im Cron fasst
+  diese Art dadurch von selbst nicht an: `acceptedForPolling` holt nur Zeilen
+  mit `status = 'accepted' AND resend_email_id is not null`, und beides trifft
+  auf eine Übergabe nie zu. Es braucht also keine zusätzliche Ausnahme.
 - Neue Variablen: `BAUFIDESK_INGEST_URL`, `BAUFIVERGLEICHER_INGEST_SECRET`.
   Fehlt eine davon, wird die Benachrichtigung gar nicht erst angelegt
   (`skip: "config_missing"`), statt dauerhaft fehlzuschlagen.
