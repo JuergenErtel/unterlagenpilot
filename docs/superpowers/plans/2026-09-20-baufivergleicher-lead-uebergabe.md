@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `Case.externeQuelle: String?`, `Case.externeId: String?`, `@@unique([organizationId, externeQuelle, externeId])`, `LeadSource.baufivergleicher`
 
-- [ ] **Step 1: Schema ergänzen**
+- [x] **Step 1: Schema ergänzen**
 
 In `enum LeadSource` nach `webformular` einfügen:
 
@@ -57,7 +57,7 @@ In den Block der Indizes von `Case`:
   @@unique([organizationId, externeQuelle, externeId])
 ```
 
-- [ ] **Step 2: DDL gegen PROD, zuerst trocken**
+- [x] **Step 2: DDL gegen PROD, zuerst trocken**
 
 ```bash
 cd ~/Coding/Unterlagenpilot
@@ -73,14 +73,14 @@ Erwartet: 3 Anweisungen, keine zerrissen. **Achtung:** Der Zerleger schneidet au
 
 Postgres behandelt NULL in eindeutigen Indizes als verschieden; Fälle ohne externe Herkunft kollidieren also nicht.
 
-- [ ] **Step 3: DDL anwenden und Prisma-Client erzeugen**
+- [x] **Step 3: DDL anwenden und Prisma-Client erzeugen**
 
 ```bash
 scripts/supabase-sql.sh /tmp/externe-herkunft.sql
 npx prisma generate
 ```
 
-- [ ] **Step 4: Test schreiben**
+- [x] **Step 4: Test schreiben**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -93,12 +93,12 @@ describe("Externe Herkunft am Fall", () => {
 });
 ```
 
-- [ ] **Step 5: Test laufen lassen**
+- [x] **Step 5: Test laufen lassen**
 
 Run: `npx vitest run tests/externe-herkunft.test.ts`
 Erwartet: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add prisma/schema.prisma tests/externe-herkunft.test.ts
@@ -118,7 +118,7 @@ git commit -m "feat(leads): Fall traegt allgemeine externe Herkunft"
 **Interfaces:**
 - Produces: `uebergabeSchema` (zod), `type Uebergabe = z.infer<typeof uebergabeSchema>`
 
-- [ ] **Step 1: Test schreiben — vollständiger Rumpf wird angenommen, unvollständiger nicht**
+- [x] **Step 1: Test schreiben — vollständiger Rumpf wird angenommen, unvollständiger nicht**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -177,12 +177,12 @@ describe("Vertrag der Lead-Uebergabe", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `npx vitest run tests/baufivergleicher-vertrag.test.ts`
 Erwartet: FAIL — Modul nicht gefunden
 
-- [ ] **Step 3: Schema schreiben**
+- [x] **Step 3: Schema schreiben**
 
 `z.null()` statt `.nullable().optional()` ist Absicht: Ein weggelassenes Feld soll auffallen, kein „nicht angegeben" vortäuschen.
 
@@ -234,12 +234,12 @@ export const uebergabeSchema = z.object({
 export type Uebergabe = z.infer<typeof uebergabeSchema>;
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `npx vitest run tests/baufivergleicher-vertrag.test.ts`
 Erwartet: PASS (4 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/leads/baufivergleicher/vertrag.ts tests/baufivergleicher-vertrag.test.ts
@@ -259,7 +259,7 @@ git commit -m "feat(leads): Vertrag der baufivergleicher-Uebergabe"
 **Interfaces:**
 - Produces: `signiere(rumpf: string, geheimnis: string): string` (liefert `sha256=<hex>`), `signaturStimmt(rumpf: string, kopfzeile: string | null, geheimnis: string): boolean`
 
-- [ ] **Step 1: Test schreiben**
+- [x] **Step 1: Test schreiben**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -291,12 +291,12 @@ describe("Signatur der Lead-Uebergabe", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `npx vitest run tests/uebergabe-signatur.test.ts`
 Erwartet: FAIL — Modul nicht gefunden
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```ts
 import { createHmac } from "node:crypto";
@@ -316,12 +316,12 @@ export function signaturStimmt(rumpf: string, kopfzeile: string | null, geheimni
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `npx vitest run tests/uebergabe-signatur.test.ts`
 Erwartet: PASS (4 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/security/uebergabe-signatur.ts tests/uebergabe-signatur.test.ts
@@ -342,7 +342,7 @@ git commit -m "feat(sicherheit): HMAC-Signatur fuer die Lead-Uebergabe"
 - Consumes: `Uebergabe` aus Task 2, `CanonicalCase` aus `@/lib/domain/canonical`
 - Produces: `zuKanonisch(u: Uebergabe): CanonicalCase`, `spannenVermerk(u: Uebergabe): string | null`
 
-- [ ] **Step 1: Test schreiben — der wichtigste Test ist der, der KEINE Zahl erfindet**
+- [x] **Step 1: Test schreiben — der wichtigste Test ist der, der KEINE Zahl erfindet**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -421,12 +421,12 @@ describe("Uebergabe zu kanonischem Fall", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `npx vitest run tests/baufivergleicher-mapping.test.ts`
 Erwartet: FAIL — Modul nicht gefunden
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```ts
 import type { CanonicalCase } from "@/lib/domain/canonical";
@@ -512,12 +512,12 @@ export function zuKanonisch(u: Uebergabe): CanonicalCase {
 
 **Hinweis für den Umsetzer:** `CanonicalCase` in `src/lib/domain/canonical.ts` lesen und die Feldnamen genau übernehmen; falls `platformIds` oder ein Abschnitt dort anders heißt oder Pflicht ist, dem echten Typ folgen statt diesem Auszug. Die Werte von `FinancingType` in `src/lib/domain/enums.ts` gegenprüfen und `ART` daran anpassen — die Tabelle oben ist die Absicht, nicht die Wahrheit.
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `npx vitest run tests/baufivergleicher-mapping.test.ts`
 Erwartet: PASS (5 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/leads/baufivergleicher/mapping.ts tests/baufivergleicher-mapping.test.ts
@@ -540,7 +540,7 @@ git commit -m "feat(leads): Uebergabe auf das kanonische Fallmodell abbilden"
 - Consumes: `uebergabeSchema`, `zuKanonisch`, `spannenVermerk`, `signaturStimmt`
 - Produces: `nimmUebergabeAn(rohRumpf: string, kopfzeilen: { authorization: string | null; signatur: string | null }): Promise<{ status: number; body: object }>`
 
-- [ ] **Step 1: Test schreiben — Wachdienst und Organisationsbindung**
+- [x] **Step 1: Test schreiben — Wachdienst und Organisationsbindung**
 
 Die Datenbankwege werden nicht mitgetestet; getestet wird der Wachdienst, weil er die Angriffsfläche ist.
 
@@ -602,12 +602,12 @@ describe("Aufnahme der Lead-Uebergabe – Wachdienst", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `npx vitest run tests/baufivergleicher-aufnahme.test.ts`
 Erwartet: FAIL — Module nicht gefunden
 
-- [ ] **Step 3: `fallanlage.ts` schreiben (der Datenbankteil, getrennt gehalten)**
+- [x] **Step 3: `fallanlage.ts` schreiben (der Datenbankteil, getrennt gehalten)**
 
 Getrennte Datei, damit der Wachdienst ohne Datenbank testbar bleibt.
 
@@ -677,7 +677,7 @@ export async function legeFallAn(u: Uebergabe, organizationId: string): Promise<
 
 **Hinweis für den Umsetzer:** `action: "case.created"` muss in `AUDIT_ACTIONS` (`src/lib/domain/enums.ts`) existieren. Wenn nicht, den dort vorhandenen Namen für „Fall angelegt" verwenden, **nicht** einen neuen erfinden. Ebenso prüfen, ob `Case.notes` das richtige Feld ist (Schreibblock) — Vermerke am Fall sind `CaseNote`; für einen maschinell erzeugten Hinweis ist `CaseNote` die sauberere Wahl, falls sie ohne Nutzer-ID angelegt werden kann.
 
-- [ ] **Step 4: `aufnahme.ts` schreiben**
+- [x] **Step 4: `aufnahme.ts` schreiben**
 
 ```ts
 import { uebergabeSchema } from "./vertrag";
@@ -730,7 +730,7 @@ export async function nimmUebergabeAn(
 }
 ```
 
-- [ ] **Step 5: Route schreiben**
+- [x] **Step 5: Route schreiben**
 
 ```ts
 import { NextRequest, NextResponse } from "next/server";
@@ -763,7 +763,7 @@ export async function POST(req: NextRequest) {
 
 **Hinweis für den Umsetzer:** Signatur von `checkRateLimit` in `src/lib/auth/rate-limit.ts` nachsehen und den Aufruf daran anpassen (Argumente, Rückgabe, ob `await` nötig ist).
 
-- [ ] **Step 6: Gate-Ausnahme ergänzen**
+- [x] **Step 6: Gate-Ausnahme ergänzen**
 
 In `src/lib/security/public-paths.ts` in `PUBLIC_PREFIXES` nach `"/api/eingang"` einfügen:
 
@@ -788,12 +788,12 @@ In `tests/public-paths.test.ts` den Geräte-Eingang-Test ergänzen:
   });
 ```
 
-- [ ] **Step 7: Alle Tests laufen lassen**
+- [x] **Step 7: Alle Tests laufen lassen**
 
 Run: `npx vitest run tests/baufivergleicher-aufnahme.test.ts tests/public-paths.test.ts`
 Erwartet: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/leads/baufivergleicher/ src/app/api/leads/ src/lib/security/public-paths.ts tests/
@@ -812,7 +812,7 @@ git commit -m "feat(leads): Aufnahme-Route fuer baufivergleicher-Uebergaben"
 **Interfaces:**
 - Consumes: `legeFallAn` aus Task 5
 
-- [ ] **Step 1: Test schreiben**
+- [x] **Step 1: Test schreiben**
 
 Ein Kommentar verhindert nichts. Dieser Test schlägt fehl, sobald jemand in den Weg einen Versand einbaut.
 
@@ -844,12 +844,12 @@ describe("Lead-Uebergabe verschickt nichts", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen**
+- [x] **Step 2: Test laufen lassen**
 
 Run: `npx vitest run tests/baufivergleicher-keine-mail.test.ts`
 Erwartet: PASS (2 Tests)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/baufivergleicher-keine-mail.test.ts
@@ -870,7 +870,7 @@ git commit -m "test(leads): die Uebergabe darf keine Mail ausloesen"
 **Interfaces:**
 - Produces: Enum-Wert `baufidesk`, `markDelivered(id: string): Promise<void>`
 
-- [ ] **Step 1: Migration schreiben**
+- [x] **Step 1: Migration schreiben**
 
 `ALTER TYPE … ADD VALUE` kann in älteren Postgres-Versionen nicht in einer Transaktion mit einer Nutzung desselben Werts stehen — deshalb allein in dieser Datei.
 
@@ -881,7 +881,7 @@ git commit -m "test(leads): die Uebergabe darf keine Mail ausloesen"
 alter type lead_store.notification_kind add value if not exists 'baufidesk';
 ```
 
-- [ ] **Step 2: Migration gegen TEST anwenden, dann gegen PROD**
+- [x] **Step 2: Migration gegen TEST anwenden, dann gegen PROD**
 
 ```bash
 cd ~/Coding/baufivergleicher
@@ -891,7 +891,7 @@ node scripts/lead-store-setup.mjs prod
 
 **Hinweis für den Umsetzer:** Erst `node scripts/lead-store-setup.mjs --help` bzw. den Quelltext des Skripts lesen; wenn es keine einzelne Migration nachziehen kann, die eine Anweisung von Hand über denselben Verbindungsweg ausführen, den das Skript benutzt.
 
-- [ ] **Step 3: Typ ergänzen**
+- [x] **Step 3: Typ ergänzen**
 
 In `lib/lead-store/core.ts`:
 
@@ -899,7 +899,7 @@ In `lib/lead-store/core.ts`:
 export type NotificationKind = "lead" | "confirmation" | "upload" | "alert" | "baufidesk";
 ```
 
-- [ ] **Step 4: `markDelivered` ergänzen**
+- [x] **Step 4: `markDelivered` ergänzen**
 
 In `lib/lead-store/repository.ts` neben `markAccepted`:
 
@@ -919,12 +919,12 @@ export async function markDelivered(id: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 5: Prüfen**
+- [x] **Step 5: Prüfen**
 
 Run: `npm run check`
 Erwartet: keine Fehler
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/ lib/lead-store/core.ts lib/lead-store/repository.ts
@@ -945,7 +945,7 @@ git commit -m "feat(lead-store): Benachrichtigungsart baufidesk"
 - Consumes: `LeadRow` aus `./repository`, `joinLead` aus `./core`
 - Produces: `baueUebergabe(row: LeadRow): Uebergabe`, `signiere(rumpf: string, geheimnis: string): string`, `stelleZu(row: LeadRow): Promise<{ ok: true } | { ok: false; retryable: boolean; code: string }>`
 
-- [ ] **Step 1: Test schreiben**
+- [x] **Step 1: Test schreiben**
 
 ```ts
 import { describe, it } from "node:test";
@@ -1006,12 +1006,12 @@ describe("Uebergabe an BaufiDesk", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `npm test -- --test-name-pattern="Uebergabe an BaufiDesk"`
 Erwartet: FAIL — Modul nicht gefunden
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```ts
 import "server-only";
@@ -1107,12 +1107,12 @@ export async function stelleZu(row: LeadRow): Promise<Zustellergebnis> {
 
 **Hinweis für den Umsetzer:** `LeadRow` in `lib/lead-store/repository.ts` lesen; die Spaltennamen oben (`details`, `attribution`, `public_id` …) gegen den echten Typ prüfen. Prüfen, ob `details` bereits geparstes JSON ist oder ein String — der `postgres`-Treiber liefert `jsonb` in der Regel als Objekt.
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `npm test -- --test-name-pattern="Uebergabe an BaufiDesk"`
 Erwartet: PASS (4 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/lead-store/baufidesk.ts lib/lead-store/baufidesk.test.ts
@@ -1133,7 +1133,7 @@ git commit -m "feat(lead-store): Rumpf und signierte Zustellung an BaufiDesk"
 **Interfaces:**
 - Consumes: `stelleZu` aus Task 8, `markDelivered` aus Task 7
 
-- [ ] **Step 1: Verzweigung in `processOne`**
+- [x] **Step 1: Verzweigung in `processOne`**
 
 Ganz oben in `processOne`, direkt nach `if (!row) return markCancelled(n.id, "lead_missing");`:
 
@@ -1157,7 +1157,7 @@ Ganz oben in `processOne`, direkt nach `if (!row) return markCancelled(n.id, "le
 
 Importe oben in der Datei ergänzen: `stelleZu` aus `./baufidesk`, `markDelivered` aus `./repository`.
 
-- [ ] **Step 2: Übergabe bei jedem neuen Lead anlegen**
+- [x] **Step 2: Übergabe bei jedem neuen Lead anlegen**
 
 In `app/(ads)/baufinanzierungsangebot-vergleichen/actions.ts` Zeile 69 und an der entsprechenden Stelle in `app/vergleich/actions.ts`:
 
@@ -1165,12 +1165,12 @@ In `app/(ads)/baufinanzierungsangebot-vergleichen/actions.ts` Zeile 69 und an de
       notifications: ["lead", "confirmation", "baufidesk"],
 ```
 
-- [ ] **Step 3: Prüfen**
+- [x] **Step 3: Prüfen**
 
 Run: `npm run check && npm test`
 Erwartet: keine Fehler, alle Tests grün
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/lead-store/notifications.ts "app/(ads)/baufinanzierungsangebot-vergleichen/actions.ts" app/vergleich/actions.ts
@@ -1183,7 +1183,7 @@ git commit -m "feat(lead-store): jeder Lead wird an BaufiDesk uebergeben"
 
 **Repo:** beide
 
-- [ ] **Step 1: Geheimnis einmal erzeugen**
+- [x] **Step 1: Geheimnis einmal erzeugen**
 
 ```bash
 node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))' > /tmp/ingest-secret.txt
@@ -1192,7 +1192,7 @@ wc -c /tmp/ingest-secret.txt
 
 Der Wert wird **nicht** in den Chat ausgegeben.
 
-- [ ] **Step 2: Organisations-ID von BaufiDesk ermitteln**
+- [x] **Step 2: Organisations-ID von BaufiDesk ermitteln**
 
 ```bash
 cd ~/Coding/Unterlagenpilot
@@ -1202,7 +1202,7 @@ scripts/supabase-sql.sh /tmp/orgs.sql
 
 Die Organisation von Jürgen (`juergen.ertel@gmx.de`) wählen.
 
-- [ ] **Step 3: Variablen in BaufiDesk setzen**
+- [x] **Step 3: Variablen in BaufiDesk setzen**
 
 ```bash
 cd ~/Coding/Unterlagenpilot
@@ -1212,7 +1212,7 @@ echo "<org-id>" | vercel env add BAUFIVERGLEICHER_ORGANIZATION_ID production
 
 Beide zusätzlich in `src/lib/env.ts` als optionale Felder ergänzen, falls dort alle Variablen geführt werden.
 
-- [ ] **Step 4: Variablen in baufivergleicher setzen**
+- [x] **Step 4: Variablen in baufivergleicher setzen**
 
 ```bash
 cd ~/Coding/baufivergleicher
@@ -1221,7 +1221,7 @@ echo "https://baufidesk.de/api/leads/baufivergleicher" | vercel env add BAUFIDES
 echo "true" | vercel env add LEAD_STORE_ENABLED production
 ```
 
-- [ ] **Step 5: Beide Seiten deployen — BaufiDesk zuerst**
+- [x] **Step 5: Beide Seiten deployen — BaufiDesk zuerst**
 
 Die Reihenfolge ist nicht beliebig: Steht die Route noch nicht, laufen die ersten Übergaben in die Wiederholung.
 
@@ -1232,7 +1232,7 @@ cd ~/Coding/baufivergleicher && git push origin main
 
 Beide Deployments abwarten, bis `vercel ls --prod` `Ready` zeigt.
 
-- [ ] **Step 6: Geheimnis vom Laufwerk löschen**
+- [x] **Step 6: Geheimnis vom Laufwerk löschen**
 
 ```bash
 rm -f /tmp/ingest-secret.txt /tmp/orgs.sql
@@ -1244,7 +1244,7 @@ rm -f /tmp/ingest-secret.txt /tmp/orgs.sql
 
 **Repo:** beide
 
-- [ ] **Step 1: Wachdienst von außen prüfen (ohne gültiges Geheimnis)**
+- [x] **Step 1: Wachdienst von außen prüfen (ohne gültiges Geheimnis)**
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -X POST https://baufidesk.de/api/leads/baufivergleicher \
@@ -1253,15 +1253,15 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST https://baufidesk.de/api/leads/
 
 Erwartet: `401`. Ein `200` oder eine Gate-Umleitung ist ein Abbruchgrund.
 
-- [ ] **Step 2: Testlead über das echte Formular absenden**
+- [x] **Step 2: Testlead über das echte Formular absenden**
 
 `https://baufivergleicher.de/baufinanzierungsangebot-vergleichen` im Browser ausfüllen, mit einem erkennbaren Namen (z. B. „Testlauf Übergabe") und einer erreichbaren Adresse.
 
-- [ ] **Step 3: Zustellung in baufivergleicher prüfen**
+- [x] **Step 3: Zustellung in baufivergleicher prüfen**
 
 Über `/intern` die Anfrage öffnen: Die Benachrichtigung `baufidesk` muss auf `delivered` stehen.
 
-- [ ] **Step 4: Fall in BaufiDesk per SQL nachweisen**
+- [x] **Step 4: Fall in BaufiDesk per SQL nachweisen**
 
 ```bash
 cd ~/Coding/Unterlagenpilot
@@ -1275,7 +1275,7 @@ scripts/supabase-sql.sh /tmp/nachweis.sql
 
 Erwartet: eine Zeile mit dem Testnamen und der Telefonnummer.
 
-- [ ] **Step 5: Beweisen, dass KEINE Mail hinausging**
+- [x] **Step 5: Beweisen, dass KEINE Mail hinausging**
 
 ```bash
 cat > /tmp/keine-mail.sql <<'SQL'
@@ -1287,11 +1287,11 @@ scripts/supabase-sql.sh /tmp/keine-mail.sql
 
 Erwartet: kein `message.sent` zu diesem Fall.
 
-- [ ] **Step 6: Dublettenschutz prüfen**
+- [x] **Step 6: Dublettenschutz prüfen**
 
 In `/intern` bei der Übergabe „Erneut senden" auslösen. Danach Step 4 wiederholen: Es darf **kein** zweiter Fall entstanden sein.
 
-- [ ] **Step 7: Testdaten wieder entfernen**
+- [x] **Step 7: Testdaten wieder entfernen**
 
 In `/intern` von baufivergleicher „Endgültig löschen" für den Testlead, und den Fall in BaufiDesk löschen. Danach Step 4 wiederholen: keine Zeile mehr.
 
@@ -1299,6 +1299,35 @@ In `/intern` von baufivergleicher „Endgültig löschen" für den Testlead, und
 rm -f /tmp/nachweis.sql /tmp/keine-mail.sql
 ```
 
-- [ ] **Step 8: Abschlussbericht an Jürgen**
+- [x] **Step 8: Abschlussbericht an Jürgen**
 
 Was live ist, was nachgewiesen wurde (mit den Zahlen aus den Abfragen), und was bewusst offen blieb (Angebots-Upload).
+
+---
+
+## Nachtrag: was bei der Umsetzung anders kam
+
+1. **`createCaseFromCanonical` schrieb pauschal `sources.type = "finlink_import"`.** Für eine
+   zweite Quelle wäre das schlicht falsch protokolliert. Der Writer nimmt jetzt eine
+   `Herkunft` entgegen (externe Quelle/ID, Quellenart, Lead-Quelle) und schreibt sie
+   BEIM ANLEGEN statt per Nachtrag – nur so kann der eindeutige Index die Dublette
+   überhaupt verhindern. Für baufivergleicher ist die Quellenart `kundenformular`:
+   Der Interessent hat selbst ausgefüllt.
+2. **Der Funnel-Schlüssel `investment` hat keine Entsprechung unter den
+   Finanzierungsarten.** Kapitalanlage ist in BaufiDesk eine Nutzung, keine Art. Wird
+   deshalb `kauf` + `kapitalanlage: true`.
+3. **Der Compiler fand zwei Stellen, die der Plan nicht kannte:** die Label-Tabelle in
+   `/intern` (Übergabe war namenlos) und den erschöpfenden `switch` in `buildEmail`.
+   Beide nachgezogen; `buildEmail` bricht bei `baufidesk` bewusst ab, damit nichts
+   stillschweigend als Mail hinausginge, falls die Verzweigung in `processOne` je
+   wegfiele.
+4. **Kein Git-Remote in baufivergleicher.** Das Projekt wird per `vercel deploy --prod`
+   deployt, nicht über einen Push. `git push` schlägt dort fehl.
+5. **baufivergleicher braucht Node 22** (`--experimental-strip-types`); das Terminal
+   startet mit Node 20. `export PATH="$HOME/.nvm/versions/node/v22.23.1/bin:$PATH"`.
+6. **Zwei rote Gates repariert, die nicht zu dieser Arbeit gehörten:** ein seit dem
+   17.09. veralteter Test in BaufiDesk (`ladeBereiche` kennt jetzt `sortierer`) und
+   Playwright-Debris, das `npm run check` in baufivergleicher dauerhaft rot aussehen
+   ließ.
+7. **Der Datenbanktest fand einen Fehler in seiner eigenen Erwartung:** Die Spalten am
+   Antragsteller heißen `phone`/`email`, nicht `telefon`. Der Code war richtig.
