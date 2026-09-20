@@ -54,6 +54,7 @@ enum LeadSource {
   manuell
   unbekannt
   webformular
+  baufivergleicher
 }
 
 /**
@@ -585,6 +586,14 @@ model Case {
   // hier "unbekannt", aber das Original ist noch da.
   quelle                LeadSource      @default(unbekannt)
   quelleDetail          String?
+  // Herkunft aus einem Fremdsystem, allgemein statt je Anbieter ein Feld.
+  // `finlinkId` bleibt, solange FinLink laeuft; neue Quellen kommen hierher.
+  // Zusammen eindeutig je Organisation – siehe @@unique weiter unten. Der
+  // Index ist ECHT und nicht nur eine Anwendungsregel: Zwei gleichzeitige
+  // Wiederholungsversuche derselben Uebergabe wuerden sonst zwei Faelle
+  // anlegen, und genau daran hing im August die doppelte Bankzusammenfassung.
+  externeQuelle         String?
+  externeId             String?
   // Dreiwertig: null heißt "keine Angabe" und ist NICHT "nein".
   einwilligungKontakt   Boolean?
   einwilligungMarketing Boolean?
@@ -687,6 +696,7 @@ model Case {
   @@index([organizationId, akteArt])
   // Die Dublettenprüfung des Lead-Abgleichs läuft je Lead über dieses Feld.
   @@index([finlinkId])
+  @@unique([organizationId, externeQuelle, externeId])
   @@map("cases")
 }
 
