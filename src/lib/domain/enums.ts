@@ -678,6 +678,9 @@ export const AUDIT_ACTIONS = [
   "sortierer.stapel_angelegt",
   "sortierer.stapel_geloescht",
   "sortierer.ausgeliefert",
+  // Abbestellen/Bestellen der taeglichen Wiedervorlage-Mail. Ohne Eintrag waere
+  // spaeter nicht zu klaeren, warum jemand seit Wochen nichts mehr bekommt.
+  "benachrichtigung.geaendert",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

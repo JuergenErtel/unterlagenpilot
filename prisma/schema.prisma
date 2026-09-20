@@ -465,6 +465,11 @@ model User {
   // Sperre gegen wiederholte "Adresse bereits vergeben"-Mails. Liegt am User,
   // weil es zu direkt angelegten Konten keinen SignupRequest gibt.
   letzteHinweisMailAm DateTime?
+  // Taegliche Wiedervorlage-Mail (Cron /api/cron/reminders). Liegt am Nutzer,
+  // nicht an der Organisation: wer sie abbestellt, bestellt sie fuer sich ab
+  // und nicht fuer seine Kollegen. Abschaltbar ueber /settings – eine
+  // Umgebungsvariable waere dafuer kein Ersatz.
+  wiedervorlageMail   Boolean          @default(true)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 

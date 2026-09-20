@@ -111,14 +111,22 @@ export async function GET(req: NextRequest) {
     orgsWithOverdue += 1;
     overdueTotal += overdue.length;
 
+    // Nur an Vermittler, die die taegliche Mail nicht abbestellt haben. Der
+    // Filter sitzt bewusst hier und nicht erst vor dem sendEmail: sonst zaehlte
+    // die Zusammenfassung Empfaenger mit, die nie etwas bekommen.
     const brokers = await prisma.user.findMany({
-      where: { organizationId, active: true, email: { contains: "@" } },
+      where: {
+        organizationId,
+        active: true,
+        wiedervorlageMail: true,
+        email: { contains: "@" },
+      },
       select: { name: true, email: true },
     });
     const recipients = brokers.map((b) => b.email);
     summary.push({ organizationId, overdue: overdue.length, recipients });
 
-    if (dryRun || !emailReady) continue;
+    if (dryRun || !emailReady || brokers.length === 0) continue;
 
     for (const broker of brokers) {
       const firstName = broker.name.split(" ")[0] || broker.name;

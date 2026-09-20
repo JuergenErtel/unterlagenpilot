@@ -14,6 +14,8 @@ import { getSystemStatus } from "@/lib/system/status";
 import { SystemStatusPanel, PilotBanner } from "@/components/system/system-status-panel";
 import { FormularKarte } from "@/components/anfrage/formular-karte";
 import { ladeFormularStand } from "@/lib/actions/anfrage-verwaltung";
+import { BenachrichtigungenKarte } from "@/components/settings/benachrichtigungen-karte";
+import { ladeBenachrichtigungen } from "@/lib/actions/benachrichtigungen";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   });
   const status = await getSystemStatus(ctx.organizationId);
   const formularStand = await ladeFormularStand();
+  const benachrichtigungen = await ladeBenachrichtigungen();
 
   const aiProvider = process.env.AI_PROVIDER ?? "mock";
   const ocrProvider = process.env.OCR_PROVIDER ?? "mock";
@@ -186,6 +189,8 @@ export default async function SettingsPage() {
             </ul>
           </CardContent>
         </Card>
+
+        <BenachrichtigungenKarte stand={benachrichtigungen} />
 
         <FormularKarte stand={formularStand} />
       </div>
