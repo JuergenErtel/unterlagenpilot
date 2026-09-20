@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import type { CaseSourceType, LeadSource } from "@prisma/client";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import { formatCaseNumber, highestSequence, caseNumberPrefix } from "@/lib/cases/case-number";
 
@@ -11,6 +12,26 @@ export interface WriteResult {
   caseId: string;
   caseNumber: string;
   deduped: boolean;
+}
+
+/**
+ * Herkunft eines Falls aus einem Fremdsystem, das nicht FinLink ist.
+ *
+ * Ohne diese Angabe legt der Writer eine `finlink_import`-Quelle an – das war
+ * richtig, solange FinLink der einzige Zufluss war, und wäre bei jeder
+ * weiteren Quelle schlicht falsch protokolliert.
+ */
+export interface Herkunft {
+  /** Name des Fremdsystems, z. B. "baufivergleicher". */
+  externeQuelle: string;
+  /** ID des Vorgangs DORT. Zusammen mit externeQuelle eindeutig je Organisation. */
+  externeId: string;
+  /** Art des Quelleneintrags am Fall. */
+  quellenArt: CaseSourceType;
+  /** Lead-Quelle des Falls (Auswertung, Pipeline-Farbe). */
+  leadQuelle?: LeadSource;
+  /** Rohwert der Herkunft, z. B. "landingpage-ads". */
+  quelleDetail?: string | null;
 }
 
 /**
@@ -49,7 +70,8 @@ async function nextCaseNumber(organizationId: string, year: number): Promise<str
  */
 export async function createCaseFromCanonical(
   ctx: WriteContext,
-  canonical: CanonicalCase
+  canonical: CanonicalCase,
+  herkunft?: Herkunft
 ): Promise<WriteResult> {
   const finlinkId = canonical.platformIds.finlinkId ?? null;
 
@@ -57,6 +79,17 @@ export async function createCaseFromCanonical(
   if (finlinkId) {
     const existing = await prisma.case.findFirst({
       where: { organizationId: ctx.organizationId, finlinkId },
+      select: { id: true, caseNumber: true },
+    });
+    if (existing) return { caseId: existing.id, caseNumber: existing.caseNumber, deduped: true };
+  }
+  if (herkunft) {
+    const existing = await prisma.case.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        externeQuelle: herkunft.externeQuelle,
+        externeId: herkunft.externeId,
+      },
       select: { id: true, caseNumber: true },
     });
     if (existing) return { caseId: existing.id, caseNumber: existing.caseNumber, deduped: true };
@@ -113,6 +146,15 @@ export async function createCaseFromCanonical(
     status: "neu" as const,
     financingType: canonical.financingType ?? null,
     finlinkId,
+    // Externe Herkunft direkt beim Anlegen, nicht per Nachtrag: Der eindeutige
+    // Index (organizationId, externeQuelle, externeId) soll die Dublette
+    // verhindern koennen. Ein spaeteres update() liesse zwei gleichzeitige
+    // Zustellversuche beide durchlaufen.
+    externeQuelle: herkunft?.externeQuelle ?? null,
+    externeId: herkunft?.externeId ?? null,
+    quelle: herkunft?.leadQuelle ?? undefined,
+    quelleDetail: herkunft?.quelleDetail ?? undefined,
+    notes: canonical.notes ?? undefined,
     applicants: { create: applicantsCreate },
     property: p
       ? { create: { objektart: p.objektart ?? null, street: p.strasse ?? null, zip: p.plz ?? null, city: p.ort ?? null } }
@@ -120,7 +162,12 @@ export async function createCaseFromCanonical(
     financingRequest: {
       create: { kaufpreis: f.kaufpreis ?? null, darlehenswunsch: f.darlehenswunsch ?? null },
     },
-    sources: { create: { type: "finlink_import" as const, externalId: finlinkId } },
+    sources: {
+      create: {
+        type: herkunft?.quellenArt ?? ("finlink_import" as const),
+        externalId: herkunft?.externeId ?? finlinkId,
+      },
+    },
   });
 
   // Race-Schutz auf @@unique([organizationId, caseNumber]): bei P2002 neu berechnen.

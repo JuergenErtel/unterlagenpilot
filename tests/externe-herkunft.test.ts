@@ -13,7 +13,7 @@ describe("Externe Herkunft am Fall", () => {
   });
 
   it("laesst die bestehenden Quellen unberuehrt", () => {
-    expect(LeadSource.finlink ?? LeadSource.immoscout24).toBeDefined();
+    expect(LeadSource.immoscout24).toBe("immoscout24");
     expect(LeadSource.webformular).toBe("webformular");
     expect(LeadSource.manuell).toBe("manuell");
   });
