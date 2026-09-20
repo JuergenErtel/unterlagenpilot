@@ -21,6 +21,9 @@
  *                      Geheimnis im Authorization-Header (persoenliches
  *                      Geraetetoken, an genau einen Nutzer gebunden). Das Gate
  *                      ist ein Browser-Cookie – ein Kurzbefehl hat keines.
+ *  - `/api/leads/*`    Lead-Uebergabe aus baufivergleicher.de. Traegt Bearer UND
+ *                      HMAC-Signatur im Header und ist fest an eine Organisation
+ *                      gebunden. Ein fremder Server hat kein Gate-Cookie.
  *  - `/monitoring`     Sentry-Tunnel (Fehler-Reports)
  *  - `/gate`, `/api/gate`  das Gate selbst
  *  - `/registrieren/bestaetigen/*`, `/passwort-neu/*`, `/einladung/*`
@@ -38,6 +41,7 @@ export const PUBLIC_PREFIXES = [
   "/impressum",
   "/api/cron",
   "/api/eingang",
+  "/api/leads",
   "/monitoring",
   "/gate",
   "/api/gate",

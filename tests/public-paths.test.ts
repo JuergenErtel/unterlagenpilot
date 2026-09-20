@@ -22,9 +22,14 @@ describe("isPublicPath – was vor dem Site-Gate liegt", () => {
     expect(isPublicPath("/api/eingang/upload")).toBe(true);
   });
 
+  it("laesst die Lead-Uebergabe durch - sie traegt Bearer und Signatur im Header", () => {
+    expect(isPublicPath("/api/leads/baufivergleicher")).toBe(true);
+  });
+
   it("verwechselt Praefixe nicht mit Teilstrings", () => {
     expect(isPublicPath("/uploads-intern")).toBe(false);
     expect(isPublicPath("/agbx")).toBe(false);
     expect(isPublicPath("/api/eingangs-tor")).toBe(false);
+    expect(isPublicPath("/api/leadsx")).toBe(false);
   });
 });
