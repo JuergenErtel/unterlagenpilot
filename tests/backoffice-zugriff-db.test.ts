@@ -148,11 +148,14 @@ describe.runIf(RUN)("Backoffice-Zugriff (PGlite)", () => {
   }, 60_000);
 
   it("ladeBereiche: Backoffice nur mit Rolle und Flag, Portal nur fuer verknuepfte Organisationen", async () => {
-    expect(await zugriff.ladeBereiche(ctx(nutzer.vermittler))).toEqual({ vertrieb: true, backoffice: false, portal: false });
-    expect(await zugriff.ladeBereiche(ctx(nutzer.manager))).toEqual({ vertrieb: true, backoffice: true, portal: false });
-    expect(await zugriff.ladeBereiche(ctx(nutzer.eManager))).toEqual({ vertrieb: true, backoffice: false, portal: false });
-    expect(await zugriff.ladeBereiche(ctx(nutzer.cAdmin))).toEqual({ vertrieb: true, backoffice: false, portal: true });
-    expect(await zugriff.ladeBereiche(ctx(nutzer.cMit))).toEqual({ vertrieb: true, backoffice: false, portal: true });
-    expect(await zugriff.ladeBereiche(ctx(nutzer.dAdmin))).toEqual({ vertrieb: true, backoffice: false, portal: false });
+    // Der Sortierer ist seit dem 17.09.2026 fuer JEDEN sichtbar und hat
+    // keinen Schalter - er gehoert deshalb in jede Erwartung.
+    const bereiche = { vertrieb: true, sortierer: true, backoffice: false, portal: false };
+    expect(await zugriff.ladeBereiche(ctx(nutzer.vermittler))).toEqual(bereiche);
+    expect(await zugriff.ladeBereiche(ctx(nutzer.manager))).toEqual({ ...bereiche, backoffice: true });
+    expect(await zugriff.ladeBereiche(ctx(nutzer.eManager))).toEqual(bereiche);
+    expect(await zugriff.ladeBereiche(ctx(nutzer.cAdmin))).toEqual({ ...bereiche, portal: true });
+    expect(await zugriff.ladeBereiche(ctx(nutzer.cMit))).toEqual({ ...bereiche, portal: true });
+    expect(await zugriff.ladeBereiche(ctx(nutzer.dAdmin))).toEqual(bereiche);
   }, 60_000);
 });
