@@ -120,6 +120,24 @@ Request-Zustand. Jede Wiederholung ist damit byte-gleich.
 Die Trennung ist wichtig: Ein falsches Geheimnis vier Mal zu wiederholen
 verzögert den Alarm nur.
 
+### Nachtrag 30.09.2026: Meta-Anzeigen aus AdPilot
+
+Die Form des Rumpfs bleibt unverändert, neu ist nur, womit die Felder gefüllt werden.
+AdPilot hängt an seine Meta-Anzeigen `utm_source=facebook` und
+`utm_campaign=<slug>` an, aber weder `src` noch `campaign`. Dadurch kamen
+solche Leads als `referral` ohne Kampagne an.
+
+- **baufivergleicher** (`lib/lead-store/baufidesk.ts`): `quelleText` wird zu
+  `meta-ads`, wenn `utm_source` facebook/fb/instagram/ig/meta ist UND die Quelle
+  nur ein abgeleiteter Rückfallwert war (`referral`, `website`,
+  `landingpage-angebot`). Eine ausdrückliche Quelle (`src`, Google-Klick,
+  Partner) wird nie überschrieben. `kampagne` = `campaign`, sonst
+  `utm_campaign`. Beide Felder werden auf 80/120 Zeichen gekürzt, weil die
+  Erfassung 200 Zeichen erlaubt.
+- **BaufiDesk**: `kampagne` wurde bis dahin angenommen und verworfen. Jetzt landet sie
+  mit in `Case.quelleDetail` (`herkunftDetail`: „Meta-Anzeige · <slug>") und
+  steht in der Fallakte am Quellen-Badge.
+
 ## Seite baufivergleicher
 
 - Neue Art `baufidesk` in `lead_store.notification_kind` (Enum-Wert ergänzen,

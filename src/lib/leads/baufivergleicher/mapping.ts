@@ -69,6 +69,25 @@ export function spannenVermerk(u: Uebergabe): string | null {
   return zeilen.join("\n");
 }
 
+/** Lesbare Namen fuer die Quellkennungen, die baufivergleicher vergibt. */
+const QUELLE_TEXT: Record<string, string> = {
+  "meta-ads": "Meta-Anzeige",
+  "google-ads": "Google-Anzeige",
+};
+
+/**
+ * Herkunft innerhalb von baufivergleicher, fuer `Case.quelleDetail`.
+ * Die Kampagne gehoert mit hinein: Sie ist das Einzige, woran der Vermittler
+ * sieht, welche AdPilot-Kampagne den Lead gebracht hat.
+ */
+export function herkunftDetail(u: Uebergabe): string | null {
+  const { quelleText, kampagne } = u.herkunft;
+  const teile = [quelleText ? (QUELLE_TEXT[quelleText] ?? quelleText) : null, kampagne].filter(
+    (t): t is string => Boolean(t)
+  );
+  return teile.length ? teile.join(" · ") : null;
+}
+
 const oderUndefined = <T>(wert: T | null): T | undefined => (wert == null ? undefined : wert);
 
 /** Uebergabe -> kanonischer Fall. caseNumber vergibt der case-writer. */

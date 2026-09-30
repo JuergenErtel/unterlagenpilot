@@ -492,7 +492,11 @@ export default async function CaseCockpitPage({
               </Badge>
             )}
             {caseRow.quelle !== "unbekannt" && (
-              <Badge variant="neutral">Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}</Badge>
+              <Badge variant="neutral" className="max-w-[28rem] truncate" title={caseRow.quelleDetail ?? undefined}>
+                Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}
+                {/* Nur hier lesbar formatiert (Meta-Anzeige · Kampagne); FinLink-Details sind Rohkennungen. */}
+                {caseRow.quelle === "baufivergleicher" && caseRow.quelleDetail && <> · {caseRow.quelleDetail}</>}
+              </Badge>
             )}
             <Badge variant={caseRow.einwilligungKontakt === true ? "success" : "neutral"}>
               Telefon:{" "}

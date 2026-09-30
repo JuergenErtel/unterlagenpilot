@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { createCaseFromCanonical } from "@/lib/platforms/case-writer";
-import { zuKanonisch } from "./mapping";
+import { herkunftDetail, zuKanonisch } from "./mapping";
 import type { Uebergabe } from "./vertrag";
 
 export interface Anlageergebnis {
@@ -38,7 +38,7 @@ export async function legeFallAn(u: Uebergabe, organizationId: string): Promise<
       // Wahrheit ueber die Herkunft, nicht "Import aus einer Plattform".
       quellenArt: "kundenformular",
       leadQuelle: "baufivergleicher",
-      quelleDetail: u.herkunft.quelleText,
+      quelleDetail: herkunftDetail(u),
     }
   );
 

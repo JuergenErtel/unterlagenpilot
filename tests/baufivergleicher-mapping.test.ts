@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zuKanonisch, spannenVermerk } from "@/lib/leads/baufivergleicher/mapping";
+import { zuKanonisch, spannenVermerk, herkunftDetail } from "@/lib/leads/baufivergleicher/mapping";
 import type { Uebergabe } from "@/lib/leads/baufivergleicher/vertrag";
 
 const ads: Uebergabe = {
@@ -119,5 +119,29 @@ describe("Uebergabe zu kanonischem Fall", () => {
   it("laesst einen unbekannten Funnel-Schluessel lieber leer als falsch", () => {
     const k = zuKanonisch({ ...ads, finanzierung: { ...ads.finanzierung, finanzierungsart: "neu_erfunden" } });
     expect(k.financingType).toBeUndefined();
+  });
+});
+
+describe("herkunftDetail", () => {
+  const mit = (quelleText: string | null, kampagne: string | null): Uebergabe => ({
+    ...ads,
+    herkunft: { ...ads.herkunft, quelleText, kampagne },
+  });
+
+  it("macht aus meta-ads eine lesbare Meta-Anzeige mit Kampagne", () => {
+    // AdPilot-Kampagnen laufen auf Meta; baufivergleicher kennzeichnet sie so.
+    expect(herkunftDetail(mit("meta-ads", "baufi-herbst"))).toBe("Meta-Anzeige · baufi-herbst");
+  });
+
+  it("laesst unbekannte Quellen im Rohtext stehen", () => {
+    expect(herkunftDetail(mit("landingpage-ads", null))).toBe("landingpage-ads");
+  });
+
+  it("zeigt eine Kampagne auch ohne Quelle", () => {
+    expect(herkunftDetail(mit(null, "sommer"))).toBe("sommer");
+  });
+
+  it("ist null, wenn nichts angegeben ist", () => {
+    expect(herkunftDetail(mit(null, null))).toBeNull();
   });
 });
