@@ -60,6 +60,9 @@
     --destructive-foreground: 0 60% 98%;
     --ai: 176 100% 24%;              /* Markentürkis: von der Maschine beigetragen */
     --ai-foreground: 176 40% 98%;
+    /* Neongruen: Leads aus eigenen Meta-Anzeigen (AdPilot) – bewusst ausserhalb der Palette, soll auffallen */
+    --neon: 108 100% 54%;
+    --neon-foreground: 120 100% 9%;
 
     /* Struktur: Haarlinien statt Kaesten */
     --border: 212 16% 87%;
@@ -112,6 +115,8 @@
     --destructive-foreground: 0 60% 98%;
     --ai: 176 58% 52%;
     --ai-foreground: 215 40% 9%;
+    --neon: 108 100% 54%;
+    --neon-foreground: 120 100% 9%;
 
     --border: 215 16% 21%;
     --input: 215 16% 24%;

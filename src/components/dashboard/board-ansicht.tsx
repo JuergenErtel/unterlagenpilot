@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { nurVertrieb } from "@/lib/cases/aktenart";
 import { buildPipeline, type PipelineCaseInput } from "@/lib/cases/pipeline";
+import { istMetaAnzeige } from "@/lib/leads/meta-anzeige";
 import { buildBoard, liegezeitTage, type BoardKarte } from "@/lib/cases/lead-board";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
 import { laeuftAusserhalb } from "@/lib/cases/next-step";
@@ -118,6 +119,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       abschlussdatum: true,
       darlehensbetrag: true,
       quelle: true,
+      quelleDetail: true,
       erstgespraechGefuehrtAm: true,
       // Die folgenden Relationen speisen die Machbarkeits-Ampel. Sie haengen
       // bewusst an DIESER Abfrage: ein caseToCanonical je Karte waere eine
@@ -269,6 +271,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
     // BaufiDesk den Fall nicht mehr (siehe next-step.ts). Ohne sie stand der
     // Knopf "Erstgespraech fuehren" auch auf Karten in "Zusage" – die Karte
     // rechnete dieselbe Frage anders als die Prioritaetsleiter.
+    metaAnzeige: istMetaAnzeige(c.quelle, c.quelleDetail),
     erstgespraechOffen:
       !laeuftAusserhalb(c.leadPhase) &&
       !c.erstgespraechGefuehrtAm &&
@@ -356,6 +359,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
       vorschlag: k.vorschlag,
       ampel: k.ampel,
       erstgespraechOffen: k.erstgespraechOffen,
+      metaAnzeige: k.metaAnzeige,
       einreichung: k.einreichung,
     })),
   });

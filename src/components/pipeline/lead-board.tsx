@@ -30,6 +30,8 @@ export interface BoardKarteView {
    */
   ampel: { farbe: string; text: string; grund: string } | null;
   erstgespraechOffen: boolean;
+  /** Lead aus einer eigenen Meta-Anzeige (AdPilot): neongruene Marke. */
+  metaAnzeige: boolean;
   /**
    * Bank und Zahl der fehlenden Konditionen – nur ab der Phase
    * "Kreditpruefung eingereicht", sonst null. Schlichtes Objekt aus demselben
@@ -441,6 +443,11 @@ export function LeadBoard({
                         {liegezeitText(k.liegezeit)}
                         {k.quelle !== "Unbekannt" && <> · {k.quelle}</>}
                       </p>
+                      {k.metaAnzeige && (
+                        <Badge variant="neon" className="mt-1.5">
+                          Meta-Anzeige
+                        </Badge>
+                      )}
                       {k.ampel && k.ampel.farbe !== "gruen" && k.ampel.farbe !== "grau" && (
                         <p
                           className={`mt-1 text-xs ${AMPEL_TEXT[k.ampel.farbe] ?? "text-muted-foreground"}`}

@@ -13,6 +13,7 @@ const badgeVariants = cva(
         warning: "border-transparent bg-warning/15 text-[hsl(var(--warning))]",
         destructive: "border-transparent bg-destructive/12 text-destructive",
         ai: "border-transparent bg-ai/12 text-ai",
+        neon: "border-transparent bg-neon font-semibold text-neon-foreground shadow-[0_0_10px_hsl(var(--neon)/0.6)]",
         neutral: "border-border bg-muted text-muted-foreground",
         outline: "text-foreground",
       },

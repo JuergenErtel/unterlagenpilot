@@ -20,6 +20,7 @@ import { UploadLinkManager } from "@/components/case/upload-link-manager";
 import { SelfDisclosureManager } from "@/components/case/self-disclosure-manager";
 import { LeadPhaseSelect } from "@/components/case/lead-phase-select";
 import { schlagePhaseVor } from "@/lib/cases/lead-phase";
+import { istMetaAnzeige } from "@/lib/leads/meta-anzeige";
 import { LEAD_SOURCE_LABELS, FINANCING_TYPE_LABELS, LEAD_PHASE_LABELS, type LeadSource, type FinancingType, type LeadPhase } from "@/lib/domain/enums";
 import { brauchtSelbststaendigenEinkommensnachweis } from "@/lib/checklists/case-input";
 import { zertifikatFehlendeAngaben } from "@/lib/pdf/zertifikat";
@@ -492,7 +493,11 @@ export default async function CaseCockpitPage({
               </Badge>
             )}
             {caseRow.quelle !== "unbekannt" && (
-              <Badge variant="neutral" className="max-w-[28rem] truncate" title={caseRow.quelleDetail ?? undefined}>
+              <Badge
+                variant={istMetaAnzeige(caseRow.quelle, caseRow.quelleDetail) ? "neon" : "neutral"}
+                className="max-w-[28rem] truncate"
+                title={caseRow.quelleDetail ?? undefined}
+              >
                 Quelle: {LEAD_SOURCE_LABELS[caseRow.quelle as LeadSource]}
                 {/* Nur hier lesbar formatiert (Meta-Anzeige · Kampagne); FinLink-Details sind Rohkennungen. */}
                 {caseRow.quelle === "baufivergleicher" && caseRow.quelleDetail && <> · {caseRow.quelleDetail}</>}

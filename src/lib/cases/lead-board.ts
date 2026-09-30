@@ -37,6 +37,8 @@ export interface BoardKarte {
    * in dem die Leiter das Gespraech nach vorn zieht.
    */
   erstgespraechOffen: boolean;
+  /** Lead aus einer eigenen Meta-Anzeige (AdPilot) – neongruen markiert, siehe leads/meta-anzeige.ts. */
+  metaAnzeige: boolean;
   /**
    * Bank und Luecken der Einreichung – nur fuer Karten ab der Phase
    * "Kreditpruefung eingereicht". Ohne sie ist die Spalte eine Behauptung:

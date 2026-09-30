@@ -1,3 +1,4 @@
+import { META_ANZEIGE_TEXT } from "@/lib/leads/meta-anzeige";
 import type { CanonicalCase } from "@/lib/domain/canonical";
 import type { FinancingType } from "@/lib/domain/enums";
 import type { Uebergabe } from "./vertrag";
@@ -71,7 +72,7 @@ export function spannenVermerk(u: Uebergabe): string | null {
 
 /** Lesbare Namen fuer die Quellkennungen, die baufivergleicher vergibt. */
 const QUELLE_TEXT: Record<string, string> = {
-  "meta-ads": "Meta-Anzeige",
+  "meta-ads": META_ANZEIGE_TEXT,
   "google-ads": "Google-Anzeige",
 };
 
