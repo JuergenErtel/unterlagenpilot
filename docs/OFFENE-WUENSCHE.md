@@ -131,10 +131,15 @@ Beim Kürzen der Selbstauskunft gefunden, bewusst nicht mitgemacht:
   in `catalog.ts`, `ANGESTELLT` in `maske.ts`, `BESCHAEFTIGUNG_MIT_ARBEITSVERTRAG`
   in `reife.ts`). Genau diese Divergenz hat dazu geführt, dass beim Minijob das
   Eintrittsdatum aus der Telefonmaske fiel.
-- **Die Regel „wer liest, nimmt die volle Kette" gilt auf Feldebene, nicht auf
+- ~~**Die Regel „wer liest, nimmt die volle Kette" gilt auf Feldebene, nicht auf
   Personenebene.** Ändert eine Person nachträglich ihre Berufsart, fällt ihre
   Spalte aus der sichtbaren Kette, und bereits gegebene Antworten verschwinden
-  aus der Übernahme.
+  aus der Übernahme.~~ **Erledigt
+  08.10.2026:** `planUebernahme` läuft jetzt über alle Seiten und beide
+  Personen-Spalten; eine verdeckte Seite oder Spalte wird wie ein verdecktes
+  Feld nur vermerkt. Antworten einer weggefallenen zweiten Person (Haushalt
+  von 2 auf 1) stehen unter „nur zur Kenntnis" und werden nie vorgeschlagen,
+  sonst legte das Übernehmen einen Antragsteller an.
 - **Die Abschnitte der Telefonmaske haben sich verschoben:** Das Nettoeinkommen
   steht seit dem Schnitt unter „Zur Person" statt unter „Beruf und Einkommen",
   weil der Abschnitt an der Seite hängt und nicht am Feld.

@@ -116,6 +116,64 @@ describe("planUebernahme", () => {
 });
 
 /**
+ * Dieselbe Regel eine Ebene hoeher: auf SEITEN und PERSONEN-SPALTEN.
+ *
+ * `planUebernahme` lief ueber `sichtbareSchritte` – eine Seite oder Spalte,
+ * deren Bedingung nicht mehr traegt, fiel samt aller Antworten heraus. Wer
+ * erst "angestellt" waehlte, den Arbeitgeber nannte und dann auf "Rentner"
+ * umstellte, verlor den Arbeitgeber still aus Vorschlag UND "ohneZiel".
+ */
+describe("planUebernahme: verdeckte Seiten und Spalten", () => {
+  it("behaelt die Berufsangaben einer Person, deren Berufsart sich spaeter geaendert hat", () => {
+    const antworten: Antworten = {
+      "p1.personen.beruf_art": "rentner",
+      "p1.beruf_details.arbeitgeber": "Muster GmbH",
+    };
+    const plan = planUebernahme(antworten, leererStand);
+    expect(plan.vorschlaege.some((v) => v.schluessel === "p1.beruf_details.arbeitgeber")).toBe(true);
+  });
+
+  it("behaelt die Spalte der zweiten Person, wenn nur sie den Berufszweig verlassen hat", () => {
+    const stand: Fallstand = {
+      ...leererStand,
+      applicants: [{ id: "a1", position: 1 }, { id: "a2", position: 2 }],
+    };
+    const antworten: Antworten = {
+      "haushalt.anzahl": "2",
+      "p1.personen.beruf_art": "angestellter",
+      "p2.personen.beruf_art": "rentner",
+      "p2.beruf_details.arbeitgeber": "Alte Firma AG",
+    };
+    const plan = planUebernahme(antworten, stand);
+    const v = plan.vorschlaege.find((x) => x.schluessel === "p2.beruf_details.arbeitgeber");
+    expect(v?.ziel.person).toBe(2);
+  });
+
+  it("behaelt die Objektdetails, wenn 'Immobilie gefunden' zurueckgenommen wurde", () => {
+    const antworten: Antworten = {
+      "vorhaben.art": "kauf_bestand",
+      "vorhaben.stand": "nicht_besichtigt",
+      "objekt_details.objektart": "einfamilienhaus",
+    };
+    const plan = planUebernahme(antworten, leererStand);
+    expect(plan.vorschlaege.some((v) => v.schluessel === "objekt_details.objektart")).toBe(true);
+  });
+
+  it("schreibt Antworten einer weggefallenen zweiten Person nicht, zeigt sie aber", () => {
+    // Haushalt von zwei auf einen Antragsteller zurueckgestellt: Ein Vorschlag
+    // fuer Person 2 wuerde beim Uebernehmen einen Antragsteller ANLEGEN, den
+    // es laut Kunde nicht gibt. Verloren gehen darf die Angabe trotzdem nicht.
+    const antworten: Antworten = {
+      "haushalt.anzahl": "1",
+      "p2.personen.vorname": "Petra",
+    };
+    const plan = planUebernahme(antworten, leererStand);
+    expect(plan.vorschlaege.some((v) => v.ziel.person === 2)).toBe(false);
+    expect(plan.ohneZiel).toContainEqual({ label: "Vorname (Antragsteller 2)", wert: "Petra" });
+  });
+});
+
+/**
  * Zwei beantwortete Felder, EIN Zielfeld.
  *
  * Seit dem Katalogschnitt stehen `objekt_preis.kaufpreis` und

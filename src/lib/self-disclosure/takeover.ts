@@ -1,5 +1,6 @@
 import { sichtbareSchritte, personenSchluessel, offeneFelder } from "@/lib/self-disclosure/navigation";
-import type { Antworten, Feld, SichtbarerSchritt, Ziel } from "@/lib/self-disclosure/types";
+import { KATALOG, anzahlAntragsteller } from "@/lib/self-disclosure/catalog";
+import type { Antworten, Feld, Schritt, Ziel } from "@/lib/self-disclosure/types";
 import { KATALOG_ZU_FINANZIERUNGSART } from "@/lib/self-disclosure/finanzierungsart";
 
 /**
@@ -74,23 +75,37 @@ function fallwertLesen(
 
 /** Eine tatsächlich gegebene Antwort, samt allem, was der Plan darüber weiß. */
 interface Beantwortet {
-  schritt: SichtbarerSchritt;
+  schritt: Schritt;
   feld: Feld;
   spaltenPerson?: 1 | 2;
   schluessel: string;
   kundenwert: string;
-  /** Trägt die Bedingung des Felds bei DIESEN Antworten noch? */
+  /** Trägt die Bedingung des Felds (samt Seite und Spalte) bei DIESEN Antworten noch? */
   sichtbar: boolean;
+  /**
+   * Antwort einer Person, die es laut Haushaltsangabe nicht mehr gibt. Sie
+   * wird gezeigt, aber nie vorgeschlagen: Beim Übernehmen legte ein Vorschlag
+   * für Person 2 einen Antragsteller AN (`schreibeVorschlaege`).
+   */
+  ohnePerson: boolean;
 }
 
 /**
  * Alle Antworten, die der Kunde tatsächlich gegeben hat – in Katalogreihenfolge.
  *
- * Bewusst ALLE Felder des Schritts, nicht `sichtbareFelder`: "Wer liest, nimmt
- * die volle Kette." Eine gegebene Antwort darf nicht verschwinden, nur weil der
- * Kunde die zugehörige Steuerantwort später geändert hat – sie steht ja
- * weiterhin in `answers` und der Vermittler muss sie sehen können. Ob die
- * Bedingung noch trägt, wird deshalb nur VERMERKT, nicht zum Filter gemacht.
+ * Bewusst ALLE Felder ALLER Seiten und BEIDER Personen-Spalten, nicht
+ * `sichtbareFelder`/`sichtbareSchritte`: "Wer liest, nimmt die volle Kette."
+ * Eine gegebene Antwort darf nicht verschwinden, nur weil der Kunde die
+ * zugehörige Steuerantwort später geändert hat – sie steht ja weiterhin in
+ * `answers` und der Vermittler muss sie sehen können. Ob die Bedingung noch
+ * trägt, wird deshalb nur VERMERKT, nicht zum Filter gemacht.
+ *
+ * Die Regel galt bis 08.10.2026 nur auf Feldebene. Über `sichtbareSchritte`
+ * fiel eine ganze Seite oder Spalte heraus, sobald IHRE Bedingung nicht mehr
+ * trug: Wer erst „angestellt" wählte, den Arbeitgeber nannte und dann auf
+ * „Rentner" umstellte, verlor den Arbeitgeber still aus Vorschlag und
+ * „ohneZiel" – ebenso die Objektdetails, wenn „Immobilie gefunden"
+ * zurückgenommen wurde.
  *
  * Umfang fest "voll": Der Bogen kann aus dem kurzen ODER dem vollen Weg
  * stammen, der Vermittler soll aber ALLES sehen, was der Kunde tatsächlich
@@ -98,11 +113,18 @@ interface Beantwortet {
  * Schritt verschweigen, der nur im vollen Katalog steht.
  */
 function beantworteteFelder(antworten: Antworten): Beantwortet[] {
+  const kette = sichtbareSchritte(antworten, "voll");
+  const anzahl = anzahlAntragsteller(antworten);
   const out: Beantwortet[] = [];
-  for (const schritt of sichtbareSchritte(antworten, "voll")) {
-    for (const spaltenPerson of schritt.personen ?? [undefined]) {
-      for (const feld of schritt.schritt.felder) {
-        const schluessel = personenSchluessel(schritt.schritt.id, feld.id, spaltenPerson);
+  for (const schritt of KATALOG) {
+    const imBogen = kette.find((s) => s.id === schritt.id);
+    const spalten: Array<1 | 2 | undefined> = schritt.personenSpalten ? [1, 2] : [undefined];
+    for (const spaltenPerson of spalten) {
+      const spalteSichtbar =
+        imBogen !== undefined &&
+        (spaltenPerson === undefined || (imBogen.personen ?? []).includes(spaltenPerson));
+      for (const feld of schritt.felder) {
+        const schluessel = personenSchluessel(schritt.id, feld.id, spaltenPerson);
         const roh = antworten[schluessel];
         const kundenwert = alsText(roh);
         if (kundenwert === "" || (Array.isArray(roh) && roh.length === 0)) continue; // Lücke
@@ -112,7 +134,9 @@ function beantworteteFelder(antworten: Antworten): Beantwortet[] {
           spaltenPerson,
           schluessel,
           kundenwert,
-          sichtbar: feld.sichtbar ? feld.sichtbar(antworten, spaltenPerson) : true,
+          sichtbar:
+            spalteSichtbar && (feld.sichtbar ? feld.sichtbar(antworten, spaltenPerson) : true),
+          ohnePerson: spaltenPerson !== undefined && spaltenPerson > anzahl,
         });
       }
     }
@@ -122,9 +146,11 @@ function beantworteteFelder(antworten: Antworten): Beantwortet[] {
 
 /**
  * Zielspalte samt Person – die Ebene, auf der sich zwei Antworten schlagen.
- * Null für Antworten ohne Zielfeld oder mit Listenziel: Die schlagen sich nie.
+ * Null für Antworten ohne Zielfeld, mit Listenziel oder einer weggefallenen
+ * Person: Die schlagen sich nie und werden nur zur Kenntnis gezeigt.
  */
 function zielGruppe(e: Beantwortet): string | null {
+  if (e.ohnePerson) return null;
   if (!e.feld.ziel || "liste" in e.feld.ziel) return null;
   return `${e.feld.ziel.entitaet}.${e.feld.ziel.feld}|${e.spaltenPerson ?? ""}`;
 }
@@ -183,7 +209,7 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
     // Die Kinderzahl gilt dem Haushalt: sie geht an beide Antragsteller.
     // (Die Seite "haushalt" traegt nur haushaltsweite Angaben.)
     const zielPersonen: Array<1 | 2> =
-      e.schritt.schritt.id === "haushalt"
+      e.schritt.id === "haushalt"
         ? (stand.applicants
             .map((a) => a.position)
             .filter((p): p is 1 | 2 => p === 1 || p === 2)
@@ -205,7 +231,7 @@ export function planUebernahme(antworten: Antworten, stand: Fallstand): Uebernah
       vorschlaege.push({
         schluessel: mehrfach ? `${k}#p${zielPerson}` : k,
         label: mehrfach ? `${feld.label} (Antragsteller ${zielPerson})` : label,
-        abschnitt: e.schritt.schritt.abschnitt,
+        abschnitt: e.schritt.abschnitt,
         kundenwert,
         fallwert,
         art: fallwert === null ? "luecke" : "abweichung",
