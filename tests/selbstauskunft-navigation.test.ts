@@ -8,6 +8,7 @@ import {
   schluessel,
   personenSchluessel,
   einstiegsSchritt,
+  neuErschieneneFelder,
 } from "@/lib/self-disclosure/navigation";
 import { sichtbareFelder } from "@/lib/self-disclosure/felder";
 import { KATALOG } from "@/lib/self-disclosure/catalog";
@@ -218,5 +219,36 @@ describe("Einstieg", () => {
     // Sie ist keine Katalogseite, aber ein gueltiges Ziel: Wer die letzte Seite
     // abgeschickt, aber nicht abgesendet hat, steht genau dort.
     expect(einstiegsSchritt("zusammenfassung", leereAntworten, "voll")).toBe("zusammenfassung");
+  });
+});
+
+describe("neuErschieneneFelder", () => {
+  it("meldet Felder, die erst durch die neue Antwort auf derselben Seite erscheinen", () => {
+    const vorher: Antworten = { "vorhaben.art": "modernisierung" };
+    const nachher: Antworten = { "vorhaben.art": "kauf_bestand" };
+    expect(neuErschieneneFelder("vorhaben", vorher, nachher, "voll").sort()).toEqual(
+      ["vorhaben.nutzung", "vorhaben.stand"].sort()
+    );
+  });
+
+  it("meldet nichts, wenn die Felder schon beim Aufruf zu sehen waren", () => {
+    // Ohne Antwort gilt der Kaufzweig – Stand und Nutzung stehen schon da.
+    expect(neuErschieneneFelder("vorhaben", {}, { "vorhaben.art": "kauf_bestand" }, "voll")).toEqual([]);
+  });
+
+  it("meldet nichts, wenn Felder nur verschwinden", () => {
+    expect(
+      neuErschieneneFelder("vorhaben", {}, { "vorhaben.art": "anschlussfinanzierung" }, "voll")
+    ).toEqual([]);
+  });
+
+  it("uebergeht neu sichtbare Felder, die schon eine Antwort tragen", () => {
+    const vorher: Antworten = { "vorhaben.art": "modernisierung", "vorhaben.stand": "gefunden" };
+    const nachher: Antworten = { ...vorher, "vorhaben.art": "kauf_bestand" };
+    expect(neuErschieneneFelder("vorhaben", vorher, nachher, "voll")).toEqual(["vorhaben.nutzung"]);
+  });
+
+  it("liefert fuer einen unbekannten Schritt nichts", () => {
+    expect(neuErschieneneFelder("gibtesnicht", {}, {}, "voll")).toEqual([]);
   });
 });

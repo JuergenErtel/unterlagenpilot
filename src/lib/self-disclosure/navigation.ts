@@ -128,6 +128,46 @@ export function vorherigerSchritt(id: string, antworten: Antworten, umfang: Umfa
   return kette[i - 1] ?? null;
 }
 
+/**
+ * Felder dieser Seite, die erst durch die gerade gespeicherten Antworten
+ * sichtbar geworden sind und noch keine Antwort tragen – als fertige
+ * Antwortschlüssel.
+ *
+ * Warum es das braucht: Die Seite wird mit der Feldliste VOR dem Absenden
+ * gezeigt, eine clientseitige Neuauswertung gibt es nicht. Ändert der Kunde
+ * auf einer Seite die Antwort, an der ein Nachbarfeld hängt (Finanzierungsart
+ * Modernisierung → Kauf schaltet „Stand der Suche" und „Nutzung" frei), hat er
+ * die neuen Felder nie gesehen. `speichereAntwort` bleibt deshalb auf der
+ * Seite, solange hier etwas zurückkommt.
+ *
+ * Bereits beantwortete Felder zählen nicht: Wer nur hin- und herschaltet, soll
+ * nicht für Fragen angehalten werden, die er schon beantwortet hat.
+ */
+export function neuErschieneneFelder(
+  schrittId: string,
+  vorher: Antworten,
+  nachher: Antworten,
+  umfang: Umfang
+): string[] {
+  const sichtbar = (antworten: Antworten): Set<string> => {
+    const s = schrittFinden(schrittId, antworten, umfang);
+    const out = new Set<string>();
+    if (!s) return out;
+    for (const person of s.personen ?? [undefined]) {
+      for (const feld of sichtbareFelder(s.schritt, antworten, person)) {
+        out.add(personenSchluessel(s.schritt.id, feld.id, person));
+      }
+    }
+    return out;
+  };
+  const alt = sichtbar(vorher);
+  return [...sichtbar(nachher)].filter((k) => {
+    if (alt.has(k)) return false;
+    const v = nachher[k];
+    return v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+  });
+}
+
 /** 1-basierte Position und Gesamtzahl – Grundlage des Fortschrittsbalkens. */
 export function fortschritt(
   id: string,

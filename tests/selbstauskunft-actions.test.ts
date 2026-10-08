@@ -117,6 +117,32 @@ describe("speichereAntwort", () => {
     expect(arg.update.currentStep).toBe("objekt_preis");
   });
 
+  it("bleibt auf der Seite, wenn die Aenderung dort neue Fragen freischaltet", async () => {
+    // Der mildere Fall aus dem Katalogschnitt: Gespeichert war Modernisierung,
+    // "Stand der Suche" und "Nutzung" waren deshalb nicht auf der Seite. Der
+    // Kunde springt zurueck und waehlt Kauf – beide Felder gehoeren jetzt
+    // dorthin, hat er aber nie gesehen. Frueher ging es trotzdem weiter.
+    findUnique.mockResolvedValue({ answers: { "vorhaben.art": "modernisierung" }, submittedAt: null });
+    await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
+    const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
+    expect(arg.update.currentStep).toBe("vorhaben");
+    expect(redirect).toHaveBeenCalledWith("/selbstauskunft/tok/vorhaben?ergaenzt=1");
+  });
+
+  it("geht weiter, wenn die neu sichtbaren Felder schon beantwortet sind", async () => {
+    findUnique.mockResolvedValue({
+      answers: {
+        "vorhaben.art": "modernisierung",
+        "vorhaben.stand": "gefunden",
+        "vorhaben.nutzung": "selbstnutzung",
+      },
+      submittedAt: null,
+    });
+    await speichereAntwort("tok", "vorhaben", form({ "vorhaben.art": "kauf_bestand" }));
+    const arg = upsert.mock.calls[0]![0] as { update: { currentStep: string } };
+    expect(arg.update.currentStep).toBe("objekt_preis");
+  });
+
   it("schickt nach dem letzten Schritt zur Zusammenfassung", async () => {
     const { sichtbareSchritte } = await import("@/lib/self-disclosure/navigation");
     const letzter = sichtbareSchritte({}, "voll").at(-1)!;

@@ -22,10 +22,16 @@ export const dynamic = "force-dynamic";
 
 export default async function SelbstauskunftSchritt({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string; schritt: string }>;
+  searchParams: Promise<{ ergaenzt?: string }>;
 }) {
   const { token, schritt: schrittId } = await params;
+  // Gesetzt von `speichereAntwort`, wenn die letzte Antwort auf dieser Seite
+  // neue Fragen freigeschaltet hat – ohne Erklaerung saehe das Stehenbleiben
+  // aus, als habe der Knopf nicht funktioniert.
+  const ergaenzt = (await searchParams).ergaenzt === "1";
   const access = await resolveSelfDisclosureToken(token);
 
   if (!access) {
@@ -108,6 +114,11 @@ export default async function SelbstauskunftSchritt({
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-8 p-6">
       <Logo />
+      {ergaenzt && (
+        <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+          Passend zu Ihrer Auswahl sind auf dieser Seite weitere Fragen dazugekommen.
+        </p>
+      )}
       <StepForm
         token={token}
         schrittId={aktuell.id}

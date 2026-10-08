@@ -12,7 +12,11 @@ import {
   createSelfDisclosureLink,
   deactivateSelfDisclosureLink,
 } from "@/lib/security/self-disclosure-link";
-import { schrittFinden, naechsterSchritt } from "@/lib/self-disclosure/navigation";
+import {
+  schrittFinden,
+  naechsterSchritt,
+  neuErschieneneFelder,
+} from "@/lib/self-disclosure/navigation";
 import { schrittSchema } from "@/lib/self-disclosure/schema";
 import {
   planUebernahme,
@@ -106,7 +110,10 @@ export async function speichereAntwort(
     neu[k] = value as Antworten[string];
   }
 
-  const nach = naechsterSchritt(schritt.id, neu, umfang);
+  // Hat die Antwort auf DIESER Seite neue Fragen freigeschaltet, bleibt der
+  // Kunde hier – sonst sieht er sie nie (siehe `neuErschieneneFelder`).
+  const ergaenzt = neuErschieneneFelder(schritt.id, antworten, neu, umfang).length > 0;
+  const nach = ergaenzt ? schritt : naechsterSchritt(schritt.id, neu, umfang);
   const currentStep = nach?.id ?? "zusammenfassung";
 
   await prisma.selfDisclosure.upsert({
@@ -122,7 +129,7 @@ export async function speichereAntwort(
     update: { answers: neu as object, currentStep },
   });
 
-  redirect(`/selbstauskunft/${token}/${currentStep}`);
+  redirect(`/selbstauskunft/${token}/${currentStep}${ergaenzt ? "?ergaenzt=1" : ""}`);
 }
 
 /**

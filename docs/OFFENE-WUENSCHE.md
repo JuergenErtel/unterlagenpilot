@@ -114,9 +114,14 @@ Beim Kürzen der Selbstauskunft gefunden, bewusst nicht mitgemacht:
   gefragt worden; ein Vertragstest verbietet das inzwischen für Felder, die ohne
   Antwort verborgen sind. Offen bleibt der mildere Fall (`vorhaben.stand`,
   `vorhaben.nutzung`): Ihre Bedingung ist ohne Antwort offen, sie können also
-  nur aus- statt eingeblendet werden. Saubere Behebung wäre, nach dem Speichern
+  nur aus- statt eingeblendet werden. ~~Saubere Behebung wäre, nach dem Speichern
   die Feldliste der eigenen Seite neu zu rechnen und bei neu erschienenen
-  Feldern stehenzubleiben.
+  Feldern stehenzubleiben.~~ **Erledigt 08.10.2026:** Genau so gebaut
+  (`neuErschieneneFelder` in `navigation.ts`). Erscheint durch die Antwort ein
+  noch unbeantwortetes Feld auf derselben Seite, bleibt `speichereAntwort` dort
+  stehen und die Seite sagt „weitere Fragen dazugekommen". Der Vertragstest gegen
+  Steuerantworten auf derselben Seite bleibt trotzdem: Ein zusätzlicher Halt
+  ist schlechter als eine Seitengrenze.
 - **`nurArbeitgeber` und `nurVertragsdauer` (`catalog.ts`) haben denselben
   Rumpf** und sind nur durch ihre Identität als Funktion getrennt. Wer sie als
   „offensichtliche Vereinfachung" zusammenzieht, gibt dem Minijob wieder die
