@@ -187,3 +187,25 @@ describe("Wunschrate misst die Gesamtbelastung", () => {
     expect(u.wunschrateAbweichung).toBeCloseTo(u.rate + u.ratenkreditRate - 800, 2);
   });
 });
+
+describe("bewerte: feste Ausgaben aus der Selbstauskunft", () => {
+  it("rechnet den Unterhalt in den Haushaltsueberschuss", () => {
+    const ohne = bewerte(eingabe(), VORGABE_ANNAHMEN);
+    const mit = bewerte(eingabe({ unterhaltMonatlich: 500 }), VORGABE_ANNAHMEN);
+    expect(mit.ueberschuss).toBe(ohne.ueberschuss - 500);
+  });
+
+  it("rechnet die Warmmiete nur bei vermietetem Objekt", () => {
+    const ohne = bewerte(eingabe(), VORGABE_ANNAHMEN);
+    const selbst = bewerte(
+      eingabe({ warmmieteMonatlich: 1000, nutzung: "selbstnutzung" }),
+      VORGABE_ANNAHMEN
+    );
+    const vermietet = bewerte(
+      eingabe({ warmmieteMonatlich: 1000, nutzung: "vermietet" }),
+      VORGABE_ANNAHMEN
+    );
+    expect(selbst.ueberschuss).toBe(ohne.ueberschuss);
+    expect(vermietet.ueberschuss).toBe(ohne.ueberschuss - 1000);
+  });
+});

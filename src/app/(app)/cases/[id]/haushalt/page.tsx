@@ -33,6 +33,7 @@ export default async function HaushaltPage({ params }: { params: Promise<{ id: s
     liabilities: canonical.liabilities,
     property: canonical.property,
     financing: canonical.financing,
+    haushalt: canonical.haushalt,
     applicantCount: caseRow.applicants.length,
     anzahlKinder: caseRow.applicants[0]?.anzahlKinder ?? 0,
   });
@@ -106,6 +107,22 @@ export default async function HaushaltPage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
       </div>
+
+      {r.bisherigeWarmmiete !== null && (
+        <Card>
+          <CardContent className="space-y-1 p-4 text-sm">
+            <div className="font-medium">Vergleich mit der heutigen Miete</div>
+            <p className="text-muted-foreground">
+              Heute zahlt der Haushalt {eur(r.bisherigeWarmmiete)} Warmmiete. Sie entfällt mit dem Einzug
+              und ist oben deshalb nicht abgezogen. Neue Wohnkosten (Rate und Bewirtschaftung):{" "}
+              {eur(r.neueWohnkosten)} –{" "}
+              {r.neueWohnkosten >= r.bisherigeWarmmiete
+                ? `${eur(r.neueWohnkosten - r.bisherigeWarmmiete)} mehr als heute.`
+                : `${eur(r.bisherigeWarmmiete - r.neueWohnkosten)} weniger als heute.`}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-xs text-muted-foreground">
         {r.rateGeschaetzt && "* Rate geschätzt, solange kein Sollzins hinterlegt ist. "}

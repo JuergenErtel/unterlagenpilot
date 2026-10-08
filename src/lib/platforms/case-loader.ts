@@ -41,6 +41,10 @@ export function mapCaseToCanonical(c: CaseWithRelations): CanonicalCase {
   return {
     caseNumber: c.caseNumber,
     financingType: c.financingType ?? undefined,
+    haushalt: {
+      warmmieteMonatlich: c.warmmieteMonatlich ?? undefined,
+      unterhaltMonatlich: c.unterhaltMonatlich ?? undefined,
+    },
     applicants: c.applicants.map((a) => ({
       position: a.position,
       vorname: a.vorname ?? undefined,

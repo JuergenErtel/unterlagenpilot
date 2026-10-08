@@ -154,6 +154,9 @@ export function baueEingabe(
         (c.liabilities ?? []).filter((l) => l.abzuloesen).map((l) => l.restschuld ?? 0)
       ),
       bestehendeRaten: sum(kredite.map((k) => k.rate)),
+      unterhaltMonatlich: c.haushalt?.unterhaltMonatlich ?? 0,
+      warmmieteMonatlich: c.haushalt?.warmmieteMonatlich ?? 0,
+      nutzung: c.property?.nutzung,
       applicantCount: opts.applicantCount,
       anzahlKinder: opts.anzahlKinder,
       wohnflaeche: c.property?.wohnflaeche ?? 0,

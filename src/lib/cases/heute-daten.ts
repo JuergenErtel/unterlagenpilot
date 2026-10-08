@@ -31,6 +31,7 @@ import type { Fallstand } from "@/lib/self-disclosure/takeover";
 import { MAX_APPLICANTS, type CaseStatus } from "@/lib/domain/enums";
 import { ordneAufgaben, SCHRITT_LABEL, type AufgabeRoh, type HeuteAufgabe } from "@/lib/cases/heute";
 import type { NextStep } from "@/lib/cases/next-step";
+import { caseFelderAus } from "@/lib/self-disclosure/fallstand";
 
 /** Terminale Status – dort ist nichts mehr zu tun. */
 const TERMINAL_STATUSES: CaseStatus[] = ["abgeschlossen", "archiviert"];
@@ -162,7 +163,7 @@ export async function ladeHeute(organizationId: string): Promise<HeuteDaten> {
         applicants: c.applicants as unknown as Fallstand["applicants"],
         property: (c.property as Record<string, unknown> | null) ?? null,
         financingRequest: (c.financingRequest as Record<string, unknown> | null) ?? null,
-        caseFelder: { financingType: c.financingType ?? null },
+        caseFelder: caseFelderAus(c),
       };
       const antragstellerZahl = Math.min(Math.max(c.applicants.length, 1), MAX_APPLICANTS) as 1 | 2;
       const reife = berechneReife(erstgespraechStand, antragstellerZahl);

@@ -14,6 +14,7 @@ import { Uebergabe } from "@/components/erstgespraech/uebergabe";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { caseFelderAus, CASE_ZIELFELDER_SELECT } from "@/lib/self-disclosure/fallstand";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function ErstgespraechPage({
     select: {
       caseNumber: true,
       status: true,
-      financingType: true,
+      ...CASE_ZIELFELDER_SELECT,
       erstgespraechGefuehrtAm: true,
       applicants: {
         orderBy: { position: "asc" },
@@ -65,7 +66,7 @@ export default async function ErstgespraechPage({
     applicants: fall.applicants as unknown as Fallstand["applicants"],
     property: (fall.property as Record<string, unknown> | null) ?? null,
     financingRequest: (fall.financingRequest as Record<string, unknown> | null) ?? null,
-    caseFelder: { financingType: fall.financingType ?? null },
+    caseFelder: caseFelderAus(fall),
   };
 
   /*

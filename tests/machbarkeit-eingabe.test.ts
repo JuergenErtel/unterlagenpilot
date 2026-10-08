@@ -120,3 +120,20 @@ describe("Eingabe-Aufbereitung", () => {
     expect(r.ok && r.bundeslandUnsicher).toBe(false);
   });
 });
+
+describe("baueEingabe: feste Ausgaben", () => {
+  it("reicht Unterhalt, Warmmiete und Nutzung an den Solver weiter", () => {
+    const r = baueEingabe(
+      basis({
+        haushalt: { unterhaltMonatlich: 300, warmmieteMonatlich: 950 },
+        property: { ...basis().property, nutzung: "vermietet" },
+      }),
+      opts
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eingabe.unterhaltMonatlich).toBe(300);
+    expect(r.eingabe.warmmieteMonatlich).toBe(950);
+    expect(r.eingabe.nutzung).toBe("vermietet");
+  });
+});

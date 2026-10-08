@@ -1,4 +1,5 @@
 import type { Bundesland } from "./bundesland";
+import type { UsageType } from "@/lib/domain/enums";
 
 /**
  * Alles, was der Solver zum Rechnen braucht – flach und ohne Datenbankbezug,
@@ -80,6 +81,14 @@ export interface SolverEingabe {
   abzuloesendeRestschuld: number;
   /** Raten der NICHT abgeloesten Kredite. */
   bestehendeRaten: number;
+  /**
+   * Feste Ausgaben aus der Selbstauskunft. Optional, damit Altaufrufer und
+   * Testvorrichtungen ohne sie weiter rechnen; ob die Warmmiete zaehlt,
+   * entscheidet `berechneHaushalt` anhand der Nutzung.
+   */
+  unterhaltMonatlich?: number;
+  warmmieteMonatlich?: number;
+  nutzung?: UsageType;
 
   applicantCount: number;
   anzahlKinder: number;

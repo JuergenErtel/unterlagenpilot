@@ -145,6 +145,14 @@ export interface CanonicalCase {
   financing: CanonicalFinancing;
   platformIds: CanonicalPlatformIds;
   notes?: string;
+  /** Feste Ausgaben des Haushalts aus der Selbstauskunft, einmal je Fall. */
+  haushalt?: CanonicalHaushalt;
+}
+
+export interface CanonicalHaushalt {
+  /** Heutige Warmmiete; laeuft nur bei einem vermieteten Objekt weiter. */
+  warmmieteMonatlich?: number;
+  unterhaltMonatlich?: number;
 }
 
 /** Feldgruppen für UI-Kopiermasken und Mapping-Audits */

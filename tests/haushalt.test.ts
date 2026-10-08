@@ -162,3 +162,62 @@ describe("Einnahmen je Antragsteller", () => {
     ]);
   });
 });
+
+/**
+ * Warmmiete und Unterhalt aus der Selbstauskunft (08.10.2026).
+ *
+ * Unterhalt laeuft immer weiter. Die Warmmiete nur, wenn der Kunde Mieter
+ * BLEIBT – also bei einem vermieteten Objekt (Kapitalanlage). Bei
+ * Selbstnutzung faellt sie mit dem Einzug weg; sie dann abzuziehen hiesse,
+ * Miete UND neue Rate gleichzeitig zu verlangen.
+ */
+describe("berechneHaushalt: Warmmiete und Unterhalt", () => {
+  const basis = {
+    income: [{ applicantPosition: 1, nettoMonatlich: 4000 }],
+    liabilities: [],
+    financing: { darlehenswunsch: 0 },
+    applicantCount: 1,
+    anzahlKinder: 0,
+  };
+
+  it("zieht Unterhalt immer als Ausgabe ab", () => {
+    const ohne = berechneHaushalt({ ...basis, property: { nutzung: "selbstnutzung" } });
+    const mit = berechneHaushalt({
+      ...basis,
+      property: { nutzung: "selbstnutzung" },
+      haushalt: { unterhaltMonatlich: 450 },
+    });
+    expect(mit.ueberschuss).toBe(ohne.ueberschuss - 450);
+    expect(mit.ausgaben.some((p) => p.label === "Unterhaltszahlungen" && p.betrag === -450)).toBe(true);
+  });
+
+  it("zieht die Warmmiete ab, wenn das Objekt vermietet wird", () => {
+    const ohne = berechneHaushalt({ ...basis, property: { nutzung: "vermietet" } });
+    const mit = berechneHaushalt({
+      ...basis,
+      property: { nutzung: "vermietet" },
+      haushalt: { warmmieteMonatlich: 1100 },
+    });
+    expect(mit.ueberschuss).toBe(ohne.ueberschuss - 1100);
+    expect(mit.bisherigeWarmmiete).toBeNull();
+  });
+
+  it("zieht die Warmmiete bei Selbstnutzung NICHT ab, weist sie aber zum Vergleich aus", () => {
+    const ohne = berechneHaushalt({ ...basis, property: { nutzung: "selbstnutzung" } });
+    const mit = berechneHaushalt({
+      ...basis,
+      property: { nutzung: "selbstnutzung" },
+      haushalt: { warmmieteMonatlich: 1100 },
+    });
+    expect(mit.ueberschuss).toBe(ohne.ueberschuss);
+    expect(mit.bisherigeWarmmiete).toBe(1100);
+  });
+
+  it("zieht sie auch ohne Nutzungsangabe nicht ab", () => {
+    // Der Normalfall der Baufinanzierung ist Selbstnutzung; eine fehlende
+    // Angabe soll den Haushalt nicht um eine ganze Miete schlechter rechnen.
+    const r = berechneHaushalt({ ...basis, property: {}, haushalt: { warmmieteMonatlich: 900 } });
+    expect(r.ausgaben.some((p) => p.label.includes("Miete"))).toBe(false);
+    expect(r.bisherigeWarmmiete).toBe(900);
+  });
+});

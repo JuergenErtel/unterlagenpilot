@@ -86,8 +86,9 @@ const FELDER: Array<[seite: string, feld: string, ziel: string | null]> = [
   ["einnahmen", "sonderzahlungen", "income.einmalzahlungenJaehrlich"],
   ["einnahmen", "miete", "income.mieteinnahmen"],
   ["einnahmen", "sonstige", "income.sonstigeEinnahmen"],
-  ["haushalt_ausgaben", "warmmiete", null],
-  ["haushalt_ausgaben", "unterhalt", null],
+  // Seit 08.10.2026 mit Ziel am Fall – vorher null (nur zur Kenntnis).
+  ["haushalt_ausgaben", "warmmiete", "case.warmmieteMonatlich"],
+  ["haushalt_ausgaben", "unterhalt", "case.unterhaltMonatlich"],
   ["eigenkapital_herkunft", "liste", "asset[]"],
   ["objekt_details", "objektart", "property.objektart"],
   ["objekt_details", "strasse", "property.street"],

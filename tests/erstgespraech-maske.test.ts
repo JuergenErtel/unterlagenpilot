@@ -425,3 +425,18 @@ describe("Die Maske folgt der Reife feldweise", () => {
     expect(objektZiele(null, "kauf")).toContain("maklerprovisionProzent");
   });
 });
+
+describe("baueMaske: Warmmiete und Unterhalt", () => {
+  it("fragt beide und zeigt den gespeicherten Wert des Falls", () => {
+    const stand: Fallstand = {
+      ...leererStand,
+      caseFelder: { financingType: "kauf", warmmieteMonatlich: 1100, unterhaltMonatlich: null },
+    };
+    const felder = alleFelder(stand);
+    const miete = felder.find((f) => f.ziel.entitaet === "case" && f.ziel.feld === "warmmieteMonatlich");
+    const unterhalt = felder.find((f) => f.ziel.entitaet === "case" && f.ziel.feld === "unterhaltMonatlich");
+    expect(miete?.wert).toBeTruthy();
+    expect(unterhalt).toBeDefined();
+    expect(unterhalt?.wert).toBe("");
+  });
+});

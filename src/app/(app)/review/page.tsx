@@ -29,6 +29,7 @@ import {
   type DocumentType,
   type Severity,
 } from "@/lib/domain/enums";
+import { caseFelderAus, CASE_ZIELFELDER_SELECT } from "@/lib/self-disclosure/fallstand";
 
 export default async function ReviewCenterPage({ searchParams }: { searchParams: Promise<{ case?: string }> }) {
   const ctx = await requireContext();
@@ -56,7 +57,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
         select: {
           id: true,
           caseNumber: true,
-          financingType: true,
+          ...CASE_ZIELFELDER_SELECT,
           status: true,
           updatedAt: true,
           erstgespraechGefuehrtAm: true,
@@ -99,7 +100,7 @@ export default async function ReviewCenterPage({ searchParams }: { searchParams:
             applicants: caseScope.applicants as unknown as Fallstand["applicants"],
             property: (caseScope.property as Record<string, unknown> | null) ?? null,
             financingRequest: (caseScope.financingRequest as Record<string, unknown> | null) ?? null,
-            caseFelder: { financingType: caseScope.financingType ?? null },
+            caseFelder: caseFelderAus(caseScope),
           };
           const antragstellerZahl = Math.min(
             Math.max(caseScope.applicants.length, 1),

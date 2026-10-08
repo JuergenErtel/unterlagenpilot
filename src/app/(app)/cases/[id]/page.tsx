@@ -78,6 +78,7 @@ import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { caseFelderAus } from "@/lib/self-disclosure/fallstand";
 import { Fakt, Faktenleiste, Kennzahlzeile, Kennzahlwert } from "@/components/ui/flaechen";
 import {
   CASE_STATUS_LABELS,
@@ -408,7 +409,7 @@ export default async function CaseCockpitPage({
     applicants: caseRow.applicants as unknown as Fallstand["applicants"],
     property: (caseRow.property as Record<string, unknown> | null) ?? null,
     financingRequest: (caseRow.financingRequest as Record<string, unknown> | null) ?? null,
-    caseFelder: { financingType: caseRow.financingType ?? null },
+    caseFelder: caseFelderAus(caseRow),
   };
   const erstgespraechAntragstellerZahl = Math.min(
     Math.max(caseRow.applicants.length, 1),

@@ -76,10 +76,11 @@ describe("planUebernahme", () => {
     expect(kinder.map((k) => k.ziel.person).sort()).toEqual([1, 2]);
   });
 
-  it("sammelt Angaben ohne Zielfeld getrennt ein", () => {
-    const plan = planUebernahme({ "haushalt_ausgaben.warmmiete": 950 }, leererStand);
-    expect(plan.ohneZiel.some((o) => o.wert === "950")).toBe(true);
-    expect(plan.vorschlaege.some((v) => v.schluessel.startsWith("haushalt_ausgaben"))).toBe(false);
+  it("sammelt Angaben mit Listenziel getrennt ein", () => {
+    // Bis 08.10.2026 stand hier die Warmmiete – sie hat seither ein Zielfeld.
+    const plan = planUebernahme({ "eigenkapital_herkunft.liste": "Sparbuch 20.000" }, leererStand);
+    expect(plan.ohneZiel.some((o) => o.wert === "Sparbuch 20.000")).toBe(true);
+    expect(plan.vorschlaege.some((v) => v.schluessel.startsWith("eigenkapital_herkunft"))).toBe(false);
   });
 
   it("erkennt einen gleichen Zahlenwert trotz unterschiedlicher Schreibweise", () => {
@@ -262,5 +263,33 @@ describe("planUebernahme: Finanzierungsart", () => {
 
   it("meldet eine Lücke, wenn im Fall noch nichts steht", () => {
     expect(vorschlag("kauf_bestand", leererStand)?.art).toBe("luecke");
+  });
+});
+
+describe("planUebernahme: Warmmiete und Unterhalt", () => {
+  it("schlaegt beide als Fallfelder vor statt sie nur zur Kenntnis zu zeigen", () => {
+    const plan = planUebernahme(
+      { "haushalt_ausgaben.warmmiete": 1100, "haushalt_ausgaben.unterhalt": 350 },
+      leererStand
+    );
+    expect(plan.vorschlaege.find((v) => v.schluessel === "haushalt_ausgaben.warmmiete")?.ziel).toEqual({
+      entitaet: "case",
+      feld: "warmmieteMonatlich",
+      person: 1,
+    });
+    expect(plan.vorschlaege.find((v) => v.schluessel === "haushalt_ausgaben.unterhalt")?.ziel).toEqual({
+      entitaet: "case",
+      feld: "unterhaltMonatlich",
+      person: 1,
+    });
+    expect(plan.ohneZiel).toEqual([]);
+  });
+
+  it("erkennt einen bereits gleichen Fallwert", () => {
+    const plan = planUebernahme(
+      { "haushalt_ausgaben.unterhalt": 350 },
+      { ...leererStand, caseFelder: { unterhaltMonatlich: 350 } }
+    );
+    expect(plan.vorschlaege).toHaveLength(0);
   });
 });

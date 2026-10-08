@@ -42,6 +42,8 @@ const ZAHLENFELDER = [
   "zinsbindungJahre",
   "sondertilgungProzentJaehrlich",
   "wunschrateMonatlich",
+  "warmmieteMonatlich",
+  "unterhaltMonatlich",
 ];
 // Ganzzahlige Spalten (Prisma-Typ Int?). Ein Bruchwert wuerde beim Schreiben
 // zur Laufzeit knallen ("Wert stimmt nicht mit Feldtyp ueberein") statt beim

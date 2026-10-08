@@ -139,6 +139,11 @@ export function bewerte(e: SolverEingabe, a: Annahmen): Urteil {
         wohnflaeche: e.wohnflaeche,
         hausgeldMonatlich: e.hausgeldMonatlich ?? undefined,
         mieteinnahmenMonatlich: e.mieteinnahmenMonatlich,
+        nutzung: e.nutzung,
+      },
+      haushalt: {
+        unterhaltMonatlich: e.unterhaltMonatlich,
+        warmmieteMonatlich: e.warmmieteMonatlich,
       },
       financing: { darlehensbetrag: darlehen, sollzinsProzent: zinsProzent },
       applicantCount: e.applicantCount + e.zusatzErwachsene,

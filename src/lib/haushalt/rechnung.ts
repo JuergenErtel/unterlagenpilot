@@ -59,13 +59,21 @@ export interface HaushaltErgebnis {
   wohnkostenquote: number;
   tragfaehig: boolean;
   annahmen: HaushaltAnnahmen;
+  /**
+   * Die heutige Warmmiete, wenn sie mit dem Einzug WEGFAELLT und deshalb nicht
+   * abgezogen wurde – zum Vergleich mit der neuen Belastung. null, wenn keine
+   * genannt ist oder sie als laufende Ausgabe bereits abgezogen wurde.
+   */
+  bisherigeWarmmiete: number | null;
+  /** Neue Wohnkosten: geplante Rate plus Objektbewirtschaftung – das Gegenstueck zur bisherigen Miete. */
+  neueWohnkosten: number;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export function berechneHaushalt(
-  caseData: Pick<CanonicalCase, "income" | "liabilities" | "property" | "financing"> & {
+  caseData: Pick<CanonicalCase, "income" | "liabilities" | "property" | "financing" | "haushalt"> & {
     /** Nur fuer die Beschriftung der Einnahmezeilen; fehlt sie, zaehlt die Position. */
     applicants?: Array<{ position: number; vorname?: string; nachname?: string }>;
     applicantCount?: number;
@@ -140,6 +148,23 @@ export function berechneHaushalt(
   if (bestehendeRaten > 0) {
     ausgaben.push({ label: "Bestehende Kreditraten (nicht abzulösen)", betrag: -round2(bestehendeRaten) });
   }
+  const unterhalt = caseData.haushalt?.unterhaltMonatlich ?? 0;
+  if (unterhalt > 0) {
+    ausgaben.push({ label: "Unterhaltszahlungen", betrag: -round2(unterhalt) });
+  }
+  // Die Warmmiete laeuft nur weiter, wenn der Kunde Mieter BLEIBT – bei einem
+  // vermieteten Objekt. Bei Selbstnutzung (auch teilweiser) und ohne Angabe
+  // endet sie mit dem Einzug; sie dann abzuziehen hiesse, Miete und neue Rate
+  // gleichzeitig zu verlangen.
+  const warmmiete = caseData.haushalt?.warmmieteMonatlich ?? 0;
+  const mieteLaeuftWeiter = caseData.property?.nutzung === "vermietet";
+  if (warmmiete > 0 && mieteLaeuftWeiter) {
+    ausgaben.push({
+      label: "Eigene Warmmiete",
+      betrag: -round2(warmmiete),
+      hinweis: "Läuft weiter – das Objekt wird vermietet.",
+    });
+  }
   if (bewirtschaftung > 0) {
     ausgaben.push({
       label: "Objektbewirtschaftung",
@@ -172,5 +197,7 @@ export function berechneHaushalt(
     wohnkostenquote,
     tragfaehig: ueberschuss >= 0,
     annahmen: a,
+    bisherigeWarmmiete: warmmiete > 0 && !mieteLaeuftWeiter ? round2(warmmiete) : null,
+    neueWohnkosten: round2(geplanteRate + bewirtschaftung),
   };
 }

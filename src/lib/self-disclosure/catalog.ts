@@ -665,11 +665,23 @@ export const KATALOG: Schritt[] = [
     umfang: "voll",
     abschnitt: "haushalt",
     frage: "Welche festen Ausgaben haben Sie?",
-    // Kein Ziel: Das Schema kennt weder Warmmiete noch Unterhalt. Die Werte
-    // bleiben im Bogen und erscheinen im Eingang zur Kenntnis.
+    // Ziel ist der FALL, nicht der Antragsteller: Beide Betraege gelten dem
+    // Haushalt und werden einmal gefragt – am Antragsteller zaehlten sie bei
+    // zwei Personen doppelt. Ob die Warmmiete in die Haushaltsrechnung geht,
+    // entscheidet dort die Nutzung (nur bei vermietetem Objekt laeuft sie weiter).
     felder: [
-      { id: "warmmiete", label: "Derzeitige Warmmiete monatlich", typ: "betrag" },
-      { id: "unterhalt", label: "Unterhaltszahlungen monatlich", typ: "betrag" },
+      {
+        id: "warmmiete",
+        label: "Derzeitige Warmmiete monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "case", feld: "warmmieteMonatlich" },
+      },
+      {
+        id: "unterhalt",
+        label: "Unterhaltszahlungen monatlich",
+        typ: "betrag",
+        ziel: { entitaet: "case", feld: "unterhaltMonatlich" },
+      },
     ],
   },
   {

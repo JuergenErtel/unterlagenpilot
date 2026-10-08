@@ -159,6 +159,7 @@ export async function buildHandoverData(
     liabilities: c.liabilities,
     property: c.property,
     financing: c.financing,
+    haushalt: c.haushalt,
     applicantCount: c.applicants.length,
     anzahlKinder: caseRow.applicants[0]?.anzahlKinder ?? 0,
   });

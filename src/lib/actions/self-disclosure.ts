@@ -28,6 +28,7 @@ import type { Antworten } from "@/lib/self-disclosure/types";
 import { schreibeVorschlaege } from "@/lib/self-disclosure/schreiben";
 import { gebaereFall } from "@/lib/leadformular/fallgeburt";
 import { fehlendeKontaktangaben, KONTAKT_SCHLUESSEL } from "@/lib/self-disclosure/pflichtangaben";
+import { caseFelderAus, CASE_ZIELFELDER_SELECT } from "@/lib/self-disclosure/fallstand";
 
 export interface SchrittState {
   error?: string;
@@ -240,13 +241,13 @@ async function ladeFallstand(caseId: string): Promise<Fallstand> {
     prisma.applicant.findMany({ where: { caseId }, orderBy: { position: "asc" } }),
     prisma.property.findUnique({ where: { caseId } }),
     prisma.financingRequest.findUnique({ where: { caseId } }),
-    prisma.case.findUnique({ where: { id: caseId }, select: { financingType: true } }),
+    prisma.case.findUnique({ where: { id: caseId }, select: CASE_ZIELFELDER_SELECT }),
   ]);
   return {
     applicants: applicants as unknown as Fallstand["applicants"],
     property: (property as Record<string, unknown> | null) ?? null,
     financingRequest: (financingRequest as Record<string, unknown> | null) ?? null,
-    caseFelder: { financingType: fall?.financingType ?? null },
+    caseFelder: fall ? caseFelderAus(fall) : {},
   };
 }
 

@@ -617,6 +617,13 @@ model Case {
   // Datum statt Boolean, damit nachvollziehbar bleibt, WANN abgehakt wurde.
   erstgespraechGefuehrtAm DateTime?
 
+  // Feste Ausgaben des HAUSHALTS aus der Selbstauskunft – einmal je Fall
+  // gefragt, deshalb hier und nicht am Antragsteller (dort zaehlten sie bei
+  // zwei Personen doppelt). Unterhalt geht immer in die Haushaltsrechnung; die
+  // Warmmiete nur, wenn der Kunde Mieter bleibt (Objekt wird vermietet).
+  warmmieteMonatlich Float?
+  unterhaltMonatlich Float?
+
   // Abschlussdaten (Provisions-/Pipeline-Tracking) – erst nach Zusage relevant
   abschlussBank   String?
   darlehensbetrag Float?
