@@ -138,6 +138,23 @@ solche Leads als `referral` ohne Kampagne an.
   mit in `Case.quelleDetail` (`herkunftDetail`: „Meta-Anzeige · <slug>") und
   steht in der Fallakte am Quellen-Badge.
 
+### Nachtrag 10.10.2026: Meta-Kennungen (Vorbereitung Lead-Qualität an Meta, E2)
+
+Nur wenn der Interessent beim Absenden dem Marketing zugestimmt hat (Cookie-Banner auf
+baufivergleicher.de, „Alle akzeptieren“), trägt `herkunft` vier zusätzliche Felder:
+
+| Feld | Inhalt |
+| --- | --- |
+| `metaConsent` | immer `true` (ohne Einwilligung fehlen alle vier Felder) |
+| `fbc` | Meta-Klick-Kennung (`fb.1.<ms>.<fbclid>`) oder `null` |
+| `fbp` | Meta-Browser-Kennung (`fb.1.<ms>.<zahl>`) oder `null` |
+| `metaLeadEventId` | `event_id` des Lead-Ereignisses, das baufivergleicher an Meta gemeldet hat |
+
+Ausnahme von der Grundregel „gefüllt oder null, nie weggelassen“: Die Felder hängen an einer
+Einwilligung und sind deshalb optional. BaufiDesk validiert sie bis E2 nicht und verwirft sie
+(`uebergabeSchema` ist nicht `.strict()`); der Rumpf bleibt gültig. Ohne Einwilligung ist der Rumpf
+byte-gleich mit der Fassung vom 30.09.2026.
+
 ## Seite baufivergleicher
 
 - Neue Art `baufidesk` in `lead_store.notification_kind` (Enum-Wert ergänzen,
