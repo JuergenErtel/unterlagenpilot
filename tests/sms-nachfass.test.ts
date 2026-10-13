@@ -137,6 +137,12 @@ describe("renderSmsNachfass", () => {
     expect(renderSmsNachfass("  {{smsAnrede}}  hallo {{objektOrt}}  ", { beraterName: "X" })).toBe("Guten Tag, hallo");
   });
 
+  it("lässt vor Satzzeichen kein Leerzeichen stehen, wenn ein Baustein leer ist", () => {
+    expect(renderSmsNachfass("Danke für Ihre Anfrage {{objektOrt}}. Gruß {{beraterName}} {{beraterWebsite}}!", { beraterName: "X" })).toBe(
+      "Danke für Ihre Anfrage. Gruß X!"
+    );
+  });
+
   it("ist in der Vorlagenverwaltung bearbeitbar", () => {
     expect(EDITABLE_TEMPLATES.some((t) => t.type === "nicht_erreicht" && t.channel === "sms")).toBe(true);
   });

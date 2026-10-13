@@ -86,9 +86,14 @@ export function smsAngebotOffen(vermerke: KontaktVermerk[], jetzt: Date): boolea
 
 /**
  * Füllt die (ggf. vom Vermittler umformulierte) Vorlage. Mehrfach-Leerzeichen
- * werden zusammengezogen: Ein weggelassener Baustein darf in einer SMS keine
- * Lücke hinterlassen, die wie ein Tippfehler aussieht.
+ * werden zusammengezogen und Leerzeichen vor Satzzeichen entfernt: Ein
+ * weggelassener Baustein darf in einer SMS keine Lücke hinterlassen, die wie
+ * ein Tippfehler aussieht. Nötig wird das, sobald jemand die Vorlage selbst
+ * umformuliert und vor einen Baustein ein Leerzeichen setzt ("Anfrage {{objektOrt}}.").
  */
 export function renderSmsNachfass(body: string, e: SmsNachfassEingabe): string {
-  return renderTemplate(body, smsNachfassVars(e)).replace(/[ \t]{2,}/g, " ").trim();
+  return renderTemplate(body, smsNachfassVars(e))
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([.,!?;:])/g, "$1")
+    .trim();
 }
