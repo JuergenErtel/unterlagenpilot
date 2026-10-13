@@ -132,7 +132,7 @@ export const LOSS_REASON_LABELS: Record<LossReason, string> = {
 };
 
 /** Art eines Fall-Vermerks (Kontakthistorie). */
-export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "whatsapp", "wiedervorlage"] as const;
+export const CASE_NOTE_KINDS = ["notiz", "telefon", "email", "whatsapp", "sms", "wiedervorlage"] as const;
 export type CaseNoteKind = (typeof CASE_NOTE_KINDS)[number];
 
 export const CASE_NOTE_KIND_LABELS: Record<CaseNoteKind, string> = {
@@ -140,6 +140,7 @@ export const CASE_NOTE_KIND_LABELS: Record<CaseNoteKind, string> = {
   telefon: "Telefonat",
   email: "E-Mail",
   whatsapp: "WhatsApp",
+  sms: "SMS",
   wiedervorlage: "Wiedervorlage",
 };
 
@@ -473,7 +474,7 @@ export const CHECKLIST_ITEM_STATUSES = [
 export type ChecklistItemStatus = (typeof CHECKLIST_ITEM_STATUSES)[number];
 
 /** Kommunikationskanäle */
-export const MESSAGE_CHANNELS = ["email", "whatsapp", "pdf", "intern"] as const;
+export const MESSAGE_CHANNELS = ["email", "whatsapp", "sms", "pdf", "intern"] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
 
 /** Nachrichten-Vorlagentypen */
@@ -489,6 +490,7 @@ export const MESSAGE_TEMPLATE_TYPES = [
   "status_nachforderung",
   "status_genehmigt",
   "selbstauskunft_einladung",
+  "nicht_erreicht",
 ] as const;
 export type MessageTemplateType = (typeof MESSAGE_TEMPLATE_TYPES)[number];
 
@@ -509,6 +511,7 @@ export const MESSAGE_TEMPLATE_TYPE_LABELS: Record<MessageTemplateType, string> =
   status_nachforderung: "Statusmeldung: Nachforderung der Bank",
   status_genehmigt: "Statusmeldung: genehmigt",
   selbstauskunft_einladung: "Einladung zum Anfrageformular",
+  nicht_erreicht: "Nicht erreicht (Rückrufbitte)",
 };
 
 /** SaaS-Tarife */

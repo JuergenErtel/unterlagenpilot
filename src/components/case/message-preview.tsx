@@ -1,4 +1,4 @@
-import { Mail, MessageCircle, FileText, StickyNote } from "lucide-react";
+import { Mail, MessageCircle, MessageSquare, FileText, StickyNote } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CopyBlock } from "@/components/copy-block";
@@ -7,6 +7,7 @@ import type { MessageChannel } from "@/lib/domain/enums";
 const CHANNEL = {
   email: { icon: Mail, label: "E-Mail", variant: "default" as const },
   whatsapp: { icon: MessageCircle, label: "WhatsApp", variant: "success" as const },
+  sms: { icon: MessageSquare, label: "SMS", variant: "neutral" as const },
   pdf: { icon: FileText, label: "PDF-Checkliste", variant: "ai" as const },
   intern: { icon: StickyNote, label: "Interne Notiz", variant: "neutral" as const },
 };

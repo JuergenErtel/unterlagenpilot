@@ -74,6 +74,7 @@ enum CaseNoteKind {
   telefon
   email
   whatsapp
+  sms
   wiedervorlage
 }
 
@@ -243,6 +244,7 @@ enum ChecklistItemStatus {
 enum MessageChannel {
   email
   whatsapp
+  sms
   pdf
   intern
 }
@@ -259,6 +261,7 @@ enum MessageTemplateType {
   status_nachforderung
   status_genehmigt
   selbstauskunft_einladung
+  nicht_erreicht
 }
 
 enum PlanTier {

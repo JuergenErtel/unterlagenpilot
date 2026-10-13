@@ -278,5 +278,10 @@ export function generateByType(
       // damit unerreichbar – und faellt bewusst laut aus statt still einen
       // sinnlosen Text zu erzeugen.
       throw new Error("Die Einladung zum Anfrageformular entsteht nur über die Vorlage.");
+    case "nicht_erreicht":
+      // Dasselbe wie oben: Die SMS nach "Nicht erreicht" braucht Ort und
+      // Beraternamen, die dieser Kontext nicht kennt. Sie entsteht nur ueber
+      // `ladeSmsNachfassText` (src/lib/kontakt/sms-nachfass-text.ts).
+      throw new Error("Die SMS nach „Nicht erreicht“ entsteht nur über die Vorlage.");
   }
 }

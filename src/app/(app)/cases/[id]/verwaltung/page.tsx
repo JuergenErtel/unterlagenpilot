@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Phone, Mail, StickyNote, CalendarClock, MessageCircle, CheckCircle2, Trash2, Banknote } from "lucide-react";
+import { ArrowLeft, Phone, Mail, StickyNote, CalendarClock, MessageCircle, MessageSquare, CheckCircle2, Trash2, Banknote } from "lucide-react";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
@@ -48,6 +48,7 @@ const NOTE_ICON: Record<CaseNoteKind, typeof Phone> = {
   telefon: Phone,
   email: Mail,
   whatsapp: MessageCircle,
+  sms: MessageSquare,
   notiz: StickyNote,
   wiedervorlage: CalendarClock,
 };
