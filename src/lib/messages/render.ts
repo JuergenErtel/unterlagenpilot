@@ -16,6 +16,10 @@ export const PLACEHOLDERS: Array<{ token: string; description: string }> = [
   { token: "{{dokument}}", description: "Betroffenes Dokument (bei Rückfragen)" },
   { token: "{{signatur}}", description: "Ihre Signatur (aus den Organisationsdaten)" },
   { token: "{{anfrageLink}}", description: "Link zu Ihrem Anfrageformular" },
+  { token: "{{smsAnrede}}", description: "SMS: „Guten Tag Frau Müller,“ (ohne Namen „Guten Tag,“)" },
+  { token: "{{objektOrt}}", description: "SMS: „ für eine Immobilie in Leipzig“ (leer ohne Ort)" },
+  { token: "{{beraterName}}", description: "SMS: Ihr Name" },
+  { token: "{{beraterWebsite}}", description: "SMS: „ (ihre-domain.de)“ aus den Organisationsdaten (leer ohne Website)" },
 ];
 
 export function renderTemplate(body: string, vars: Record<string, string>): string {
@@ -170,6 +174,11 @@ Bei Fragen melden Sie sich gerne jederzeit.
 Viele Grüße
 {{signatur}}`,
   },
+  // Eine Zeile, kein Betreff: Eine SMS kennt keinen Absatz. Die Bausteine
+  // bringen ihre Leerzeichen selbst mit (src/lib/kontakt/sms-nachfass.ts).
+  [templateKey("nicht_erreicht", "sms")]: {
+    body: "{{smsAnrede}} vielen Dank für Ihre Finanzierungsanfrage{{objektOrt}}. Ich habe Sie eben leider telefonisch nicht erreicht. Wann kann ich Sie am besten erreichen? Viele Grüße, {{beraterName}}{{beraterWebsite}}",
+  },
 };
 
 /** Bearbeitbare Vorlagen mit Anzeigename (Reihenfolge = Anzeige im Editor). */
@@ -184,6 +193,7 @@ export const EDITABLE_TEMPLATES: Array<{
   { type: "datei_nicht_lesbar", channel: "email", label: "Datei nicht lesbar (E-Mail)" },
   { type: "datei_veraltet", channel: "email", label: "Datei veraltet (E-Mail)" },
   { type: "erstnachforderung", channel: "whatsapp", label: "Nachforderung (WhatsApp)" },
+  { type: "nicht_erreicht", channel: "sms", label: "Nicht erreicht – Rückrufbitte (SMS)" },
   { type: "pdf_checkliste", channel: "pdf", label: "Unterlagen-Checkliste (PDF)" },
   { type: "selbstauskunft_einladung", channel: "email", label: "Einladung zum Anfrageformular (E-Mail)" },
 ];

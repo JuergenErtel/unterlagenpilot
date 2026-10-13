@@ -7,6 +7,8 @@
  * der Nachrichten-App seines iPhones abschickt.
  */
 
+import { renderTemplate } from "@/lib/messages/render";
+
 /** Der Text sagt "eben nicht erreicht" – nach einem halben Tag stimmt das nicht mehr. */
 export const SMS_NACHFASS_FENSTER_STUNDEN = 12;
 
@@ -80,4 +82,13 @@ export function smsAngebotOffen(vermerke: KontaktVermerk[], jetzt: Date): boolea
   if (!juengster) return false;
   if (juengster.kind !== "telefon" || juengster.ergebnis !== "nicht_erreicht") return false;
   return jetzt.getTime() - juengster.createdAt.getTime() <= SMS_NACHFASS_FENSTER_STUNDEN * 3600_000;
+}
+
+/**
+ * Füllt die (ggf. vom Vermittler umformulierte) Vorlage. Mehrfach-Leerzeichen
+ * werden zusammengezogen: Ein weggelassener Baustein darf in einer SMS keine
+ * Lücke hinterlassen, die wie ein Tippfehler aussieht.
+ */
+export function renderSmsNachfass(body: string, e: SmsNachfassEingabe): string {
+  return renderTemplate(body, smsNachfassVars(e)).replace(/[ \t]{2,}/g, " ").trim();
 }

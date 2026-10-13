@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { smsAngebotOffen, smsNachfassVars, websiteKurz } from "@/lib/kontakt/sms-nachfass";
+import { renderSmsNachfass, smsAngebotOffen, smsNachfassVars, websiteKurz } from "@/lib/kontakt/sms-nachfass";
+import { DEFAULT_TEMPLATES, EDITABLE_TEMPLATES, templateKey } from "@/lib/messages/render";
 
 const basis = { beraterName: "Jürgen Ertel" };
 
@@ -102,5 +103,41 @@ describe("smsAngebotOffen", () => {
       )
     ).toBe(true);
     expect(smsAngebotOffen([], jetzt)).toBe(false);
+  });
+});
+
+describe("renderSmsNachfass", () => {
+  const vorlage = DEFAULT_TEMPLATES[templateKey("nicht_erreicht", "sms")]?.body ?? "";
+
+  it("ergibt den abgestimmten Text", () => {
+    expect(
+      renderSmsNachfass(vorlage, {
+        anrede: "frau",
+        nachname: "Müller",
+        ort: "Leipzig",
+        beraterName: "Jürgen Ertel",
+        website: "https://www.baufivergleicher.de",
+      })
+    ).toBe(
+      "Guten Tag Frau Müller, vielen Dank für Ihre Finanzierungsanfrage für eine Immobilie in Leipzig. " +
+        "Ich habe Sie eben leider telefonisch nicht erreicht. Wann kann ich Sie am besten erreichen? " +
+        "Viele Grüße, Jürgen Ertel (baufivergleicher.de)"
+    );
+  });
+
+  it("bleibt ohne Name, Ort und Website ein ganzer Satz", () => {
+    const text = renderSmsNachfass(vorlage, { beraterName: "Jürgen Ertel" });
+    expect(text).toBe(
+      "Guten Tag, vielen Dank für Ihre Finanzierungsanfrage. Ich habe Sie eben leider telefonisch nicht erreicht. " +
+        "Wann kann ich Sie am besten erreichen? Viele Grüße, Jürgen Ertel"
+    );
+  });
+
+  it("räumt doppelte Leerzeichen einer umformulierten Vorlage auf", () => {
+    expect(renderSmsNachfass("  {{smsAnrede}}  hallo {{objektOrt}}  ", { beraterName: "X" })).toBe("Guten Tag, hallo");
+  });
+
+  it("ist in der Vorlagenverwaltung bearbeitbar", () => {
+    expect(EDITABLE_TEMPLATES.some((t) => t.type === "nicht_erreicht" && t.channel === "sms")).toBe(true);
   });
 });
