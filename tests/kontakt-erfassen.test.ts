@@ -34,6 +34,22 @@ beforeEach(() => {
 });
 
 describe("kontaktVersuchErfassen", () => {
+  it("vermerkt eine SMS ohne Ergebnis und ohne Versuchszaehler", async () => {
+    noteCount.mockResolvedValue(3);
+    await kontaktVersuchErfassen("case-A", form({ kanal: "sms" }));
+    expect(noteCreate).toHaveBeenCalledTimes(1);
+    const daten = noteCreate.mock.calls[0]![0].data;
+    expect(daten.kind).toBe("sms");
+    expect(daten.ergebnis).toBeUndefined();
+    expect(daten.body).toBe("SMS geschrieben.");
+    expect(noteCount).not.toHaveBeenCalled();
+  });
+
+  it("ignoriert ein mitgeschicktes Ergebnis bei der SMS", async () => {
+    await kontaktVersuchErfassen("case-A", form({ kanal: "sms", ergebnis: "nicht_erreicht" }));
+    expect(noteCreate.mock.calls[0]![0].data.ergebnis).toBeUndefined();
+  });
+
   it("legt einen Telefon-Vermerk mit Ergebnis an", async () => {
     await kontaktVersuchErfassen("case-A", form({ kanal: "telefon", ergebnis: "nicht_erreicht" }));
     expect(noteCreate).toHaveBeenCalledTimes(1);

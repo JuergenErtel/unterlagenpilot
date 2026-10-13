@@ -144,6 +144,28 @@ export async function kontaktVersuchErfassen(caseId: string, formData: FormData)
 
   const kanalRoh = str(formData, "kanal");
   const ergebnisRoh = str(formData, "ergebnis");
+
+  // Die SMS gehoert zum Anruf davor, sie ist kein eigener Versuch: Mit
+  // `ergebnis` zaehlte `kontaktStand` sie mit – nach einem einzigen Anruf
+  // stuende "2. Versuch" da, und der Abstand bis zum naechsten Anruf liefe
+  // ab der SMS neu. Deshalb steht sie vor dem Kanal-Check und nicht in
+  // KONTAKT_KANAELE: Die Liste meint Versuche, die SMS ist keiner.
+  if (kanalRoh === "sms") {
+    await prisma.caseNote.create({
+      data: { caseId, authorId: ctx.userId, kind: "sms", body: "SMS geschrieben." },
+    });
+    await audit({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      action: "case.updated",
+      entityType: "case",
+      entityId: caseId,
+    });
+    revalidateCase(caseId);
+    revalidatePath("/dashboard");
+    return;
+  }
+
   if (!(KONTAKT_KANAELE as readonly string[]).includes(kanalRoh ?? "")) return;
   if (!(KONTAKT_ERGEBNISSE as readonly string[]).includes(ergebnisRoh ?? "")) return;
   const kanal = kanalRoh as (typeof KONTAKT_KANAELE)[number];
