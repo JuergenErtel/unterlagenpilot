@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { waLink, telLink } from "@/lib/kontakt/telefon";
+import { waLink, telLink, smsLink } from "@/lib/kontakt/telefon";
 
 describe("waLink", () => {
   it("macht aus einer deutschen Nummer mit fuehrender Null eine internationale", () => {
@@ -150,5 +150,31 @@ describe("waLink und telLink verstehen dieselbe Eingabe gleich", () => {
   it("deuten eine gewoehnliche deutsche Nummer beide unveraendert", () => {
     expect(waLink("0170 1234567")).toBe("https://wa.me/491701234567");
     expect(telLink("0170 1234567")).toBe("tel:01701234567");
+  });
+});
+
+describe("smsLink", () => {
+  it("nimmt die internationale Form mit Pluszeichen", () => {
+    expect(smsLink("0170 1234567", "Hallo")).toBe("sms:+491701234567&body=Hallo");
+  });
+
+  it("deutet Schreibweisen wie waLink", () => {
+    for (const n of ["+49 170 1234567", "0049 170 1234567", "(0170) 123-4567", "00170 1234567"]) {
+      expect(smsLink(n, "x")).toBe("sms:+491701234567&body=x");
+    }
+  });
+
+  it("liefert ohne brauchbare Nummer keinen Link", () => {
+    expect(smsLink(null, "x")).toBeNull();
+    expect(smsLink("", "x")).toBeNull();
+    expect(smsLink("123", "x")).toBeNull();
+    expect(smsLink("030 12345678-100", "x")).toBeNull();
+  });
+
+  it("kodiert Umlaute und Sonderzeichen im Text", () => {
+    const link = smsLink("0170 1234567", "Bad Tölz & Söhne? #1")!;
+    const body = link.split("&body=")[1]!;
+    expect(body).not.toMatch(/[ &?#]/);
+    expect(decodeURIComponent(body)).toBe("Bad Tölz & Söhne? #1");
   });
 });

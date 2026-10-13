@@ -137,3 +137,22 @@ export function waLink(nummer: string | null): string | null {
 
   return `https://wa.me/${roh}`;
 }
+
+/**
+ * `sms:`-Link mit vorbefülltem Text.
+ *
+ * Die Nummer kommt aus `waLink`: EINE Deutung der Ziffern für alle
+ * Schreibkanäle – die Fallakte darf eine SMS nicht an jemand anderen
+ * vorschlagen als den WhatsApp-Knopf daneben. Das Pluszeichen ist Pflicht,
+ * ohne es liest die Nachrichten-App "49170…" als Inlandsnummer.
+ *
+ * `&body=` statt `?body=`: die Form, die iOS und die Nachrichten-App am Mac
+ * verstehen. Ob der Mac den Text übernimmt, hängt an der macOS-Version –
+ * deshalb steht in der Karte immer ein Kopierknopf daneben.
+ */
+export function smsLink(nummer: string | null, text: string): string | null {
+  const wa = waLink(nummer);
+  if (!wa) return null;
+  const international = wa.slice("https://wa.me/".length);
+  return `sms:+${international}&body=${encodeURIComponent(text)}`;
+}
