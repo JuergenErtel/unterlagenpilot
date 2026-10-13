@@ -61,17 +61,29 @@ Die neuen Platzhalter erscheinen in der Editor-Hilfe (`PLACEHOLDERS`).
    Kommentar vom 15.08. gilt weiter: ohne Einrichtung tut der Knopf am Mac
    nichts). Kurzer Hinweistext/Tooltip am Knopf: „am Mac über ‚Anrufe über
    iPhone‘“.
-2. Nach **Nicht erreicht** (Vermerk wird wie bisher angelegt) zeigt die Reihe
-   den Knopf **SMS schicken**. Er ist ein `sms:`-Link mit Nummer und
-   vorbefülltem Text.
+2. Nach **Nicht erreicht** (Vermerk wird wie bisher angelegt) erscheint auf
+   der Fallseite eine eigene kleine Karte **„Nicht erreicht – SMS
+   hinterherschicken?“** mit dem fertigen Text als Vorschau und dem Knopf
+   **SMS schicken** (`sms:`-Link mit Nummer und vorbefülltem Text).
 3. Daneben **Text kopieren** (`CopyButton`) als Absicherung, falls die
    Nachrichten-App am Mac den Text nicht übernimmt.
 4. **SMS geschrieben** legt einen Vermerk an: `kind = sms`, Text „SMS
-   geschrieben.“, **ohne `ergebnis`**.
+   geschrieben.“, **ohne `ergebnis`**. Danach verschwindet die Karte.
 
-Wann „SMS schicken“ sichtbar ist: wenn der letzte Kontaktvermerk des Falls
-ein `nicht_erreicht` ist und danach noch kein `sms`-Vermerk kam. Sonst würde
-der Knopf dauerhaft neben dem Anrufknopf stehen.
+**Warum eine eigene Karte und nicht in der Knopfreihe** (Nachtrag beim
+Planen): Die `KontaktKnopfreihe` hängt am Leiterschritt `kontakt_aufnehmen`.
+Nach „Nicht erreicht“ ist der nächste Versuch erst nach dem eingestellten
+Abstand fällig (`stand.faellig = false`), der Schritt verschwindet und mit
+ihm die Reihe. Ein SMS-Knopf darin wäre direkt nach dem Klick weg.
+
+Wann die Karte sichtbar ist (reine Funktion `smsAngebotOffen`):
+- der letzte Kontaktvermerk (`telefon`/`whatsapp`/`sms`) ist ein Anruf mit
+  `nicht_erreicht`,
+- er ist höchstens **12 Stunden** alt (der Text sagt „eben nicht erreicht“),
+- es gibt eine gültige SMS-Nummer (`smsLink` ≠ `null`).
+
+Eine SMS nach dem Anruf beendet das Angebot, weil sie dann der letzte
+Vermerk ist.
 
 ### Warum der SMS-Vermerk kein `ergebnis` trägt
 
