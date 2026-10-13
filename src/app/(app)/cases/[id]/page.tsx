@@ -77,6 +77,10 @@ import { ApplicantSelect } from "@/components/review/applicant-select";
 import { maxUploadMb } from "@/lib/documents/pipeline";
 import { formatEUR, formatConfidence } from "@/lib/utils";
 import { TONE } from "@/lib/ui/tone";
+import { smsLink } from "@/lib/kontakt/telefon";
+import { smsAngebotOffen } from "@/lib/kontakt/sms-nachfass";
+import { ladeSmsNachfassText } from "@/lib/kontakt/sms-nachfass-text";
+import { SmsNachfassKarte } from "@/components/case/sms-nachfass-karte";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { caseFelderAus } from "@/lib/self-disclosure/fallstand";
 import { Fakt, Faktenleiste, Kennzahlzeile, Kennzahlwert } from "@/components/ui/flaechen";
@@ -254,7 +258,7 @@ export default async function CaseCockpitPage({
   // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
   // "geprueft" von "steht so im Exposé", die offenen Anfragen sind das, was
   // beim Kunden gerade wirklich aussteht.
-  const [wohnflaecheFreigegeben, offeneAnfragen, verbundeneGeraete, wartendImPosteingang] =
+  const [wohnflaecheFreigegeben, offeneAnfragen, verbundeneGeraete, wartendImPosteingang, kontaktVermerke] =
     await Promise.all([
       prisma.wohnflaechenBerechnung.count({ where: { caseId: id, released: true } }),
       prisma.missingDocumentRequest.count({ where: { caseId: id, resolved: false } }),
@@ -262,6 +266,16 @@ export default async function CaseCockpitPage({
       // und Mail-Wege im richtigen Zustand - einrichten oder benutzen.
       listGeraeteTokens(ctx.userId),
       zaehleEingang(ctx.organizationId),
+      // Fuer das SMS-Angebot nach "Nicht erreicht": die juengsten
+      // Kontaktvermerke INKLUSIVE der SMS (die kein `ergebnis` tragen und in
+      // `caseRow.caseNotes` deshalb fehlen – deren `ergebnis!` fuer
+      // `kontaktStand` verbietet, die Abfrage dort aufzuweiten).
+      prisma.caseNote.findMany({
+        where: { caseId: id, kind: { in: ["telefon", "whatsapp", "sms"] } },
+        select: { kind: true, ergebnis: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
     ]);
 
   // Unterlagen-Detektiv: offene und unsichere Befunde plus die bereits
@@ -437,6 +451,22 @@ export default async function CaseCockpitPage({
         kontaktEinstellungen()
       )
     : null;
+
+  // SMS nach "Nicht erreicht": nur, solange das Angebot offen ist UND es eine
+  // brauchbare Nummer gibt – im Zweifel lieber keine Karte (telefon.ts).
+  const smsTelefon = caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null;
+  const smsNachfass =
+    smsAngebotOffen(kontaktVermerke, jetzt) && smsLink(smsTelefon, "")
+      ? await (async () => {
+          const text = await ladeSmsNachfassText({
+            organizationId: ctx.organizationId,
+            userName: ctx.userName,
+            applicant: caseRow.applicants[0] ?? null,
+            property: caseRow.property ?? null,
+          });
+          return { text, link: smsLink(smsTelefon, text)! };
+        })()
+      : null;
 
   /*
    * Die Pruefleiste des Falls – ein Fach je Unterlage. Bewusst aus den echten
@@ -650,6 +680,9 @@ export default async function CaseCockpitPage({
                 radiale Anordnung braucht Breite; auf ein Telefon gequetscht
                 erzeugt sie genau die unleserliche Ansicht, die hier
                 abgeschafft werden soll. */}
+            {/* EINE Stelle fuer beide Breiten – die Karte haengt nicht an der
+                Leiter (siehe sms-nachfass-karte.tsx). */}
+            {smsNachfass && <SmsNachfassKarte caseId={id} link={smsNachfass.link} text={smsNachfass.text} />}
             <div className="hidden lg:block">
               <FallbildAnsicht bild={bild} aktionSlot={actionSlot} caseId={id} telefon={telefon} />
             </div>

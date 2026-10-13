@@ -48,8 +48,11 @@ export function KontaktKnopfreihe({ caseId, telefon }: { caseId: string; telefon
         nicht eingerichtet hat, klickt auf einen Knopf, der nichts tut – und
         sah bisher nicht einmal die Nummer, um sie von Hand zu wählen. Auf dem
         Handy dagegen öffnet derselbe Link die Telefon-App, dort ist er das
-        Bequemste. Deshalb: Zahl plus Kopierknopf überall, der Wähl-Link nur
-        auf schmalen Schirmen.
+        Bequemste. Deshalb: Zahl plus Kopierknopf überall.
+        Seit 13.10.2026 steht der Wähl-Link trotzdem auch am Mac: Jürgen wählt
+        dort über "Anrufe über iPhone" (FaceTime reicht den Anruf ans iPhone
+        weiter). Die Zahl bleibt daneben – ohne diese Einrichtung tut der Knopf
+        am Mac weiterhin nichts.
       */}
       {telefon && telefon.trim() !== "" && (
         <span className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
@@ -59,8 +62,8 @@ export function KontaktKnopfreihe({ caseId, telefon }: { caseId: string; telefon
         </span>
       )}
       {anrufLink && (
-        <Button asChild variant="default" className="md:hidden">
-          <a href={anrufLink}>
+        <Button asChild variant="default">
+          <a href={anrufLink} title="Am Mac über „Anrufe über iPhone“">
             <Phone className="h-4 w-4" /> Anrufen
           </a>
         </Button>
