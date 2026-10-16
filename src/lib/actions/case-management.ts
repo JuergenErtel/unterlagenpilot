@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireCaseAccess } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { NOTIZEN_MAX_ZEICHEN } from "@/lib/cases/notizen";
+import { notizAnhaengen, smsNotizZeile } from "@/lib/kontakt/sms-nachfass";
 import {
   CASE_NOTE_KINDS,
   DEADLINE_KINDS,
@@ -116,11 +117,10 @@ export async function setWiedervorlage(caseId: string, formData: FormData): Prom
 export async function deleteCaseNote(noteId: string): Promise<void> {
   const note = await prisma.caseNote.findUnique({
     where: { id: noteId },
-    select: { caseId: true, case: { select: { organizationId: true } } },
+    select: { caseId: true },
   });
   if (!note) return;
-  const { ctx } = await requireCaseAccess(note.caseId);
-  if (note.case.organizationId !== ctx.organizationId) return;
+  await requireCaseAccess(note.caseId);
   await prisma.caseNote.delete({ where: { id: noteId } });
   revalidateCase(note.caseId);
 }
@@ -154,12 +154,21 @@ export async function kontaktVersuchErfassen(caseId: string, formData: FormData)
     // Der Text kann vor dem Senden geaendert worden sein – im Vermerk steht
     // der, den die Karte zuletzt angezeigt hat, nicht die Vorlage.
     const smsText = (str(formData, "smsText") ?? "").trim().slice(0, 1000);
+    const empfaenger = (str(formData, "empfaenger") ?? "").trim().slice(0, 40);
+    // Zusaetzlich zum Vermerk eine Zeile im Notizblock: Dort sucht Juergen den
+    // Kontaktverlauf (16.10.2026: "wird nirgends vermerkt"). Der Vermerk
+    // bleibt die Wahrheit fuer den Kontaktstand, die Notizzeile ist Lesehilfe.
+    const fall = await prisma.case.findUnique({ where: { id: caseId }, select: { notes: true } });
+    const notizen = notizAnhaengen(fall?.notes, smsNotizZeile(new Date(), empfaenger, smsText), NOTIZEN_MAX_ZEICHEN);
+    if (notizen !== null) {
+      await prisma.case.update({ where: { id: caseId }, data: { notes: notizen } });
+    }
     await prisma.caseNote.create({
       data: {
         caseId,
         authorId: ctx.userId,
         kind: "sms",
-        body: smsText ? `SMS geschrieben:\n${smsText}` : "SMS geschrieben.",
+        body: smsText ? `SMS verschickt:\n${smsText}` : "SMS verschickt.",
       },
     });
     await audit({
@@ -297,11 +306,10 @@ export async function addDeadline(caseId: string, formData: FormData): Promise<v
 export async function toggleDeadline(deadlineId: string): Promise<void> {
   const dl = await prisma.caseDeadline.findUnique({
     where: { id: deadlineId },
-    select: { caseId: true, done: true, case: { select: { organizationId: true } } },
+    select: { caseId: true, done: true },
   });
   if (!dl) return;
-  const { ctx } = await requireCaseAccess(dl.caseId);
-  if (dl.case.organizationId !== ctx.organizationId) return;
+  await requireCaseAccess(dl.caseId);
   await prisma.caseDeadline.update({ where: { id: deadlineId }, data: { done: !dl.done } });
   revalidateCase(dl.caseId);
 }
@@ -371,11 +379,10 @@ export async function addBankRequest(caseId: string, formData: FormData): Promis
 export async function resolveMissingRequest(requestId: string): Promise<void> {
   const req = await prisma.missingDocumentRequest.findUnique({
     where: { id: requestId },
-    select: { caseId: true, case: { select: { organizationId: true } } },
+    select: { caseId: true },
   });
   if (!req) return;
   const { ctx } = await requireCaseAccess(req.caseId);
-  if (req.case.organizationId !== ctx.organizationId) return;
 
   await prisma.missingDocumentRequest.update({
     where: { id: requestId },

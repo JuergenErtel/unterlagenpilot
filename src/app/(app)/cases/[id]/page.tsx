@@ -707,6 +707,10 @@ export default async function CaseCockpitPage({
             <div className="lg:hidden">
               <NextStepCard step={step} actionSlot={actionSlot} caseId={id} telefon={telefon} />
             </div>
+            {/* Direkt unter dem Kreislauf (Juergen, 16.10.2026): Der
+                Schreibblock begleitet die ganze Arbeit, und dort landet auch
+                "SMS verschickt am …" – ganz unten fand er ihn nicht. */}
+            <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
             {/* Dieselbe Zahlenzeile wie im Auftragsdetail: der Kreislauf sagt
                 WO der Fall steht, die Zeile sagt WIE VIEL noch zu tun ist. */}
             <Kennzahlzeile className="px-1">
@@ -1255,9 +1259,9 @@ export default async function CaseCockpitPage({
           Nachlese, nicht die Fuehrung. */}
       <NextBestAction actions={cockpit.nextActions} />
 
-      {/* Gehoert in keinen der drei Bereiche: Der Schreibblock begleitet die
-          ganze Arbeit, und das Archivieren beendet sie. */}
-      <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
+      {/* Gehoert in keinen der drei Bereiche: Das Archivieren beendet die
+          Arbeit. (Der Notizblock steht seit 16.10.2026 direkt unter dem
+          Kreislauf, siehe oben.) */}
       <DangerZone caseId={id} caseNumber={cockpit.caseNumber} archived={caseRow.status === "archiviert"} />
     </div>
   );

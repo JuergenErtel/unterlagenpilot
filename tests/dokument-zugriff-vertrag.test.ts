@@ -145,6 +145,9 @@ const REIHENFOLGE_AUSNAHMEN: Record<string, string> = {
   "src/lib/actions/cases.ts#createCase": "legt eine neue Akte der eigenen Organisation an - es gibt noch nichts zu schuetzen",
   "src/lib/actions/finlink.ts#importFromFinLink": "der Connector legt die Akte selbst an; das Nachlesen betrifft nur die eben erzeugte ID (Fallnummer)",
   "src/lib/actions/machbarkeit.ts#speichereAnnahmen": "organisationsweite Zinsannahmen, keine Akte",
+  "src/lib/actions/case-management.ts#deleteCaseNote": "liest vor dem Guard nur die caseId des Vermerks, um requireCaseAccess zu fragen; kein Inhalt",
+  "src/lib/actions/case-management.ts#toggleDeadline": "liest vor dem Guard nur caseId (+ done) der Frist, um requireCaseAccess zu fragen",
+  "src/lib/actions/case-management.ts#resolveMissingRequest": "liest vor dem Guard nur die caseId der Nachforderung, um requireCaseAccess zu fragen",
   "src/lib/actions/review.ts#reviewExtractedField": "liest vor dem Guard nur die documentId des Feldes, um requireDocumentAccess zu fragen; kein Inhalt",
 };
 

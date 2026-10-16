@@ -97,3 +97,32 @@ export function renderSmsNachfass(body: string, e: SmsNachfassEingabe): string {
     .replace(/[ \t]+([.,!?;:])/g, "$1")
     .trim();
 }
+
+/**
+ * Die Zeile, die nach "SMS schicken" im Notizblock des Falls landet. Jürgen
+ * sucht den Kontaktverlauf dort, nicht in den Vermerken der Verwaltung.
+ * Uhrzeit in deutscher Zeit, egal wo der Server läuft.
+ */
+export function smsNotizZeile(jetzt: Date, empfaenger: string | null | undefined, text: string): string {
+  const datum = jetzt.toLocaleDateString("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const uhr = jetzt.toLocaleTimeString("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" });
+  const an = sauber(empfaenger) ? ` an ${sauber(empfaenger)}` : "";
+  const t = sauber(text);
+  return `SMS verschickt am ${datum} um ${uhr} Uhr${an}${t ? `:\n„${t}“` : "."}`;
+}
+
+/**
+ * Hängt eine Zeile an den Notizblock an, mit Leerzeile wie "Neuer Eintrag".
+ * `null`, wenn der Block danach über der Obergrenze läge – dann bleibt er
+ * unangetastet (der Vermerk entsteht trotzdem).
+ */
+export function notizAnhaengen(alt: string | null | undefined, zeile: string, max: number): string | null {
+  const basis = (alt ?? "").replace(/\s+$/, "");
+  const neu = basis ? `${basis}\n\n${zeile}` : zeile;
+  return neu.length > max ? null : neu;
+}

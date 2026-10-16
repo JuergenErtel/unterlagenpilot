@@ -12,10 +12,11 @@ vi.mock("@/lib/auth/context", () => ({ requireCaseAccess: (caseId: string) => re
 const noteCount = vi.fn();
 const noteCreate = vi.fn();
 const caseUpdate = vi.fn();
+const caseFind = vi.fn();
 vi.mock("@/lib/db", () => ({
   prisma: {
     caseNote: { count: (...a: unknown[]) => noteCount(...a), create: (...a: unknown[]) => noteCreate(...a) },
-    case: { update: (...a: unknown[]) => caseUpdate(...a) },
+    case: { update: (...a: unknown[]) => caseUpdate(...a), findUnique: (...a: unknown[]) => caseFind(...a) },
   },
 }));
 
@@ -28,7 +29,8 @@ function form(werte: Record<string, string>) {
 }
 
 beforeEach(() => {
-  [noteCount, noteCreate, caseUpdate].forEach((m) => m.mockReset());
+  [noteCount, noteCreate, caseUpdate, caseFind].forEach((m) => m.mockReset());
+  caseFind.mockResolvedValue({ notes: null });
   noteCount.mockResolvedValue(0);
   noteCreate.mockResolvedValue({ id: "n1" });
 });
@@ -41,14 +43,22 @@ describe("kontaktVersuchErfassen", () => {
     const daten = noteCreate.mock.calls[0]![0].data;
     expect(daten.kind).toBe("sms");
     expect(daten.ergebnis).toBeUndefined();
-    expect(daten.body).toBe("SMS geschrieben.");
+    expect(daten.body).toBe("SMS verschickt.");
     expect(noteCount).not.toHaveBeenCalled();
   });
 
   it("haelt den (bearbeiteten) SMS-Text im Vermerk fest", async () => {
     await kontaktVersuchErfassen("case-A", form({ kanal: "sms", smsText: "  Hallo, rufe morgen an.  " }));
-    expect(noteCreate.mock.calls[0]![0].data.body).toBe("SMS geschrieben:\nHallo, rufe morgen an.");
+    expect(noteCreate.mock.calls[0]![0].data.body).toBe("SMS verschickt:\nHallo, rufe morgen an.");
     expect(noteCreate.mock.calls[0]![0].data.ergebnis).toBeUndefined();
+  });
+
+  it("schreibt die SMS zusaetzlich in den Notizblock", async () => {
+    caseFind.mockResolvedValue({ notes: "Alter Eintrag" });
+    await kontaktVersuchErfassen("case-A", form({ kanal: "sms", smsText: "Hallo", empfaenger: "0170 1" }));
+    const notes = caseUpdate.mock.calls[0]![0].data.notes as string;
+    expect(notes.startsWith("Alter Eintrag\n\nSMS verschickt am ")).toBe(true);
+    expect(notes).toContain("an 0170 1:\n„Hallo“");
   });
 
   it("ignoriert ein mitgeschicktes Ergebnis bei der SMS", async () => {

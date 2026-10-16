@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { MessageSquare, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,10 @@ const SMS_VERMERK_MAX = 1000;
  * BaufiDesk verschickt nichts: "SMS schicken" öffnet die Nachrichten-App mit
  * Nummer und Text, abgeschickt wird dort. Ob der Mac den Text übernimmt,
  * hängt an der macOS-Version – dafür steht "Text kopieren" daneben.
+ *
+ * "SMS schicken" trägt die SMS sofort in den Notizblock und die Vermerke ein
+ * ("SMS verschickt am …") – danach schließt sich die Karte von selbst, weil
+ * die SMS nun der jüngste Kontaktvermerk ist.
  *
  * Der Text ist ein Vorschlag aus der Vorlage und hier frei änderbar: Link,
  * Kopierknopf und Vermerk nehmen immer den Text, der gerade im Feld steht.
@@ -45,6 +49,19 @@ export function SmsNachfassKarte({
   const [text, setText] = useState(vorschlag);
   const link = smsLink(telefon, text);
   const leer = text.trim().length === 0;
+  const [vermerkt, setVermerkt] = useState(false);
+  const [, startTransition] = useTransition();
+
+  /** Vermerk + Notizzeile. Läuft neben dem Öffnen der Nachrichten-App her. */
+  function vermerken() {
+    if (vermerkt) return;
+    setVermerkt(true);
+    const f = new FormData();
+    f.set("kanal", "sms");
+    f.set("smsText", text.slice(0, SMS_VERMERK_MAX));
+    f.set("empfaenger", telefon);
+    startTransition(() => kontaktVersuchErfassen(caseId, f));
+  }
 
   return (
     <div className="flaeche-ablage space-y-3 px-4 py-3">
@@ -101,7 +118,7 @@ export function SmsNachfassKarte({
       <div className="flex flex-wrap items-center gap-2">
         {link && !leer ? (
           <Button asChild>
-            <a href={link}>
+            <a href={link} onClick={vermerken}>
               <MessageSquare className="h-4 w-4" /> SMS schicken
             </a>
           </Button>
@@ -111,13 +128,11 @@ export function SmsNachfassKarte({
           </Button>
         )}
         <CopyButton value={text} label="Text kopieren" />
-        <form action={kontaktVersuchErfassen.bind(null, caseId)}>
-          <input type="hidden" name="kanal" value="sms" />
-          <input type="hidden" name="smsText" value={text.slice(0, SMS_VERMERK_MAX)} />
-          <Button type="submit" variant="outline">
-            SMS geschrieben
-          </Button>
-        </form>
+        {/* Für den Weg über "Text kopieren": dort öffnet BaufiDesk nichts und
+            merkt deshalb auch nicht, dass verschickt wurde. */}
+        <Button type="button" variant="outline" disabled={vermerkt || leer} onClick={vermerken}>
+          {vermerkt ? "Vermerkt" : "Als verschickt vermerken"}
+        </Button>
       </div>
     </div>
   );

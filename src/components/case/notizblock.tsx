@@ -43,7 +43,27 @@ export function Notizblock({ caseId, notes }: { caseId: string; notes: string })
     {},
   );
   const [text, setText] = useState(notes);
+  const [serverStand, setServerStand] = useState(notes);
   const feld = useRef<HTMLTextAreaElement>(null);
+
+  // Der Server kann den Block auch selbst fortschreiben ("SMS verschickt am
+  // …", sms-nachfass-karte.tsx). Ohne Abgleich stuende die neue Zeile erst
+  // nach einem Neuladen da – und das naechste Speichern wuerde sie mit dem
+  // alten Feldinhalt wieder ueberschreiben. Deshalb beim Wechsel von `notes`:
+  // unveraenderten Text ersetzen, ungespeicherten Text um das Angehaengte
+  // ergaenzen. (Zustandsabgleich beim Rendern, das React-Muster fuer
+  // "State aus Prop nachziehen".)
+  if (notes !== serverStand) {
+    setServerStand(notes);
+    const getippt = text.trim();
+    if (getippt === notes) {
+      // eigener Speichervorgang – nichts zu tun
+    } else if (getippt === serverStand) {
+      setText(notes);
+    } else if (notes.startsWith(serverStand)) {
+      setText(`${text.replace(/\s+$/, "")}${notes.slice(serverStand.length)}`);
+    }
+  }
 
   // Gespeichert heisst: was im Feld steht, entspricht dem Stand vom Server.
   // Nach dem Speichern liefert die Server-Action den getrimmten Text zurueck,
