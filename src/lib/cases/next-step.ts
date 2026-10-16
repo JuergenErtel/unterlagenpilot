@@ -486,12 +486,11 @@ function ermittleSchritt(c: NextStepInput): NextStep {
        * Datumsvergleich wuerde ein altes, nie geraeumtes Datum den Fall
        * dauerhaft hier festhalten und alles darunter verdecken – dieselbe
        * Falle, die bei kontakt_aufgeben schon zuschnappte. Die Sprosse SOLL
-       * mahnen, darf aber nicht unentrinnbar sein: Der cta fuehrt deshalb zur
-       * Verwaltungsseite, wo das Feld Wiedervorlage liegt und sich
-       * verschieben oder raeumen laesst – nicht zurueck auf die Fallseite,
-       * die diese Karte ja gerade zeigt.
+       * mahnen, darf aber nicht unentrinnbar sein: Der cta fuehrt deshalb zum
+       * Kontaktverlauf der Fallseite, wo sich die Wiedervorlage verschieben
+       * oder raeumen laesst (bis 16.10.2026 auf der Verwaltungsseite).
        */
-      cta: { label: "Wiedervorlage verwalten", href: `/cases/${id}/verwaltung` },
+      cta: { label: "Wiedervorlage verwalten", href: `/cases/${id}#kontaktverlauf` },
     };
   }
 
@@ -709,7 +708,7 @@ function ermittleSchritt(c: NextStepInput): NextStep {
       title: "Fristen & Nachforderungen im Blick behalten",
       reason: "Der Fall ist eingereicht – verfolge Rückmeldungen und Fristen der Bank.",
       tone: "neutral",
-      cta: { label: "Verwaltung öffnen", href: `/cases/${id}/verwaltung` },
+      cta: { label: "Einreichung öffnen", href: `/cases/${id}?tab=einreichung` },
     };
   }
 

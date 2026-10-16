@@ -89,7 +89,6 @@ export function backofficeBereiche(caseId: string, auftragId: string): FallBerei
     { href: `${base}/messages`, label: "Nachrichten", icon: Send },
     { href: `${base}/haushalt`, label: "Haushalt", icon: Calculator },
     { href: `${base}/machbarkeit`, label: "Machbarkeit", icon: Scale },
-    { href: `${base}/verwaltung`, label: "Verwaltung", icon: ClipboardList },
     { href: `${base}/export`, label: "Einreichung", icon: FileText },
   ];
 }

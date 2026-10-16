@@ -55,6 +55,8 @@ import { ErstkontaktVorbereitenButton } from "@/components/case/erstkontakt-vorb
 import { FinLinkRefreshButton } from "@/components/case/finlink-refresh-button";
 import { NextBestAction } from "@/components/case/next-best-action";
 import { Notizblock } from "@/components/case/notizblock";
+import { Kontaktverlauf } from "@/components/case/kontaktverlauf";
+import { BackofficeUebergabeKarte } from "@/components/case/backoffice-uebergabe-karte";
 import { KreditpruefungKarte } from "@/components/case/kreditpruefung-karte";
 import { BackofficeStatusKarte } from "@/components/case/backoffice-status-karte";
 import { MissingDocumentsPanel } from "@/components/case/missing-documents-panel";
@@ -258,7 +260,7 @@ export default async function CaseCockpitPage({
   // Fuer das Fallbild: eine freigegebene Wohnflaechenberechnung unterscheidet
   // "geprueft" von "steht so im Exposé", die offenen Anfragen sind das, was
   // beim Kunden gerade wirklich aussteht.
-  const [wohnflaecheFreigegeben, offeneAnfragen, verbundeneGeraete, wartendImPosteingang, kontaktVermerke] =
+  const [wohnflaecheFreigegeben, offeneAnfragen, verbundeneGeraete, wartendImPosteingang, kontaktVermerke, kontaktverlauf] =
     await Promise.all([
       prisma.wohnflaechenBerechnung.count({ where: { caseId: id, released: true } }),
       prisma.missingDocumentRequest.count({ where: { caseId: id, resolved: false } }),
@@ -275,6 +277,15 @@ export default async function CaseCockpitPage({
         select: { kind: true, ergebnis: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 5,
+      }),
+      // Anzeige unter dem Notizblock (kontaktverlauf.tsx): alle Vermerke,
+      // nicht nur die Kontaktkanaele – Altbestand aus der frueheren
+      // Verwaltungsseite soll nicht unsichtbar werden.
+      prisma.caseNote.findMany({
+        where: { caseId: id },
+        select: { id: true, kind: true, body: true, createdAt: true, author: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 30,
       }),
     ]);
 
@@ -711,6 +722,17 @@ export default async function CaseCockpitPage({
                 Schreibblock begleitet die ganze Arbeit, und dort landet auch
                 "SMS verschickt am …" – ganz unten fand er ihn nicht. */}
             <Notizblock caseId={id} notes={caseRow.notes ?? ""} />
+            <Kontaktverlauf
+              caseId={id}
+              wiedervorlage={caseRow.wiedervorlage ?? null}
+              eintraege={kontaktverlauf.map((n) => ({
+                id: n.id,
+                kind: n.kind,
+                body: n.body,
+                createdAt: n.createdAt,
+                autor: n.author?.name ?? null,
+              }))}
+            />
             {/* Dieselbe Zahlenzeile wie im Auftragsdetail: der Kreislauf sagt
                 WO der Fall steht, die Zeile sagt WIE VIEL noch zu tun ist. */}
             <Kennzahlzeile className="px-1">
@@ -1217,6 +1239,14 @@ export default async function CaseCockpitPage({
             organizationId={ctx.organizationId}
             istBackofficeNutzer={ctx.backofficeRolle != null}
           />
+          {/* Frueher auf der Verwaltungsseite (entfallen 16.10.2026). Rendert
+              nichts ohne Backoffice-Ziel oder bei Backoffice-Akten. */}
+          <BackofficeUebergabeKarte
+            caseId={id}
+            organizationId={ctx.organizationId}
+            akteArt={caseRow.akteArt}
+            istBackofficeNutzer={ctx.backofficeRolle != null}
+          />
 
           {/* Erst ab der Einreichungsphase: Vorher gibt es keine Bank und keine
               Konditionen, und eine leere Karte im Kopf der Seitenspalte
@@ -1228,7 +1258,6 @@ export default async function CaseCockpitPage({
           <Werkzeugreihe>
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/export`}><FileText />Export vorbereiten</Link></Button>
             <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/summary`}><FileBarChart />Bankfähige Zusammenfassung</Link></Button>
-            <Button asChild variant="outline" className="w-full justify-start"><Link href={`/cases/${id}/verwaltung`}><ClipboardList />Verwaltung & Fristen</Link></Button>
             {/*
               Finanzierungszertifikat – das Blatt, das der Kaufinteressent dem
               Makler vorlegt. Ohne Kaufpreis, Objektadresse und Namen gibt es

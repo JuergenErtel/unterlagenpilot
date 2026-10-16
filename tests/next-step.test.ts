@@ -929,7 +929,7 @@ describe("Wiedervorlage in der Leiter", () => {
       })
     );
     expect(schritt.key).toBe("wiedervorlage_faellig");
-    expect(schritt.cta?.href).toBe("/cases/c1/verwaltung");
+    expect(schritt.cta?.href).toBe("/cases/c1#kontaktverlauf");
   });
 });
 

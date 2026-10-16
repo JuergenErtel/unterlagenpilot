@@ -109,7 +109,6 @@ export default async function AuftragPage({ params }: { params: Promise<{ id: st
     { href: `${akte}/edit`, label: "Antragstellerdaten", icon: Users, hinweis: "Personen, Beschäftigung, Einkommen" },
     { href: `${akte}/haushalt`, label: "Haushaltsrechnung", icon: Calculator, hinweis: "Kapitaldienstfähigkeit" },
     { href: `${akte}/machbarkeit`, label: "Machbarkeit", icon: Scale, hinweis: "Beleihung, Rate, Stellschrauben" },
-    { href: `${akte}/verwaltung`, label: "Fristen & Bank", icon: ClipboardList, hinweis: "Zielbank, Bank-Nachforderungen" },
     { href: `${akte}/export`, label: "Einreichung", icon: FileText, hinweis: "Plattformdaten, Exporte, Zertifikat" },
   ];
 

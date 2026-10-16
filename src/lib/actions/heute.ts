@@ -98,7 +98,7 @@ export async function wiedervorlageErledigen(caseId: string, formData: FormData)
   await prisma.case.update({ where: { id: caseId }, data: { wiedervorlage: gueltig } });
 
   // Als Vermerk am Fall festhalten – die Wiedervorlage ist Kontakthistorie,
-  // und auf /cases/<id>/verwaltung steht die Liste, in der sie erwartet wird.
+  // und im Kontaktverlauf der Fallseite steht die Liste, in der sie erwartet wird.
   await prisma.caseNote.create({
     data: {
       caseId,

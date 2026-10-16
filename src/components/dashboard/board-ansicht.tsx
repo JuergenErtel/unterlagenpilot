@@ -448,7 +448,7 @@ export async function BoardAnsicht({ organizationId }: { organizationId: string 
                 {[...pipeline.abgeschlossen, ...pipeline.offen].map((c) => (
                   <TableRow key={c.caseId}>
                     <TableCell>
-                      <Link href={`/cases/${c.caseId}/verwaltung`} className="font-medium hover:underline">
+                      <Link href={`/cases/${c.caseId}`} className="font-medium hover:underline">
                         {c.kundenName}
                       </Link>
                       <div className="font-mono text-xs text-muted-foreground">{c.caseNumber}</div>
