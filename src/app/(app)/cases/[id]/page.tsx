@@ -452,6 +452,21 @@ export default async function CaseCockpitPage({
       )
     : null;
 
+  // Das zuletzt benutzte verbundene Geraet des Beraters – das Handy, das die
+  // SMS-Karte nennt (sms-nachfass-karte.tsx erklaert, warum nur ein Anhaltspunkt).
+  const smsHandyRoh =
+    [...verbundeneGeraete].sort(
+      (a, b) => (b.lastUsedAt ?? b.createdAt).getTime() - (a.lastUsedAt ?? a.createdAt).getTime()
+    )[0] ?? null;
+  const smsHandy = smsHandyRoh
+    ? {
+        bezeichnung: smsHandyRoh.bezeichnung,
+        zuletzt: smsHandyRoh.lastUsedAt
+          ? smsHandyRoh.lastUsedAt.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" })
+          : null,
+      }
+    : null;
+
   // SMS nach "Nicht erreicht": nur, solange das Angebot offen ist UND es eine
   // brauchbare Nummer gibt – im Zweifel lieber keine Karte (telefon.ts).
   const smsTelefon = caseRow.applicants[0]?.phone ?? caseRow.customer?.phone ?? null;
@@ -464,7 +479,7 @@ export default async function CaseCockpitPage({
             applicant: caseRow.applicants[0] ?? null,
             property: caseRow.property ?? null,
           });
-          return { text, link: smsLink(smsTelefon, text)! };
+          return { text, telefon: smsTelefon! };
         })()
       : null;
 
@@ -682,7 +697,9 @@ export default async function CaseCockpitPage({
                 abgeschafft werden soll. */}
             {/* EINE Stelle fuer beide Breiten – die Karte haengt nicht an der
                 Leiter (siehe sms-nachfass-karte.tsx). */}
-            {smsNachfass && <SmsNachfassKarte caseId={id} link={smsNachfass.link} text={smsNachfass.text} />}
+            {smsNachfass && (
+              <SmsNachfassKarte caseId={id} telefon={smsNachfass.telefon} text={smsNachfass.text} handy={smsHandy} />
+            )}
             <div className="hidden lg:block">
               <FallbildAnsicht bild={bild} aktionSlot={actionSlot} caseId={id} telefon={telefon} />
             </div>

@@ -45,6 +45,12 @@ describe("kontaktVersuchErfassen", () => {
     expect(noteCount).not.toHaveBeenCalled();
   });
 
+  it("haelt den (bearbeiteten) SMS-Text im Vermerk fest", async () => {
+    await kontaktVersuchErfassen("case-A", form({ kanal: "sms", smsText: "  Hallo, rufe morgen an.  " }));
+    expect(noteCreate.mock.calls[0]![0].data.body).toBe("SMS geschrieben:\nHallo, rufe morgen an.");
+    expect(noteCreate.mock.calls[0]![0].data.ergebnis).toBeUndefined();
+  });
+
   it("ignoriert ein mitgeschicktes Ergebnis bei der SMS", async () => {
     await kontaktVersuchErfassen("case-A", form({ kanal: "sms", ergebnis: "nicht_erreicht" }));
     expect(noteCreate.mock.calls[0]![0].data.ergebnis).toBeUndefined();

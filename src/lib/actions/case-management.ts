@@ -151,8 +151,16 @@ export async function kontaktVersuchErfassen(caseId: string, formData: FormData)
   // ab der SMS neu. Deshalb steht sie vor dem Kanal-Check und nicht in
   // KONTAKT_KANAELE: Die Liste meint Versuche, die SMS ist keiner.
   if (kanalRoh === "sms") {
+    // Der Text kann vor dem Senden geaendert worden sein – im Vermerk steht
+    // der, den die Karte zuletzt angezeigt hat, nicht die Vorlage.
+    const smsText = (str(formData, "smsText") ?? "").trim().slice(0, 1000);
     await prisma.caseNote.create({
-      data: { caseId, authorId: ctx.userId, kind: "sms", body: "SMS geschrieben." },
+      data: {
+        caseId,
+        authorId: ctx.userId,
+        kind: "sms",
+        body: smsText ? `SMS geschrieben:\n${smsText}` : "SMS geschrieben.",
+      },
     });
     await audit({
       organizationId: ctx.organizationId,
