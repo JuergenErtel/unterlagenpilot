@@ -15,11 +15,13 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { erzeugeGeraeteToken, widerrufeGeraeteToken } from "@/lib/actions/geraete";
+import { erzeugeGeraeteToken, setzeGeraeteTelefon, widerrufeGeraeteToken } from "@/lib/actions/geraete";
 
 export interface GeraetZeile {
   id: string;
   bezeichnung: string;
+  /** Eigene Handynummer des Geraets – die SMS-Karte nennt sie als Absender. */
+  telefon: string | null;
   /** Fertig formatiert – der Server rechnet die Zeitzone, nicht der Browser. */
   zuletztBenutzt: string | null;
 }
@@ -79,6 +81,7 @@ export function KurzbefehlKarte({
                 <span className="text-xs text-muted-foreground">
                   {g.zuletztBenutzt ? `zuletzt genutzt am ${g.zuletztBenutzt}` : "noch nicht genutzt"}
                 </span>
+                <GeraetTelefon id={g.id} telefon={g.telefon} />
                 <Button
                   size="sm"
                   variant="ghost"
@@ -241,5 +244,68 @@ function Anleitung({ basisUrl }: { basisUrl: string }) {
         oder du bittest um das Dokument als Datei-Anhang.
       </p>
     </div>
+  );
+}
+
+/**
+ * Handynummer eines Geraets – von Hand eingetragen, weil weder Browser noch
+ * Kurzbefehl die eigene Nummer verlaesslich kennen.
+ */
+function GeraetTelefon({ id, telefon }: { id: string; telefon: string | null }) {
+  const [bearbeiten, setBearbeiten] = useState(false);
+  const [wert, setWert] = useState(telefon ?? "");
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!bearbeiten) {
+    return (
+      <button
+        type="button"
+        className="text-xs underline-offset-2 hover:underline"
+        onClick={() => setBearbeiten(true)}
+      >
+        {telefon ? (
+          <>Nummer: <span className="font-medium">{telefon}</span> (ändern)</>
+        ) : (
+          <span className="text-amber-700 dark:text-amber-400">Handynummer eintragen</span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        startTransition(async () => {
+          const r = await setzeGeraeteTelefon(id, wert);
+          if (r.ok) {
+            setFehler(null);
+            setBearbeiten(false);
+          } else {
+            setFehler(r.meldung ?? "Das hat nicht geklappt.");
+          }
+        });
+      }}
+    >
+      <Input
+        value={wert}
+        onChange={(e) => setWert(e.target.value)}
+        placeholder="0170 1234567"
+        type="tel"
+        maxLength={30}
+        className="h-8 w-40"
+        aria-label="Handynummer"
+        autoFocus
+      />
+      <Button size="sm" type="submit" disabled={pending}>
+        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : "Speichern"}
+      </Button>
+      <Button size="sm" variant="ghost" type="button" onClick={() => setBearbeiten(false)}>
+        Abbrechen
+      </Button>
+      {fehler && <span className="w-full text-xs text-destructive">{fehler}</span>}
+    </form>
   );
 }

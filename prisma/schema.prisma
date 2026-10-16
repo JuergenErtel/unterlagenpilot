@@ -1364,6 +1364,9 @@ model GeraeteToken {
   tokenHash   String    @unique
   /// Frei waehlbarer Name, damit beim Widerruf klar ist, welches Geraet gemeint ist.
   bezeichnung String
+  /// Eigene Handynummer des Geraets – von Hand eingetragen, eine Webseite kann
+  /// sie nicht auslesen. Die SMS-Karte nennt sie als Absender.
+  telefon     String?
   active      Boolean   @default(true)
   /// Wann zuletzt etwas mit diesem Token hochgeladen wurde – die einzige
   /// Handhabe, ein vergessenes Geraet zu erkennen.

@@ -461,6 +461,7 @@ export default async function CaseCockpitPage({
   const smsHandy = smsHandyRoh
     ? {
         bezeichnung: smsHandyRoh.bezeichnung,
+        telefon: smsHandyRoh.telefon,
         zuletzt: smsHandyRoh.lastUsedAt
           ? smsHandyRoh.lastUsedAt.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" })
           : null,

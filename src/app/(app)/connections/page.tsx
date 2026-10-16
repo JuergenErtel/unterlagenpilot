@@ -97,6 +97,7 @@ export default async function ConnectionsPage() {
   const geraete = (await listGeraeteTokens(ctx.userId)).map((g) => ({
     id: g.id,
     bezeichnung: g.bezeichnung,
+    telefon: g.telefon,
     zuletztBenutzt: g.lastUsedAt ? g.lastUsedAt.toLocaleDateString("de-DE") : null,
   }));
 

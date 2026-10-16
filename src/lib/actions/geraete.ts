@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireContext } from "@/lib/auth/context";
+import { prisma } from "@/lib/db";
+import { waLink } from "@/lib/kontakt/telefon";
 import {
   createGeraeteToken,
   listGeraeteTokens,
@@ -57,4 +59,23 @@ export async function widerrufeGeraeteToken(id: string): Promise<{ ok: boolean }
 export async function eigeneGeraete(): Promise<GeraeteTokenView[]> {
   const ctx = await requireContext();
   return listGeraeteTokens(ctx.userId);
+}
+
+/**
+ * Traegt die eigene Handynummer eines Geraets ein (leer = entfernen).
+ * `updateMany` mit userId im Filter wie beim Widerruf: Ein fremdes Geraet
+ * trifft schlicht keine Zeile.
+ */
+export async function setzeGeraeteTelefon(id: string, telefon: string): Promise<{ ok: boolean; meldung?: string }> {
+  const ctx = await requireContext();
+  const roh = telefon.trim().slice(0, 30);
+  if (roh && !waLink(roh)) {
+    return { ok: false, meldung: "Das sieht nicht nach einer Handynummer aus, z. B. 0170 1234567." };
+  }
+  await prisma.geraeteToken.updateMany({
+    where: { id, userId: ctx.userId, active: true },
+    data: { telefon: roh || null },
+  });
+  revalidatePath("/connections");
+  return { ok: true };
 }

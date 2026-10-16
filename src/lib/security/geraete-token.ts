@@ -138,6 +138,7 @@ export async function resolveGeraeteToken(token: string): Promise<GeraeteTokenKo
 export interface GeraeteTokenView {
   id: string;
   bezeichnung: string;
+  telefon: string | null;
   active: boolean;
   lastUsedAt: Date | null;
   createdAt: Date;
@@ -147,7 +148,7 @@ export async function listGeraeteTokens(userId: string): Promise<GeraeteTokenVie
   return prisma.geraeteToken.findMany({
     where: { userId, active: true },
     orderBy: { createdAt: "desc" },
-    select: { id: true, bezeichnung: true, active: true, lastUsedAt: true, createdAt: true },
+    select: { id: true, bezeichnung: true, telefon: true, active: true, lastUsedAt: true, createdAt: true },
   });
 }
 

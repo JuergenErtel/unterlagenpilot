@@ -40,7 +40,7 @@ export function SmsNachfassKarte({
   caseId: string;
   telefon: string;
   text: string;
-  handy: { bezeichnung: string; zuletzt: string | null } | null;
+  handy: { bezeichnung: string; telefon: string | null; zuletzt: string | null } | null;
 }) {
   const [text, setText] = useState(vorschlag);
   const link = smsLink(telefon, text);
@@ -57,6 +57,20 @@ export function SmsNachfassKarte({
         {handy ? (
           <span>
             Verbundenes Handy: <span className="font-medium text-foreground">{handy.bezeichnung}</span>
+            {handy.telefon ? (
+              <>
+                {" "}
+                · Nummer <span className="font-medium text-foreground">{handy.telefon}</span>
+              </>
+            ) : (
+              <>
+                {" "}
+                ·{" "}
+                <Link href="/connections" className="underline">
+                  Nummer eintragen
+                </Link>
+              </>
+            )}
             {handy.zuletzt && <> · zuletzt genutzt {handy.zuletzt}</>}
           </span>
         ) : (
@@ -67,7 +81,7 @@ export function SmsNachfassKarte({
             </Link>
           </span>
         )}
-        <span>· an {telefon}</span>
+        <span>· Empfänger: {telefon}</span>
       </div>
       <textarea
         value={text}
